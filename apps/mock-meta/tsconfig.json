@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "declaration": true,
+    "outDir": "dist",
+    "types": ["node"],
+    "paths": {
+      "@realwise/contracts": ["../../packages/contracts/src/index.ts"],
+      "@realwise/meta": ["../../packages/meta/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "declaration": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "outDir": "dist",
+    "types": ["node"],
+    "paths": {
+      "@realwise/config": ["../../packages/config/src/index.ts"],
+      "@realwise/contracts": ["../../packages/contracts/src/index.ts"],
+      "@realwise/knowledge": ["../../packages/knowledge/src/index.ts"],
+      "@realwise/meta": ["../../packages/meta/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

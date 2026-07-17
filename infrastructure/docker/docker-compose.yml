@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: realwise
+      POSTGRES_PASSWORD: realwise
+      POSTGRES_DB: realwise_aichat
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/node.Dockerfile
+      args:
+        APP: api
+    environment:
+      DATABASE_URL: postgres://realwise:realwise@postgres:5432/realwise_aichat
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: change-me-at-least-32-chars-local
+      ENCRYPTION_MASTER_KEYS: v1:BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "3001:3001"
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/node.Dockerfile
+      args:
+        APP: web
+    environment:
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      API_URL: http://api:3001
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres-data:

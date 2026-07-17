@@ -1,0 +1,132 @@
+import { boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+
+export const providerEnum = pgEnum("provider", ["WHATSAPP", "INSTAGRAM", "FACEBOOK"]);
+export const releaseStateEnum = pgEnum("release_state", [
+  "PLANNED",
+  "IMPLEMENTED_NOT_VERIFIED",
+  "MOCK_VERIFIED",
+  "SANDBOX_VERIFIED",
+  "READY_FOR_EXTERNAL_ACTIVATION",
+  "PRODUCTION_VERIFIED",
+]);
+export const roleEnum = pgEnum("role", ["OWNER", "ADMIN", "ATTENDANT", "BILLING_ADMIN", "SUPPORT", "PLATFORM_ADMIN"]);
+
+const timestamps = {
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+};
+
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull(),
+  name: text("name").notNull(),
+  passwordHash: text("password_hash"),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  mfaRequired: boolean("mfa_required").default(false).notNull(),
+  ...timestamps,
+}, (table) => ({ emailUnique: uniqueIndex("users_email_unique").on(table.email) }));
+
+export const tenants = pgTable("tenants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  segment: text("segment").notNull(),
+  status: text("status").default("ACTIVE").notNull(),
+  aiEnabled: boolean("ai_enabled").default(true).notNull(),
+  releaseState: releaseStateEnum("release_state").default("IMPLEMENTED_NOT_VERIFIED").notNull(),
+  ...timestamps,
+});
+
+export const memberships = pgTable("memberships", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  role: roleEnum("role").notNull(),
+  ...timestamps,
+}, (table) => ({ tenantUserUnique: uniqueIndex("memberships_tenant_user_unique").on(table.tenantId, table.userId) }));
+
+export const channelConnections = pgTable("channel_connections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  provider: providerEnum("provider").notNull(),
+  externalAssetId: text("external_asset_id"),
+  encryptedCredentials: jsonb("encrypted_credentials"),
+  status: text("status").default("ACTION_REQUIRED").notNull(),
+  releaseState: releaseStateEnum("release_state").default("MOCK_VERIFIED").notNull(),
+  lastDiagnostic: jsonb("last_diagnostic"),
+  ...timestamps,
+}, (table) => ({ tenantProviderIdx: index("channel_connections_tenant_provider_idx").on(table.tenantId, table.provider) }));
+
+export const contacts = pgTable("contacts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  displayName: text("display_name"),
+  phone: text("phone"),
+  email: text("email"),
+  ...timestamps,
+}, (table) => ({ tenantIdx: index("contacts_tenant_idx").on(table.tenantId) }));
+
+export const conversations = pgTable("conversations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  contactId: uuid("contact_id").references(() => contacts.id).notNull(),
+  connectionId: uuid("connection_id").references(() => channelConnections.id).notNull(),
+  externalConversationId: text("external_conversation_id"),
+  aiPaused: boolean("ai_paused").default(false).notNull(),
+  humanActive: boolean("human_active").default(false).notNull(),
+  ...timestamps,
+}, (table) => ({ tenantExternalIdx: index("conversations_tenant_external_idx").on(table.tenantId, table.externalConversationId) }));
+
+export const messages = pgTable("messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  conversationId: uuid("conversation_id").references(() => conversations.id).notNull(),
+  externalEventId: text("external_event_id").notNull(),
+  externalMessageId: text("external_message_id").notNull(),
+  direction: text("direction").notNull(),
+  origin: text("origin").notNull(),
+  text: text("text"),
+  attachments: jsonb("attachments").default([]).notNull(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  ...timestamps,
+}, (table) => ({ tenantEventUnique: uniqueIndex("messages_tenant_event_unique").on(table.tenantId, table.externalEventId) }));
+
+export const knowledgeSources = pgTable("knowledge_sources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  title: text("title").notNull(),
+  kind: text("kind").notNull(),
+  body: text("body"),
+  releaseState: releaseStateEnum("release_state").default("IMPLEMENTED_NOT_VERIFIED").notNull(),
+  ...timestamps,
+}, (table) => ({ tenantKindIdx: index("knowledge_sources_tenant_kind_idx").on(table.tenantId, table.kind) }));
+
+export const leads = pgTable("leads", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  contactName: text("contact_name").notNull(),
+  service: text("service"),
+  preferredTime: text("preferred_time"),
+  notes: text("notes"),
+  status: text("status").default("NEW").notNull(),
+  ...timestamps,
+}, (table) => ({ tenantCreatedIdx: index("leads_tenant_created_idx").on(table.tenantId, table.createdAt) }));
+
+export const webhookEvents = pgTable("webhook_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  provider: providerEnum("provider").notNull(),
+  externalEventId: text("external_event_id").notNull(),
+  payload: jsonb("payload").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+  ...timestamps,
+}, (table) => ({ providerEventUnique: uniqueIndex("webhook_events_provider_event_unique").on(table.provider, table.externalEventId) }));
+
+export const auditEvents = pgTable("audit_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id),
+  actorUserId: uuid("actor_user_id").references(() => users.id),
+  action: text("action").notNull(),
+  targetType: text("target_type").notNull(),
+  targetId: text("target_id"),
+  metadata: jsonb("metadata").default({}).notNull(),
+  ...timestamps,
+});

@@ -1,0 +1,17 @@
+# apps/api
+
+NestJS REST API.
+
+## Current implementation
+
+- Health endpoints: `/api/health/live`, `/api/health/ready`, `/api/health/dependencies`.
+- Dashboard summary endpoint.
+- Mock Meta webhook normalization and fake assistant decision endpoint.
+- Knowledge source/chunk preview endpoints.
+- Leads list and billing entitlement demo endpoints.
+
+## Rules
+
+- Add tenant context before real persistence.
+- Validate request bodies at boundaries with Zod or DTOs.
+- Use safe errors and support codes for customer-facing failures.
