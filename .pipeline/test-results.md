@@ -12,6 +12,7 @@
 - `pnpm typecheck` — PASS.
 - `pnpm test` — PASS.
 - `pnpm build` — PASS.
+- `pnpm smoke:api` against live API + Colima DB — PASS.
 
 ## Current iteration
 
@@ -20,6 +21,8 @@
 - Made incremental SQL migrations idempotent for fresh local databases.
 - Made demo seed idempotent.
 - Verified local PostgreSQL + Redis services under Colima.
+- Added repeatable API smoke script.
+- Added `/app` web page that logs into the API and loads tenant dashboard data from PostgreSQL.
 
 ## Commands not run
 

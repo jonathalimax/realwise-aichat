@@ -1,10 +1,10 @@
-import { Body, Controller, Post } from "@nestjs/common";
+import { Body, Controller, Inject, Post } from "@nestjs/common";
 import { mockMetaEventSchema, normalizeMockMetaEvent } from "@realwise/meta";
 import { MessagingService } from "./messaging.service";
 
 @Controller("webhooks/meta")
 export class MetaWebhookController {
-  constructor(private readonly messagingService: MessagingService) {}
+  constructor(@Inject(MessagingService) private readonly messagingService: MessagingService) {}
 
   @Post("mock")
   async acceptMockEvent(@Body() body: unknown) {

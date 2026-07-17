@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from "@nestjs/common";
+import { ForbiddenException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import { createSessionToken, hashPassword, hashToken, verifyPassword } from "@realwise/auth";
 import type { Role } from "@realwise/contracts";
@@ -8,7 +8,7 @@ import { DatabaseProvider } from "./database.provider";
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly databaseProvider: DatabaseProvider) {}
+  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider) {}
 
   async bootstrapOwner(input: { email: string; name: string; password: string; tenantName: string; segment: string }) {
     const db = this.databaseProvider.require();

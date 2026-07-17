@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException, BadRequestException, ForbiddenException } from "@nestjs/common";
+import { BadRequestException, CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import type { Request } from "express";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { hashToken } from "@realwise/auth";
@@ -12,7 +12,7 @@ export type AuthenticatedRequest = Request & {
 
 @Injectable()
 export class SessionTenantGuard implements CanActivate {
-  constructor(private readonly databaseProvider: DatabaseProvider) {}
+  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();

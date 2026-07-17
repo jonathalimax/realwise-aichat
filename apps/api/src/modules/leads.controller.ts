@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { leads } from "@realwise/database";
@@ -16,7 +16,7 @@ const createLeadSchema = z.object({
 @Controller("leads")
 @UseGuards(SessionTenantGuard)
 export class LeadsController {
-  constructor(private readonly databaseProvider: DatabaseProvider) {}
+  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider) {}
 
   @Get()
   async list(@TenantContext() context: RequestTenantContext) {

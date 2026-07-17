@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, Post, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Headers, HttpCode, Inject, Post, Res, UnauthorizedException, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { roleSchema } from "@realwise/contracts";
 import { z } from "zod";
@@ -36,7 +36,7 @@ const passwordResetSchema = z.object({ resetToken: z.string().min(32), password:
 
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(@Inject(AuthService) private readonly authService: AuthService) {}
 
   @Post("bootstrap-owner")
   async bootstrapOwner(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
@@ -118,6 +118,6 @@ function setSessionCookie(response: Response, token: string) {
 
 function readSessionCookie(cookieHeader: string): string {
   const match = cookieHeader.match(/(?:^|; )rw_session=([^;]+)/);
-  if (!match?.[1]) throw new Error("Missing session cookie");
+  if (!match?.[1]) throw new UnauthorizedException({ code: "SESSION_REQUIRED", message: "Sessão obrigatória.", supportCode: "RW-AUTH-002" });
   return decodeURIComponent(match[1]);
 }

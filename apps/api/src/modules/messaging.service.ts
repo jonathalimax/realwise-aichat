@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { fakeAssistantDecision } from "@realwise/knowledge";
 import type { NormalizedMessage } from "@realwise/contracts";
 import { and, eq } from "drizzle-orm";
@@ -7,7 +7,7 @@ import { DatabaseProvider } from "./database.provider";
 
 @Injectable()
 export class MessagingService {
-  constructor(private readonly databaseProvider: DatabaseProvider) {}
+  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider) {}
 
   async acceptNormalizedMessage(message: NormalizedMessage, rawPayload: unknown) {
     const db = this.databaseProvider.optional();

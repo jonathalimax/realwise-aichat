@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
 import { chunkKnowledge } from "@realwise/knowledge";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -16,7 +16,7 @@ const createKnowledgeSchema = z.object({
 @Controller("knowledge")
 @UseGuards(SessionTenantGuard)
 export class KnowledgeController {
-  constructor(private readonly databaseProvider: DatabaseProvider) {}
+  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider) {}
 
   @Get("sources")
   async sources(@TenantContext() context: RequestTenantContext) {

@@ -4,9 +4,9 @@ Next.js App Router customer UI.
 
 ## Current implementation
 
-- `src/app/page.tsx` renders a responsive Portuguese dashboard.
+- `src/app/page.tsx` renders a responsive Portuguese marketing/demo dashboard.
+- `src/app/app/page.tsx` logs into the API with the seeded user and loads tenant dashboard data from PostgreSQL.
 - Uses shared primitives from `@realwise/ui`.
-- Initial dashboard is static/demo-shaped; API integration is next.
 
 ## Rules
 

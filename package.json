@@ -15,7 +15,8 @@
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "format": "prettier --write .",
-    "check": "pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "smoke:api": "infrastructure/scripts/smoke-api.sh"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
