@@ -1,7 +1,10 @@
-import { Body, Controller, Get, Headers, HttpCode, Post, Res } from "@nestjs/common";
+import { Body, Controller, Get, Headers, HttpCode, Post, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
+import { roleSchema } from "@realwise/contracts";
 import { z } from "zod";
 import { AuthService } from "./auth.service";
+import { SessionTenantGuard } from "./session-tenant.guard";
+import { TenantContext, type RequestTenantContext } from "./tenant-context";
 
 const bootstrapSchema = z.object({
   email: z.string().email(),
@@ -14,6 +17,17 @@ const bootstrapSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+});
+
+const inviteSchema = z.object({
+  email: z.string().email(),
+  role: roleSchema,
+});
+
+const acceptInviteSchema = z.object({
+  inviteToken: z.string().min(32),
+  name: z.string().min(1),
+  password: z.string().min(12),
 });
 
 @Controller("auth")
@@ -33,6 +47,20 @@ export class AuthController {
     const result = await this.authService.login(loginSchema.parse(body));
     setSessionCookie(response, result.sessionToken);
     return { user: result.user };
+  }
+
+  @Post("invite")
+  @UseGuards(SessionTenantGuard)
+  async invite(@TenantContext() context: RequestTenantContext, @Body() body: unknown) {
+    const input = inviteSchema.parse(body);
+    return this.authService.createInvitation({ tenantId: context.tenantId, actorUserId: context.userId, ...input });
+  }
+
+  @Post("accept-invite")
+  async acceptInvite(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
+    const result = await this.authService.acceptInvitation(acceptInviteSchema.parse(body));
+    setSessionCookie(response, result.sessionToken);
+    return { user: result.user, tenantId: result.tenantId };
   }
 
   @Get("me")
