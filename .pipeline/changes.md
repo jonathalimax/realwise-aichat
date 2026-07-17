@@ -17,6 +17,7 @@
 - Knowledge and leads can be created for a tenant using header-based tenant context.
 - Dashboard summary reads tenant/channel/knowledge/lead counts from DB when configured; otherwise demo mode remains available.
 - Tenant-owned dashboard, knowledge and leads routes require a valid `rw_session` cookie and tenant membership when DB is configured.
+- Mock Meta webhooks persist webhook events, contacts, conversations and messages idempotently when DB is configured.
 
 ## Migration notes
 
@@ -27,4 +28,4 @@
 
 - Add invite acceptance, email verification/reset and MFA.
 - Add RLS policies and tenant isolation tests.
-- Wire mock webhook persistence and queue processing.
+- Queue persisted mock webhook processing through BullMQ instead of returning decisions inline.

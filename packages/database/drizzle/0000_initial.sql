@@ -82,6 +82,7 @@ CREATE INDEX "channel_connections_tenant_provider_idx" ON "channel_connections" 
 CREATE TABLE "contacts" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "tenant_id" uuid NOT NULL REFERENCES "tenants"("id"),
+  "external_contact_id" text,
   "display_name" text,
   "phone" text,
   "email" text,
@@ -89,6 +90,7 @@ CREATE TABLE "contacts" (
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 CREATE INDEX "contacts_tenant_idx" ON "contacts" ("tenant_id");
+CREATE UNIQUE INDEX "contacts_tenant_external_unique" ON "contacts" ("tenant_id", "external_contact_id");
 
 CREATE TABLE "conversations" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -102,6 +104,7 @@ CREATE TABLE "conversations" (
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 CREATE INDEX "conversations_tenant_external_idx" ON "conversations" ("tenant_id", "external_conversation_id");
+CREATE UNIQUE INDEX "conversations_tenant_external_unique" ON "conversations" ("tenant_id", "external_conversation_id");
 
 CREATE TABLE "messages" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

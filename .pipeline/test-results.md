@@ -10,7 +10,8 @@
 ## Current iteration
 
 - Added migration tooling, baseline SQL migration, demo seed, auth primitives, auth endpoints and DB-backed tenant-scoped dashboard/knowledge/leads endpoints.
-- Fixed direct API dependencies for imported modules.
+- Added cookie-session tenant guard for DB-configured tenant routes.
+- Added idempotent mock webhook persistence for webhook events, contacts, conversations and messages.
 
 ## Commands not run
 

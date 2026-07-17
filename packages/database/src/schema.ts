@@ -80,11 +80,12 @@ export const channelConnections = pgTable("channel_connections", {
 export const contacts = pgTable("contacts", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  externalContactId: text("external_contact_id"),
   displayName: text("display_name"),
   phone: text("phone"),
   email: text("email"),
   ...timestamps,
-}, (table) => ({ tenantIdx: index("contacts_tenant_idx").on(table.tenantId) }));
+}, (table) => ({ tenantIdx: index("contacts_tenant_idx").on(table.tenantId), tenantExternalUnique: uniqueIndex("contacts_tenant_external_unique").on(table.tenantId, table.externalContactId) }));
 
 export const conversations = pgTable("conversations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -95,7 +96,7 @@ export const conversations = pgTable("conversations", {
   aiPaused: boolean("ai_paused").default(false).notNull(),
   humanActive: boolean("human_active").default(false).notNull(),
   ...timestamps,
-}, (table) => ({ tenantExternalIdx: index("conversations_tenant_external_idx").on(table.tenantId, table.externalConversationId) }));
+}, (table) => ({ tenantExternalIdx: index("conversations_tenant_external_idx").on(table.tenantId, table.externalConversationId), tenantExternalUnique: uniqueIndex("conversations_tenant_external_unique").on(table.tenantId, table.externalConversationId) }));
 
 export const messages = pgTable("messages", {
   id: uuid("id").primaryKey().defaultRandom(),
