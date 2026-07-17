@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { leads } from "@realwise/database";
 import { DatabaseProvider } from "./database.provider";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
+import { SessionTenantGuard } from "./session-tenant.guard";
 
 const createLeadSchema = z.object({
   contactName: z.string().min(1),
@@ -13,6 +14,7 @@ const createLeadSchema = z.object({
 });
 
 @Controller("leads")
+@UseGuards(SessionTenantGuard)
 export class LeadsController {
   constructor(private readonly databaseProvider: DatabaseProvider) {}
 

@@ -9,12 +9,12 @@ Implemented in this iteration:
 - Drizzle migration commands and demo seed script.
 - Password hashing, verification, session-token hashing and role assertion primitives in `@realwise/auth`.
 - API endpoints for owner bootstrap, login, current session and logout.
-- Header-based tenant context for tenant-scoped API endpoints while full session guard is finalized.
+- Cookie-session tenant guard that verifies active session and membership before tenant-owned API access when `DATABASE_URL` is configured.
+- Header/demo fallback only when no DB is configured for local preview.
 
 Still next:
 
 - Invite acceptance flow.
 - Email verification and reset tokens.
 - TOTP/MFA.
-- Cookie-session tenant guard that verifies membership on every tenant request.
-- RLS policies and tests.
+- RLS policies and tenant isolation tests.

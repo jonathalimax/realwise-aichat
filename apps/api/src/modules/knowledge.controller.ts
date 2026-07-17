@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 import { chunkKnowledge } from "@realwise/knowledge";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { knowledgeSources } from "@realwise/database";
 import { DatabaseProvider } from "./database.provider";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
+import { SessionTenantGuard } from "./session-tenant.guard";
 
 const createKnowledgeSchema = z.object({
   title: z.string().min(1),
@@ -13,6 +14,7 @@ const createKnowledgeSchema = z.object({
 });
 
 @Controller("knowledge")
+@UseGuards(SessionTenantGuard)
 export class KnowledgeController {
   constructor(private readonly databaseProvider: DatabaseProvider) {}
 

@@ -8,9 +8,10 @@ import { BillingController } from "./billing.controller";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { DatabaseProvider } from "./database.provider";
+import { SessionTenantGuard } from "./session-tenant.guard";
 
 @Module({
   controllers: [AuthController, HealthController, DashboardController, KnowledgeController, LeadsController, MetaWebhookController, BillingController],
-  providers: [AuthService, DatabaseProvider],
+  providers: [AuthService, DatabaseProvider, SessionTenantGuard],
 })
 export class AppModule {}

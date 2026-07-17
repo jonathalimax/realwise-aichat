@@ -1,11 +1,13 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, UseGuards } from "@nestjs/common";
 import type { DashboardSummary } from "@realwise/contracts";
 import { and, eq, sql } from "drizzle-orm";
 import { channelConnections, knowledgeSources, leads, tenants } from "@realwise/database";
 import { DatabaseProvider } from "./database.provider";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
+import { SessionTenantGuard } from "./session-tenant.guard";
 
 @Controller("dashboard")
+@UseGuards(SessionTenantGuard)
 export class DashboardController {
   constructor(private readonly databaseProvider: DatabaseProvider) {}
 
