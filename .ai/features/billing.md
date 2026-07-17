@@ -2,4 +2,6 @@
 
 Status: IMPLEMENTED_NOT_VERIFIED
 
-Billing entitlement endpoint returns pilot limits and truthful activation status. Stripe Checkout, Portal, webhooks and reconciliation are next.
+Billing now has persisted `plans`, `subscriptions` and `usage_events` tables. The demo seed creates a `pilot` plan and active tenant subscription. `/api/billing/entitlements` is tenant-guarded and returns DB-backed limits/usage when configured, while Stripe activation remains `IMPLEMENTED_NOT_VERIFIED` until real credentials and webhook evidence exist.
+
+Next: Stripe Checkout, Customer Portal, webhooks and reconciliation.

@@ -151,6 +151,38 @@ export const leads = pgTable("leads", {
   ...timestamps,
 }, (table) => ({ tenantCreatedIdx: index("leads_tenant_created_idx").on(table.tenantId, table.createdAt) }));
 
+export const plans = pgTable("plans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  messagesPerMonth: integer("messages_per_month").notNull(),
+  knowledgeSourcesLimit: integer("knowledge_sources_limit").notNull(),
+  teamMembersLimit: integer("team_members_limit").notNull(),
+  stripePriceId: text("stripe_price_id"),
+  ...timestamps,
+}, (table) => ({ codeUnique: uniqueIndex("plans_code_unique").on(table.code) }));
+
+export const subscriptions = pgTable("subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  planId: uuid("plan_id").references(() => plans.id).notNull(),
+  status: text("status").default("ACTIVE").notNull(),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  ...timestamps,
+}, (table) => ({ tenantUnique: uniqueIndex("subscriptions_tenant_unique").on(table.tenantId) }));
+
+export const usageEvents = pgTable("usage_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  kind: text("kind").notNull(),
+  quantity: integer("quantity").default(1).notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  ...timestamps,
+}, (table) => ({ tenantIdempotencyUnique: uniqueIndex("usage_events_tenant_idempotency_unique").on(table.tenantId, table.idempotencyKey), tenantKindIdx: index("usage_events_tenant_kind_idx").on(table.tenantId, table.kind) }));
+
 export const webhookEvents = pgTable("webhook_events", {
   id: uuid("id").primaryKey().defaultRandom(),
   provider: providerEnum("provider").notNull(),

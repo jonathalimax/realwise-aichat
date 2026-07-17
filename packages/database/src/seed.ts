@@ -1,6 +1,6 @@
 import { pbkdf2Sync, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createDatabase, channelConnections, knowledgeSources, memberships, tenants, users } from "./index";
+import { createDatabase, channelConnections, knowledgeSources, memberships, plans, subscriptions, tenants, users } from "./index";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -25,6 +25,17 @@ const tenant = existingTenant ?? (await db.insert(tenants).values({
 
 if (!user || !tenant) throw new Error("Failed to seed user/tenant");
 
+const [existingPlan] = await db.select().from(plans).where(eq(plans.code, "pilot")).limit(1);
+const plan = existingPlan ?? (await db.insert(plans).values({
+  code: "pilot",
+  name: "Pilot",
+  messagesPerMonth: 1000,
+  knowledgeSourcesLimit: 25,
+  teamMembersLimit: 5,
+}).returning())[0];
+if (!plan) throw new Error("Failed to seed plan");
+
+await db.insert(subscriptions).values({ tenantId: tenant.id, planId: plan.id, status: "ACTIVE" }).onConflictDoNothing();
 await db.insert(memberships).values({ tenantId: tenant.id, userId: user.id, role: "OWNER" }).onConflictDoNothing();
 
 const existingChannels = await db.select().from(channelConnections).where(eq(channelConnections.tenantId, tenant.id));
