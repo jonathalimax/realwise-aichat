@@ -24,6 +24,13 @@
 - Apply `packages/database/drizzle/0000_initial.sql` with `pnpm --filter @realwise/database db:migrate` after starting PostgreSQL.
 - Demo seed credentials: `owner@realwise.local` / `change-me-demo-password`.
 
+## Local verification
+
+- Colima Docker context is verified.
+- PostgreSQL/Redis services start successfully.
+- SQL migrations apply successfully.
+- Demo seed is idempotent.
+
 ## Follow-ups
 
 - Add invite acceptance, email verification/reset and MFA.

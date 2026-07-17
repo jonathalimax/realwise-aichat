@@ -14,8 +14,14 @@ pnpm --filter @realwise/database db:seed
 
 ## Local services
 
+Docker is verified through Colima on macOS:
+
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml up -d
+colima start --arch aarch64 --vm-type vz --mount-type virtiofs
+docker context use colima
+docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis
+pnpm --filter @realwise/database db:migrate
+pnpm --filter @realwise/database db:seed
 ```
 
 ## App ports
