@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { createSessionToken, hashPassword, hashToken, verifyPassword } from "@realwise/auth";
 import type { Role } from "@realwise/contracts";
 import { eq, and, gt, isNull } from "drizzle-orm";
-import { invitations, memberships, sessions, tenants, users } from "@realwise/database";
+import { emailVerificationTokens, invitations, memberships, passwordResetTokens, sessions, tenants, users } from "@realwise/database";
 import { DatabaseProvider } from "./database.provider";
 
 @Injectable()
@@ -75,6 +75,45 @@ export class AuthService {
     const session = createSessionToken();
     await db.insert(sessions).values({ userId: user.id, tokenHash: session.tokenHash, expiresAt: session.expiresAt });
     return { user: { id: user.id, email: user.email, name: user.name }, tenantId: invitation.tenantId, sessionToken: session.rawToken };
+  }
+
+  async requestEmailVerification(email: string) {
+    const db = this.databaseProvider.require();
+    const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
+    if (!user) return { ok: true, verificationToken: null };
+    const rawToken = randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
+    await db.insert(emailVerificationTokens).values({ userId: user.id, tokenHash: hashToken(rawToken), expiresAt });
+    return { ok: true, verificationToken: process.env.NODE_ENV === "production" ? null : rawToken, expiresAt };
+  }
+
+  async verifyEmail(token: string) {
+    const db = this.databaseProvider.require();
+    const [record] = await db.select().from(emailVerificationTokens).where(and(eq(emailVerificationTokens.tokenHash, hashToken(token)), isNull(emailVerificationTokens.consumedAt), gt(emailVerificationTokens.expiresAt, new Date()))).limit(1);
+    if (!record) throw new UnauthorizedException({ code: "EMAIL_TOKEN_INVALID", message: "Token de verificação inválido ou expirado.", supportCode: "RW-AUTH-008" });
+    await db.update(users).set({ emailVerifiedAt: new Date(), updatedAt: new Date() }).where(eq(users.id, record.userId));
+    await db.update(emailVerificationTokens).set({ consumedAt: new Date(), updatedAt: new Date() }).where(eq(emailVerificationTokens.id, record.id));
+    return { ok: true };
+  }
+
+  async requestPasswordReset(email: string) {
+    const db = this.databaseProvider.require();
+    const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
+    if (!user) return { ok: true, resetToken: null };
+    const rawToken = randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 30);
+    await db.insert(passwordResetTokens).values({ userId: user.id, tokenHash: hashToken(rawToken), expiresAt });
+    return { ok: true, resetToken: process.env.NODE_ENV === "production" ? null : rawToken, expiresAt };
+  }
+
+  async resetPassword(input: { resetToken: string; password: string }) {
+    const db = this.databaseProvider.require();
+    const [record] = await db.select().from(passwordResetTokens).where(and(eq(passwordResetTokens.tokenHash, hashToken(input.resetToken)), isNull(passwordResetTokens.consumedAt), gt(passwordResetTokens.expiresAt, new Date()))).limit(1);
+    if (!record) throw new UnauthorizedException({ code: "RESET_TOKEN_INVALID", message: "Token de redefinição inválido ou expirado.", supportCode: "RW-AUTH-009" });
+    await db.update(users).set({ passwordHash: hashPassword(input.password), updatedAt: new Date() }).where(eq(users.id, record.userId));
+    await db.update(passwordResetTokens).set({ consumedAt: new Date(), updatedAt: new Date() }).where(eq(passwordResetTokens.id, record.id));
+    await db.update(sessions).set({ revokedAt: new Date(), updatedAt: new Date() }).where(eq(sessions.userId, record.userId));
+    return { ok: true };
   }
 
   async logout(rawToken: string) {

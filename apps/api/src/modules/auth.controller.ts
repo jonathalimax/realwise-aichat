@@ -30,6 +30,10 @@ const acceptInviteSchema = z.object({
   password: z.string().min(12),
 });
 
+const verificationTokenSchema = z.object({ token: z.string().min(32) });
+const passwordResetRequestSchema = z.object({ email: z.string().email() });
+const passwordResetSchema = z.object({ resetToken: z.string().min(32), password: z.string().min(12) });
+
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -61,6 +65,31 @@ export class AuthController {
     const result = await this.authService.acceptInvitation(acceptInviteSchema.parse(body));
     setSessionCookie(response, result.sessionToken);
     return { user: result.user, tenantId: result.tenantId };
+  }
+
+  @Post("request-email-verification")
+  @HttpCode(200)
+  async requestEmailVerification(@Body() body: unknown) {
+    const input = passwordResetRequestSchema.parse(body);
+    return this.authService.requestEmailVerification(input.email);
+  }
+
+  @Post("verify-email")
+  @HttpCode(200)
+  async verifyEmail(@Body() body: unknown) {
+    return this.authService.verifyEmail(verificationTokenSchema.parse(body).token);
+  }
+
+  @Post("request-password-reset")
+  @HttpCode(200)
+  async requestPasswordReset(@Body() body: unknown) {
+    return this.authService.requestPasswordReset(passwordResetRequestSchema.parse(body).email);
+  }
+
+  @Post("reset-password")
+  @HttpCode(200)
+  async resetPassword(@Body() body: unknown) {
+    return this.authService.resetPassword(passwordResetSchema.parse(body));
   }
 
   @Get("me")
