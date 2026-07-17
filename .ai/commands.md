@@ -8,6 +8,8 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm check
+pnpm --filter @realwise/database db:migrate
+pnpm --filter @realwise/database db:seed
 ```
 
 ## Local services

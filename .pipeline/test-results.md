@@ -3,16 +3,17 @@
 ## Commands run
 
 - `pnpm install` — PASS
-- `pnpm typecheck` — PASS after fixing package/app TypeScript path configuration.
+- `pnpm typecheck` — PASS
 - `pnpm test` — PASS
 - `pnpm build` — PASS
 
-## Failures fixed
+## Current iteration
 
-- Initial typecheck failed because per-package `rootDir` conflicted with workspace source imports. Removed restrictive `rootDir` settings.
-- `apps/mock-meta` needed a `@realwise/contracts` path alias because it compiles shared package source.
+- Added migration tooling, baseline SQL migration, demo seed, auth primitives, auth endpoints and DB-backed tenant-scoped dashboard/knowledge/leads endpoints.
+- Fixed direct API dependencies for imported modules.
 
 ## Commands not run
 
+- `pnpm --filter @realwise/database db:migrate` against a live database: not run because no local DB service was started in this autonomous pass.
 - End-to-end browser tests: not yet implemented.
 - Real provider integration tests: credentials and external activation not available.

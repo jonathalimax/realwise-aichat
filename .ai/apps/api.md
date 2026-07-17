@@ -5,10 +5,11 @@ NestJS REST API.
 ## Current implementation
 
 - Health endpoints: `/api/health/live`, `/api/health/ready`, `/api/health/dependencies`.
-- Dashboard summary endpoint.
+- Auth endpoints: `/api/auth/bootstrap-owner`, `/api/auth/login`, `/api/auth/me`, `/api/auth/logout`.
+- Dashboard summary endpoint with DB-backed tenant data when configured.
 - Mock Meta webhook normalization and fake assistant decision endpoint.
-- Knowledge source/chunk preview endpoints.
-- Leads list and billing entitlement demo endpoints.
+- Tenant-scoped knowledge source list/create and chunk preview endpoints.
+- Tenant-scoped leads list/create and billing entitlement demo endpoints.
 
 ## Rules
 

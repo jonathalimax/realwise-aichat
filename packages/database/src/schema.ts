@@ -44,6 +44,27 @@ export const memberships = pgTable("memberships", {
   ...timestamps,
 }, (table) => ({ tenantUserUnique: uniqueIndex("memberships_tenant_user_unique").on(table.tenantId, table.userId) }));
 
+export const sessions = pgTable("sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  ...timestamps,
+}, (table) => ({ tokenHashUnique: uniqueIndex("sessions_token_hash_unique").on(table.tokenHash), userIdx: index("sessions_user_idx").on(table.userId) }));
+
+export const invitations = pgTable("invitations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  email: text("email").notNull(),
+  role: roleEnum("role").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  invitedByUserId: uuid("invited_by_user_id").references(() => users.id),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  ...timestamps,
+}, (table) => ({ invitationTokenUnique: uniqueIndex("invitations_token_hash_unique").on(table.tokenHash), tenantEmailIdx: index("invitations_tenant_email_idx").on(table.tenantId, table.email) }));
+
 export const channelConnections = pgTable("channel_connections", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),

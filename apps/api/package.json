@@ -14,14 +14,20 @@
     "@nestjs/common": "^11.1.5",
     "@nestjs/core": "^11.1.5",
     "@nestjs/platform-express": "^11.1.5",
+    "@realwise/auth": "workspace:*",
     "@realwise/config": "workspace:*",
     "@realwise/contracts": "workspace:*",
+    "@realwise/database": "workspace:*",
     "@realwise/knowledge": "workspace:*",
     "@realwise/meta": "workspace:*",
+    "drizzle-orm": "^0.44.3",
+    "express": "^5.1.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/express": "^5.0.3",
     "@types/node": "^24.0.0",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
