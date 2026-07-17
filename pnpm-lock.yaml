@@ -38,6 +38,9 @@ importers:
       '@realwise/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@realwise/chatwoot':
+        specifier: workspace:*
+        version: link:../../packages/chatwoot
       '@realwise/config':
         specifier: workspace:*
         version: link:../../packages/config

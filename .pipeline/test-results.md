@@ -12,7 +12,7 @@
 - `pnpm typecheck` — PASS.
 - `pnpm test` — PASS.
 - `pnpm build` — PASS.
-- `pnpm smoke:api` against live API + Colima DB — PASS, including auth, dashboard, channels, mock channel connect, knowledge, billing, leads and mock webhook idempotency.
+- `pnpm smoke:api` against live API + Colima DB — PASS, including auth, dashboard, channels, mock channel connect, Chatwoot mock provisioning, knowledge, billing, leads and mock webhook idempotency.
 
 ## Current iteration
 
@@ -25,6 +25,7 @@
 - Added `/app` web page that logs into the API and loads tenant dashboard data from PostgreSQL.
 - Added persisted billing plan/subscription/usage schema and DB-backed entitlements endpoint.
 - Added tenant channel list and mock-connect endpoints.
+- Added persisted Chatwoot mock installation state and guarded status/provisioning endpoints.
 
 ## Commands not run
 

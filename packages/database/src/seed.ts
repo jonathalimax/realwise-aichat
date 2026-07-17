@@ -1,6 +1,6 @@
 import { pbkdf2Sync, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createDatabase, channelConnections, knowledgeSources, memberships, plans, subscriptions, tenants, users } from "./index";
+import { createDatabase, channelConnections, chatwootInstallations, knowledgeSources, memberships, plans, subscriptions, tenants, users } from "./index";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -36,6 +36,13 @@ const plan = existingPlan ?? (await db.insert(plans).values({
 if (!plan) throw new Error("Failed to seed plan");
 
 await db.insert(subscriptions).values({ tenantId: tenant.id, planId: plan.id, status: "ACTIVE" }).onConflictDoNothing();
+await db.insert(chatwootInstallations).values({
+  tenantId: tenant.id,
+  accountId: `mock-account-${tenant.id.slice(0, 12)}`,
+  inboxId: `mock-inbox-${tenant.id.slice(0, 12)}`,
+  status: "MOCK_PROVISIONED",
+  releaseState: "MOCK_VERIFIED",
+}).onConflictDoNothing();
 await db.insert(memberships).values({ tenantId: tenant.id, userId: user.id, role: "OWNER" }).onConflictDoNothing();
 
 const existingChannels = await db.select().from(channelConnections).where(eq(channelConnections.tenantId, tenant.id));

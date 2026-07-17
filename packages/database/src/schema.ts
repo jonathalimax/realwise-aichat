@@ -151,6 +151,16 @@ export const leads = pgTable("leads", {
   ...timestamps,
 }, (table) => ({ tenantCreatedIdx: index("leads_tenant_created_idx").on(table.tenantId, table.createdAt) }));
 
+export const chatwootInstallations = pgTable("chatwoot_installations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  accountId: text("account_id").notNull(),
+  inboxId: text("inbox_id").notNull(),
+  status: text("status").default("MOCK_PROVISIONED").notNull(),
+  releaseState: releaseStateEnum("release_state").default("MOCK_VERIFIED").notNull(),
+  ...timestamps,
+}, (table) => ({ tenantUnique: uniqueIndex("chatwoot_installations_tenant_unique").on(table.tenantId) }));
+
 export const plans = pgTable("plans", {
   id: uuid("id").primaryKey().defaultRandom(),
   code: text("code").notNull(),
