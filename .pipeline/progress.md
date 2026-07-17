@@ -19,7 +19,7 @@ Not created.
 - [x] Add `.ai/` context.
 - [x] Add Docker/Coolify/CI.
 - [x] Run validation.
-- [ ] Commit and push.
+- [x] Commit and push.
 
 ## Timeline
 
