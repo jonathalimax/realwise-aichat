@@ -19,6 +19,8 @@ TENANT_ID=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwi
 CONNECTION_ID=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select id from channel_connections where tenant_id='$TENANT_ID' and provider='WHATSAPP' limit 1")
 
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/dashboard/summary" >/tmp/realwise-aichat-dashboard.json
+curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/channels" >/tmp/realwise-aichat-channels.json
+curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" -H 'content-type: application/json' -X POST "$API_URL/channels/connect-mock" --data '{"provider":"FACEBOOK","externalAssetId":"mock-facebook-smoke"}' >/tmp/realwise-aichat-channel-connect.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/knowledge/sources" >/tmp/realwise-aichat-knowledge.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/billing/entitlements" >/tmp/realwise-aichat-billing.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" \
@@ -34,7 +36,7 @@ curl -fsS -H 'content-type: application/json' -X POST "$API_URL/webhooks/meta/mo
 python3 - <<'PY'
 import json
 from pathlib import Path
-for name in ['health','login-body','dashboard','knowledge','billing','lead','webhook','webhook-duplicate']:
+for name in ['health','login-body','dashboard','channels','channel-connect','knowledge','billing','lead','webhook','webhook-duplicate']:
     path = Path(f'/tmp/realwise-aichat-{name}.json')
     data = json.loads(path.read_text())
     print(name, json.dumps(data, ensure_ascii=False)[:500])
