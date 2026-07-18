@@ -242,6 +242,19 @@ CREATE TABLE "subscriptions" (
 );
 CREATE UNIQUE INDEX "subscriptions_tenant_unique" ON "subscriptions" ("tenant_id");
 
+CREATE TABLE "billing_sessions" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "tenant_id" uuid NOT NULL REFERENCES "tenants"("id"),
+  "kind" text NOT NULL,
+  "provider_session_id" text NOT NULL,
+  "url" text NOT NULL,
+  "status" text DEFAULT 'MOCK_CREATED' NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE UNIQUE INDEX "billing_sessions_provider_session_unique" ON "billing_sessions" ("provider_session_id");
+CREATE INDEX "billing_sessions_tenant_idx" ON "billing_sessions" ("tenant_id");
+
 CREATE TABLE "usage_events" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "tenant_id" uuid NOT NULL REFERENCES "tenants"("id"),

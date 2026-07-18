@@ -210,6 +210,16 @@ export const subscriptions = pgTable("subscriptions", {
   ...timestamps,
 }, (table) => ({ tenantUnique: uniqueIndex("subscriptions_tenant_unique").on(table.tenantId) }));
 
+export const billingSessions = pgTable("billing_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  kind: text("kind").notNull(),
+  providerSessionId: text("provider_session_id").notNull(),
+  url: text("url").notNull(),
+  status: text("status").default("MOCK_CREATED").notNull(),
+  ...timestamps,
+}, (table) => ({ providerSessionUnique: uniqueIndex("billing_sessions_provider_session_unique").on(table.providerSessionId), tenantIdx: index("billing_sessions_tenant_idx").on(table.tenantId) }));
+
 export const usageEvents = pgTable("usage_events", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),

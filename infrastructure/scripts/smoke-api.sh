@@ -25,6 +25,8 @@ curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/chatwoot/s
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" -H 'content-type: application/json' -X POST "$API_URL/chatwoot/provision-mock" >/tmp/realwise-aichat-chatwoot-provision.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/knowledge/sources" >/tmp/realwise-aichat-knowledge.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/billing/entitlements" >/tmp/realwise-aichat-billing.json
+curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" -H 'content-type: application/json' -X POST "$API_URL/billing/checkout-session" >/tmp/realwise-aichat-billing-checkout.json
+curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" -H 'content-type: application/json' -X POST "$API_URL/billing/portal-session" >/tmp/realwise-aichat-billing-portal.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" \
   -H 'content-type: application/json' \
   -X POST "$API_URL/leads" \
@@ -68,7 +70,7 @@ done
 python3 - <<'PY'
 import json
 from pathlib import Path
-for name in ['health','login-body','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','lead','webhook','webhook-duplicate','assistant-decision','usage-event','chatwoot-mirror']:
+for name in ['health','login-body','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','billing-checkout','billing-portal','lead','webhook','webhook-duplicate','assistant-decision','usage-event','chatwoot-mirror']:
     path = Path(f'/tmp/realwise-aichat-{name}.json')
     data = json.loads(path.read_text())
     print(name, json.dumps(data, ensure_ascii=False)[:500])

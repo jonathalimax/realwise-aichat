@@ -8,6 +8,7 @@
     "types": ["node"],
     "paths": {
       "@realwise/auth": ["../../packages/auth/src/index.ts"],
+      "@realwise/billing": ["../../packages/billing/src/index.ts"],
       "@realwise/chatwoot": ["../../packages/chatwoot/src/index.ts"],
       "@realwise/config": ["../../packages/config/src/index.ts"],
       "@realwise/contracts": ["../../packages/contracts/src/index.ts"],

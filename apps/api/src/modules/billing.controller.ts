@@ -1,6 +1,8 @@
-import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { plans, subscriptions, usageEvents } from "@realwise/database";
+import { buildMockBillingSession, stripeActivationState, type BillingSessionKind } from "@realwise/billing";
+import { billingSessions, plans, subscriptions, usageEvents } from "@realwise/database";
 import { DatabaseProvider } from "./database.provider";
 import { SessionTenantGuard } from "./session-tenant.guard";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
@@ -17,6 +19,7 @@ export class BillingController {
       return {
         plan: "pilot",
         status: process.env.STRIPE_SECRET_KEY ? "READY_FOR_EXTERNAL_ACTIVATION" : "IMPLEMENTED_NOT_VERIFIED",
+        activation: stripeActivationState(process.env.STRIPE_SECRET_KEY, process.env.STRIPE_WEBHOOK_SECRET),
         limits: { messagesPerMonth: 1000, knowledgeSources: 25, teamMembers: 5 },
         usage: { messages: 0 },
       };
@@ -45,7 +48,7 @@ export class BillingController {
       plan: subscription?.code ?? "none",
       name: subscription?.name ?? "Sem plano",
       status: subscription?.status ?? "INACTIVE",
-      activation: process.env.STRIPE_SECRET_KEY ? "READY_FOR_EXTERNAL_ACTIVATION" : "IMPLEMENTED_NOT_VERIFIED",
+      activation: stripeActivationState(process.env.STRIPE_SECRET_KEY, process.env.STRIPE_WEBHOOK_SECRET),
       limits: {
         messagesPerMonth: subscription?.messagesPerMonth ?? 0,
         knowledgeSources: subscription?.knowledgeSourcesLimit ?? 0,
@@ -53,5 +56,29 @@ export class BillingController {
       },
       usage: { messages: messageUsage?.total ?? 0 },
     };
+  }
+
+  @Post("checkout-session")
+  async checkoutSession(@TenantContext() context: RequestTenantContext) {
+    return this.createMockSession(context.tenantId, "CHECKOUT");
+  }
+
+  @Post("portal-session")
+  async portalSession(@TenantContext() context: RequestTenantContext) {
+    return this.createMockSession(context.tenantId, "PORTAL");
+  }
+
+  private async createMockSession(tenantId: string, kind: BillingSessionKind) {
+    const db = this.databaseProvider.require();
+    const providerSessionId = `mock_${kind.toLowerCase()}_${randomUUID()}`;
+    const mock = buildMockBillingSession({ tenantId, kind, sessionId: providerSessionId });
+    const [session] = await db.insert(billingSessions).values({
+      tenantId,
+      kind,
+      providerSessionId,
+      url: mock.url,
+      status: mock.status,
+    }).returning();
+    return session;
   }
 }

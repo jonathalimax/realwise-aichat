@@ -41,6 +41,9 @@ importers:
       '@realwise/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@realwise/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@realwise/chatwoot':
         specifier: workspace:*
         version: link:../../packages/chatwoot
