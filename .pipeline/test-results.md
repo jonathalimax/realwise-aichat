@@ -12,7 +12,7 @@
 - `pnpm build` — PASS.
 - API dev server against Colima DB/Redis — PASS.
 - Worker dev process against Colima DB/Redis — PASS.
-- `pnpm smoke:api` against live API + worker + Colima DB/Redis — PASS, including auth, invite, email verification, password reset, email outbox, audit listing, dashboard, channels, mock channel connect, Chatwoot mock provisioning, knowledge, billing entitlements, billing checkout/portal mock sessions, leads, mock webhook enqueue, worker processing, assistant decision persistence, idempotent usage metering and Chatwoot mock mirror persistence.
+- `pnpm smoke:api` against live API + worker + Colima DB/Redis — PASS, including standardized validation errors, auth, invite, email verification, password reset, email outbox, audit listing, dashboard, channels, mock channel connect, Chatwoot mock provisioning, knowledge, billing entitlements, billing checkout/portal mock sessions, leads, mock webhook enqueue, worker processing, assistant decision persistence, idempotent usage metering and Chatwoot mock mirror persistence.
 - `pnpm e2e:local` — PASS, Playwright Chromium verifies login, dashboard, channels, knowledge creation, leads and billing console tabs.
 
 ## Current iteration
