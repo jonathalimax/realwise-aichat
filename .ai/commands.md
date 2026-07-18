@@ -13,6 +13,7 @@ pnpm --filter @realwise/database db:seed
 pnpm --filter @realwise/api dev
 pnpm --filter @realwise/worker dev
 pnpm smoke:api
+pnpm e2e:local
 ```
 
 ## Local services

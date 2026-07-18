@@ -16,10 +16,12 @@
     "test": "turbo test",
     "format": "prettier --write .",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "smoke:api": "infrastructure/scripts/smoke-api.sh"
+    "smoke:api": "infrastructure/scripts/smoke-api.sh",
+    "e2e:local": "DATABASE_URL=postgres://realwise:realwise@localhost:5432/realwise_aichat pnpm --filter @realwise/database db:migrate && DATABASE_URL=postgres://realwise:realwise@localhost:5432/realwise_aichat pnpm --filter @realwise/database db:seed && playwright test"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@playwright/test": "^1.54.2",
     "prettier": "^3.6.2",
     "turbo": "^2.5.5",
     "typescript": "^5.8.3",

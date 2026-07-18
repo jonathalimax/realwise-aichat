@@ -10,4 +10,5 @@
 | Leads and appointments | IMPLEMENTED_NOT_VERIFIED | `features/leads-appointments.md` |
 | Billing and entitlements | IMPLEMENTED_NOT_VERIFIED | `features/billing.md` |
 | Deployment and CI | IMPLEMENTED_NOT_VERIFIED | `features/deployment.md` |
+| End-to-end tests | MOCK_VERIFIED | `features/e2e.md` |
 | Security and observability | IMPLEMENTED_NOT_VERIFIED | `features/security-observability.md` |
