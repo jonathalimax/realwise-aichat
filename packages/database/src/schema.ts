@@ -130,6 +130,20 @@ export const messages = pgTable("messages", {
   ...timestamps,
 }, (table) => ({ tenantEventUnique: uniqueIndex("messages_tenant_event_unique").on(table.tenantId, table.externalEventId) }));
 
+export const assistantDecisions = pgTable("assistant_decisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  conversationId: uuid("conversation_id").references(() => conversations.id).notNull(),
+  messageId: uuid("message_id").references(() => messages.id).notNull(),
+  action: text("action").notNull(),
+  confidence: integer("confidence").notNull(),
+  response: text("response"),
+  citedSourceIds: jsonb("cited_source_ids").default([]).notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").default("RECORDED").notNull(),
+  ...timestamps,
+}, (table) => ({ messageUnique: uniqueIndex("assistant_decisions_message_unique").on(table.messageId), tenantIdx: index("assistant_decisions_tenant_idx").on(table.tenantId) }));
+
 export const knowledgeSources = pgTable("knowledge_sources", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),

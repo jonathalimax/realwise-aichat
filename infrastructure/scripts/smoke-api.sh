@@ -35,10 +35,20 @@ PAYLOAD="{\"tenantId\":\"$TENANT_ID\",\"connectionId\":\"$CONNECTION_ID\",\"prov
 curl -fsS -H 'content-type: application/json' -X POST "$API_URL/webhooks/meta/mock" --data "$PAYLOAD" >/tmp/realwise-aichat-webhook.json
 curl -fsS -H 'content-type: application/json' -X POST "$API_URL/webhooks/meta/mock" --data "$PAYLOAD" >/tmp/realwise-aichat-webhook-duplicate.json
 
+for i in $(seq 1 30); do
+  DECISION_JSON=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select json_build_object('action', action, 'status', status, 'reason', reason)::text from assistant_decisions where tenant_id='$TENANT_ID' order by created_at desc limit 1")
+  if [ -n "$DECISION_JSON" ]; then
+    printf '%s\n' "$DECISION_JSON" >/tmp/realwise-aichat-assistant-decision.json
+    break
+  fi
+  sleep 1
+  if [ "$i" = "30" ]; then echo "assistant decision not recorded" >&2; exit 1; fi
+done
+
 python3 - <<'PY'
 import json
 from pathlib import Path
-for name in ['health','login-body','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','lead','webhook','webhook-duplicate']:
+for name in ['health','login-body','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','lead','webhook','webhook-duplicate','assistant-decision']:
     path = Path(f'/tmp/realwise-aichat-{name}.json')
     data = json.loads(path.read_text())
     print(name, json.dumps(data, ensure_ascii=False)[:500])

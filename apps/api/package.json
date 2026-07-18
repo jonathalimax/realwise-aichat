@@ -21,6 +21,7 @@
     "@realwise/database": "workspace:*",
     "@realwise/knowledge": "workspace:*",
     "@realwise/meta": "workspace:*",
+    "@realwise/queue": "workspace:*",
     "drizzle-orm": "^0.44.3",
     "express": "^5.1.0",
     "reflect-metadata": "^0.2.2",

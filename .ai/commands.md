@@ -11,6 +11,7 @@ pnpm check
 pnpm --filter @realwise/database db:migrate
 pnpm --filter @realwise/database db:seed
 pnpm --filter @realwise/api dev
+pnpm --filter @realwise/worker dev
 pnpm smoke:api
 ```
 

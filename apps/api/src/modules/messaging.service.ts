@@ -1,8 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { fakeAssistantDecision } from "@realwise/knowledge";
+import { createMessageProcessingQueue, defaultJobOptions, messageJobId } from "@realwise/queue";
 import type { NormalizedMessage } from "@realwise/contracts";
 import { and, eq } from "drizzle-orm";
-import { channelConnections, contacts, conversations, knowledgeSources, messages, webhookEvents } from "@realwise/database";
+import { channelConnections, contacts, conversations, messages, webhookEvents } from "@realwise/database";
 import { DatabaseProvider } from "./database.provider";
 
 @Injectable()
@@ -12,16 +12,17 @@ export class MessagingService {
   async acceptNormalizedMessage(message: NormalizedMessage, rawPayload: unknown) {
     const db = this.databaseProvider.optional();
     if (!db) {
-      const decision = fakeAssistantDecision(message, [{ id: "source-prices", title: "Planos e preços" }], { humanActive: false, aiEnabled: true });
-      return { accepted: true, duplicate: false, persisted: false, assistantDecision: decision };
+      return { accepted: true, duplicate: false, persisted: false, queued: false };
     }
 
     const existingEvent = await db.select().from(webhookEvents).where(and(eq(webhookEvents.provider, message.provider), eq(webhookEvents.externalEventId, message.externalEventId))).limit(1);
-    if (existingEvent.length > 0) return { accepted: true, duplicate: true, persisted: true, assistantDecision: null };
+    if (existingEvent.length > 0) return { accepted: true, duplicate: true, persisted: true, queued: false };
 
     await db.insert(webhookEvents).values({ provider: message.provider, externalEventId: message.externalEventId, payload: rawPayload });
 
     const [connection] = await db.select().from(channelConnections).where(eq(channelConnections.id, message.connectionId)).limit(1);
+    if (!connection) throw new Error("Channel connection not found");
+
     const [contact] = await db.insert(contacts).values({
       tenantId: message.tenantId,
       externalContactId: message.externalContactId,
@@ -30,22 +31,20 @@ export class MessagingService {
       target: [contacts.tenantId, contacts.externalContactId],
       set: { updatedAt: new Date() },
     }).returning();
-
     if (!contact) throw new Error("Failed to upsert contact");
 
     const [conversation] = await db.insert(conversations).values({
       tenantId: message.tenantId,
       contactId: contact.id,
-      connectionId: connection?.id ?? message.connectionId,
+      connectionId: connection.id,
       externalConversationId: message.externalConversationId ?? message.externalContactId,
     }).onConflictDoUpdate({
       target: [conversations.tenantId, conversations.externalConversationId],
       set: { updatedAt: new Date() },
     }).returning();
-
     if (!conversation) throw new Error("Failed to upsert conversation");
 
-    await db.insert(messages).values({
+    const [storedMessage] = await db.insert(messages).values({
       tenantId: message.tenantId,
       conversationId: conversation.id,
       externalEventId: message.externalEventId,
@@ -55,11 +54,21 @@ export class MessagingService {
       text: message.text,
       attachments: message.attachments,
       occurredAt: new Date(message.occurredAt),
-    }).onConflictDoNothing();
+    }).returning();
+    if (!storedMessage) throw new Error("Failed to persist message");
 
-    const sources = await db.select({ id: knowledgeSources.id, title: knowledgeSources.title }).from(knowledgeSources).where(eq(knowledgeSources.tenantId, message.tenantId)).limit(5);
-    const decision = fakeAssistantDecision(message, sources, { humanActive: conversation.humanActive, aiEnabled: true });
-    await db.update(webhookEvents).set({ processedAt: new Date(), updatedAt: new Date() }).where(and(eq(webhookEvents.provider, message.provider), eq(webhookEvents.externalEventId, message.externalEventId)));
-    return { accepted: true, duplicate: false, persisted: true, assistantDecision: decision };
+    const queue = createMessageProcessingQueue(process.env.REDIS_URL ?? "redis://localhost:6379");
+    await queue.add("process-message", {
+      tenantId: message.tenantId,
+      messageId: storedMessage.id,
+      conversationId: conversation.id,
+      externalEventId: message.externalEventId,
+    }, {
+      ...defaultJobOptions,
+      jobId: messageJobId({ tenantId: message.tenantId, externalEventId: message.externalEventId }),
+    });
+    await queue.close();
+
+    return { accepted: true, duplicate: false, persisted: true, queued: true, messageId: storedMessage.id, conversationId: conversation.id };
   }
 }

@@ -13,7 +13,8 @@
       "@realwise/contracts": ["../../packages/contracts/src/index.ts"],
       "@realwise/database": ["../../packages/database/src/index.ts"],
       "@realwise/knowledge": ["../../packages/knowledge/src/index.ts"],
-      "@realwise/meta": ["../../packages/meta/src/index.ts"]
+      "@realwise/meta": ["../../packages/meta/src/index.ts"],
+      "@realwise/queue": ["../../packages/queue/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts"]

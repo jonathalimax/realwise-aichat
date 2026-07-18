@@ -11,8 +11,13 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@realwise/contracts": "workspace:*",
+    "@realwise/database": "workspace:*",
+    "@realwise/knowledge": "workspace:*",
+    "@realwise/queue": "workspace:*",
     "bullmq": "^5.56.0",
-    "ioredis": "^5.6.1"
+    "ioredis": "^5.6.1",
+    "drizzle-orm": "^0.44.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

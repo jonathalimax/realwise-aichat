@@ -2,30 +2,25 @@
 
 ## Commands run
 
-- `colima start --arch aarch64 --vm-type vz --mount-type virtiofs` — PASS, already running.
 - `docker context use colima` — PASS.
 - `docker info` — PASS through Colima.
 - `docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis` — PASS.
-- `pnpm --filter @realwise/database db:migrate` against Colima PostgreSQL — PASS.
-- `pnpm --filter @realwise/database db:seed` against Colima PostgreSQL — PASS.
-- `pnpm --filter @realwise/database db:seed` second run — PASS, seed is idempotent.
+- `pnpm --filter @realwise/database db:migrate` against Colima PostgreSQL — PASS, including `0005_assistant_decisions.sql`.
+- `pnpm install` — PASS.
 - `pnpm typecheck` — PASS.
 - `pnpm test` — PASS.
 - `pnpm build` — PASS.
-- `pnpm smoke:api` against live API + Colima DB — PASS, including auth, dashboard, channels, mock channel connect, Chatwoot mock provisioning, knowledge, billing, leads and mock webhook idempotency.
+- API dev server against Colima DB/Redis — PASS.
+- Worker dev process against Colima DB/Redis — PASS.
+- `pnpm smoke:api` against live API + worker + Colima DB/Redis — PASS, including auth, dashboard, channels, mock channel connect, Chatwoot mock provisioning, knowledge, billing, leads, mock webhook enqueue, worker processing and assistant decision persistence.
 
 ## Current iteration
 
-- Switched local Docker verification to Colima context.
-- Replaced Drizzle metadata-based migration command with an explicit SQL migration runner for committed SQL files.
-- Made incremental SQL migrations idempotent for fresh local databases.
-- Made demo seed idempotent.
-- Verified local PostgreSQL + Redis services under Colima.
-- Added repeatable API smoke script.
-- Added `/app` web page that logs into the API and loads tenant dashboard data from PostgreSQL.
-- Added persisted billing plan/subscription/usage schema and DB-backed entitlements endpoint.
-- Added tenant channel list and mock-connect endpoints.
-- Added persisted Chatwoot mock installation state and guarded status/provisioning endpoints.
+- Added `@realwise/queue` with BullMQ queue contract/default job options.
+- Added `assistant_decisions` persistence.
+- Changed mock webhook API flow to persist and enqueue message processing jobs.
+- Implemented worker processing for queued messages.
+- Updated smoke script to wait for a persisted assistant decision.
 
 ## Commands not run
 

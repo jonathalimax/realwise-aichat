@@ -146,6 +146,23 @@ CREATE TABLE "messages" (
 );
 CREATE UNIQUE INDEX "messages_tenant_event_unique" ON "messages" ("tenant_id", "external_event_id");
 
+CREATE TABLE "assistant_decisions" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "tenant_id" uuid NOT NULL REFERENCES "tenants"("id"),
+  "conversation_id" uuid NOT NULL REFERENCES "conversations"("id"),
+  "message_id" uuid NOT NULL REFERENCES "messages"("id"),
+  "action" text NOT NULL,
+  "confidence" integer NOT NULL,
+  "response" text,
+  "cited_source_ids" jsonb DEFAULT '[]'::jsonb NOT NULL,
+  "reason" text NOT NULL,
+  "status" text DEFAULT 'RECORDED' NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE UNIQUE INDEX "assistant_decisions_message_unique" ON "assistant_decisions" ("message_id");
+CREATE INDEX "assistant_decisions_tenant_idx" ON "assistant_decisions" ("tenant_id");
+
 CREATE TABLE "knowledge_sources" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "tenant_id" uuid NOT NULL REFERENCES "tenants"("id"),

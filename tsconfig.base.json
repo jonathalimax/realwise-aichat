@@ -20,6 +20,7 @@
       "@realwise/encryption": ["./packages/encryption/src/index.ts"],
       "@realwise/meta": ["./packages/meta/src/index.ts"],
       "@realwise/knowledge": ["./packages/knowledge/src/index.ts"],
+      "@realwise/queue": ["./packages/queue/src/index.ts"],
       "@realwise/ui": ["./packages/ui/src/index.ts"],
       "@realwise/testing": ["./packages/testing/src/index.ts"]
     }

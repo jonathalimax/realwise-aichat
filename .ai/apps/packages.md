@@ -7,5 +7,6 @@
 - `encryption`: AES-256-GCM JSON encryption with tenant-bound AAD.
 - `meta`: mock Meta event normalization and OAuth state helpers.
 - `knowledge`: chunking and deterministic assistant decision policy.
+- `queue`: BullMQ queue names, job contracts and default retry options.
 - `ui`: shared accessible UI primitives.
 - Remaining packages are placeholders for expansion while preserving architecture boundaries.
