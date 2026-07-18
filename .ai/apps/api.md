@@ -4,7 +4,7 @@ NestJS REST API.
 
 ## Current implementation
 
-- Health endpoints: `/api/health/live`, `/api/health/ready`, `/api/health/dependencies`.
+- Health endpoints: `/api/health/live`, `/api/health/ready`, `/api/health/dependencies`; readiness performs real PostgreSQL/Redis checks when configured.
 - Global safe exception filter and `x-request-id` response header.
 - Auth endpoints: `/api/auth/bootstrap-owner`, `/api/auth/login`, `/api/auth/invite`, `/api/auth/accept-invite`, `/api/auth/request-email-verification`, `/api/auth/verify-email`, `/api/auth/request-password-reset`, `/api/auth/reset-password`, `/api/auth/me`, `/api/auth/logout`.
 - Dashboard summary endpoint with DB-backed tenant data when configured.

@@ -6,6 +6,8 @@ TENANT_NAME="${TENANT_NAME:-Academia Realwise Demo}"
 DB_COMPOSE_FILE="${DB_COMPOSE_FILE:-infrastructure/docker/docker-compose.yml}"
 
 curl -fsS "$API_URL/health/live" >/tmp/realwise-aichat-health.json
+curl -fsS "$API_URL/health/ready" >/tmp/realwise-aichat-ready.json
+curl -fsS "$API_URL/health/dependencies" >/tmp/realwise-aichat-dependencies.json
 
 LOGIN_HEADERS=/tmp/realwise-aichat-login-headers.txt
 LOGIN_BODY=/tmp/realwise-aichat-login-body.json
@@ -88,7 +90,7 @@ done
 python3 - <<'PY'
 import json
 from pathlib import Path
-for name in ['health','login-body','invalid','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','billing-checkout','billing-portal','invite','accept-invite','forbidden','email-verification','password-reset','email-outbox','audit','lead','webhook','webhook-duplicate','assistant-decision','usage-event','chatwoot-mirror']:
+for name in ['health','ready','dependencies','login-body','invalid','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','billing-checkout','billing-portal','invite','accept-invite','forbidden','email-verification','password-reset','email-outbox','audit','lead','webhook','webhook-duplicate','assistant-decision','usage-event','chatwoot-mirror']:
     path = Path(f'/tmp/realwise-aichat-{name}.json')
     data = json.loads(path.read_text())
     print(name, json.dumps(data, ensure_ascii=False)[:500])
