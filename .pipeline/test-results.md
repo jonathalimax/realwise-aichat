@@ -5,22 +5,28 @@
 - `docker context use colima` — PASS.
 - `docker info` — PASS through Colima.
 - `docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis` — PASS.
-- `pnpm --filter @realwise/database db:migrate` against Colima PostgreSQL — PASS, including `0008_email_outbox.sql`.
+- `pnpm --filter @realwise/database db:migrate` against Colima PostgreSQL — PASS.
 - `pnpm install` — PASS.
 - `pnpm typecheck` — PASS.
 - `pnpm test` — PASS.
 - `pnpm build` — PASS.
 - API dev server against Colima DB/Redis — PASS.
 - Worker dev process against Colima DB/Redis — PASS.
-- `pnpm smoke:api` against live API + worker + Colima DB/Redis — PASS, including live dependency health checks, standardized validation errors, auth, invite, role-forbidden RBAC check, email verification, password reset, email outbox, audit listing, dashboard, channels, mock channel connect, Chatwoot mock provisioning, knowledge, billing entitlements, billing checkout/portal mock sessions, leads, mock webhook enqueue, worker processing, assistant decision persistence, idempotent usage metering and Chatwoot mock mirror persistence.
-- `pnpm e2e:local` — PASS, Playwright Chromium verifies login, dashboard, channels, knowledge creation, leads and billing console tabs.
+- `pnpm smoke:api` against local Docker Compose DB query mode — PASS.
+- `pnpm e2e:local` — PASS in the previous Playwright iteration.
 
-## Current iteration
+## CI hardening iteration
 
-- Added `email_outbox` persistence.
-- Auth invite, email verification and password reset flows write mock/manual email records.
-- Smoke verifies `INVITATION`, `EMAIL_VERIFICATION` and `PASSWORD_RESET` outbox records.
+- GitHub Actions now uses PostgreSQL pgvector and Redis service containers.
+- CI installs `postgresql-client` and uses `USE_DIRECT_PSQL=1 pnpm smoke:api` for DB assertions without Docker Compose.
+- CI runs migrations, seed, `pnpm check`, Playwright browser install, API smoke and local E2E.
+- Smoke script supports both local Docker Compose query mode and CI direct `psql` query mode.
+
+## Local caveat
+
+- Direct `USE_DIRECT_PSQL=1 pnpm smoke:api` was not run locally because `psql` is not installed on this macOS environment. Normal local Docker Compose smoke mode passed.
 
 ## Commands not run
 
 - Real provider integration tests: credentials and external activation not available.
+- Hosted GitHub Actions result after this push: pending remote CI execution.

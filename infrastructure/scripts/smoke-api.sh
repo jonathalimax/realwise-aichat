@@ -5,6 +5,15 @@ API_URL="${API_URL:-http://localhost:3001/api}"
 TENANT_NAME="${TENANT_NAME:-Academia Realwise Demo}"
 DB_COMPOSE_FILE="${DB_COMPOSE_FILE:-infrastructure/docker/docker-compose.yml}"
 
+query_db() {
+  local sql="$1"
+  if [ "${USE_DIRECT_PSQL:-0}" = "1" ]; then
+    psql "${DATABASE_URL:?DATABASE_URL is required when USE_DIRECT_PSQL=1}" -tAc "$sql"
+  else
+    docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "$sql"
+  fi
+}
+
 curl -fsS "$API_URL/health/live" >/tmp/realwise-aichat-health.json
 curl -fsS "$API_URL/health/ready" >/tmp/realwise-aichat-ready.json
 curl -fsS "$API_URL/health/dependencies" >/tmp/realwise-aichat-dependencies.json
@@ -17,8 +26,8 @@ curl -fsS -D "$LOGIN_HEADERS" -o "$LOGIN_BODY" \
   --data '{"email":"owner@realwise.local","password":"change-me-demo-password"}'
 
 COOKIE=$(grep -i '^set-cookie:' "$LOGIN_HEADERS" | sed -E 's/^set-cookie: ([^;]+).*/\1/i' | tr -d '\r' | head -1)
-TENANT_ID=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select id from tenants where name='$TENANT_NAME' limit 1")
-CONNECTION_ID=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select id from channel_connections where tenant_id='$TENANT_ID' and provider='WHATSAPP' limit 1")
+TENANT_ID=$(query_db "select id from tenants where name='$TENANT_NAME' limit 1")
+CONNECTION_ID=$(query_db "select id from channel_connections where tenant_id='$TENANT_ID' and provider='WHATSAPP' limit 1")
 
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/dashboard/summary" >/tmp/realwise-aichat-dashboard.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/channels" >/tmp/realwise-aichat-channels.json
@@ -44,7 +53,7 @@ FORBIDDEN_STATUS=$(curl -sS -o /tmp/realwise-aichat-forbidden.json -w '%{http_co
 if [ "$FORBIDDEN_STATUS" != "403" ]; then echo "expected attendant billing checkout to return 403, got $FORBIDDEN_STATUS" >&2; cat /tmp/realwise-aichat-forbidden.json >&2; exit 1; fi
 curl -fsS -H 'content-type: application/json' -X POST "$API_URL/auth/request-email-verification" --data '{"email":"owner@realwise.local"}' >/tmp/realwise-aichat-email-verification.json
 curl -fsS -H 'content-type: application/json' -X POST "$API_URL/auth/request-password-reset" --data '{"email":"owner@realwise.local"}' >/tmp/realwise-aichat-password-reset.json
-OUTBOX_JSON=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select json_object_agg(kind, count)::text from (select kind, count(*)::int from email_outbox where kind in ('INVITATION','EMAIL_VERIFICATION','PASSWORD_RESET') group by kind) t")
+OUTBOX_JSON=$(query_db "select json_object_agg(kind, count)::text from (select kind, count(*)::int from email_outbox where kind in ('INVITATION','EMAIL_VERIFICATION','PASSWORD_RESET') group by kind) t")
 printf '%s\n' "$OUTBOX_JSON" >/tmp/realwise-aichat-email-outbox.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/audit/events" >/tmp/realwise-aichat-audit.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" \
@@ -58,7 +67,7 @@ curl -fsS -H 'content-type: application/json' -X POST "$API_URL/webhooks/meta/mo
 curl -fsS -H 'content-type: application/json' -X POST "$API_URL/webhooks/meta/mock" --data "$PAYLOAD" >/tmp/realwise-aichat-webhook-duplicate.json
 
 for i in $(seq 1 30); do
-  DECISION_JSON=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select json_build_object('action', d.action, 'status', d.status, 'reason', d.reason)::text from assistant_decisions d inner join messages m on m.id=d.message_id where d.tenant_id='$TENANT_ID' and m.external_event_id='$EVENT_ID' limit 1")
+  DECISION_JSON=$(query_db "select json_build_object('action', d.action, 'status', d.status, 'reason', d.reason)::text from assistant_decisions d inner join messages m on m.id=d.message_id where d.tenant_id='$TENANT_ID' and m.external_event_id='$EVENT_ID' limit 1")
   if [ -n "$DECISION_JSON" ]; then
     printf '%s\n' "$DECISION_JSON" >/tmp/realwise-aichat-assistant-decision.json
     break
@@ -68,7 +77,7 @@ for i in $(seq 1 30); do
 done
 
 for i in $(seq 1 30); do
-  USAGE_JSON=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select json_build_object('kind', kind, 'quantity', quantity)::text from usage_events where tenant_id='$TENANT_ID' and idempotency_key=(select 'message:' || id::text from messages where external_event_id='$EVENT_ID' limit 1) limit 1")
+  USAGE_JSON=$(query_db "select json_build_object('kind', kind, 'quantity', quantity)::text from usage_events where tenant_id='$TENANT_ID' and idempotency_key=(select 'message:' || id::text from messages where external_event_id='$EVENT_ID' limit 1) limit 1")
   if [ -n "$USAGE_JSON" ]; then
     printf '%s\n' "$USAGE_JSON" >/tmp/realwise-aichat-usage-event.json
     break
@@ -78,7 +87,7 @@ for i in $(seq 1 30); do
 done
 
 for i in $(seq 1 30); do
-  MIRROR_JSON=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select json_build_object('status', c.status, 'targetInboxId', c.target_inbox_id)::text from chatwoot_message_mirrors c inner join messages m on m.id=c.message_id where c.tenant_id='$TENANT_ID' and m.external_event_id='$EVENT_ID' limit 1")
+  MIRROR_JSON=$(query_db "select json_build_object('status', c.status, 'targetInboxId', c.target_inbox_id)::text from chatwoot_message_mirrors c inner join messages m on m.id=c.message_id where c.tenant_id='$TENANT_ID' and m.external_event_id='$EVENT_ID' limit 1")
   if [ -n "$MIRROR_JSON" ]; then
     printf '%s\n' "$MIRROR_JSON" >/tmp/realwise-aichat-chatwoot-mirror.json
     break
