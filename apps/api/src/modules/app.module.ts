@@ -4,6 +4,8 @@ import { HealthController } from "./health.controller";
 import { KnowledgeController } from "./knowledge.controller";
 import { LeadsController } from "./leads.controller";
 import { MetaWebhookController } from "./meta-webhook.controller";
+import { AuditController } from "./audit.controller";
+import { AuditService } from "./audit.service";
 import { BillingController } from "./billing.controller";
 import { ChannelsController } from "./channels.controller";
 import { ChatwootController } from "./chatwoot.controller";
@@ -14,7 +16,7 @@ import { SessionTenantGuard } from "./session-tenant.guard";
 import { MessagingService } from "./messaging.service";
 
 @Module({
-  controllers: [AuthController, HealthController, DashboardController, ChannelsController, ChatwootController, KnowledgeController, LeadsController, MetaWebhookController, BillingController],
-  providers: [AuthService, DatabaseProvider, SessionTenantGuard, MessagingService],
+  controllers: [AuthController, AuditController, HealthController, DashboardController, ChannelsController, ChatwootController, KnowledgeController, LeadsController, MetaWebhookController, BillingController],
+  providers: [AuthService, AuditService, DatabaseProvider, SessionTenantGuard, MessagingService],
 })
 export class AppModule {}

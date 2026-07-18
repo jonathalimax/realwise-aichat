@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { buildMockBillingSession, stripeActivationState, type BillingSessionKind } from "@realwise/billing";
 import { billingSessions, plans, subscriptions, usageEvents } from "@realwise/database";
+import { AuditService } from "./audit.service";
 import { DatabaseProvider } from "./database.provider";
 import { SessionTenantGuard } from "./session-tenant.guard";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
@@ -10,7 +11,7 @@ import { TenantContext, type RequestTenantContext } from "./tenant-context";
 @Controller("billing")
 @UseGuards(SessionTenantGuard)
 export class BillingController {
-  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider) {}
+  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider, @Inject(AuditService) private readonly auditService: AuditService) {}
 
   @Get("entitlements")
   async entitlements(@TenantContext() context: RequestTenantContext) {
@@ -60,25 +61,26 @@ export class BillingController {
 
   @Post("checkout-session")
   async checkoutSession(@TenantContext() context: RequestTenantContext) {
-    return this.createMockSession(context.tenantId, "CHECKOUT");
+    return this.createMockSession(context, "CHECKOUT");
   }
 
   @Post("portal-session")
   async portalSession(@TenantContext() context: RequestTenantContext) {
-    return this.createMockSession(context.tenantId, "PORTAL");
+    return this.createMockSession(context, "PORTAL");
   }
 
-  private async createMockSession(tenantId: string, kind: BillingSessionKind) {
+  private async createMockSession(context: RequestTenantContext, kind: BillingSessionKind) {
     const db = this.databaseProvider.require();
     const providerSessionId = `mock_${kind.toLowerCase()}_${randomUUID()}`;
-    const mock = buildMockBillingSession({ tenantId, kind, sessionId: providerSessionId });
+    const mock = buildMockBillingSession({ tenantId: context.tenantId, kind, sessionId: providerSessionId });
     const [session] = await db.insert(billingSessions).values({
-      tenantId,
+      tenantId: context.tenantId,
       kind,
       providerSessionId,
       url: mock.url,
       status: mock.status,
     }).returning();
+    await this.auditService.record({ tenantId: context.tenantId, actorUserId: context.userId, action: "BILLING_SESSION_CREATED", targetType: "billing_session", targetId: session?.id, metadata: { kind } });
     return session;
   }
 }

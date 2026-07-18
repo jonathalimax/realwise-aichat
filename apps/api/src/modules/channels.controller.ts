@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { channelConnections } from "@realwise/database";
 import { providerSchema } from "@realwise/contracts";
+import { AuditService } from "./audit.service";
 import { DatabaseProvider } from "./database.provider";
 import { SessionTenantGuard } from "./session-tenant.guard";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
@@ -15,7 +16,7 @@ const connectMockSchema = z.object({
 @Controller("channels")
 @UseGuards(SessionTenantGuard)
 export class ChannelsController {
-  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider) {}
+  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider, @Inject(AuditService) private readonly auditService: AuditService) {}
 
   @Get()
   async list(@TenantContext() context: RequestTenantContext) {
@@ -42,6 +43,7 @@ export class ChannelsController {
         releaseState: "MOCK_VERIFIED",
         updatedAt: new Date(),
       }).where(eq(channelConnections.id, existing.id)).returning();
+      await this.auditService.record({ tenantId: context.tenantId, actorUserId: context.userId, action: "CHANNEL_MOCK_CONNECTED", targetType: "channel_connection", targetId: connection?.id, metadata: { provider: input.provider } });
       return connection;
     }
     const [connection] = await db.insert(channelConnections).values({
@@ -51,6 +53,7 @@ export class ChannelsController {
       externalAssetId: input.externalAssetId ?? `mock-${input.provider.toLowerCase()}`,
       releaseState: "MOCK_VERIFIED",
     }).returning();
+    await this.auditService.record({ tenantId: context.tenantId, actorUserId: context.userId, action: "CHANNEL_MOCK_CONNECTED", targetType: "channel_connection", targetId: connection?.id, metadata: { provider: input.provider } });
     return connection;
   }
 }

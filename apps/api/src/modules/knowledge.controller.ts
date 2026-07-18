@@ -3,6 +3,7 @@ import { chunkKnowledge } from "@realwise/knowledge";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { knowledgeSources } from "@realwise/database";
+import { AuditService } from "./audit.service";
 import { DatabaseProvider } from "./database.provider";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
 import { SessionTenantGuard } from "./session-tenant.guard";
@@ -16,7 +17,7 @@ const createKnowledgeSchema = z.object({
 @Controller("knowledge")
 @UseGuards(SessionTenantGuard)
 export class KnowledgeController {
-  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider) {}
+  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider, @Inject(AuditService) private readonly auditService: AuditService) {}
 
   @Get("sources")
   async sources(@TenantContext() context: RequestTenantContext) {
@@ -35,6 +36,7 @@ export class KnowledgeController {
     const input = createKnowledgeSchema.parse(body);
     const db = this.databaseProvider.require();
     const [source] = await db.insert(knowledgeSources).values({ ...input, tenantId: context.tenantId, releaseState: "IMPLEMENTED_NOT_VERIFIED" }).returning();
+    await this.auditService.record({ tenantId: context.tenantId, actorUserId: context.userId, action: "KNOWLEDGE_SOURCE_CREATED", targetType: "knowledge_source", targetId: source?.id, metadata: { kind: input.kind } });
     return { source, chunks: chunkKnowledge(input.body) };
   }
 

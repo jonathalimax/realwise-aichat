@@ -4,6 +4,7 @@
 |---|---:|---|
 | Auth and tenancy | IMPLEMENTED_NOT_VERIFIED | `features/auth-and-tenancy.md` |
 | Email delivery | MOCK_VERIFIED | `features/email.md` |
+| Audit | MOCK_VERIFIED | `features/audit.md` |
 | Channel onboarding and Meta mocks | MOCK_VERIFIED | `features/meta-integrations.md` |
 | Messaging and AI decisions | MOCK_VERIFIED | `features/ai-messaging.md` |
 | Chatwoot | MOCK_VERIFIED | `features/chatwoot.md` |
