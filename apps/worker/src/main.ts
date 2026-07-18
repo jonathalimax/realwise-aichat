@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import { and, eq } from "drizzle-orm";
 import { fakeAssistantDecision } from "@realwise/knowledge";
-import { createDatabase, assistantDecisions, chatwootInstallations, chatwootMessageMirrors, conversations, knowledgeSources, messages, tenants, webhookEvents } from "@realwise/database";
+import { createDatabase, assistantDecisions, chatwootInstallations, chatwootMessageMirrors, conversations, knowledgeSources, messages, tenants, usageEvents, webhookEvents } from "@realwise/database";
 import { createRedisConnection, MESSAGE_PROCESSING_QUEUE, type ProcessMessageJob } from "@realwise/queue";
 import type { NormalizedMessage } from "@realwise/contracts";
 
@@ -78,6 +78,13 @@ const worker = new Worker<ProcessMessageJob>(
         });
       }
     }
+
+    await db.insert(usageEvents).values({
+      tenantId: job.data.tenantId,
+      kind: "MESSAGE_PROCESSED",
+      quantity: 1,
+      idempotencyKey: `message:${job.data.messageId}`,
+    }).onConflictDoNothing();
 
     await db.update(webhookEvents).set({ processedAt: new Date(), updatedAt: new Date() }).where(and(eq(webhookEvents.provider, "WHATSAPP"), eq(webhookEvents.externalEventId, job.data.externalEventId)));
     console.log(JSON.stringify({ event: "message_processed", jobId: job.id, messageId: job.data.messageId }));

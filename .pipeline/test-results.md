@@ -12,14 +12,16 @@
 - `pnpm build` — PASS.
 - API dev server against Colima DB/Redis — PASS.
 - Worker dev process against Colima DB/Redis — PASS.
-- `pnpm smoke:api` against live API + worker + Colima DB/Redis — PASS, including auth, dashboard, channels, mock channel connect, Chatwoot mock provisioning, knowledge, billing, leads, mock webhook enqueue, worker processing, assistant decision persistence and Chatwoot mock mirror persistence.
+- `pnpm smoke:api` against live API + worker + Colima DB/Redis — PASS, including auth, dashboard, channels, mock channel connect, Chatwoot mock provisioning, knowledge, billing, leads, mock webhook enqueue, worker processing, assistant decision persistence, idempotent usage metering and Chatwoot mock mirror persistence.
 - `pnpm e2e:local` — PASS, Playwright Chromium verifies login, dashboard, channels, knowledge creation, leads and billing console tabs.
 
 ## Current iteration
 
 - Added `chatwoot_message_mirrors` persistence.
 - Worker now creates mock Chatwoot mirror records for `HANDOFF` assistant decisions.
-- Smoke webhook text now exercises the human handoff path and verifies the mirror record.
+- Worker now records idempotent `MESSAGE_PROCESSED` usage events for billing/usage reporting.
+- Dashboard and billing endpoints read real message usage totals.
+- Smoke webhook text now exercises the human handoff path and verifies the mirror and usage records.
 
 ## Commands not run
 

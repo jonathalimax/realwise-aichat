@@ -1,7 +1,7 @@
 import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
 import type { DashboardSummary } from "@realwise/contracts";
 import { and, eq, sql } from "drizzle-orm";
-import { channelConnections, knowledgeSources, leads, tenants } from "@realwise/database";
+import { channelConnections, knowledgeSources, leads, tenants, usageEvents } from "@realwise/database";
 import { DatabaseProvider } from "./database.provider";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
 import { SessionTenantGuard } from "./session-tenant.guard";
@@ -21,6 +21,7 @@ export class DashboardController {
     const [actionCount] = await db.select({ count: sql<number>`count(*)::int` }).from(channelConnections).where(and(eq(channelConnections.tenantId, context.tenantId), eq(channelConnections.status, "ACTION_REQUIRED")));
     const [knowledgeCount] = await db.select({ count: sql<number>`count(*)::int` }).from(knowledgeSources).where(eq(knowledgeSources.tenantId, context.tenantId));
     const [leadCount] = await db.select({ count: sql<number>`count(*)::int` }).from(leads).where(eq(leads.tenantId, context.tenantId));
+    const [messageUsage] = await db.select({ total: sql<number>`coalesce(sum(${usageEvents.quantity}), 0)::int` }).from(usageEvents).where(eq(usageEvents.tenantId, context.tenantId));
 
     return {
       tenant: {
@@ -37,7 +38,7 @@ export class DashboardController {
         aiPausedConversations: 0,
       },
       usage: {
-        messagesUsed: 0,
+        messagesUsed: messageUsage?.total ?? 0,
         messagesLimit: 1000,
         knowledgeSources: knowledgeCount?.count ?? 0,
       },

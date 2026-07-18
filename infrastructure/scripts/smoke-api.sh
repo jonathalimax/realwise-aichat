@@ -46,6 +46,16 @@ for i in $(seq 1 30); do
 done
 
 for i in $(seq 1 30); do
+  USAGE_JSON=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select json_build_object('kind', kind, 'quantity', quantity)::text from usage_events where tenant_id='$TENANT_ID' and idempotency_key=(select 'message:' || id::text from messages where external_event_id='$EVENT_ID' limit 1) limit 1")
+  if [ -n "$USAGE_JSON" ]; then
+    printf '%s\n' "$USAGE_JSON" >/tmp/realwise-aichat-usage-event.json
+    break
+  fi
+  sleep 1
+  if [ "$i" = "30" ]; then echo "usage event not recorded" >&2; exit 1; fi
+done
+
+for i in $(seq 1 30); do
   MIRROR_JSON=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select json_build_object('status', c.status, 'targetInboxId', c.target_inbox_id)::text from chatwoot_message_mirrors c inner join messages m on m.id=c.message_id where c.tenant_id='$TENANT_ID' and m.external_event_id='$EVENT_ID' limit 1")
   if [ -n "$MIRROR_JSON" ]; then
     printf '%s\n' "$MIRROR_JSON" >/tmp/realwise-aichat-chatwoot-mirror.json
@@ -58,7 +68,7 @@ done
 python3 - <<'PY'
 import json
 from pathlib import Path
-for name in ['health','login-body','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','lead','webhook','webhook-duplicate','assistant-decision','chatwoot-mirror']:
+for name in ['health','login-body','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','lead','webhook','webhook-duplicate','assistant-decision','usage-event','chatwoot-mirror']:
     path = Path(f'/tmp/realwise-aichat-{name}.json')
     data = json.loads(path.read_text())
     print(name, json.dumps(data, ensure_ascii=False)[:500])
