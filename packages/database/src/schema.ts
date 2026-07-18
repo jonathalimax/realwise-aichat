@@ -210,6 +210,20 @@ export const subscriptions = pgTable("subscriptions", {
   ...timestamps,
 }, (table) => ({ tenantUnique: uniqueIndex("subscriptions_tenant_unique").on(table.tenantId) }));
 
+export const emailOutbox = pgTable("email_outbox", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id),
+  userId: uuid("user_id").references(() => users.id),
+  toEmail: text("to_email").notNull(),
+  kind: text("kind").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  status: text("status").default("MOCK_QUEUED").notNull(),
+  metadata: jsonb("metadata").default({}).notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  ...timestamps,
+}, (table) => ({ recipientIdx: index("email_outbox_recipient_idx").on(table.toEmail), statusIdx: index("email_outbox_status_idx").on(table.status) }));
+
 export const billingSessions = pgTable("billing_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),

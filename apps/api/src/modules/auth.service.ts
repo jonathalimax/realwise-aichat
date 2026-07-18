@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { createSessionToken, hashPassword, hashToken, verifyPassword } from "@realwise/auth";
 import type { Role } from "@realwise/contracts";
 import { eq, and, gt, isNull } from "drizzle-orm";
-import { emailVerificationTokens, invitations, memberships, passwordResetTokens, sessions, tenants, users } from "@realwise/database";
+import { emailOutbox, emailVerificationTokens, invitations, memberships, passwordResetTokens, sessions, tenants, users } from "@realwise/database";
 import { DatabaseProvider } from "./database.provider";
 
 @Injectable()
@@ -58,6 +58,14 @@ export class AuthService {
       invitedByUserId: input.actorUserId,
       expiresAt,
     }).returning();
+    await db.insert(emailOutbox).values({
+      tenantId: input.tenantId,
+      toEmail: input.email.toLowerCase(),
+      kind: "INVITATION",
+      subject: "Convite para Realwise AI Chat",
+      body: `Você foi convidado para acessar o Realwise AI Chat. Token: ${rawToken}`,
+      metadata: { invitationId: invitation?.id, role: input.role },
+    });
     return { invitation: { id: invitation?.id, email: invitation?.email, role: invitation?.role, expiresAt }, inviteToken: rawToken };
   }
 
@@ -84,6 +92,14 @@ export class AuthService {
     const rawToken = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
     await db.insert(emailVerificationTokens).values({ userId: user.id, tokenHash: hashToken(rawToken), expiresAt });
+    await db.insert(emailOutbox).values({
+      userId: user.id,
+      toEmail: user.email,
+      kind: "EMAIL_VERIFICATION",
+      subject: "Verifique seu e-mail no Realwise AI Chat",
+      body: `Use este token para verificar seu e-mail: ${rawToken}`,
+      metadata: { expiresAt: expiresAt.toISOString() },
+    });
     return { ok: true, verificationToken: process.env.NODE_ENV === "production" ? null : rawToken, expiresAt };
   }
 
@@ -103,6 +119,14 @@ export class AuthService {
     const rawToken = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + 1000 * 60 * 30);
     await db.insert(passwordResetTokens).values({ userId: user.id, tokenHash: hashToken(rawToken), expiresAt });
+    await db.insert(emailOutbox).values({
+      userId: user.id,
+      toEmail: user.email,
+      kind: "PASSWORD_RESET",
+      subject: "Redefina sua senha no Realwise AI Chat",
+      body: `Use este token para redefinir sua senha: ${rawToken}`,
+      metadata: { expiresAt: expiresAt.toISOString() },
+    });
     return { ok: true, resetToken: process.env.NODE_ENV === "production" ? null : rawToken, expiresAt };
   }
 

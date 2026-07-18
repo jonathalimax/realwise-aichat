@@ -27,6 +27,11 @@ curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/knowledge/
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" "$API_URL/billing/entitlements" >/tmp/realwise-aichat-billing.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" -H 'content-type: application/json' -X POST "$API_URL/billing/checkout-session" >/tmp/realwise-aichat-billing-checkout.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" -H 'content-type: application/json' -X POST "$API_URL/billing/portal-session" >/tmp/realwise-aichat-billing-portal.json
+curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" -H 'content-type: application/json' -X POST "$API_URL/auth/invite" --data '{"email":"invited-smoke@realwise.local","role":"ATTENDANT"}' >/tmp/realwise-aichat-invite.json
+curl -fsS -H 'content-type: application/json' -X POST "$API_URL/auth/request-email-verification" --data '{"email":"owner@realwise.local"}' >/tmp/realwise-aichat-email-verification.json
+curl -fsS -H 'content-type: application/json' -X POST "$API_URL/auth/request-password-reset" --data '{"email":"owner@realwise.local"}' >/tmp/realwise-aichat-password-reset.json
+OUTBOX_JSON=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select json_object_agg(kind, count)::text from (select kind, count(*)::int from email_outbox where kind in ('INVITATION','EMAIL_VERIFICATION','PASSWORD_RESET') group by kind) t")
+printf '%s\n' "$OUTBOX_JSON" >/tmp/realwise-aichat-email-outbox.json
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" \
   -H 'content-type: application/json' \
   -X POST "$API_URL/leads" \
@@ -70,7 +75,7 @@ done
 python3 - <<'PY'
 import json
 from pathlib import Path
-for name in ['health','login-body','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','billing-checkout','billing-portal','lead','webhook','webhook-duplicate','assistant-decision','usage-event','chatwoot-mirror']:
+for name in ['health','login-body','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','billing-checkout','billing-portal','invite','email-verification','password-reset','email-outbox','lead','webhook','webhook-duplicate','assistant-decision','usage-event','chatwoot-mirror']:
     path = Path(f'/tmp/realwise-aichat-{name}.json')
     data = json.loads(path.read_text())
     print(name, json.dumps(data, ensure_ascii=False)[:500])
