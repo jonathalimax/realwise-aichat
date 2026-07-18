@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import { and, eq } from "drizzle-orm";
 import { fakeAssistantDecision } from "@realwise/knowledge";
-import { createDatabase, assistantDecisions, conversations, knowledgeSources, messages, tenants, webhookEvents } from "@realwise/database";
+import { createDatabase, assistantDecisions, chatwootInstallations, chatwootMessageMirrors, conversations, knowledgeSources, messages, tenants, webhookEvents } from "@realwise/database";
 import { createRedisConnection, MESSAGE_PROCESSING_QUEUE, type ProcessMessageJob } from "@realwise/queue";
 import type { NormalizedMessage } from "@realwise/contracts";
 
@@ -38,7 +38,7 @@ const worker = new Worker<ProcessMessageJob>(
     };
     const decision = fakeAssistantDecision(normalized, sources, { humanActive: conversation.humanActive, aiEnabled: tenant.aiEnabled });
 
-    await db.insert(assistantDecisions).values({
+    const [storedDecision] = await db.insert(assistantDecisions).values({
       tenantId: job.data.tenantId,
       conversationId: job.data.conversationId,
       messageId: job.data.messageId,
@@ -59,7 +59,25 @@ const worker = new Worker<ProcessMessageJob>(
         status: decision.action === "HANDOFF" ? "NEEDS_HUMAN" : "RECORDED",
         updatedAt: new Date(),
       },
-    });
+    }).returning();
+
+    if (decision.action === "HANDOFF") {
+      const [installation] = await db.select().from(chatwootInstallations).where(eq(chatwootInstallations.tenantId, job.data.tenantId)).limit(1);
+      if (installation && storedDecision) {
+        await db.insert(chatwootMessageMirrors).values({
+          tenantId: job.data.tenantId,
+          conversationId: job.data.conversationId,
+          messageId: job.data.messageId,
+          assistantDecisionId: storedDecision.id,
+          targetInboxId: installation.inboxId,
+          status: "MOCK_MIRRORED",
+          payload: { text: message.text, decision: decision.action, reason: decision.reason },
+        }).onConflictDoUpdate({
+          target: chatwootMessageMirrors.messageId,
+          set: { updatedAt: new Date(), status: "MOCK_MIRRORED" },
+        });
+      }
+    }
 
     await db.update(webhookEvents).set({ processedAt: new Date(), updatedAt: new Date() }).where(and(eq(webhookEvents.provider, "WHATSAPP"), eq(webhookEvents.externalEventId, job.data.externalEventId)));
     console.log(JSON.stringify({ event: "message_processed", jobId: job.id, messageId: job.data.messageId }));

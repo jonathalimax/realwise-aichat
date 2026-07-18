@@ -165,6 +165,18 @@ export const leads = pgTable("leads", {
   ...timestamps,
 }, (table) => ({ tenantCreatedIdx: index("leads_tenant_created_idx").on(table.tenantId, table.createdAt) }));
 
+export const chatwootMessageMirrors = pgTable("chatwoot_message_mirrors", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  conversationId: uuid("conversation_id").references(() => conversations.id).notNull(),
+  messageId: uuid("message_id").references(() => messages.id).notNull(),
+  assistantDecisionId: uuid("assistant_decision_id").references(() => assistantDecisions.id),
+  targetInboxId: text("target_inbox_id").notNull(),
+  status: text("status").default("MOCK_MIRRORED").notNull(),
+  payload: jsonb("payload").default({}).notNull(),
+  ...timestamps,
+}, (table) => ({ messageUnique: uniqueIndex("chatwoot_message_mirrors_message_unique").on(table.messageId), tenantIdx: index("chatwoot_message_mirrors_tenant_idx").on(table.tenantId) }));
+
 export const chatwootInstallations = pgTable("chatwoot_installations", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),

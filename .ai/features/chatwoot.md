@@ -10,9 +10,11 @@ Implemented:
 - `GET /api/chatwoot/status` returns installation and activation state.
 - `POST /api/chatwoot/provision-mock` idempotently provisions mock account/inbox state.
 - API smoke covers status and mock provisioning.
+- `chatwoot_message_mirrors` records mock human-handoff mirroring.
+- Worker creates mock Chatwoot mirror records when assistant decisions require `HANDOFF`.
 
 Next:
 
 - Real Chatwoot platform API account/inbox provisioning.
-- Conversation/message mirroring to Chatwoot.
+- Real conversation/message mirroring to Chatwoot.
 - Human takeover state synchronization.
