@@ -21,8 +21,9 @@
 - Changed mock webhook API flow to persist and enqueue message processing jobs.
 - Implemented worker processing for queued messages.
 - Updated smoke script to wait for a persisted assistant decision.
+- Expanded `/app` web UI into a tabbed operational console for overview, channels, Chatwoot, knowledge creation/list, leads and billing.
 
 ## Commands not run
 
-- End-to-end browser tests: not yet implemented.
+- End-to-end browser automation: not yet implemented.
 - Real provider integration tests: credentials and external activation not available.
