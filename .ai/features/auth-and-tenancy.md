@@ -10,7 +10,7 @@ Implemented in this iteration:
 - Password hashing, verification, session-token hashing and role assertion primitives in `@realwise/auth`.
 - API endpoints for owner bootstrap, login, invite creation, invite acceptance, email verification, password reset, current session and logout.
 - Invite, email verification and password reset flows write transactional records to `email_outbox`.
-- Cookie-session tenant guard that verifies active session and membership before tenant-owned API access when `DATABASE_URL` is configured.
+- Cookie-session tenant guard that verifies active session, membership and role requirements before tenant-owned API access when `DATABASE_URL` is configured.
 - Header/demo fallback only when no DB is configured for local preview.
 
 Still next:

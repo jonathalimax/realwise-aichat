@@ -6,6 +6,7 @@ import { knowledgeSources } from "@realwise/database";
 import { AuditService } from "./audit.service";
 import { DatabaseProvider } from "./database.provider";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
+import { RequireRoles } from "./roles.decorator";
 import { SessionTenantGuard } from "./session-tenant.guard";
 
 const createKnowledgeSchema = z.object({
@@ -32,6 +33,7 @@ export class KnowledgeController {
   }
 
   @Post("sources")
+  @RequireRoles("OWNER", "ADMIN")
   async createSource(@TenantContext() context: RequestTenantContext, @Body() body: unknown) {
     const input = createKnowledgeSchema.parse(body);
     const db = this.databaseProvider.require();

@@ -30,6 +30,16 @@ curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" -H 'content-type: ap
 INVALID_STATUS=$(curl -sS -o /tmp/realwise-aichat-invalid.json -w '%{http_code}' -H 'content-type: application/json' -X POST "$API_URL/auth/login" --data '{"email":"not-an-email","password":"x"}')
 if [ "$INVALID_STATUS" != "400" ]; then echo "expected invalid login to return 400, got $INVALID_STATUS" >&2; cat /tmp/realwise-aichat-invalid.json >&2; exit 1; fi
 curl -fsS -H "cookie: $COOKIE" -H "x-tenant-id: $TENANT_ID" -H 'content-type: application/json' -X POST "$API_URL/auth/invite" --data '{"email":"invited-smoke@realwise.local","role":"ATTENDANT"}' >/tmp/realwise-aichat-invite.json
+INVITE_TOKEN=$(python3 - <<'PY'
+import json
+print(json.load(open('/tmp/realwise-aichat-invite.json'))['inviteToken'])
+PY
+)
+ATTENDANT_HEADERS=/tmp/realwise-aichat-attendant-headers.txt
+curl -fsS -D "$ATTENDANT_HEADERS" -o /tmp/realwise-aichat-accept-invite.json -H 'content-type: application/json' -X POST "$API_URL/auth/accept-invite" --data "{\"inviteToken\":\"$INVITE_TOKEN\",\"name\":\"Smoke Attendant\",\"password\":\"change-me-attendant\"}"
+ATTENDANT_COOKIE=$(grep -i '^set-cookie:' "$ATTENDANT_HEADERS" | sed -E 's/^set-cookie: ([^;]+).*/\1/i' | tr -d '\r' | head -1)
+FORBIDDEN_STATUS=$(curl -sS -o /tmp/realwise-aichat-forbidden.json -w '%{http_code}' -H "cookie: $ATTENDANT_COOKIE" -H "x-tenant-id: $TENANT_ID" -H 'content-type: application/json' -X POST "$API_URL/billing/checkout-session")
+if [ "$FORBIDDEN_STATUS" != "403" ]; then echo "expected attendant billing checkout to return 403, got $FORBIDDEN_STATUS" >&2; cat /tmp/realwise-aichat-forbidden.json >&2; exit 1; fi
 curl -fsS -H 'content-type: application/json' -X POST "$API_URL/auth/request-email-verification" --data '{"email":"owner@realwise.local"}' >/tmp/realwise-aichat-email-verification.json
 curl -fsS -H 'content-type: application/json' -X POST "$API_URL/auth/request-password-reset" --data '{"email":"owner@realwise.local"}' >/tmp/realwise-aichat-password-reset.json
 OUTBOX_JSON=$(docker compose -f "$DB_COMPOSE_FILE" exec -T postgres psql -U realwise -d realwise_aichat -tAc "select json_object_agg(kind, count)::text from (select kind, count(*)::int from email_outbox where kind in ('INVITATION','EMAIL_VERIFICATION','PASSWORD_RESET') group by kind) t")
@@ -78,7 +88,7 @@ done
 python3 - <<'PY'
 import json
 from pathlib import Path
-for name in ['health','login-body','invalid','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','billing-checkout','billing-portal','invite','email-verification','password-reset','email-outbox','audit','lead','webhook','webhook-duplicate','assistant-decision','usage-event','chatwoot-mirror']:
+for name in ['health','login-body','invalid','dashboard','channels','channel-connect','chatwoot','chatwoot-provision','knowledge','billing','billing-checkout','billing-portal','invite','accept-invite','forbidden','email-verification','password-reset','email-outbox','audit','lead','webhook','webhook-duplicate','assistant-decision','usage-event','chatwoot-mirror']:
     path = Path(f'/tmp/realwise-aichat-{name}.json')
     data = json.loads(path.read_text())
     print(name, json.dumps(data, ensure_ascii=False)[:500])

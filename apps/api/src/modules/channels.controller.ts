@@ -5,6 +5,7 @@ import { channelConnections } from "@realwise/database";
 import { providerSchema } from "@realwise/contracts";
 import { AuditService } from "./audit.service";
 import { DatabaseProvider } from "./database.provider";
+import { RequireRoles } from "./roles.decorator";
 import { SessionTenantGuard } from "./session-tenant.guard";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
 
@@ -32,6 +33,7 @@ export class ChannelsController {
   }
 
   @Post("connect-mock")
+  @RequireRoles("OWNER", "ADMIN")
   async connectMock(@TenantContext() context: RequestTenantContext, @Body() body: unknown) {
     const input = connectMockSchema.parse(body);
     const db = this.databaseProvider.require();

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { buildMockChatwootInstallation, chatwootActivationState } from "@realwise/chatwoot";
 import { chatwootInstallations } from "@realwise/database";
 import { DatabaseProvider } from "./database.provider";
+import { RequireRoles } from "./roles.decorator";
 import { SessionTenantGuard } from "./session-tenant.guard";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
 
@@ -23,6 +24,7 @@ export class ChatwootController {
   }
 
   @Post("provision-mock")
+  @RequireRoles("OWNER", "ADMIN")
   async provisionMock(@TenantContext() context: RequestTenantContext) {
     const db = this.databaseProvider.require();
     const mock = buildMockChatwootInstallation(context.tenantId);

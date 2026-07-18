@@ -5,6 +5,7 @@ import { buildMockBillingSession, stripeActivationState, type BillingSessionKind
 import { billingSessions, plans, subscriptions, usageEvents } from "@realwise/database";
 import { AuditService } from "./audit.service";
 import { DatabaseProvider } from "./database.provider";
+import { RequireRoles } from "./roles.decorator";
 import { SessionTenantGuard } from "./session-tenant.guard";
 import { TenantContext, type RequestTenantContext } from "./tenant-context";
 
@@ -60,11 +61,13 @@ export class BillingController {
   }
 
   @Post("checkout-session")
+  @RequireRoles("OWNER", "ADMIN", "BILLING_ADMIN")
   async checkoutSession(@TenantContext() context: RequestTenantContext) {
     return this.createMockSession(context, "CHECKOUT");
   }
 
   @Post("portal-session")
+  @RequireRoles("OWNER", "ADMIN", "BILLING_ADMIN")
   async portalSession(@TenantContext() context: RequestTenantContext) {
     return this.createMockSession(context, "PORTAL");
   }

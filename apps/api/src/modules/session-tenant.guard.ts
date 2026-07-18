@@ -1,9 +1,12 @@
 import { BadRequestException, CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import type { Role } from "@realwise/contracts";
 import type { Request } from "express";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { hashToken } from "@realwise/auth";
 import { memberships, sessions } from "@realwise/database";
 import { DatabaseProvider } from "./database.provider";
+import { REQUIRED_ROLES_KEY } from "./roles.decorator";
 import type { RequestTenantContext } from "./tenant-context";
 
 export type AuthenticatedRequest = Request & {
@@ -12,7 +15,7 @@ export type AuthenticatedRequest = Request & {
 
 @Injectable()
 export class SessionTenantGuard implements CanActivate {
-  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider) {}
+  constructor(@Inject(DatabaseProvider) private readonly databaseProvider: DatabaseProvider, @Inject(Reflector) private readonly reflector: Reflector) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
@@ -30,6 +33,11 @@ export class SessionTenantGuard implements CanActivate {
 
     const [membership] = await db.select().from(memberships).where(and(eq(memberships.userId, session.userId), eq(memberships.tenantId, tenantId))).limit(1);
     if (!membership) throw new ForbiddenException({ code: "TENANT_FORBIDDEN", message: "Você não tem acesso a este tenant.", supportCode: "RW-AUTH-005" });
+
+    const requiredRoles = this.reflector.getAllAndOverride<Role[]>(REQUIRED_ROLES_KEY, [context.getHandler(), context.getClass()]) ?? [];
+    if (requiredRoles.length > 0 && !requiredRoles.includes(membership.role)) {
+      throw new ForbiddenException({ code: "ROLE_FORBIDDEN", message: "Seu perfil não permite esta ação.", supportCode: "RW-AUTH-010" });
+    }
 
     request.tenantContext = { tenantId, userId: session.userId, role: membership.role };
     return true;
