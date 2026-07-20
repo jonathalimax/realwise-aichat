@@ -8,11 +8,11 @@ Deploy `apps/web`, `apps/api`, `apps/worker`, PostgreSQL pgvector and Redis as s
 | --- | --- | --- | --- |
 | `realwise-aichat-postgres` | Docker image `pgvector/pgvector:pg16` | none | `5432` internal only |
 | `realwise-aichat-redis` | Docker image `redis:7-alpine` | none | `6379` internal only |
-| `realwise-aichat-api` | Dockerfile service | `https://api.aichat.realwise.com.br` | `3001` |
+| `realwise-aichat-api` | Dockerfile service | `https://aichat.realwise.com.br/api` via custom Traefik labels | `3001` |
 | `realwise-aichat-web` | Dockerfile service | `https://aichat.realwise.com.br` | `3000` |
 | `realwise-aichat-worker` | Dockerfile service | none | none |
 
-Do not attach HTTP domains to PostgreSQL or Redis.
+Do not attach HTTP domains to PostgreSQL or Redis. The API and web UI intentionally share one public hostname.
 
 ## PostgreSQL pgvector
 
@@ -94,6 +94,28 @@ APP=worker
 
 The Dockerfile builds the selected workspace package and starts it with `pnpm --filter @realwise/${APP} start`.
 
+## API routing
+
+Set the API service without a standard Coolify FQDN and add custom Traefik labels so `/api` is forwarded without stripping the prefix. The Nest API already serves routes under `/api`, so Coolify's path-FQDN `StripPrefix` behavior is not appropriate here.
+
+Custom labels for `realwise-aichat-api`:
+
+```txt
+traefik.enable=true
+traefik.http.routers.realwise-aichat-api-https.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/api`)
+traefik.http.routers.realwise-aichat-api-https.entrypoints=https
+traefik.http.routers.realwise-aichat-api-https.tls=true
+traefik.http.routers.realwise-aichat-api-https.tls.certresolver=letsencrypt
+traefik.http.routers.realwise-aichat-api-https.service=realwise-aichat-api
+traefik.http.routers.realwise-aichat-api-https.priority=100
+traefik.http.routers.realwise-aichat-api-http.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/api`)
+traefik.http.routers.realwise-aichat-api-http.entrypoints=http
+traefik.http.routers.realwise-aichat-api-http.middlewares=redirect-to-https
+traefik.http.routers.realwise-aichat-api-http.service=realwise-aichat-api
+traefik.http.routers.realwise-aichat-api-http.priority=100
+traefik.http.services.realwise-aichat-api.loadbalancer.server.port=3001
+```
+
 ## API environment
 
 ```env
@@ -104,8 +126,8 @@ REDIS_URL=redis://<redis-service-name>:6379
 SESSION_SECRET=<generated-session-secret>
 ENCRYPTION_MASTER_KEYS=v1:<base64-32-byte-key>
 NEXT_PUBLIC_APP_URL=https://aichat.realwise.com.br
-NEXT_PUBLIC_API_URL=https://api.aichat.realwise.com.br/api
-API_URL=https://api.aichat.realwise.com.br
+NEXT_PUBLIC_API_URL=https://aichat.realwise.com.br/api
+API_URL=https://aichat.realwise.com.br
 CHATWOOT_BASE_URL=
 CHATWOOT_PLATFORM_TOKEN=
 STRIPE_SECRET_KEY=
@@ -123,8 +145,8 @@ OPENAI_API_KEY=
 NODE_ENV=production
 PORT=3000
 NEXT_PUBLIC_APP_URL=https://aichat.realwise.com.br
-NEXT_PUBLIC_API_URL=https://api.aichat.realwise.com.br/api
-API_URL=https://api.aichat.realwise.com.br
+NEXT_PUBLIC_API_URL=https://aichat.realwise.com.br/api
+API_URL=https://aichat.realwise.com.br
 ```
 
 ## Worker environment
@@ -135,6 +157,9 @@ DATABASE_URL=postgres://realwise:<secure-password>@<postgres-service-name>:5432/
 REDIS_URL=redis://<redis-service-name>:6379
 SESSION_SECRET=<generated-session-secret>
 ENCRYPTION_MASTER_KEYS=v1:<base64-32-byte-key>
+NEXT_PUBLIC_APP_URL=https://aichat.realwise.com.br
+NEXT_PUBLIC_API_URL=https://aichat.realwise.com.br/api
+API_URL=https://aichat.realwise.com.br
 CHATWOOT_BASE_URL=
 CHATWOOT_PLATFORM_TOKEN=
 STRIPE_SECRET_KEY=
@@ -181,9 +206,10 @@ Do not seed production if demo users/data should not exist there.
 ## Verification
 
 ```bash
-curl -fsS https://api.aichat.realwise.com.br/api/health/live
-curl -fsS https://api.aichat.realwise.com.br/api/health/ready
-curl -fsS https://api.aichat.realwise.com.br/api/health/dependencies
+curl -fsS https://aichat.realwise.com.br/api/health/live
+curl -fsS https://aichat.realwise.com.br/api/health/ready
+curl -fsS https://aichat.realwise.com.br/api/health/dependencies
+curl -I https://aichat.realwise.com.br
 ```
 
 Expected dependency state before external activation:
