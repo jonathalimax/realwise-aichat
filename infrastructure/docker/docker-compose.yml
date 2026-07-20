@@ -32,6 +32,21 @@ services:
     ports:
       - "3001:3001"
 
+  worker:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/node.Dockerfile
+      args:
+        APP: worker
+    environment:
+      DATABASE_URL: postgres://realwise:realwise@postgres:5432/realwise_aichat
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: change-me-at-least-32-chars-local
+      ENCRYPTION_MASTER_KEYS: v1:BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
+    depends_on:
+      - postgres
+      - redis
+
   web:
     build:
       context: ../..
@@ -40,6 +55,7 @@ services:
         APP: web
     environment:
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
       API_URL: http://api:3001
     depends_on:
       - api

@@ -6,6 +6,7 @@ COPY apps ./apps
 COPY packages ./packages
 RUN pnpm install --frozen-lockfile=false
 ARG APP
+ENV APP=${APP}
 RUN pnpm --filter @realwise/${APP} build
 EXPOSE 3000 3001
 CMD ["sh", "-lc", "pnpm --filter @realwise/${APP} dev"]
