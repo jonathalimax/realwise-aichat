@@ -9,4 +9,4 @@ ARG APP
 ENV APP=${APP}
 RUN pnpm --filter @realwise/${APP} build
 EXPOSE 3000 3001
-CMD ["sh", "-lc", "pnpm --filter @realwise/${APP} dev"]
+CMD ["sh", "-lc", "pnpm --filter @realwise/${APP} start"]
