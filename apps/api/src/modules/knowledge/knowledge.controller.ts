@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { KnowledgeService } from "./knowledge.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
 import { CurrentBusiness } from "../../common/decorators/current-business.decorator";
@@ -14,14 +15,19 @@ export class KnowledgeController {
     return this.knowledge.listDocuments(session.businessId);
   }
 
-  @Post("documents")
-  registerUpload(
+  @Post("documents/upload")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 20 * 1024 * 1024 } }))
+  uploadFile(@CurrentBusiness() session: BusinessSessionClaims, @UploadedFile() file: Express.Multer.File) {
+    return this.knowledge.registerFileUpload(session.businessId, file.originalname, file.mimetype, file.buffer);
+  }
+
+  @Post("documents/text")
+  registerText(
     @CurrentBusiness() session: BusinessSessionClaims,
     @Body("filename") filename: string,
-    @Body("mimeType") mimeType: string,
-    @Body("sizeBytes") sizeBytes: number,
+    @Body("content") content: string,
   ) {
-    return this.knowledge.registerUpload(session.businessId, filename, mimeType, sizeBytes);
+    return this.knowledge.registerTextDocument(session.businessId, filename, content);
   }
 
   @Delete("documents/:id")

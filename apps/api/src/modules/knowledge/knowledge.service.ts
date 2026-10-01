@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { randomUUID } from "crypto";
+import { mkdir, writeFile } from "fs/promises";
+import { dirname, join } from "path";
 import { PrismaService } from "../../prisma/prisma.service";
 import { DocumentIngestionQueue } from "../../queues/document-ingestion.queue";
+
+const STORAGE_DIR = process.env.LOCAL_STORAGE_DIR ?? "./storage";
 
 @Injectable()
 export class KnowledgeService {
@@ -11,14 +15,26 @@ export class KnowledgeService {
     return this.prisma.client.knowledgeDocument.findMany({ where: { businessId }, orderBy: { createdAt: "desc" } });
   }
 
-  async registerUpload(businessId: string, filename: string, mimeType: string, sizeBytes: number) {
+  private storageKeyFor(businessId: string, filename: string) {
     const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const storageKey = `tenants/${businessId}/documents/${randomUUID()}-${safeFilename}`;
+    return `tenants/${businessId}/documents/${randomUUID()}-${safeFilename}`;
+  }
+
+  async registerFileUpload(businessId: string, filename: string, mimeType: string, buffer: Buffer) {
+    const storageKey = this.storageKeyFor(businessId, filename);
+    const localPath = join(STORAGE_DIR, storageKey);
+    await mkdir(dirname(localPath), { recursive: true });
+    await writeFile(localPath, buffer);
+
     const document = await this.prisma.client.knowledgeDocument.create({
-      data: { businessId, filename, mimeType, sizeBytes, storageKey, source: "upload", status: "uploaded" },
+      data: { businessId, filename, mimeType, sizeBytes: buffer.length, storageKey, source: "upload", status: "uploaded" },
     });
-    await this.ingestionQueue.enqueue(document.id, storageKey);
+    await this.ingestionQueue.enqueue(document.id, localPath);
     return document;
+  }
+
+  async registerTextDocument(businessId: string, filename: string, content: string) {
+    return this.registerFileUpload(businessId, filename.endsWith(".txt") ? filename : `${filename}.txt`, "text/plain", Buffer.from(content, "utf-8"));
   }
 
   async deleteDocument(businessId: string, documentId: string) {

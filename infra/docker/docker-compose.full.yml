@@ -16,8 +16,12 @@ services:
       context: ../..
       dockerfile: apps/api/Dockerfile
     env_file: ../../.env
+    environment:
+      LOCAL_STORAGE_DIR: /data/realwise-storage
     ports:
       - "3001:3001"
+    volumes:
+      - realwise_storage:/data/realwise-storage
     depends_on: [postgres, redis]
 
   worker:
@@ -25,6 +29,10 @@ services:
       context: ../..
       dockerfile: apps/worker/Dockerfile
     env_file: ../../.env
+    environment:
+      LOCAL_STORAGE_DIR: /data/realwise-storage
+    volumes:
+      - realwise_storage:/data/realwise-storage
     depends_on: [postgres, redis]
 
   inference-gateway:
@@ -65,3 +73,4 @@ services:
 
 volumes:
   realwise_pg_data:
+  realwise_storage:
