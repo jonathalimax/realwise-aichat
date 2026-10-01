@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { randomUUID } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 
 @Injectable()
@@ -9,7 +10,9 @@ export class KnowledgeService {
     return this.prisma.client.knowledgeDocument.findMany({ where: { businessId }, orderBy: { createdAt: "desc" } });
   }
 
-  async registerUpload(businessId: string, filename: string, mimeType: string, sizeBytes: number, storageKey: string) {
+  async registerUpload(businessId: string, filename: string, mimeType: string, sizeBytes: number) {
+    const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storageKey = `tenants/${businessId}/documents/${randomUUID()}-${safeFilename}`;
     return this.prisma.client.knowledgeDocument.create({
       data: { businessId, filename, mimeType, sizeBytes, storageKey, source: "upload", status: "uploaded" },
     });

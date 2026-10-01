@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { nicheTemplates } from "@realwise/profile-schema";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -34,9 +34,15 @@ export class ChatService {
     return ESCALATION_KEYWORDS.some((kw) => normalized.includes(kw));
   }
 
-  async sendMessage(businessId: string, conversationId: string, visitorText: string) {
+  async sendMessage(businessId: string, conversationId: string, visitorText: string, visitorToken: string, leadId?: string) {
     const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
     if (!conversation) throw new NotFoundException("Conversation not found");
+
+    const belongsToCaller =
+      conversation.visitorToken === visitorToken || (leadId && conversation.leadId === leadId);
+    if (!belongsToCaller) {
+      throw new ForbiddenException("Conversation does not belong to this visitor");
+    }
 
     await this.prisma.client.message.create({
       data: { conversationId, businessId, role: "visitor", content: visitorText },

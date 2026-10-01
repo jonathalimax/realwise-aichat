@@ -20,9 +20,8 @@ export class KnowledgeController {
     @Body("filename") filename: string,
     @Body("mimeType") mimeType: string,
     @Body("sizeBytes") sizeBytes: number,
-    @Body("storageKey") storageKey: string,
   ) {
-    return this.knowledge.registerUpload(session.businessId, filename, mimeType, sizeBytes, storageKey);
+    return this.knowledge.registerUpload(session.businessId, filename, mimeType, sizeBytes);
   }
 
   @Delete("documents/:id")
