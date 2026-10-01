@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { getTenantDetail, suspendTenant } from "../../../lib/api";
 
-export default function TenantDetailPage({ params }: { params: { id: string } }) {
+export default function TenantDetailPage() {
+  const params = useParams<{ id: string }>();
   const [tenant, setTenant] = useState<any>(null);
 
   useEffect(() => {
