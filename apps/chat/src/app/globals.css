@@ -3,13 +3,13 @@
 @tailwind utilities;
 
 body {
-  background: #F0EFED;
-  color: #15201B;
+  background: #E8E6E0;
+  color: #0E2B22;
 }
 
 @media (prefers-color-scheme: dark) {
   body {
-    background: #0F1311;
-    color: #EDEAE2;
+    background: #0C1713;
+    color: #EAEBE2;
   }
 }
