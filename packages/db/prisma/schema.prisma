@@ -1,0 +1,389 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector, pgcrypto]
+}
+
+generator json {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+enum Niche {
+  imobiliaria
+  concessionaria
+}
+
+enum BusinessStatus {
+  onboarding
+  pending_review
+  live
+  suspended
+  churned
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+}
+
+enum DocumentStatus {
+  uploaded
+  processing
+  processed
+  failed
+}
+
+enum ConversationStatus {
+  active
+  idle
+  escalated
+  closed
+}
+
+enum AnswerSource {
+  fixed_flow
+  rag
+  abstained
+  escalation
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  canceled
+  no_show
+  completed
+}
+
+enum DataSubjectRequestType {
+  access
+  deletion
+  correction
+  portability
+}
+
+model Business {
+  id              String         @id @default(uuid())
+  name            String
+  slug            String         @unique
+  niche           Niche
+  parentBusinessId String?
+  phone           String         @unique
+  ownerName       String
+  logoUrl         String?
+  brandColor      String?
+  timezone        String         @default("America/Sao_Paulo")
+  address         String?
+  status          BusinessStatus @default(onboarding)
+  confidenceScore Int            @default(0)
+  confidenceBreakdown Json?
+  publishedAt     DateTime?
+  linkPlacedAt    DateTime?
+  createdAt       DateTime       @default(now())
+  deletedAt       DateTime?
+
+  profile         BusinessProfile?
+  documents       KnowledgeDocument[]
+  conversations   Conversation[]
+  leads           Lead[]
+  routingNumbers  WhatsappRoutingNumber[]
+  subscription    Subscription?
+  bookingSlots    BookingSlot[]
+  appointments    Appointment[]
+  unansweredQuestions UnansweredQuestion[]
+  consentRecords  ConsentRecord[]
+  dataSubjectRequests DataSubjectRequest[]
+}
+
+model Plan {
+  id                  String  @id @default(uuid())
+  code                String  @unique
+  name                String
+  priceBrlCents       Int
+  setupFeeBrlCents    Int
+  conversationQuota   Int
+  documentQuota       Int
+  whatsappNumberQuota Int
+  features            Json
+  stripePriceId       String
+  stripeSetupPriceId  String
+  isActive            Boolean @default(true)
+
+  subscriptions       Subscription[]
+}
+
+model Subscription {
+  id                        String              @id @default(uuid())
+  businessId                String              @unique
+  business                  Business            @relation(fields: [businessId], references: [id])
+  planId                    String
+  plan                      Plan                @relation(fields: [planId], references: [id])
+  stripeCustomerId          String
+  stripeSubscriptionId      String
+  status                    SubscriptionStatus  @default(trialing)
+  currentPeriodStart        DateTime
+  currentPeriodEnd          DateTime
+  setupFeePaidAt            DateTime?
+  cancelAtPeriodEnd         Boolean             @default(false)
+  conversationsUsedThisPeriod Int               @default(0)
+}
+
+model KnowledgeDocument {
+  id                String          @id @default(uuid())
+  businessId        String
+  business          Business        @relation(fields: [businessId], references: [id])
+  filename          String
+  mimeType          String
+  sizeBytes         Int
+  storageKey        String
+  source            String
+  status            DocumentStatus  @default(uploaded)
+  extractedMarkdown String?
+  ocrUsed           Boolean         @default(false)
+  pageCount         Int?
+  processingError   String?
+  createdAt         DateTime        @default(now())
+  retentionDeleteAt DateTime?
+
+  chunks            KnowledgeChunk[]
+}
+
+model KnowledgeChunk {
+  id          String            @id @default(uuid())
+  businessId  String
+  documentId  String
+  document    KnowledgeDocument @relation(fields: [documentId], references: [id])
+  ordinal     Int
+  content     String
+  tokenCount  Int
+  embedding   Unsupported("vector(1024)")?
+  sectionPath String?
+}
+
+model BusinessProfile {
+  id               String    @id @default(uuid())
+  businessId       String    @unique
+  business         Business  @relation(fields: [businessId], references: [id])
+  templateVersion  String
+  data             Json
+  fieldStatus      Json
+  cachedSummary    String?
+  cachedSummaryTokens Int?
+  approvedAt       DateTime?
+  updatedAt        DateTime  @updatedAt
+}
+
+model Conversation {
+  id                  String              @id @default(uuid())
+  businessId          String
+  business            Business            @relation(fields: [businessId], references: [id])
+  leadId              String?
+  lead                Lead?               @relation(fields: [leadId], references: [id])
+  visitorToken        String
+  status              ConversationStatus  @default(active)
+  channel             String?
+  referrer            String?
+  startedAt           DateTime            @default(now())
+  lastMessageAt       DateTime            @default(now())
+  messageCount        Int                 @default(0)
+  rollingSummary      String?
+  summaryUpdatedAtMessage Int?
+  escalatedAt         DateTime?
+  escalationNumberId  String?
+  referenceCode       String?
+  totalInputTokens    Int                 @default(0)
+  totalOutputTokens   Int                 @default(0)
+  fixedFlowTurns      Int                 @default(0)
+  llmTurns            Int                 @default(0)
+
+  messages            Message[]
+  chipSuggestions     ChipSuggestion[]
+  appointments        Appointment[]
+}
+
+model Message {
+  id                  String        @id @default(uuid())
+  conversationId      String
+  conversation        Conversation  @relation(fields: [conversationId], references: [id])
+  businessId          String
+  role                String
+  content             String
+  createdAt           DateTime      @default(now())
+  answerSource        AnswerSource?
+  retrievedChunkIds   String[]
+  retrievalTopScore   Float?
+  modelUsed           String?
+  inputTokens         Int?
+  outputTokens        Int?
+  latencyMs           Int?
+  feedback            String?
+  flagged             Boolean       @default(false)
+}
+
+model UnansweredQuestion {
+  id                   String    @id @default(uuid())
+  businessId           String
+  business             Business  @relation(fields: [businessId], references: [id])
+  conversationId       String
+  messageId            String
+  questionText         String
+  normalizedText       String
+  occurrenceCount      Int       @default(1)
+  status               String    @default("open")
+  resolvedByProfileField String?
+  resolvedAt           DateTime?
+}
+
+model Lead {
+  id                String          @id @default(uuid())
+  businessId        String
+  business          Business        @relation(fields: [businessId], references: [id])
+  name              String?
+  phone             String
+  phoneNormalized   String
+  firstSeenAt       DateTime        @default(now())
+  lastSeenAt        DateTime        @default(now())
+  sessionCount      Int             @default(1)
+  commitmentScore   Int             @default(0)
+  scoreBand         String          @default("cold")
+  scoreSignals      Json?
+  consentId         String?
+  ownerNotes        String?
+  ownerOutcome       String?
+  whatsappContactedAt DateTime?
+  tags              String[]
+  retentionDeleteAt DateTime?
+
+  conversations     Conversation[]
+  appointments      Appointment[]
+
+  @@unique([businessId, phoneNormalized])
+}
+
+model ChipSuggestion {
+  id              String        @id @default(uuid())
+  conversationId  String
+  conversation    Conversation  @relation(fields: [conversationId], references: [id])
+  businessId      String
+  afterMessageId  String?
+  label           String
+  questionText    String?
+  kind            String
+  position        Int
+  shownAt         DateTime      @default(now())
+  clickedAt       DateTime?
+  validatedAgainstKb Boolean    @default(false)
+}
+
+model BookingSlot {
+  id              String    @id @default(uuid())
+  businessId      String
+  business        Business  @relation(fields: [businessId], references: [id])
+  kind            String
+  weekday         Int?
+  startTime       String?
+  endTime         String?
+  slotDurationMinutes Int
+  capacity        Int       @default(1)
+  serviceId       String?
+  validFrom       DateTime?
+  validUntil      DateTime?
+  isBlocked       Boolean   @default(false)
+}
+
+model Appointment {
+  id                      String            @id @default(uuid())
+  businessId              String
+  business                Business          @relation(fields: [businessId], references: [id])
+  leadId                  String?
+  lead                    Lead?             @relation(fields: [leadId], references: [id])
+  conversationId          String?
+  conversation            Conversation?     @relation(fields: [conversationId], references: [id])
+  serviceName             String
+  startsAt                DateTime
+  endsAt                  DateTime
+  status                  AppointmentStatus @default(pending)
+  createdVia              String
+  notes                   String?
+  ownerConfirmedAt        DateTime?
+  externalCalendarEventId String?
+}
+
+model WhatsappRoutingNumber {
+  id            String    @id @default(uuid())
+  businessId    String
+  business      Business  @relation(fields: [businessId], references: [id])
+  label         String
+  phone         String
+  isActive      Boolean   @default(true)
+  businessHours Json?
+  priority      Int       @default(0)
+  lastRoutedAt  DateTime?
+}
+
+model ConsentRecord {
+  id            String    @id @default(uuid())
+  businessId    String
+  business      Business  @relation(fields: [businessId], references: [id])
+  leadId        String?
+  phoneHash     String
+  consentTextVersion String
+  purposes      String[]
+  grantedAt     DateTime  @default(now())
+  ipAddress     String?
+  userAgent     String?
+  withdrawnAt   DateTime?
+  withdrawalReason String?
+}
+
+model DataSubjectRequest {
+  id              String                  @id @default(uuid())
+  businessId      String
+  business        Business                @relation(fields: [businessId], references: [id])
+  leadId          String?
+  type            DataSubjectRequestType
+  status          String                  @default("open")
+  requestedAt     DateTime                @default(now())
+  fulfilledAt     DateTime?
+  fulfillmentNotes String?
+}
+
+model AnalyticsEvent {
+  id             String    @id @default(uuid())
+  businessId     String
+  name           String
+  properties     Json?
+  conversationId String?
+  leadId         String?
+  occurredAt     DateTime  @default(now())
+}
+
+model LlmCallLog {
+  id               String   @id @default(uuid())
+  businessId       String?
+  purpose          String
+  model            String
+  provider         String
+  inputTokens      Int
+  outputTokens     Int
+  latencyMs        Int
+  costEstimateCents Int?
+  cachedPrefixHit  Boolean  @default(false)
+  error            String?
+  createdAt        DateTime @default(now())
+}
+
+model AdminUser {
+  id          String    @id @default(uuid())
+  phone       String    @unique
+  name        String
+  role        String
+  lastLoginAt DateTime?
+}

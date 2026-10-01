@@ -19,19 +19,38 @@ d = json.load(open('$QUESTIONS_FILE'))
 for niche, qs in d.items():
     for q in qs:
         print(json.dumps({'niche': niche, 'question': q}))
-" | while IFS= read -r line; do
-    Q=$(echo "$line" | python3 -c "import json,sys; print(json.loads(sys.stdin.read())['question'])")
-    NICHE=$(echo "$line" | python3 -c "import json,sys; print(json.loads(sys.stdin.read())['niche'])")
+" > /tmp/rw_bench_questions.jsonl
+
+  while IFS= read -r line; do
+    NICHE=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['niche'])" "$line")
+    Q=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['question'])" "$line")
+
+    PAYLOAD=$(python3 -c "
+import json, sys
+prompt = sys.argv[1] + chr(10) + chr(10) + 'Cliente: ' + sys.argv[2]
+print(json.dumps({'model': sys.argv[3], 'prompt': prompt, 'stream': False}))
+" "$SYSTEM_PROMPT" "$Q" "$MODEL")
+
     START=$(date +%s%N)
-    ANSWER=$(ollama run "$MODEL" "$SYSTEM_PROMPT"$'\n\n'"Cliente: $Q" 2>/dev/null)
+    RESPONSE=$(curl -s http://localhost:11434/api/generate -d "$PAYLOAD")
     END=$(date +%s%N)
     LATENCY_MS=$(( (END - START) / 1000000 ))
+
     python3 -c "
-import json
-print(json.dumps({'niche': '$NICHE', 'question': '''$Q''', 'answer': '''$ANSWER''', 'latency_ms': $LATENCY_MS}))
-" >> "$OUT_FILE"
+import json, sys
+resp = json.loads(sys.argv[1])
+out = {
+  'niche': sys.argv[2],
+  'question': sys.argv[3],
+  'answer': resp.get('response', ''),
+  'latency_ms': int(sys.argv[4]),
+}
+print(json.dumps(out, ensure_ascii=False))
+" "$RESPONSE" "$NICHE" "$Q" "$LATENCY_MS" >> "$OUT_FILE"
+
     echo "[$MODEL] ($NICHE) ${LATENCY_MS}ms :: $Q"
-  done
+  done < /tmp/rw_bench_questions.jsonl
 done
 
-echo "Done. Results in $OUT_DIR — grade manually or feed into the llm-evaluation skill for a rubric pass."
+rm -f /tmp/rw_bench_questions.jsonl
+echo "Done. Results in $OUT_DIR"
