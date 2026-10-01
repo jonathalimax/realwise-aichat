@@ -57,21 +57,22 @@ export function ChatScreen({ slug }: { slug: string }) {
     setMessages((prev) => [...prev, { role: "visitor", content: text }]);
     setInput("");
 
-    let assistantIndex = -1;
+    let assistantStarted = false;
     try {
       const convId = await ensureConversation();
       const result = await streamMessage(business.id, convId, text, (delta) => {
         setSending(false);
+        // The function passed to setMessages must stay pure (React may invoke it twice in
+        // Strict Mode to check for side effects) — so `assistantStarted` is only read here,
+        // and mutated below, outside the updater, once per real delta event.
         setMessages((prev) => {
+          if (!assistantStarted) return [...prev, { role: "assistant", content: delta }];
           const next = [...prev];
-          if (assistantIndex === -1) {
-            assistantIndex = next.length;
-            next.push({ role: "assistant", content: delta });
-          } else {
-            next[assistantIndex] = { role: "assistant", content: next[assistantIndex].content + delta };
-          }
+          const last = next.length - 1;
+          next[last] = { role: "assistant", content: next[last].content + delta };
           return next;
         });
+        assistantStarted = true;
       });
       if (result?.escalated && result?.whatsappUrl) {
         window.open(result.whatsappUrl, "_blank");
