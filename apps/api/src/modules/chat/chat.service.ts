@@ -5,7 +5,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway, generateFromGatewayStream } from "../../inference/gateway-client";
 import { embedText } from "../../inference/embed-client";
 import { BookingsService } from "../bookings/bookings.service";
-import { sendEmail } from "../../common/email";
+import { sendEmail, escapeHtml } from "../../common/email";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 
@@ -423,8 +423,8 @@ export class ChatService {
     });
     this.notifyOwner(
       businessId,
-      `Novo agendamento: ${serviceName}`,
-      `<p>Um cliente marcou <strong>${serviceName}</strong> para <strong>${start.toLocaleString("pt-BR")}</strong>.</p>
+      `Novo agendamento: ${escapeHtml(serviceName)}`,
+      `<p>Um cliente marcou <strong>${escapeHtml(serviceName)}</strong> para <strong>${escapeHtml(start.toLocaleString("pt-BR"))}</strong>.</p>
        <p>Confira e confirme no painel: Agenda.</p>`,
     );
     return appointment;
@@ -455,10 +455,10 @@ export class ChatService {
 
     this.notifyOwner(
       businessId,
-      `Lead quente — ${business.name}`,
+      `Lead quente — ${escapeHtml(business.name)}`,
       `<p>Um cliente pediu para falar com alguém do time agora.</p>
-       <p><strong>Assunto:</strong> ${topic}</p>
-       <p><strong>Código de referência:</strong> ${referenceCode}</p>
+       <p><strong>Assunto:</strong> ${escapeHtml(topic)}</p>
+       <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
        <p>Veja a conversa e responda no painel: Leads.</p>`,
     );
 
