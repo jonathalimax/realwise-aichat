@@ -14,6 +14,11 @@ export class AnalyticsController {
     return this.analytics.dashboardSummary(session.businessId);
   }
 
+  @Get("timeseries")
+  timeseries(@CurrentBusiness() session: BusinessSessionClaims) {
+    return this.analytics.timeseries(session.businessId);
+  }
+
   @Get("top-questions")
   topQuestions(@CurrentBusiness() session: BusinessSessionClaims) {
     return this.analytics.topQuestions(session.businessId);

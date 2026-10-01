@@ -5,6 +5,8 @@ import { getMe, updateBranding, updateWebsiteUrl } from "../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
 
 export default function SettingsPage() {
   const [brandColor, setBrandColor] = useState("#1F5F52");
@@ -50,19 +52,19 @@ export default function SettingsPage() {
       <Card>
         <CardContent className="flex flex-col gap-4 p-5">
           <div>
-            <label className="text-xs text-ink-soft">Cor da marca</label>
+            <Label>Cor da marca</Label>
             <div className="mt-1 flex items-center gap-3">
               <input type="color" value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="h-10 w-16 rounded-lg border border-border" />
               <span className="font-mono text-sm text-ink-soft">{brandColor}</span>
             </div>
           </div>
           <div>
-            <label className="text-xs text-ink-soft">URL do logo</label>
-            <input
+            <Label>URL do logo</Label>
+            <Input
               value={logoUrl}
               onChange={(e) => setLogoUrl(e.target.value)}
               placeholder="https://…"
-              className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              className="mt-1"
             />
           </div>
           <Button className="self-start" onClick={save}>
@@ -89,16 +91,15 @@ export default function SettingsPage() {
             </p>
           ) : (
             <div className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs text-ink-soft">URL do site</span>
-                <input
+              <div className="flex flex-col gap-1.5">
+                <Label>URL do site</Label>
+                <Input
                   value={websiteUrl}
                   onChange={(e) => setWebsiteUrl(e.target.value)}
                   placeholder="https://seusite.com.br"
                   type="url"
-                  className="rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm"
                 />
-              </label>
+              </div>
               <Button className="self-start" disabled={websiteUrl === websiteSavedUrl} onClick={saveWebsite}>
                 {websiteSaved ? "Salvo!" : "Salvar"}
               </Button>

@@ -29,6 +29,18 @@ export class AuthController {
     return { admin: { id: admin.id, name: admin.name, role: admin.role } };
   }
 
+  @Post("business/logout")
+  logoutBusiness(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie("rw_business_session", { path: "/" });
+    return { ok: true };
+  }
+
+  @Post("admin/logout")
+  logoutAdmin(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie("rw_admin_session", { path: "/" });
+    return { ok: true };
+  }
+
   @UseGuards(RateLimitGuard)
   @Post("visitor/identify")
   async identifyVisitor(

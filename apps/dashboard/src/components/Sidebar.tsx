@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Menu, LogOut } from "lucide-react";
 import { Sheet, SheetTrigger, SheetContent } from "./ui/sheet";
+import { logout } from "../lib/api";
 
 const ITEMS = [
   { href: "/", label: "Início" },
@@ -17,8 +19,16 @@ const ITEMS = [
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  const router = useRouter();
+
+  async function handleLogout() {
+    onNavigate?.();
+    await logout().catch(() => {});
+    router.push("/login");
+  }
+
   return (
-    <nav className="flex flex-col gap-1">
+    <nav className="flex flex-1 flex-col gap-1">
       {ITEMS.map((item) => (
         <Link
           key={item.href}
@@ -29,6 +39,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           {item.label}
         </Link>
       ))}
+      <button
+        onClick={handleLogout}
+        className="mt-auto flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-ink-soft hover:bg-surface"
+      >
+        <LogOut className="h-4 w-4" /> Sair
+      </button>
     </nav>
   );
 }
@@ -47,7 +63,7 @@ export function Sidebar() {
             </button>
           </SheetTrigger>
           <SheetContent>
-            <div className="px-6 py-6">
+            <div className="flex h-full flex-col px-6 py-6">
               <div className="mb-6 font-serif text-lg font-bold text-ink">Realwise</div>
               <NavLinks onNavigate={() => setOpen(false)} />
             </div>

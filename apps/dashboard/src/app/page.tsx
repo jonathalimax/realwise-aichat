@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAnalyticsSummary, getMe } from "../lib/api";
-import { Card, CardContent } from "../components/ui/card";
+import { getAnalyticsSummary, getAnalyticsTimeseries, getMe } from "../lib/api";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { ActivityChart } from "../components/charts/ActivityChart";
 
 const STATS = [
   { key: "conversations7d", label: "Conversas 7d" },
@@ -15,10 +16,12 @@ const STATS = [
 export default function HomePage() {
   const [business, setBusiness] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
+  const [timeseries, setTimeseries] = useState<any[]>([]);
 
   useEffect(() => {
     getMe().then(setBusiness).catch(() => {});
     getAnalyticsSummary().then(setSummary).catch(() => {});
+    getAnalyticsTimeseries().then(setTimeseries).catch(() => setTimeseries([]));
   }, []);
 
   return (
@@ -39,6 +42,15 @@ export default function HomePage() {
           </Card>
         ))}
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Atividade (14 dias)</CardTitle>
+          <CardDescription>Conversas e leads novos por dia.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ActivityChart data={timeseries} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -68,6 +68,76 @@ export class OnboardingService {
     return result;
   }
 
+  // Finds required/recommended/optional fields still missing, ordered so the most important
+  // gaps get asked about first — same priority order used to weight the confidence score.
+  private async findGaps(businessId: string) {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) throw new NotFoundException("Business not found");
+    const profile = await this.prisma.client.businessProfile.findUnique({ where: { businessId } });
+    const template = nicheTemplates[business.niche];
+    const data = (profile?.data as Record<string, unknown>) ?? {};
+
+    const weightOrder = { required: 0, recommended: 1, optional: 2 } as const;
+    const gaps = template.fields
+      .filter((f) => data[f.key] === undefined || data[f.key] === "")
+      .sort((a, b) => weightOrder[a.weight] - weightOrder[b.weight]);
+
+    return { business, template, data, gaps };
+  }
+
+  async interviewChat(businessId: string, history: { role: "owner" | "clara"; content: string }[]) {
+    const { business, gaps } = await this.findGaps(businessId);
+
+    if (gaps.length === 0) {
+      return { reply: "Já cobrimos tudo que eu precisava saber! Pode revisar os campos abaixo e aprovar quando estiver tudo certo.", allDone: true, remainingGaps: 0 };
+    }
+
+    const documents = await this.prisma.client.knowledgeDocument.findMany({
+      where: { businessId, status: "processed" },
+      select: { extractedMarkdown: true },
+      take: 5,
+    });
+    const documentContext = documents.map((d) => d.extractedMarkdown).filter(Boolean).join("\n\n").slice(0, 4000);
+
+    const gapList = gaps.map((g) => `- ${g.key}: ${g.label} (${g.weight})`).join("\n");
+    const conversation = history.map((m) => `${m.role === "owner" ? "Dono" : "Clara"}: ${m.content}`).join("\n");
+
+    const systemPrompt = [
+      `Você é a Clara, entrevistando o DONO da ${business.name} para completar o perfil do negócio (não é o cliente final).`,
+      "Sua tarefa: perguntar, uma de cada vez, sobre os campos que ainda faltam preencher, na ordem dada.",
+      "Se o conteúdo dos documentos abaixo já responder um campo, não pergunte de novo — apenas confirme e extraia o valor.",
+      "Quando o dono responder uma pergunta, extraia um valor curto e estruturado para o campo perguntado.",
+      "Responda SEMPRE em JSON puro, sem markdown, no formato: {\"reply\": string, \"fieldKey\": string|null, \"value\": string|null}.",
+      "fieldKey/value só devem vir preenchidos quando a MENSAGEM MAIS RECENTE do dono responder a um campo — nunca invente valor.",
+      `Campos que faltam (em ordem de prioridade):\n${gapList}`,
+      documentContext ? `Conteúdo já extraído dos documentos (use para não perguntar o que já está aqui):\n${documentContext}` : "",
+    ].join("\n\n");
+
+    const prompt = conversation
+      ? `${conversation}\nClara:`
+      : "Inicie a entrevista perguntando sobre o primeiro campo da lista.";
+
+    let reply = "Me conta um pouco mais sobre isso?";
+    let fieldKey: string | null = null;
+    let value: string | null = null;
+    try {
+      const result = await generateFromGateway({ purpose: "chat", businessId, systemPrompt, prompt, maxTokens: 300 });
+      const parsed = JSON.parse(result.text.trim());
+      if (typeof parsed.reply === "string") reply = parsed.reply;
+      if (typeof parsed.fieldKey === "string") fieldKey = parsed.fieldKey;
+      if (typeof parsed.value === "string") value = parsed.value;
+    } catch {
+      // keep the generic fallback reply; don't block the conversation on a parsing/inference hiccup
+    }
+
+    if (fieldKey && value) {
+      await this.patchProfileField(businessId, fieldKey, value, "interview");
+    }
+
+    const { gaps: remaining } = await this.findGaps(businessId);
+    return { reply, allDone: remaining.length === 0, remainingGaps: remaining.length };
+  }
+
   private async runEvalQuestions(businessId: string, businessName: string, niche: string, profileSummary: string, evalQuestions: string[]): Promise<number> {
     if (evalQuestions.length === 0) return 0;
 

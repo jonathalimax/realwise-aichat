@@ -18,6 +18,11 @@ import {
   publishBusiness,
   confirmLinkPlaced,
 } from "../../lib/api";
+import { InterviewChat } from "../../components/InterviewChat";
+import { Input } from "../../components/ui/input";
+import { Textarea } from "../../components/ui/textarea";
+import { Button } from "../../components/ui/button";
+import { Badge } from "../../components/ui/badge";
 
 const STEPS = ["Negócio", "Documentos", "Entrevista", "Revisão", "WhatsApp", "Publicar"];
 
@@ -29,7 +34,6 @@ export default function OnboardingPage() {
   const [profile, setProfile] = useState<any>(null);
   const [documents, setDocuments] = useState<any[]>([]);
   const [pastedText, setPastedText] = useState("");
-  const [confidence, setConfidence] = useState<any>(null);
   const [whatsappNumbers, setWhatsappNumbers] = useState<any[]>([]);
   const [waLabel, setWaLabel] = useState("Principal");
   const [waPhone, setWaPhone] = useState("");
@@ -85,7 +89,7 @@ export default function OnboardingPage() {
   }
 
   async function handleRecompute() {
-    setConfidence(await recomputeConfidence());
+    await recomputeConfidence();
     setBusiness(await getMe());
   }
 
@@ -102,11 +106,11 @@ export default function OnboardingPage() {
     refresh();
   }
 
-  if (!business || !profile) return <p className="text-muted">Carregando…</p>;
+  if (!business || !profile) return <p className="text-ink-soft">Carregando…</p>;
 
   const data = profile.profile?.data ?? {};
   const fieldStatus = profile.profile?.fieldStatus ?? {};
-  const publicUrl = `${process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3000"}/${business.slug}`;
+  const publicUrl = `${process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005"}/${business.slug}`;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -120,7 +124,7 @@ export default function OnboardingPage() {
           <button
             key={label}
             onClick={() => setStep(i)}
-            className={`flex-1 border-t-2 pt-2 text-left text-xs transition-colors hover:text-ink ${i === step ? "border-accent text-accent-ink font-semibold" : "border-border text-muted"}`}
+            className={`flex-1 border-t-2 pt-2 text-left text-xs transition-colors hover:text-ink ${i === step ? "border-accent text-accent-ink font-semibold" : "border-border text-ink-soft"}`}
           >
             {label}
           </button>
@@ -130,52 +134,45 @@ export default function OnboardingPage() {
       {step === 0 && (
         <div className="flex flex-col gap-3">
           <h2 className="font-serif text-xl">Sobre o seu negócio</h2>
-          <input
+          <Input
             value={business.name}
             onChange={(e) => setBusiness({ ...business, name: e.target.value })}
             placeholder="Nome do negócio"
-            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
-          <input
+          <Input
             value={business.ownerName}
             onChange={(e) => setBusiness({ ...business, ownerName: e.target.value })}
             placeholder="Seu nome"
-            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
-          <input
+          <Input
             value={business.email ?? ""}
             onChange={(e) => setBusiness({ ...business, email: e.target.value })}
             placeholder="Seu e-mail (avisos sobre o período de teste)"
             type="email"
-            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
           <select
             value={business.niche}
             onChange={(e) => setBusiness({ ...business, niche: e.target.value })}
-            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
           >
             <option value="imobiliaria">Imobiliária</option>
             <option value="concessionaria">Concessionária</option>
           </select>
           <div className="flex gap-2">
-            <input
+            <Input
               value={slug}
               onChange={(e) => {
                 setSlug(e.target.value);
                 setSlugStatus("idle");
               }}
               placeholder="seu-link (ex: imoveis-vale-real)"
-              className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              className="flex-1"
             />
-            <button onClick={handleCheckSlug} className="rounded-lg border border-border px-3 py-2 text-xs">
-              Verificar
-            </button>
+            <Button variant="outline" size="sm" onClick={handleCheckSlug}>Verificar</Button>
           </div>
           {slugStatus === "available" && <p className="text-xs text-positive">Disponível!</p>}
           {slugStatus === "taken" && <p className="text-xs text-negative">Já em uso.</p>}
-          <button onClick={saveBusinessInfo} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
-            Continuar
-          </button>
+          <Button onClick={saveBusinessInfo}>Continuar</Button>
         </div>
       )}
 
@@ -183,55 +180,38 @@ export default function OnboardingPage() {
         <div className="flex flex-col gap-4">
           <h2 className="font-serif text-xl">Manda o que você já tem</h2>
           <input type="file" onChange={handleFileUpload} className="text-sm" />
-          <textarea
+          <Textarea
             value={pastedText}
             onChange={(e) => setPastedText(e.target.value)}
             placeholder="Ou cole aqui um texto (tabela de preços, horários, políticas…)"
             rows={5}
-            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
-          <button onClick={handlePasteText} className="self-start rounded-lg border border-border px-3 py-2 text-xs">
-            Adicionar texto
-          </button>
+          <Button variant="outline" size="sm" className="self-start" onClick={handlePasteText}>Adicionar texto</Button>
           <div className="flex flex-col gap-1">
             {documents.map((d) => (
               <div key={d.id} className="flex justify-between rounded-lg border border-border bg-surface px-3 py-2 text-xs">
                 <span>{d.filename}</span>
-                <span className="text-muted">{d.status}</span>
+                <span className="text-ink-soft">{d.status}</span>
               </div>
             ))}
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setStep(0)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink-soft">
-              Voltar
-            </button>
-            <button onClick={() => setStep(2)} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
-              Continuar
-            </button>
+            <Button variant="outline" onClick={() => setStep(0)}>Voltar</Button>
+            <Button onClick={() => setStep(2)}>Continuar</Button>
           </div>
         </div>
       )}
 
       {step === 2 && (
         <div className="flex flex-col gap-3">
-          <h2 className="font-serif text-xl">Entrevista guiada</h2>
-          {profile.template?.interviewQuestions.map((q: any) => (
-            <div key={q.id}>
-              <label className="text-xs text-ink-soft">{q.prompt}</label>
-              <input
-                defaultValue={data[q.fillsField] ?? ""}
-                onBlur={(e) => handleFieldChange(q.fillsField, e.target.value)}
-                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              />
-            </div>
-          ))}
+          <h2 className="font-serif text-xl">Entrevista com a Clara</h2>
+          <p className="text-xs text-ink-soft">
+            A Clara já leu os documentos que você mandou. Agora ela só vai perguntar o que ainda falta.
+          </p>
+          <InterviewChat onFieldFilled={refresh} />
           <div className="mt-2 flex gap-2">
-            <button onClick={() => setStep(1)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink-soft">
-              Voltar
-            </button>
-            <button onClick={() => setStep(3)} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
-              Continuar
-            </button>
+            <Button variant="outline" onClick={() => setStep(1)}>Voltar</Button>
+            <Button onClick={() => setStep(3)}>Continuar</Button>
           </div>
         </div>
       )}
@@ -240,26 +220,27 @@ export default function OnboardingPage() {
         <div className="flex flex-col gap-3">
           <h2 className="font-serif text-xl">Revisar e aprovar</h2>
           {profile.template?.fields.map((f: any) => (
-            <div key={f.key} className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm">
-              <div>
-                <div>{f.label}</div>
-                <div className="text-xs text-muted">{data[f.key] ?? "— não preenchido —"}</div>
+            <div key={f.key} className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+              <div className="flex-1">
+                <div className="mb-1 text-xs text-ink-soft">{f.label}</div>
+                <Input
+                  defaultValue={data[f.key] ?? ""}
+                  placeholder="— não preenchido —"
+                  onBlur={(e) => handleFieldChange(f.key, e.target.value)}
+                />
               </div>
-              <button
+              <Button
+                size="sm"
+                variant={fieldStatus[f.key]?.approvedByOwner ? "default" : "outline"}
                 onClick={() => handleApprove(f.key)}
-                className={`rounded-full px-2 py-1 text-xs ${fieldStatus[f.key]?.approvedByOwner ? "bg-positive-soft text-positive" : "border border-border text-muted"}`}
               >
                 {fieldStatus[f.key]?.approvedByOwner ? "Aprovado" : "Aprovar"}
-              </button>
+              </Button>
             </div>
           ))}
           <div className="mt-2 flex gap-2">
-            <button onClick={() => setStep(2)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink-soft">
-              Voltar
-            </button>
-            <button onClick={() => { handleRecompute(); setStep(4); }} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
-              Continuar
-            </button>
+            <Button variant="outline" onClick={() => setStep(2)}>Voltar</Button>
+            <Button onClick={() => { handleRecompute(); setStep(4); }}>Continuar</Button>
           </div>
         </div>
       )}
@@ -267,22 +248,18 @@ export default function OnboardingPage() {
       {step === 4 && (
         <div className="flex flex-col gap-3">
           <h2 className="font-serif text-xl">Número de WhatsApp para escalonamento</h2>
-          <p className="text-xs text-muted">Necessário para o chat conseguir passar um cliente para um atendente humano.</p>
+          <p className="text-xs text-ink-soft">Necessário para o chat conseguir passar um cliente para um atendente humano.</p>
           <div className="flex gap-2">
-            <input value={waLabel} onChange={(e) => setWaLabel(e.target.value)} placeholder="Label" className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
-            <input value={waPhone} onChange={(e) => setWaPhone(e.target.value)} placeholder="+55 11 99999-9999" className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
-            <button onClick={handleAddWhatsapp} className="rounded-lg border border-border px-3 py-2 text-xs">Adicionar</button>
+            <Input value={waLabel} onChange={(e) => setWaLabel(e.target.value)} placeholder="Label" className="w-32" />
+            <Input value={waPhone} onChange={(e) => setWaPhone(e.target.value)} placeholder="(11) 99999-9999" className="flex-1" />
+            <Button variant="outline" size="sm" onClick={handleAddWhatsapp}>Adicionar</Button>
           </div>
           {whatsappNumbers.map((n) => (
             <div key={n.id} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm">{n.label}: {n.phone}</div>
           ))}
           <div className="mt-2 flex gap-2">
-            <button onClick={() => setStep(3)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink-soft">
-              Voltar
-            </button>
-            <button onClick={() => setStep(5)} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
-              Continuar
-            </button>
+            <Button variant="outline" onClick={() => setStep(3)}>Voltar</Button>
+            <Button onClick={() => setStep(5)}>Continuar</Button>
           </div>
         </div>
       )}
@@ -291,33 +268,25 @@ export default function OnboardingPage() {
         <div className="flex flex-col gap-3">
           <h2 className="font-serif text-xl">Medidor de prontidão</h2>
           <div className="rounded-card border border-border bg-surface p-5 text-center">
-            <div className="font-mono text-3xl">{business.confidenceScore}%</div>
-            <div className="text-xs text-muted">
+            <div className="font-mono text-3xl text-ink">{business.confidenceScore}%</div>
+            <Badge variant={business.confidenceScore >= 70 ? "positive" : "warning"} className="mt-2">
               {business.confidenceScore >= 70 ? "Pronto para publicar" : "Preencha os campos obrigatórios para chegar a 70%"}
-            </div>
+            </Badge>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setStep(4)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink-soft">
-              Voltar
-            </button>
-            <button onClick={handleRecompute} className="rounded-lg border border-border px-3 py-2 text-xs">Recalcular</button>
+            <Button variant="outline" onClick={() => setStep(4)}>Voltar</Button>
+            <Button variant="outline" size="sm" onClick={handleRecompute}>Recalcular</Button>
           </div>
 
           {business.status !== "live" ? (
-            <button
-              onClick={handlePublish}
-              disabled={business.confidenceScore < 70}
-              className="mt-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-            >
+            <Button className="mt-2" disabled={business.confidenceScore < 70} onClick={handlePublish}>
               Publicar
-            </button>
+            </Button>
           ) : (
             <div className="flex flex-col gap-2 rounded-card border border-border bg-surface p-4">
-              <div className="text-sm">Seu link está pronto:</div>
+              <div className="text-sm text-ink">Seu link está pronto:</div>
               <code className="rounded bg-bg-2 px-2 py-1 text-xs">{publicUrl}</code>
-              <button onClick={() => confirmLinkPlaced().then(refresh)} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
-                Já coloquei o link na bio
-              </button>
+              <Button onClick={() => confirmLinkPlaced().then(refresh)}>Já coloquei o link na bio</Button>
             </div>
           )}
         </div>

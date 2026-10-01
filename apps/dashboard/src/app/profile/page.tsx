@@ -20,6 +20,9 @@ import {
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
+import { Input } from "../../components/ui/input";
+import { Textarea } from "../../components/ui/textarea";
+import { InterviewChat } from "../../components/InterviewChat";
 
 export default function ProfilePage() {
   const [business, setBusiness] = useState<any>(null);
@@ -119,34 +122,30 @@ export default function ProfilePage() {
           <CardTitle>Sobre o negócio</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <input
+          <Input
             value={business.name}
             onChange={(e) => setBusiness({ ...business, name: e.target.value })}
             placeholder="Nome do negócio"
-            className="rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm"
           />
-          <input
+          <Input
             value={business.ownerName}
             onChange={(e) => setBusiness({ ...business, ownerName: e.target.value })}
             placeholder="Seu nome"
-            className="rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm"
           />
-          <input
+          <Input
             value={business.email ?? ""}
             onChange={(e) => setBusiness({ ...business, email: e.target.value })}
             placeholder="Seu e-mail"
             type="email"
-            className="rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm"
           />
           <div className="flex gap-2">
-            <input
+            <Input
               value={slug}
               onChange={(e) => {
                 setSlug(e.target.value);
                 setSlugStatus("idle");
               }}
               placeholder="seu-link"
-              className="flex-1 rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm"
             />
             <Button variant="outline" size="sm" onClick={handleCheckSlug}>Verificar</Button>
           </div>
@@ -163,12 +162,11 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <input type="file" onChange={handleFileUpload} className="text-sm" />
-          <textarea
+          <Textarea
             value={pastedText}
             onChange={(e) => setPastedText(e.target.value)}
             placeholder="Ou cole aqui um texto (tabela de preços, horários, políticas…)"
             rows={4}
-            className="rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm"
           />
           <Button variant="outline" size="sm" className="self-start" onClick={handlePasteText}>Adicionar texto</Button>
           <div className="flex flex-col gap-1">
@@ -184,19 +182,11 @@ export default function ProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Entrevista</CardTitle>
+          <CardTitle>Conversar com a Clara</CardTitle>
+          <CardDescription>Ela já sabe o que está nos documentos — só vai perguntar o que falta.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {profile.template?.interviewQuestions.map((q: any) => (
-            <div key={q.id}>
-              <label className="text-xs text-ink-soft">{q.prompt}</label>
-              <input
-                defaultValue={data[q.fillsField] ?? ""}
-                onBlur={(e) => handleFieldChange(q.fillsField, e.target.value)}
-                className="mt-1 w-full rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm"
-              />
-            </div>
-          ))}
+        <CardContent>
+          <InterviewChat onFieldFilled={refresh} />
         </CardContent>
       </Card>
 
@@ -206,10 +196,14 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {profile.template?.fields.map((f: any) => (
-            <div key={f.key} className="flex items-center justify-between rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm">
-              <div>
-                <div className="text-ink">{f.label}</div>
-                <div className="text-xs text-ink-soft">{data[f.key] ?? "— não preenchido —"}</div>
+            <div key={f.key} className="flex items-center gap-2 rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm">
+              <div className="flex-1">
+                <div className="mb-1 text-xs text-ink-soft">{f.label}</div>
+                <Input
+                  defaultValue={data[f.key] ?? ""}
+                  placeholder="— não preenchido —"
+                  onBlur={(e) => handleFieldChange(f.key, e.target.value)}
+                />
               </div>
               <Button
                 size="sm"
@@ -230,8 +224,8 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">
-            <input value={waLabel} onChange={(e) => setWaLabel(e.target.value)} placeholder="Label" className="w-32 rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm" />
-            <input value={waPhone} onChange={(e) => setWaPhone(e.target.value)} placeholder="(11) 99999-9999" className="flex-1 rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm" />
+            <Input value={waLabel} onChange={(e) => setWaLabel(e.target.value)} placeholder="Label" className="w-32" />
+            <Input value={waPhone} onChange={(e) => setWaPhone(e.target.value)} placeholder="(11) 99999-9999" className="flex-1" />
             <Button variant="outline" size="sm" onClick={handleAddWhatsapp}>Adicionar</Button>
           </div>
           {whatsappNumbers.map((n) => (

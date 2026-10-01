@@ -21,6 +21,9 @@ export class BusinessesService {
     if (!business || business.status !== "live") {
       throw new NotFoundException("Business not published");
     }
+    // Fire-and-forget: every real page load of the public chat link counts as a link open,
+    // feeding the "Aberturas do link 7d" dashboard stat. Never block the chat on this.
+    this.prisma.client.analyticsEvent.create({ data: { businessId: business.id, name: "link_opened" } }).catch(() => {});
     return business;
   }
 

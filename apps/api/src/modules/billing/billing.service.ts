@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import Stripe from "stripe";
 import { PrismaService } from "../../prisma/prisma.service";
 
@@ -41,12 +41,20 @@ export class BillingService {
 
   async createPortalSession(businessId: string) {
     const subscription = await this.prisma.client.subscription.findUnique({ where: { businessId } });
-    if (!subscription) throw new NotFoundException("No subscription found");
-    const session = await this.stripe.billingPortal.sessions.create({
-      customer: subscription.stripeCustomerId,
-      return_url: `${process.env.DASHBOARD_URL}/billing`,
-    });
-    return { url: session.url };
+    if (!subscription) throw new NotFoundException("Nenhuma assinatura encontrada para este negócio");
+    try {
+      const session = await this.stripe.billingPortal.sessions.create({
+        customer: subscription.stripeCustomerId,
+        return_url: `${process.env.DASHBOARD_URL}/billing`,
+      });
+      return { url: session.url };
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Stripe.errors.StripeError
+          ? `Não foi possível abrir o portal de cobrança: ${error.message}`
+          : "Não foi possível abrir o portal de cobrança",
+      );
+    }
   }
 
   constructWebhookEvent(rawBody: Buffer, signature: string): Stripe.Event {

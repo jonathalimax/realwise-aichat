@@ -18,6 +18,39 @@ export class AnalyticsService {
     return { conversations7d, leadsTotal, appointmentsTotal, linkOpens7d: linkOpenEvents };
   }
 
+  async timeseries(businessId: string, days = 14) {
+    const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+    const [conversations, leads, appointments, linkOpens] = await Promise.all([
+      this.prisma.client.conversation.findMany({ where: { businessId, startedAt: { gte: since } }, select: { startedAt: true } }),
+      this.prisma.client.lead.findMany({ where: { businessId, firstSeenAt: { gte: since } }, select: { firstSeenAt: true } }),
+      this.prisma.client.appointment.findMany({ where: { businessId, createdVia: "chat", startsAt: { gte: since } }, select: { startsAt: true } }),
+      this.prisma.client.analyticsEvent.findMany({ where: { businessId, name: "link_opened", occurredAt: { gte: since } }, select: { occurredAt: true } }),
+    ]);
+
+    const buckets = new Map<string, { date: string; conversations: number; leads: number; appointments: number; linkOpens: number }>();
+    for (let i = days - 1; i >= 0; i--) {
+      const key = new Date(Date.now() - i * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      buckets.set(key, { date: key, conversations: 0, leads: 0, appointments: 0, linkOpens: 0 });
+    }
+    for (const c of conversations) {
+      const bucket = buckets.get(c.startedAt.toISOString().slice(0, 10));
+      if (bucket) bucket.conversations++;
+    }
+    for (const l of leads) {
+      const bucket = buckets.get(l.firstSeenAt.toISOString().slice(0, 10));
+      if (bucket) bucket.leads++;
+    }
+    for (const a of appointments) {
+      const bucket = buckets.get(a.startsAt.toISOString().slice(0, 10));
+      if (bucket) bucket.appointments++;
+    }
+    for (const e of linkOpens) {
+      const bucket = buckets.get(e.occurredAt.toISOString().slice(0, 10));
+      if (bucket) bucket.linkOpens++;
+    }
+    return Array.from(buckets.values());
+  }
+
   async topQuestions(businessId: string, limit = 10) {
     return this.prisma.client.unansweredQuestion.findMany({
       where: { businessId },

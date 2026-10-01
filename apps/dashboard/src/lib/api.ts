@@ -10,7 +10,10 @@ async function request(path: string, options?: RequestInit) {
   if (res.status === 401 && typeof window !== "undefined" && window.location.pathname !== "/login") {
     window.location.href = "/login";
   }
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.message ?? `Request failed: ${res.status}`);
+  }
   return res.json();
 }
 
@@ -20,6 +23,7 @@ export const getLeadDetail = (id: string) => request(`/leads/${id}`);
 export const getLeadWhatsappLink = (id: string, topic: string) =>
   request(`/leads/${id}/whatsapp-link`, { method: "POST", body: JSON.stringify({ topic }) });
 export const getAnalyticsSummary = () => request("/analytics/summary");
+export const getAnalyticsTimeseries = () => request("/analytics/timeseries");
 export const getTopQuestions = () => request("/analytics/top-questions");
 export const getDocuments = () => request("/knowledge/documents");
 export const getUnanswered = () => request("/knowledge/unanswered");
@@ -29,6 +33,7 @@ export const startCheckout = (planCode: string) =>
 export const openBillingPortal = () => request("/billing/portal", { method: "POST" });
 export const verifyFirebaseToken = (idToken: string) =>
   request("/auth/business/verify", { method: "POST", body: JSON.stringify({ idToken }) });
+export const logout = () => request("/auth/business/logout", { method: "POST" });
 
 export const updateBusiness = (data: Record<string, unknown>) =>
   request("/businesses/me", { method: "PATCH", body: JSON.stringify(data) });
@@ -49,6 +54,8 @@ export const addWhatsappNumber = (label: string, phone: string) =>
 export const removeWhatsappNumber = (id: string) => request(`/businesses/me/whatsapp-numbers/${id}`, { method: "DELETE" });
 
 export const getOnboardingProfile = () => request("/onboarding/profile");
+export const interviewChat = (history: { role: "owner" | "clara"; content: string }[]) =>
+  request("/onboarding/interview", { method: "POST", body: JSON.stringify({ history }) });
 export const patchProfileField = (fieldKey: string, value: unknown, source: string) =>
   request("/onboarding/profile/field", { method: "POST", body: JSON.stringify({ fieldKey, value, source }) });
 export const approveProfileField = (fieldKey: string) =>

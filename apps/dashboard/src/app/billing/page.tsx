@@ -7,19 +7,28 @@ import { Button } from "../../components/ui/button";
 
 export default function BillingPage() {
   const [plans, setPlans] = useState<any[]>([]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     getPlans().then(setPlans).catch(() => setPlans([]));
   }, []);
 
   async function choosePlan(code: string) {
-    const { url } = await startCheckout(code);
-    window.location.href = url;
+    try {
+      const { url } = await startCheckout(code);
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível iniciar o checkout.");
+    }
   }
 
   async function managePlan() {
-    const { url } = await openBillingPortal();
-    window.location.href = url;
+    try {
+      const { url } = await openBillingPortal();
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível abrir o portal de cobrança.");
+    }
   }
 
   return (
@@ -43,6 +52,7 @@ export default function BillingPage() {
       <button onClick={managePlan} className="mt-6 text-sm text-accent underline">
         Gerenciar assinatura atual
       </button>
+      {error && <p className="mt-3 text-sm text-negative">{error}</p>}
     </div>
   );
 }

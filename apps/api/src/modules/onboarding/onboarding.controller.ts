@@ -29,6 +29,14 @@ export class OnboardingController {
     return this.onboarding.approveField(session.businessId, fieldKey);
   }
 
+  @Post("interview")
+  interviewChat(
+    @CurrentBusiness() session: BusinessSessionClaims,
+    @Body("history") history: { role: "owner" | "clara"; content: string }[],
+  ) {
+    return this.onboarding.interviewChat(session.businessId, history ?? []);
+  }
+
   @Post("confidence/recompute")
   recomputeConfidence(@CurrentBusiness() session: BusinessSessionClaims) {
     return this.onboarding.recomputeConfidence(session.businessId);

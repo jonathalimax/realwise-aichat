@@ -22,3 +22,4 @@ export const getMetricsTimeseries = () => request("/admin/metrics/timeseries");
 export const getConfidenceDistribution = () => request("/admin/metrics/confidence-distribution");
 export const verifyAdminFirebaseToken = (idToken: string) =>
   request("/auth/admin/verify", { method: "POST", body: JSON.stringify({ idToken }) });
+export const logout = () => request("/auth/admin/logout", { method: "POST" });
