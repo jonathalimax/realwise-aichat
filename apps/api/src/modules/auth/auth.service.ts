@@ -30,7 +30,7 @@ export class AuthService {
     return { token, business };
   }
 
-  async identifyVisitor(businessSlug: string, name: string, phone: string, ip: string, userAgent: string) {
+  async identifyVisitor(businessSlug: string, name: string, phone: string, ip: string, userAgent: string, anonVisitorToken?: string) {
     const business = await this.prisma.client.business.findUnique({ where: { slug: businessSlug } });
     if (!business) throw new NotFoundException("Business not found");
 
@@ -61,6 +61,13 @@ export class AuthService {
         userAgent,
       },
     });
+
+    if (anonVisitorToken) {
+      await this.prisma.client.conversation.updateMany({
+        where: { businessId: business.id, visitorToken: anonVisitorToken, leadId: null },
+        data: { leadId: lead.id },
+      });
+    }
 
     const token = await signVisitorSession({ businessId: business.id, leadId: lead.id, phoneNumber: phoneNormalized, name });
     return { token, lead };

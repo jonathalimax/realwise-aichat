@@ -38,7 +38,14 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { token, lead } = await this.auth.identifyVisitor(businessSlug, name, phone, req.ip ?? "", req.headers["user-agent"] ?? "");
+    // Find this browser's pre-identification anonymous token (set by VisitorSessionGuard on
+    // the chat endpoints) so any conversation it already started can be re-linked to the lead
+    // being created here — otherwise booking/sending right after identifying 403s, since the
+    // conversation's ownership was recorded under the now-abandoned anonymous token.
+    const anonCookieKey = Object.keys(req.cookies ?? {}).find((k) => k.startsWith("rw_visitor_anon_"));
+    const anonToken = anonCookieKey ? req.cookies[anonCookieKey] : undefined;
+
+    const { token, lead } = await this.auth.identifyVisitor(businessSlug, name, phone, req.ip ?? "", req.headers["user-agent"] ?? "", anonToken);
     res.cookie("rw_visitor_session", token, SESSION_COOKIE_OPTIONS);
     return { lead };
   }
