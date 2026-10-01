@@ -163,7 +163,7 @@ model KnowledgeChunk {
   ordinal     Int
   content     String
   tokenCount  Int
-  embedding   Unsupported("vector(1024)")?
+  embedding   Unsupported("vector(768)")?
   sectionPath String?
 }
 
