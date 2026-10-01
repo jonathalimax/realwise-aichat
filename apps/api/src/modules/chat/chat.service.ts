@@ -5,6 +5,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway, generateFromGatewayStream } from "../../inference/gateway-client";
 import { embedText } from "../../inference/embed-client";
 import { BookingsService } from "../bookings/bookings.service";
+import { sendEmail } from "../../common/email";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 
@@ -420,6 +421,12 @@ export class ChatService {
         answerSource: "fixed_flow",
       },
     });
+    this.notifyOwner(
+      businessId,
+      `Novo agendamento: ${serviceName}`,
+      `<p>Um cliente marcou <strong>${serviceName}</strong> para <strong>${start.toLocaleString("pt-BR")}</strong>.</p>
+       <p>Confira e confirme no painel: Agenda.</p>`,
+    );
     return appointment;
   }
 
@@ -446,6 +453,26 @@ export class ChatService {
       data: { conversationId, businessId, role: "assistant", content: "Vou te passar pra uma pessoa do time.", answerSource: "escalation" },
     });
 
+    this.notifyOwner(
+      businessId,
+      `Lead quente — ${business.name}`,
+      `<p>Um cliente pediu para falar com alguém do time agora.</p>
+       <p><strong>Assunto:</strong> ${topic}</p>
+       <p><strong>Código de referência:</strong> ${referenceCode}</p>
+       <p>Veja a conversa e responda no painel: Leads.</p>`,
+    );
+
     return { message: assistantMessage, escalated: true, whatsappUrl: url, referenceCode };
+  }
+
+  // Fire-and-forget — notifying the owner must never slow down or fail the visitor-facing
+  // chat response. Silently no-ops if the business hasn't set an email yet (see Perfil).
+  private notifyOwner(businessId: string, subject: string, html: string) {
+    this.prisma.client.business
+      .findUnique({ where: { id: businessId }, select: { email: true } })
+      .then((business) => {
+        if (business?.email) return sendEmail(business.email, subject, html);
+      })
+      .catch(() => {});
   }
 }
