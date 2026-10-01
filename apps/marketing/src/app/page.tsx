@@ -26,19 +26,6 @@ function ChannelPill({ icon, label }: { icon: React.ReactNode; label: string }) 
   );
 }
 
-function PolaroidCard({ badge, from, to }: { badge: string; from: string; to: string }) {
-  return (
-    <div
-      className="group relative aspect-[4/5] overflow-hidden rounded-2xl transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl"
-      style={{ background: `linear-gradient(145deg, ${from}, ${to})` }}
-    >
-      <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-[0.72rem] font-medium text-bg transition-transform duration-300 group-hover:scale-105">
-        {badge}
-      </span>
-    </div>
-  );
-}
-
 function CapabilityIcon({ path }: { path: string }) {
   return (
     <svg viewBox="0 0 48 48" className="h-11 w-11 transition-transform duration-300 group-hover:-translate-y-1 group-hover:scale-110" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -168,21 +155,15 @@ export default function MarketingHome() {
         </Reveal>
       </section>
 
-      {/* TALK ANYWHERE */}
-      <section id="nichos" className="py-20">
+      {/* CHANNELS */}
+      <section id="nichos" className="py-14">
         <Reveal className="mx-auto max-w-5xl px-5 text-center">
-          <h2 className="font-serif text-3xl text-ink md:text-4xl">Fale com a Realwise <em className="italic">em qualquer canal</em></h2>
-          <div className="mt-7 flex flex-wrap justify-center gap-3">
+          <h2 className="font-serif text-2xl text-ink">Fale com a Realwise <em className="italic">em qualquer canal</em></h2>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
             <ChannelPill label="Link na bio" icon={<span>🔗</span>} />
             <ChannelPill label="Story do Instagram" icon={<span>📸</span>} />
             <ChannelPill label="QR code no balcão" icon={<span>▦</span>} />
             <ChannelPill label="Status do WhatsApp" icon={<span className="text-positive">●</span>} />
-          </div>
-
-          <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3">
-            <PolaroidCard badge="📅 Agendar visita" from="#E8D9C3" to="#D9C3A3" />
-            <PolaroidCard badge="💰 Simular financiamento" from="#CFE0D6" to="#AFC9B9" />
-            <PolaroidCard badge="📄 Checklist de documentos" from="#E3DCEE" to="#C9BEDD" />
           </div>
         </Reveal>
       </section>
