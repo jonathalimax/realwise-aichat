@@ -2,6 +2,9 @@ import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/commo
 import { nicheTemplates } from "@realwise/profile-schema";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
 import { PrismaService } from "../../prisma/prisma.service";
+import { generateFromGateway } from "../../inference/gateway-client";
+
+const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 
 const ESCALATION_KEYWORDS = ["falar com atendente", "falar com uma pessoa", "humano", "atendente"];
 
@@ -52,13 +55,67 @@ export class ChatService {
       return this.escalate(businessId, conversationId, visitorText);
     }
 
-    // TODO: route to apps/inference-gateway for RAG once a model is selected (see ai/evals results).
-    const answer = "Deixa eu confirmar essa informação com um atendente e já te retorno.";
+    const answer = await this.generateAnswer(businessId, conversationId, visitorText);
     const assistantMessage = await this.prisma.client.message.create({
-      data: { conversationId, businessId, role: "assistant", content: answer, answerSource: "abstained" },
+      data: {
+        conversationId,
+        businessId,
+        role: "assistant",
+        content: answer.text,
+        answerSource: answer.abstained ? "abstained" : "rag",
+        modelUsed: answer.model,
+        inputTokens: answer.inputTokens,
+        outputTokens: answer.outputTokens,
+        latencyMs: answer.latencyMs,
+      },
+    });
+
+    await this.prisma.client.conversation.update({
+      where: { id: conversationId },
+      data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
     });
 
     return { message: assistantMessage, escalated: false };
+  }
+
+  private async generateAnswer(businessId: string, conversationId: string, visitorText: string) {
+    const [business, profile, recentMessages] = await Promise.all([
+      this.prisma.client.business.findUnique({ where: { id: businessId } }),
+      this.prisma.client.businessProfile.findUnique({ where: { businessId } }),
+      this.prisma.client.message.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "desc" },
+        take: 6,
+      }),
+    ]);
+
+    if (!business) throw new NotFoundException("Business not found");
+
+    const profileSummary = profile?.cachedSummary ?? JSON.stringify(profile?.data ?? {});
+    const history = recentMessages
+      .reverse()
+      .map((m) => `${m.role === "visitor" ? "Cliente" : "Atendente"}: ${m.content}`)
+      .join("\n");
+
+    const systemPrompt = [
+      `Você é o atendente de IA da ${business.name}, um negócio de ${business.niche === "imobiliaria" ? "locação imobiliária" : "concessionária de veículos"}.`,
+      "Responda apenas com base nas informações abaixo. Se não souber, diga que vai confirmar com um atendente humano — nunca invente preço, prazo ou disponibilidade.",
+      `Informações do negócio: ${profileSummary}`,
+    ].join("\n");
+
+    const prompt = `${history}\nCliente: ${visitorText}`;
+
+    try {
+      const result = await generateFromGateway({
+        purpose: "chat",
+        businessId,
+        systemPrompt,
+        prompt,
+      });
+      return { text: result.text, abstained: false, model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs };
+    } catch {
+      return { text: ABSTENTION_FALLBACK, abstained: true, model: undefined, inputTokens: 0, outputTokens: 0, latencyMs: 0 };
+    }
   }
 
   async escalate(businessId: string, conversationId: string, topic: string) {
