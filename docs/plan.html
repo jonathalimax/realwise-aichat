@@ -1,0 +1,969 @@
+<title>RealWise — Plano Mestre</title>
+<style>
+  :root{
+    --bg:#FAF8F4; --bg-2:#F2EEE6; --surface:#FFFFFF; --ink:#1C2420; --ink-soft:#4B564F;
+    --line:#E4DED2; --muted:#7A8177;
+    --primary:#1F5F52; --primary-ink:#0F332C; --primary-soft:#E4EEE9;
+    --accent:#C77A3B; --accent-soft:#F7E6D4;
+    --red:#B4432E; --red-soft:#F7E2DC;
+    --amber:#B8862B; --amber-soft:#F5ECD6;
+    --green:#3C7A4F; --green-soft:#E3EFE3;
+    --radius:10px;
+    --serif: "Iowan Old Style","Palatino Linotype","URW Palladio L",P052,serif;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono: ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  :root[data-theme="dark"]{
+    --bg:#151916; --bg-2:#1B211D; --surface:#1E2521; --ink:#EDEAE2; --ink-soft:#B9C1BA;
+    --line:#333B34; --muted:#8B958B;
+    --primary:#6FBFA6; --primary-ink:#CFE9DE; --primary-soft:#1E3730;
+    --accent:#E3A46B; --accent-soft:#3A2C1D;
+    --red:#E38672; --red-soft:#3A241E;
+    --amber:#E0BD70; --amber-soft:#3A311B;
+    --green:#82C395; --green-soft:#223A28;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#151916; --bg-2:#1B211D; --surface:#1E2521; --ink:#EDEAE2; --ink-soft:#B9C1BA;
+      --line:#333B34; --muted:#8B958B;
+      --primary:#6FBFA6; --primary-ink:#CFE9DE; --primary-soft:#1E3730;
+      --accent:#E3A46B; --accent-soft:#3A2C1D;
+      --red:#E38672; --red-soft:#3A241E;
+      --amber:#E0BD70; --amber-soft:#3A311B;
+      --green:#82C395; --green-soft:#223A28;
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--sans);
+    font-size:16px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4{font-family:var(--serif); font-weight:600; text-wrap:balance; color:var(--ink); margin:0;}
+  a{color:var(--primary);}
+  p{margin:0 0 .9em; color:var(--ink-soft); max-width:68ch;}
+  table{border-collapse:collapse; width:100%; font-size:.92rem;}
+  td,th{text-align:left; padding:.55em .7em; border-bottom:1px solid var(--line); vertical-align:top;}
+  th{font-family:var(--sans); font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);}
+  .num{font-variant-numeric:tabular-nums; font-family:var(--mono);}
+  .scrollx{overflow-x:auto;}
+
+  /* ---- shell ---- */
+  .shell{display:flex; min-height:100vh;}
+  .side{
+    width:248px; flex:none; position:sticky; top:0; height:100vh; overflow-y:auto;
+    background:var(--bg-2); border-right:1px solid var(--line); padding:28px 20px;
+    display:flex; flex-direction:column; gap:24px;
+  }
+  .brand{display:flex; flex-direction:column; gap:2px;}
+  .brand .mark{
+    width:34px;height:34px;border-radius:9px;background:var(--primary);
+    display:flex;align-items:center;justify-content:center;color:var(--bg-2);
+    font-family:var(--serif); font-weight:700; font-size:1.05rem; margin-bottom:10px;
+  }
+  .brand .name{font-family:var(--serif); font-weight:700; font-size:1.2rem;}
+  .brand .tag{font-size:.74rem; color:var(--muted); letter-spacing:.02em;}
+  nav.tabs{display:flex; flex-direction:column; gap:2px; margin-top:6px;}
+  nav.tabs button{
+    all:unset; cursor:pointer; padding:10px 12px; border-radius:8px;
+    font-size:.86rem; color:var(--ink-soft); display:flex; gap:10px; align-items:baseline;
+  }
+  nav.tabs button .n{font-family:var(--mono); font-size:.72rem; color:var(--muted);}
+  nav.tabs button:hover{background:var(--surface);}
+  nav.tabs button[aria-selected="true"]{background:var(--primary-soft); color:var(--primary-ink); font-weight:600;}
+  nav.tabs button[aria-selected="true"] .n{color:var(--primary-ink);}
+  .side-foot{margin-top:auto; font-size:.72rem; color:var(--muted); line-height:1.5;}
+  .side-foot b{color:var(--ink-soft);}
+
+  main{flex:1; min-width:0; padding:56px 48px 120px; max-width:1040px;}
+  .panel{display:none;}
+  .panel.active{display:block; animation:fade .25s ease both;}
+  @keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+  @media (prefers-reduced-motion: reduce){.panel.active{animation:none;}}
+
+  .eyebrow{font-size:.74rem; text-transform:uppercase; letter-spacing:.1em; color:var(--accent); font-weight:700; margin-bottom:10px;}
+  .panel > header{margin-bottom:38px; padding-bottom:22px; border-bottom:1px solid var(--line);}
+  .panel > header h1{font-size:2.1rem;}
+  .panel > header p{margin-top:10px; font-size:1.02rem; max-width:62ch;}
+
+  section.block{margin-bottom:46px;}
+  section.block h2{font-size:1.35rem; margin-bottom:6px;}
+  section.block .sub{color:var(--muted); font-size:.88rem; margin-bottom:18px;}
+  section.block h3{font-size:1.02rem; margin:22px 0 8px;}
+
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px;}
+  .grid{display:grid; gap:16px;}
+  .grid.cols-2{grid-template-columns:1fr 1fr;}
+  .grid.cols-3{grid-template-columns:repeat(3,1fr);}
+  @media (max-width:760px){.grid.cols-2,.grid.cols-3{grid-template-columns:1fr;} main{padding:40px 22px 100px;} .side{position:relative; height:auto; width:100%;}}
+
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px;}
+  .stat .v{font-family:var(--serif); font-size:1.5rem; color:var(--primary-ink); display:block;}
+  .stat .l{font-size:.76rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;}
+
+  .pill{display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;}
+  .pill.red{background:var(--red-soft); color:var(--red);}
+  .pill.amber{background:var(--amber-soft); color:var(--amber);}
+  .pill.green{background:var(--green-soft); color:var(--green);}
+  .pill.dot::before{content:"●"; font-size:.6rem;}
+
+  .decision{
+    border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:var(--radius);
+    background:var(--surface); padding:18px 20px; margin-bottom:14px;
+  }
+  .decision h4{font-size:1rem; display:flex; align-items:center; gap:10px; margin-bottom:6px;}
+  .decision h4 .tag{font-size:.68rem; background:var(--accent-soft); color:var(--accent); padding:2px 8px; border-radius:6px; font-family:var(--sans); font-weight:700; letter-spacing:.03em;}
+  .decision .rec{margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); font-size:.9rem;}
+  .decision .rec b{color:var(--ink);}
+
+  .callout{background:var(--primary-soft); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; font-size:.92rem; color:var(--ink);}
+  .callout p{color:var(--ink); margin:0;}
+
+  /* pricing */
+  .price-row{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+  .price-card{border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); padding:22px 20px; position:relative;}
+  .price-card.featured{border-color:var(--primary); box-shadow:0 0 0 1px var(--primary);}
+  .price-card .badge{position:absolute; top:-11px; left:20px; background:var(--primary); color:var(--bg-2); font-size:.65rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:3px 9px; border-radius:99px;}
+  .price-card h4{font-size:1.02rem;}
+  .price-card .amt{font-family:var(--serif); font-size:1.9rem; margin:10px 0 2px; color:var(--ink);}
+  .price-card .amt small{font-family:var(--sans); font-size:.8rem; color:var(--muted); font-weight:400;}
+  .price-card .setup{font-size:.78rem; color:var(--muted); margin-bottom:14px;}
+  .price-card ul{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:7px; font-size:.86rem; color:var(--ink-soft);}
+  .price-card li::before{content:"—"; color:var(--accent); margin-right:7px;}
+  @media (max-width:760px){.price-row{grid-template-columns:1fr;}}
+
+  /* chart */
+  .chart-wrap{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:22px 22px 14px;}
+  .legend{display:flex; gap:18px; margin-bottom:10px; font-size:.78rem; color:var(--muted);}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .legend i{width:10px;height:10px;border-radius:3px; display:inline-block;}
+
+  /* gauge */
+  .gauge-wrap{display:flex; align-items:center; gap:26px; flex-wrap:wrap;}
+  .gauge-num{font-family:var(--serif); font-size:2.2rem; color:var(--primary-ink);}
+  .gauge-list{display:flex; flex-direction:column; gap:6px; font-size:.84rem; flex:1; min-width:220px;}
+  .gauge-list .row{display:flex; justify-content:space-between; gap:10px;}
+  .gauge-list .bar{height:6px; background:var(--bg-2); border-radius:4px; overflow:hidden; flex:1; margin:0 10px;}
+  .gauge-list .bar i{display:block; height:100%; background:var(--primary);}
+
+  /* timeline */
+  .timeline{display:grid; grid-template-columns:repeat(4,1fr); gap:14px;}
+  .timeline .step{border-top:3px solid var(--primary); padding-top:12px;}
+  .timeline .step .m{font-family:var(--mono); font-size:.72rem; color:var(--muted);}
+  .timeline .step h4{font-size:.92rem; margin:4px 0 6px;}
+  .timeline .step p{font-size:.82rem; margin:0;}
+  @media (max-width:760px){.timeline{grid-template-columns:1fr;}}
+
+  /* mvp split */
+  .split{display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;}
+  .split > div{padding:20px 22px;}
+  .split .in{background:var(--green-soft); border-right:1px solid var(--line);}
+  .split .out{background:var(--bg-2);}
+  .split h4{font-size:.86rem; text-transform:uppercase; letter-spacing:.04em; margin-bottom:10px;}
+  .split .in h4{color:var(--green);}
+  .split .out h4{color:var(--muted);}
+  .split ul{margin:0; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:7px; font-size:.87rem; color:var(--ink-soft);}
+  .split .in li::before{content:"✓ "; color:var(--green); font-weight:700;}
+  .split .out li::before{content:"— "; color:var(--muted);}
+  @media (max-width:640px){.split{grid-template-columns:1fr;} .split .in{border-right:none; border-bottom:1px solid var(--line);}}
+
+  /* arch diagram */
+  .arch{display:flex; flex-direction:column; gap:8px;}
+  .arch .layer{border:1px solid var(--line); border-radius:8px; padding:12px 16px; background:var(--surface); display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  .arch .layer .label{font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); width:100px; flex:none;}
+  .arch .chip{background:var(--bg-2); border:1px solid var(--line); border-radius:6px; padding:5px 10px; font-size:.78rem; font-family:var(--mono);}
+  .arch .chip.hl{background:var(--primary-soft); color:var(--primary-ink); border-color:var(--primary);}
+
+  .footnote{font-size:.78rem; color:var(--muted); margin-top:8px;}
+  hr.soft{border:none; border-top:1px solid var(--line); margin:36px 0;}
+  code{font-family:var(--mono); font-size:.88em; background:var(--bg-2); padding:1px 5px; border-radius:4px;}
+
+  .src{display:inline-flex; align-items:center; gap:4px; font-size:.68rem; font-weight:700; letter-spacing:.03em; padding:2px 7px; border-radius:5px; text-transform:uppercase;}
+  .src.ok{background:var(--green-soft); color:var(--green);}
+  .src.part{background:var(--amber-soft); color:var(--amber);}
+  .src.none{background:var(--red-soft); color:var(--red);}
+  .cite{font-size:.74rem; color:var(--muted);}
+  .cite a{color:var(--muted); text-decoration:underline;}
+  .ledger{display:flex; flex-direction:column; gap:0;}
+  .ledger .row{display:grid; grid-template-columns:1.4fr .8fr .8fr; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); align-items:baseline; font-size:.88rem;}
+  .ledger .row.total{border-top:2px solid var(--ink); border-bottom:none; font-weight:700; padding-top:12px;}
+  .ledger .row .l{color:var(--ink-soft);}
+  .ledger .row .v{font-family:var(--mono); text-align:right;}
+  .ledger .row .v.neg{color:var(--red);}
+  .ledger .row .v.pos{color:var(--green);}
+
+  /* token swatches */
+  .swatch-row{display:flex; flex-wrap:wrap; gap:14px;}
+  .swatch{width:96px;}
+  .swatch .chip-color{height:56px; border-radius:10px; border:1px solid var(--line); margin-bottom:6px;}
+  .swatch .lbl{font-size:.68rem; color:var(--muted); font-family:var(--mono);}
+  .swatch .hex{font-size:.66rem; color:var(--ink-soft); font-family:var(--mono);}
+
+  pre.codeblock{background:var(--bg-2); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; overflow-x:auto; font-family:var(--mono); font-size:.76rem; line-height:1.55; color:var(--ink-soft); max-height:420px;}
+
+  /* mini dashboard mock */
+  .mock-dash{display:flex; border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--surface);}
+  .mock-side{width:140px; flex:none; background:var(--bg-2); border-right:1px solid var(--line); padding:14px 10px; display:flex; flex-direction:column; gap:4px;}
+  .mock-side .mi{font-size:.68rem; padding:6px 8px; border-radius:7px; color:var(--ink-soft); display:flex; gap:6px; align-items:center;}
+  .mock-side .mi.on{background:var(--primary-soft); color:var(--primary-ink); font-weight:600;}
+  .mock-main{flex:1; padding:16px; display:flex; flex-direction:column; gap:10px;}
+  .mock-kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+  .mock-kpi{border:1px solid var(--line); border-radius:10px; padding:8px 10px;}
+  .mock-kpi .t{font-size:.62rem; color:var(--muted); display:flex; justify-content:space-between;}
+  .mock-kpi .v{font-family:var(--mono); font-size:1rem; margin-top:4px;}
+  .mock-pill{font-size:.55rem; background:var(--green-soft); color:var(--green); padding:1px 5px; border-radius:99px; font-weight:700;}
+  .mock-pill.n{background:var(--red-soft); color:var(--red);}
+  .mock-chart{border:1px solid var(--line); border-radius:10px; padding:10px; flex:1;}
+
+  /* mini chat mock */
+  .mock-chat{border:1px solid var(--line); border-radius:14px; background:var(--surface); max-width:340px; margin:0 auto; overflow:hidden;}
+  .mock-chat .hd{padding:12px 14px; border-bottom:1px solid var(--line); font-size:.78rem; font-weight:600; display:flex; align-items:center; gap:8px;}
+  .mock-chat .hd .dot{width:7px;height:7px;border-radius:99px;background:var(--green);}
+  .mock-chat .body{padding:14px; display:flex; flex-direction:column; gap:10px; min-height:180px;}
+  .mock-chat .a{background:var(--bg-2); border-radius:12px; padding:8px 12px; font-size:.78rem; max-width:85%;}
+  .mock-chat .u{background:var(--primary); color:#fff; border-radius:12px; padding:8px 12px; font-size:.78rem; max-width:75%; align-self:flex-end;}
+  .mock-chat .chips{display:flex; gap:6px; flex-wrap:wrap;}
+  .mock-chat .chip-s{font-size:.68rem; border:1px solid var(--line); border-radius:99px; padding:4px 10px; color:var(--ink-soft);}
+  .mock-chat .inp{margin:0 14px 14px; border:1px solid var(--line); border-radius:99px; padding:9px 14px; font-size:.76rem; color:var(--muted); display:flex; justify-content:space-between; align-items:center;}
+</style>
+
+<div class="shell">
+  <aside class="side">
+    <div class="brand">
+      <div class="mark">R</div>
+      <div class="name">RealWise</div>
+      <div class="tag">Plano mestre · pré-implementação</div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button data-tab="negocio" aria-selected="true"><span class="n">01</span> Negócio</button>
+      <button data-tab="produto" aria-selected="false"><span class="n">02</span> Produto</button>
+      <button data-tab="tecnico" aria-selected="false"><span class="n">03</span> Técnico</button>
+      <button data-tab="marca" aria-selected="false"><span class="n">04</span> Marca</button>
+      <button data-tab="riscos" aria-selected="false"><span class="n">05</span> Riscos &amp; Decisões</button>
+      <button data-tab="validacao" aria-selected="false"><span class="n">06</span> Validação</button>
+      <button data-tab="sistema" aria-selected="false"><span class="n">07</span> Sistema de Design</button>
+    </nav>
+    <div class="side-foot">
+      <b>Seu atendimento não dorme.</b><br/>
+      Brasil · PT-BR · Hetzner (Alemanha) via Coolify<br/>
+      Rascunho para revisão — nada foi implementado ainda.
+    </div>
+  </aside>
+
+  <main>
+
+    <!-- ============ 01 NEGÓCIO ============ -->
+    <section class="panel active" id="panel-negocio">
+      <header>
+        <div class="eyebrow">Resumo executivo</div>
+        <h1>Um link. Um atendente. Um cliente pronto no WhatsApp.</h1>
+        <p>RealWise entrega a pequenos negócios brasileiros um atendente de IA pronto para compartilhar: o dono manda o que já tem (tabela de preços, fotos do quadro de horários), uma entrevista guiada por IA preenche o resto, um medidor de 0–100% mostra exatamente o quão pronto o atendente está, e só então o link é compartilhado no Instagram ou WhatsApp. Sem API oficial do WhatsApp — sem aprovação da Meta, sem taxa por conversa — e com escalonamento para um humano via link direto quando necessário.</p>
+      </header>
+
+      <section class="block">
+        <h2>O modelo de receita</h2>
+        <div class="sub">Taxa de setup (entrevista guiada) + assinatura mensal por negócio, ancorada no custo de uma recepcionista.</div>
+        <div class="grid cols-3" style="margin-bottom:18px;">
+          <div class="stat"><span class="v">R$3.200–4.500</span><span class="l">custo mensal carregado de uma recepcionista</span></div>
+          <div class="stat"><span class="v">R$0,03–0,08</span><span class="l">custo marginal de inferência por conversa</span></div>
+          <div class="stat"><span class="v">67–72%</span><span class="l">margem bruta estimada, plano Profissional</span></div>
+        </div>
+        <div class="price-row">
+          <div class="price-card">
+            <h4>Essencial</h4>
+            <div class="amt">R$297<small>/mês</small></div>
+            <div class="setup">+ R$497 taxa de setup</div>
+            <ul><li>300 conversas/mês</li><li>10 documentos de base</li><li>Agendamento embutido</li><li>1 número de WhatsApp</li><li>Analytics básico</li></ul>
+          </div>
+          <div class="price-card featured">
+            <span class="badge">Mais escolhido</span>
+            <h4>Profissional</h4>
+            <div class="amt">R$597<small>/mês</small></div>
+            <div class="setup">+ R$997 taxa de setup</div>
+            <ul><li>1.200 conversas/mês</li><li>50 documentos de base</li><li>3 números de WhatsApp</li><li>Analytics completo + tendências</li><li>Marca própria (logo/cores)</li><li>Revisão trimestral da base</li></ul>
+          </div>
+          <div class="price-card">
+            <h4>Studio</h4>
+            <div class="amt">R$1.197<small>/mês</small></div>
+            <div class="setup">+ R$1.997 taxa de setup</div>
+            <ul><li>4.000 conversas/mês</li><li>Documentos ilimitados</li><li>10 números de WhatsApp</li><li>Domínio próprio</li><li>Webhook para CRM</li><li>Suporte dedicado</li></ul>
+          </div>
+        </div>
+        <p class="footnote">Anual: 2 meses grátis. Setup grátis para os primeiros 10 parceiros de design, em troca de depoimento em vídeo. Preço a validar com os primeiros clientes — ver decisão aberta em <a href="javascript:void(0)" onclick="go('riscos')">Riscos &amp; Decisões</a>.</p>
+      </section>
+
+      <section class="block">
+        <h2>Projeção de 12 meses (MRR)</h2>
+        <div class="sub">Três cenários — o indicador a observar de perto é o churn do mês 3.</div>
+        <div class="chart-wrap">
+          <div class="legend">
+            <span><i style="background:var(--muted)"></i>Conservador — R$4,6k no mês 12</span>
+            <span><i style="background:var(--primary)"></i>Base — R$21,0k no mês 12</span>
+            <span><i style="background:var(--accent)"></i>Otimista — R$62,0k no mês 12</span>
+          </div>
+          <svg viewBox="0 0 640 220" width="100%" height="220" role="img" aria-label="Gráfico de projeção de MRR em três cenários">
+            <g stroke="var(--line)" stroke-width="1">
+              <line x1="40" y1="20" x2="40" y2="190"/>
+              <line x1="40" y1="190" x2="620" y2="190"/>
+            </g>
+            <g font-family="var(--mono)" font-size="9" fill="var(--muted)">
+              <text x="10" y="24">62k</text><text x="10" y="80">41k</text><text x="10" y="136">21k</text><text x="18" y="193">0</text>
+            </g>
+            <polyline fill="none" stroke="var(--muted)" stroke-width="2" points="40,183 98,180 156,175 214,170 272,164 330,158 388,148 446,140 504,128 562,120 620,112"/>
+            <polyline fill="none" stroke="var(--primary)" stroke-width="2.5" points="40,190 98,183 156,174 214,161 272,142 330,120 388,93 446,72 504,48 562,28 620,20"/>
+            <polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="40,183 98,168 156,145 214,113 272,75 330,32 388,-4 446,-40" />
+            <circle cx="620" cy="20" r="4" fill="var(--primary)"/>
+            <circle cx="620" cy="112" r="4" fill="var(--muted)"/>
+          </svg>
+          <p class="footnote">Meses 3–12. Cenário otimista sai do quadro no final — ver detalhe numérico abaixo. Gatilho de contratação: primeiro suporte dedicado aos 30 tenants ativos.</p>
+        </div>
+        <div class="grid cols-3" style="margin-top:14px;">
+          <div class="card"><b>Conservador</b><p style="margin:6px 0 0">1→12 tenants em 10 meses. Receita ano 1 ≈ R$38k. Sinal para trocar de nicho ou preço, não para desistir.</p></div>
+          <div class="card"><b>Base (plano de referência)</b><p style="margin:6px 0 0">2→38 tenants. Receita ano 1 ≈ R$165k incl. setup fees. ARPU médio R$520.</p></div>
+          <div class="card"><b>Otimista</b><p style="margin:6px 0 0">Parceria com associação decola no mês 5. 3→110 tenants. Receita ano 1 ≈ R$480k. Exige contratação no mês 8.</p></div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Fluxo de caixa, runway e ponto de equilíbrio</h2>
+        <div class="sub">MRR mostra crescimento — não mostra se a empresa sobrevive até lá. Esta é a pergunta que faltava.</div>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3 style="margin-top:0">Custos fixos mensais, pré-receita</h3>
+            <div class="ledger">
+              <div class="row"><span class="l">Infra Nível 0 (app + banco + GPU)</span><span></span><span class="v neg">−R$1.500</span></div>
+              <div class="row"><span class="l">Contador (Simples Nacional)</span><span></span><span class="v neg">−R$650</span></div>
+              <div class="row"><span class="l">Ferramentas (domínio, e-mail, observabilidade)</span><span></span><span class="v neg">−R$200</span></div>
+              <div class="row"><span class="l">Falha de API gerenciada (overflow, baixo volume)</span><span></span><span class="v neg">−R$150</span></div>
+              <div class="row total"><span class="l">Total fixo/mês</span><span></span><span class="v neg">−R$2.500</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Custos de uma vez, antes do 1º cliente</h3>
+            <div class="ledger">
+              <div class="row"><span class="l">Abertura de LTDA</span><span></span><span class="v neg">−R$2.000</span></div>
+              <div class="row"><span class="l">ToS + Privacidade + DPA (orçar com advogado)</span><span></span><span class="v neg">−R$3.000*</span></div>
+              <div class="row"><span class="l">Registro INPI (classe única, com desconto)</span><span></span><span class="v neg">−R$440</span></div>
+              <div class="row total"><span class="l">Total setup legal</span><span></span><span class="v neg">−R$5.440</span></div>
+            </div>
+            <p class="footnote">*estimativa de piso sem fonte confirmada — pedir orçamento real antes de fechar o plano de caixa.</p>
+          </div>
+        </div>
+        <h3>Ponto de equilíbrio operacional</h3>
+        <div class="grid cols-3">
+          <div class="stat"><span class="v">≈5 tenants</span><span class="l">no plano Profissional (R$597) cobrem o custo fixo de R$2.500/mês</span></div>
+          <div class="stat"><span class="v">R$5.440</span><span class="l">custo legal/formação de uma vez, recuperável com ~5–9 taxas de setup</span></div>
+          <div class="stat"><span class="v">meses 1–3</span><span class="l">janela sem receita — runway pessoal do fundador é o recurso real que falta no plano</span></div>
+        </div>
+        <div class="callout">
+          <p><b>O que estava faltando:</b> o cenário conservador (§Negócio) já mostrava que o ano 1 mal cobre a infraestrutura — mas não dizia <i>de onde</i> vêm os R$2.500/mês fixos nos meses 0–2 de build, nem os R$5.440 de formação legal, antes de qualquer receita. Isso é dinheiro do próprio bolso ou de um cartão, não do produto. <b>Decisão em aberto:</b> definir explicitamente quantos meses de runway pessoal você tem para sustentar R$2.500–3.000/mês de custo fixo sem receita — se forem menos de 3 meses, o design-partner gratuito da Fase 0 (§Marketing) precisa virar pago desde o primeiro tenant.</p>
+        </div>
+        <h3>Postura de captação</h3>
+        <p>Não há, até aqui, nenhum plano de levantar dinheiro externo — o modelo é bootstrap com taxa de setup cobrindo CAC no fechamento (ver §Unit economics). Isso é uma escolha coerente com a margem alta e o ticket baixo, mas vale registrar como decisão consciente: <b>bootstrap por padrão; considerar captação apenas se o cenário otimista se confirmar</b> (crescimento rápido o bastante para exigir contratação antes que o caixa aguente, por volta de 30 tenants).</p>
+      </section>
+
+      <section class="block">
+        <h2>Panorama competitivo <span class="src ok">nomes reais, pesquisados</span></h2>
+        <div class="sub">Concorrentes reais identificados e verificados, com preço público quando disponível. Onde não achei confirmação independente, está marcado.</div>
+        <div class="scrollx">
+        <table>
+          <tr><th>Empresa</th><th>Categoria</th><th>Preço encontrado</th><th>Onde deixa espaço</th></tr>
+          <tr><td><b>Take Blip / Blip Go</b></td><td>Chatbot builder, self-serve</td><td class="num">R$99–349/mês (Go); empresarial a partir de ~R$2.449/mês</td><td>Construtor de fluxo, não entrevista guiada — o dono monta o bot</td></tr>
+          <tr><td><b>Digisac</b></td><td>Multicanal + módulos de IA</td><td class="num">A partir de ~R$197/mês (preço personalizado)</td><td>Sem medidor de prontidão; foco em inbox de atendimento humano</td></tr>
+          <tr><td><b>ChatGuru</b></td><td>CRM de WhatsApp</td><td class="num">≈R$692/mês + R$500 setup <span class="src part">estimativa de terceiro</span></td><td>Preço já próximo do nosso Studio, sem onboarding assistido por IA</td></tr>
+          <tr><td><b>Leadster / Leadster AI</b></td><td>Chatbot de geração de leads</td><td class="num">R$142–220/mês</td><td>Foco em captura de lead para marketing, não atendimento contínuo nem agendamento</td></tr>
+          <tr><td><b>Octadesk</b></td><td>Helpdesk conversacional (mid-market)</td><td class="num">R$2.499–4.399/mês</td><td>Mira empresas de 50–500 funcionários — acima do nosso comprador</td></tr>
+          <tr><td><b>Superlógica Imobi</b></td><td>CRM imobiliário com IA 24h</td><td class="num">sob consulta</td><td><b>Concorrente direto já existente no nicho imobiliário</b> — qualificação de lead via WhatsApp+IA já embutida. Ver nota abaixo.</td></tr>
+          <tr><td><b>Pacto Soluções</b></td><td>Gestão de academias + IA de treino</td><td class="num">R$150–1.200/mês</td><td>IA focada em plano de treino, não em atendimento ao cliente/lead</td></tr>
+        </table>
+        </div>
+        <div class="callout" style="margin-top:14px;">
+          <p><b>Achado que muda o plano:</b> a Superlógica já vende IA de atendimento 24h com qualificação de lead via WhatsApp dentro do seu CRM imobiliário — isso significa que o nicho de locação não está tão aberto quanto o plano original assumia. Concorrer diretamente com um CRM já instalado (altíssimo custo de troca) é o erro clássico aqui. <b>Recomendação revisada:</b> se entrar em imobiliárias, mirar corretores autônomos e pequenas imobiliárias que <i>não</i> usam Superlógica/Vista, não tentar deslocar quem já usa — ou priorizar o segundo nicho intake-heavy (concessionárias) onde não apareceu concorrente direto nesta pesquisa.</p>
+        </div>
+        <p class="footnote">Não encontrei, nesta pesquisa, nenhum concorrente brasileiro que anuncie "a IA lê seus documentos e monta sozinha sua base de conhecimento" como proposta central — o que sustenta a tese de diferenciação, mas ausência de resultado de busca não é prova de ausência; tratar como hipótese validada parcialmente, não confirmada.</p>
+        <h3>Nossas fraquezas — ditas sem rodeio</h3>
+        <p>Sem mensagem proativa (o link precisa ser recompartilhado manualmente); dependência do dono colar o link na bio; nicho de estética já saturado por agências; imobiliárias já têm CRMs com IA embutida (ver achado acima); e um servidor de IA auto-hospedado significa que <i>nós</i> seguramos o pager quando algo cai — mitigado por failover para um provedor gerenciado desde o dia um.</p>
+        <div class="callout"><p><b>Tamanho de mercado (estimativa <span class="src part">não verificada com IBGE/CNAE</span>):</b> ≈95–100 mil negócios endereçáveis nos seis nichos, SAM ≈ R$600M/ano em ARR a R$520 de ticket médio. Capturar 0,05% do SAM (≈50 tenants) já é R$310k ARR — o mercado não é o limitador, a distribuição é. <b>Este número ainda não foi cruzado com dados oficiais de estabelecimentos — tratar como ordem de grandeza, não como fato.</b></p></div>
+      </section>
+
+      <section class="block">
+        <h2>Fundação da empresa &amp; custo legal <span class="src ok">valores pesquisados</span></h2>
+        <div class="sub">O que falta no plano original: abrir a empresa e contratar os documentos legais custam dinheiro real, antes do primeiro cliente pagar.</div>
+        <div class="scrollx">
+        <table>
+          <tr><th>Item</th><th>Faixa de custo</th><th>Nota</th></tr>
+          <tr><td>Abertura de LTDA (taxas + serviço de contabilidade)</td><td class="num">R$870–3.500 (única vez)</td><td>Junta Comercial + certificado digital + alvará + honorário do contador</td></tr>
+          <tr><td>Contador mensal (Simples Nacional)</td><td class="num">R$250–1.050/mês</td><td>Escritórios remotos anunciam a partir de ~R$195/mês</td></tr>
+          <tr><td>Regime tributário</td><td class="num">Anexo III (6–33%) ou Anexo V (desde 15,5%)</td><td>Decidido pelo <b>Fator R</b> — folha de pagamento ÷ receita bruta (12 meses). Abaixo de 28%, cai no Anexo V, mais caro — relevante para uma SaaS enxuta com pouca folha</td></tr>
+          <tr><td>Registro de marca no INPI</td><td class="num">R$440–1.720 (10 anos de proteção)</td><td>Reforma de set/2025: taxa única na entrada, sem segunda cobrança na concessão. Prazo médio de concessão: 18–36 meses</td></tr>
+          <tr><td>Termos de Uso + Política de Privacidade + DPA (advogado)</td><td class="num">sem tabela pública <span class="src none">não verificado</span></td><td>Nenhuma fonte confirma valor fixo — pedir 2–3 orçamentos reais antes de orçar isso no plano</td></tr>
+        </table>
+        </div>
+        <p class="footnote">Fontes: Junta Comercial e Serasa Experian (custo de abertura); Conta Azul (Fator R); INPI via contaja.com.br e oficialmarca.com.br (registro de marca, valores pós-reforma de set/2025).</p>
+      </section>
+
+      <section class="block">
+        <h2>Marketing — 90 dias, sem verba de anúncio</h2>
+        <div class="timeline">
+          <div class="step"><span class="m">Dias 1–30</span><h4>Provar com cinco pessoas</h4><p>Demo pública, 20 DMs/dia por nicho, 10 visitas presenciais. Meta: 5 parceiros de design, setup grátis.</p></div>
+          <div class="step"><span class="m">Dias 31–60</span><h4>Fabricar prova</h4><p>Primeiro case (vídeo + PDF + página), outbound com número real, SEO de cauda longa, calculadora de leads perdidos como isca.</p></div>
+          <div class="step"><span class="m">Dias 61–90</span><h4>Virar canal repetível</h4><p>Workshop com associação, parceria com agências locais (comissão recorrente), segundo nicho em piloto.</p></div>
+          <div class="step"><span class="m">Meta dia 90</span><h4>8–12 tenants pagantes</h4><p>2 cases publicados, 1 associação parceira, 2 agências em piloto, 500+ visitas orgânicas/mês.</p></div>
+        </div>
+        <p class="footnote" style="margin-top:14px;">Métrica única que governa tudo: conversas reais por semana com donos de negócio. Meta: 50/semana. O resto é consequência.</p>
+      </section>
+    </section>
+
+    <!-- ============ 02 PRODUTO ============ -->
+    <section class="panel" id="panel-produto">
+      <header>
+        <div class="eyebrow">Escopo e telas</div>
+        <h1>Da primeira mensagem ao lead qualificado</h1>
+        <p>O que entra na primeira versão, o que fica para depois, e como cada tela — chat, dashboard do negócio, admin interno e landing page — se encaixa na jornada.</p>
+      </header>
+
+      <section class="block">
+        <h2>MVP vs. cortado deliberadamente</h2>
+        <div class="sub">A pergunta que o MVP precisa responder: um dono consegue, em uma sessão guiada, produzir uma base boa o suficiente — e paga por isso depois de 30 dias?</div>
+        <div class="split">
+          <div class="in">
+            <h4>Dentro do MVP</h4>
+            <ul>
+              <li>Chat público com chips regenerativos e RAG sobre a base do negócio</li>
+              <li>Login por telefone + OTP</li>
+              <li>Upload de documentos + OCR + entrevista guiada por IA</li>
+              <li>Medidor de confiança (0–100%) com lista do que falta</li>
+              <li>Agendamento embutido no chat (calendário interno)</li>
+              <li>Escalonamento para WhatsApp via <code>wa.me</code></li>
+              <li>Reconhecimento de visitante recorrente por nome+telefone</li>
+              <li>Dashboard: leads, conversas, base de conhecimento, cobrança</li>
+              <li>Admin interno (propositalmente simples)</li>
+              <li>Stripe (assinatura + taxa de setup) + Apple/Google Pay</li>
+              <li>Duas templates de nicho</li>
+            </ul>
+          </div>
+          <div class="out">
+            <h4>Fica para depois</h4>
+            <ul>
+              <li>Integração com Google/Outlook Calendar</li>
+              <li>API oficial do WhatsApp Business</li>
+              <li>Múltiplos usuários por negócio</li>
+              <li>Voz (entrada/saída)</li>
+              <li>Mais de 2 templates de nicho</li>
+              <li>Outros idiomas</li>
+              <li>Pagamento de depósito dentro do chat</li>
+              <li>Marketplace de templates</li>
+              <li>App nativo</li>
+              <li>Fine-tuning de modelo</li>
+              <li>Onboarding 100% self-serve</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Roadmap por fases</h2>
+        <div class="timeline">
+          <div class="step"><span class="m">Fase 1 · 0–2m</span><h4>MVP</h4><p>Validar 1 nicho de agendamento + 1 de captação de documentos, onboarding assistido pelo fundador.</p></div>
+          <div class="step"><span class="m">Fase 2 · 4–7m</span><h4>Fazer grudar</h4><p>Sync de calendário, lembretes via toque único, fila de perguntas não respondidas, Pix, onboarding self-serve.</p></div>
+          <div class="step"><span class="m">Fase 3 · 8–12m</span><h4>Fazer escalar</h4><p>Mais 2 templates, funil de conversão avançado, contas multi-unidade, API pública, migração vLLM.</p></div>
+          <div class="step"><span class="m">Fase 4 · ano 2</span><h4>Virar plataforma</h4><p>Marketplace de templates, voz, API Meta como add-on pago, expansão para espanhol.</p></div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Chat do cliente final</h2>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3 style="margin-top:0">Mecânica da conversa</h3>
+            <p>4 chips iniciais visíveis antes de qualquer digitação. Após cada resposta da IA, a fileira de chips se renova — sempre validados contra a base, nunca levando a um "não sei". Tabelas de preço renderizadas como tabela, nunca como parágrafo.</p>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Escalonamento humano</h3>
+            <p>Cartão dedicado com botão verde WhatsApp, mensagem pré-escrita com código de referência, contexto da conversa anexado. Sem API — o cliente só aperta enviar.</p>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Agendamento embutido</h3>
+            <p>Cartão inline dentro da própria conversa (nunca um modal): serviço → data → hora → identificação → confirmação. Cada etapa é determinística, sem custo de modelo.</p>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Visitante recorrente</h3>
+            <p>Reconhecimento por telefone normalizado, cumprimento pelo nome, resumo da última conversa injetado no contexto — nunca a transcrição bruta, e nunca dados sensíveis.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Dashboard do negócio</h2>
+        <div class="sub">Mobile-first — o dono é ocupado e não-técnico. A tela inicial dá algo para <i>fazer</i>, não para ler.</div>
+        <div class="gauge-wrap card">
+          <div>
+            <div class="gauge-num">78%</div>
+            <div class="footnote">Medidor de prontidão</div>
+          </div>
+          <div class="gauge-list">
+            <div class="row"><span>Cobertura de campos obrigatórios</span><div class="bar"><i style="width:92%"></i></div><span class="num">92</span></div>
+            <div class="row"><span>Profundidade de documentos</span><div class="bar"><i style="width:70%"></i></div><span class="num">70</span></div>
+            <div class="row"><span>Capacidade de resposta simulada</span><div class="bar"><i style="width:81%"></i></div><span class="num">81</span></div>
+            <div class="row"><span>Aderência real (pós-lançamento)</span><div class="bar"><i style="width:60%"></i></div><span class="num">60</span></div>
+            <div class="row"><span>Atualidade</span><div class="bar"><i style="width:88%"></i></div><span class="num">88</span></div>
+          </div>
+        </div>
+        <h3>Telas principais</h3>
+        <div class="grid cols-3">
+          <div class="card"><b>Leads</b><p style="margin:6px 0 0">Ordenados por temperatura — 🔥 quente / 🌤 morno / ❄️ frio — com os 3 sinais que explicam a nota e um botão "Chamar no WhatsApp".</p></div>
+          <div class="card"><b>Base de conhecimento</b><p style="margin:6px 0 0">Editor de perfil com origem de cada campo, fila de perguntas não respondidas, painel de teste ao vivo.</p></div>
+          <div class="card"><b>Análises</b><p style="margin:6px 0 0">Volume por hora (o gráfico "olha quantos clientes te procuram às 22h"), perguntas mais feitas, funil de agendamento.</p></div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Admin interno</h2>
+        <p>Denso, não bonito — uma ferramenta de operação real. Lista de tenants com filtros acionáveis ("preso no onboarding há 7 dias", "nunca colou o link", "confiança &lt; 70"), detalhe do tenant com debug de recuperação por conversa, gerenciador de templates de nicho, fila de suporte/escalonamento e configuração de roteamento de modelo com kill-switch manual para o provedor gerenciado.</p>
+      </section>
+
+      <section class="block">
+        <h2>Assistente do dono — chat interno, propositalmente limitado</h2>
+        <div class="sub">O dono também conversa com uma IA dentro do dashboard — mas nunca como um ChatGPT genérico.</div>
+        <p>Dentro do <b>Base de conhecimento</b>, o dono tem um painel de chat para perguntar sobre os próprios dados ("quantos leads quentes essa semana?", "atualiza o preço da mensalidade pra R$210", "por que a IA não respondeu sobre desconto pra irmãos?") e pedir para a IA <i>atualizar</i> um campo do perfil ou gerar um relatório. Isso é deliberadamente uma superfície diferente do chat do cliente final — mesma aparência visual (ver §Sistema de Design), comportamento totalmente diferente por baixo.</p>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3 style="margin-top:0;color:var(--primary-ink)">O que o assistente do dono pode fazer</h3>
+            <p style="margin:0">Consultar métricas e leads já armazenados; buscar e citar trechos da própria base de conhecimento; propor uma edição de campo do perfil (preço, horário, política) — <b>sempre como uma sugestão que o dono aprova com um toque</b>, nunca uma escrita direta; gerar um resumo/relatório a partir dos dados existentes (ex.: tabela de top perguntas, exportação de leads).</p>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0;color:var(--muted)">O que ele nunca faz</h3>
+            <p style="margin:0">Responder perguntas gerais sem relação com o negócio; navegar na internet; gerar conteúdo de marketing livre; agir como um chat de propósito geral; escrever no perfil sem confirmação explícita; acessar dados de outro tenant.</p>
+          </div>
+        </div>
+        <p class="footnote">Implementação: não é "mais liberdade de prompt" — é um conjunto fixo e pequeno de ferramentas que o modelo pode chamar (<code>getLeads</code>, <code>getAnalytics</code>, <code>searchKnowledgeBase</code>, <code>proposeProfileEdit</code>, <code>generateReport</code>), nenhuma ferramenta de propósito aberto. O mesmo motor de RAG do chat do cliente é reaproveitado aqui — só a lista de ferramentas disponíveis muda.</p>
+      </section>
+
+      <section class="block">
+        <h2>Fator de ônibus e SLA de suporte</h2>
+        <div class="sub">Um risco já nomeado no plano original sem mitigação concreta — corrigido aqui.</div>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3 style="margin-top:0">Se o fundador some por uma semana</h3>
+            <p style="margin:0">Runbook escrito desde o MVP: (1) um e-mail/WhatsApp de "modo backup" que avisa tenants sobre possível atraso; (2) credenciais de admin documentadas em um cofre (1Password/Bitwarden) acessível por uma segunda pessoa de confiança; (3) o failover para API gerenciada já cobre a pior consequência técnica — o chat não para mesmo sem ninguém olhando o painel; (4) nenhum onboarding novo é aceito na semana — apenas suporte reativo ao que já está no ar.</p>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">SLA real, não só o anunciado</h3>
+            <p style="margin:0">O quadro de planos promete "WhatsApp, 24h/4h" — isso exige um orçamento de tempo do fundador. Com 15 tenants no plano Profissional, um SLA de 4h de resposta em horário comercial consome, na prática, checagens a cada 2–3h entre 9h–19h. Acima de ~20 tenants ativos isso deixa de caber na agenda de vendas+onboarding+produto — <b>gatilho explícito: contratar suporte meio-período aos 20 tenants, não aos 30</b> (mais conservador que o gatilho de 30 citado no plano original, porque aquele assumia apenas dashboard, não SLA de resposta).</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Landing page — regra anti-genérico</h2>
+        <p>Proibido: "revolucione", "transforme", gradiente roxo-azul, ícones em card centralizado, fotos de aperto de mão. Obrigatório: números específicos ("23 agendamentos em 30 dias", não "aumente seus agendamentos"), screenshots reais do produto, um demo ao vivo embutido na própria página — a seção que mais converte é deixar a pessoa conversar com o produto antes de qualquer texto de venda.</p>
+      </section>
+    </section>
+
+    <!-- ============ 03 TÉCNICO ============ -->
+    <section class="panel" id="panel-tecnico">
+      <header>
+        <div class="eyebrow">Arquitetura</div>
+        <h1>Um monorepo, um motor, dois templates de nicho</h1>
+        <p>Stack enxuta o bastante para uma pessoa operar, com um caminho claro de escala quando a demanda justificar.</p>
+      </header>
+
+      <section class="block">
+        <h2>Camadas do sistema</h2>
+        <div class="arch">
+          <div class="layer"><span class="label">apps/</span>
+            <span class="chip hl">chat</span><span class="chip hl">dashboard</span><span class="chip hl">admin</span><span class="chip">api</span><span class="chip">worker</span><span class="chip">inference-gateway</span>
+          </div>
+          <div class="layer"><span class="label">packages/</span>
+            <span class="chip">ui</span><span class="chip">profile-schema</span><span class="chip">auth</span><span class="chip">analytics</span><span class="chip">db</span><span class="chip">shared</span>
+          </div>
+          <div class="layer"><span class="label">dados</span>
+            <span class="chip">Postgres 16 + pgvector</span><span class="chip">Redis + BullMQ</span><span class="chip">Object Storage (Hetzner, UE)</span>
+          </div>
+          <div class="layer"><span class="label">inferência</span>
+            <span class="chip hl">Ollama → vLLM</span><span class="chip">Failover gerenciado</span>
+          </div>
+          <div class="layer"><span class="label">infra</span>
+            <span class="chip">Coolify · Hetzner (Alemanha)</span><span class="chip">Stripe</span>
+          </div>
+        </div>
+        <p class="footnote">Next.js (App Router) nas três apps web; NestJS como API única; pgvector em vez de um banco vetorial separado — o corpus por tenant é pequeno o bastante para não justificar mais uma peça de operação.</p>
+      </section>
+
+      <section class="block">
+        <h2>Hospedagem e inferência — três níveis</h2>
+        <div class="scrollx">
+        <table>
+          <tr><th>Nível</th><th>Tenants</th><th>Infra</th><th>Custo aprox.</th></tr>
+          <tr><td><b>0 · MVP</b></td><td>0–15</td><td>CPX41 (app) + CPX31 (dados) + GEX44 com Ollama</td><td class="num">≈R$1.500/mês</td></tr>
+          <tr><td><b>1 · Crescimento</b></td><td>15–60</td><td>CCX33 + migração para vLLM + 2º GEX44 de redundância</td><td class="num">≈R$3.300/mês</td></tr>
+          <tr><td><b>2 · Escala</b></td><td>60–250</td><td>2–3 CCX43 + load balancer + GEX130 ou pool vLLM</td><td class="num">≈R$11–16k/mês</td></tr>
+        </table>
+        </div>
+        <p class="footnote"><span class="src part">Preço parcialmente verificado</span> — fontes de jul/2026 confirmam GEX44 a €184/mês + €79 de setup, mas há sinal de reajuste para €234/mês e possível renomeação da linha para GEX45/GEX131. A página de preços da Hetzner carrega valores via JavaScript e não pôde ser confirmada diretamente nesta pesquisa. <b>Verificar o preço vigente direto no console antes de orçar o Nível 0.</b></p>
+        <h3>Stack de inferência — opções</h3>
+        <div class="grid cols-3">
+          <div class="card"><b>Ollama</b> <span class="pill green dot" style="margin-left:6px;">recomendado MVP</span><p style="margin:8px 0 0">Ops quase zero, sobe em uma tarde. Gargalo aos 10 tenants não é o modelo.</p></div>
+          <div class="card"><b>vLLM</b> <span class="pill green dot" style="margin-left:6px;">recomendado a partir do nível 1</span><p style="margin:8px 0 0">Continuous batching — maior throughput por real gasto. Planejar a migração desde o dia zero.</p></div>
+          <div class="card"><b>API gerenciada</b> <span class="pill amber dot" style="margin-left:6px;">obrigatório como failover</span><p style="margin:8px 0 0">Overflow e modelo forte único da entrevista de onboarding.</p></div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Técnicas de controle de custo</h2>
+        <ol style="padding-left:1.1em; color:var(--ink-soft);">
+          <li>Fluxos fixos (agendamento, preços, horários) não tocam o modelo — meta ≥40% dos turnos.</li>
+          <li>Modelo pequeno por padrão; escalona para um mais forte só em complexidade detectada.</li>
+          <li>Perfil do negócio fica no início do prompt, em cache.</li>
+          <li>Apenas resumo contínuo + últimas mensagens — nunca o histórico inteiro.</li>
+          <li>Modelo forte usado uma única vez, no onboarding, para extrair estrutura dos documentos.</li>
+        </ol>
+      </section>
+
+      <section class="block">
+        <h2>Pipeline de RAG + confiança</h2>
+        <p>Intenção classificada primeiro — se mapeia para um fluxo fixo, responde sem tocar o modelo. Caso contrário: busca híbrida (vetorial + full-text) → rerank → geração com streaming. Se a nota de recuperação for baixa, a IA <b>não improvisa</b>: assume que não sabe e oferece escalonamento — e a pergunta cai na fila de "não respondidas", que alimenta tanto a melhoria da base quanto o próprio medidor de confiança.</p>
+        <div class="callout"><p><b>Fórmula do medidor:</b> 30% cobertura de campos + 20% profundidade de documentos + 20% capacidade de resposta simulada + 15% aderência real pós-lançamento + 10% atualidade + 5% aprovação do dono. Um campo obrigatório ausente limita a nota total — não dá para "enganar" o medidor com volume.</p></div>
+      </section>
+
+      <section class="block">
+        <h2>Modelo de dados — entidades-chave</h2>
+        <div class="scrollx">
+        <table>
+          <tr><th>Entidade</th><th>Função</th></tr>
+          <tr><td class="num">Business</td><td>O tenant — nicho, status, medidor de confiança, marca</td></tr>
+          <tr><td class="num">BusinessProfile</td><td>Base de conhecimento estruturada (jsonb validado por schema Zod do nicho)</td></tr>
+          <tr><td class="num">KnowledgeDocument / Chunk</td><td>Documentos originais e seus pedaços indexados com embedding</td></tr>
+          <tr><td class="num">Conversation / Message</td><td>Sessões de chat; cada mensagem registra fonte da resposta e custo de token</td></tr>
+          <tr><td class="num">UnansweredQuestion</td><td>Fila de perguntas sem resposta — tabela mais estratégica do sistema</td></tr>
+          <tr><td class="num">Lead</td><td>Identidade por nome+telefone; pontuação de comprometimento explicável</td></tr>
+          <tr><td class="num">Appointment / BookingSlot</td><td>Agenda interna do MVP</td></tr>
+          <tr><td class="num">ConsentRecord</td><td>Registro de consentimento LGPD, append-only, nunca apagado</td></tr>
+          <tr><td class="num">LlmCallLog</td><td>Toda chamada de modelo — tokens, custo, latência, cache hit</td></tr>
+        </table>
+        </div>
+        <div class="callout" style="margin-top:14px;">
+          <p><b>Buraco corrigido — múltiplas unidades e troca de número.</b> O modelo original tratava <code>Business</code> como uma unidade única com um telefone único. Academias e concessionárias com mais de uma unidade, e donos que trocam de número, quebram isso na prática. Correção: <code>WhatsappRoutingNumber</code> já suporta múltiplos números por negócio (usar isso desde o MVP, não só na Fase 3); adicionar um campo opcional <code>parent_business_id</code> em <code>Business</code> para agrupar unidades sob uma mesma assinatura com a base de conhecimento compartilhada e overrides por unidade (endereço, horário, número de WhatsApp) — a estrutura de dados já prevista para "Fase 3: contas multi-unidade" precisa, na prática, existir como coluna opcional desde o dia 1, mesmo que a tela de gestão só chegue depois. Troca de número de telefone do próprio dono (login): tratar como fluxo de suporte manual no MVP (verificação por WhatsApp antigo + novo), não como self-service.</p>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Domínios de API</h2>
+        <p style="max-width:none;">auth · businesses · onboarding · knowledge · chat/conversations · leads · bookings · billing (webhooks Stripe) · analytics · admin · compliance (LGPD) · inference-gateway interno. Três contextos de consumo com exposição diferente: <code>chat</code> público e anônimo por token de visitante, <code>dashboard</code> escopado à sessão do tenant, <code>admin</code> entre tenants e totalmente auditado.</p>
+      </section>
+    </section>
+
+    <!-- ============ 04 MARCA ============ -->
+    <section class="panel" id="panel-marca">
+      <header>
+        <div class="eyebrow">Identidade</div>
+        <h1>RealWise</h1>
+        <p><i>Real</i> + <i>Wise</i> — o real brasileiro, o real de verdade, e a sabedoria de saber quando <b>não</b> responder. É esse último traço, o de abster-se e escalar para um humano, que é o comportamento central do produto.</p>
+      </header>
+
+      <section class="block">
+        <h2>Posicionamento</h2>
+        <div class="callout">
+          <p><b>Para</b> pequenos negócios brasileiros que perdem cliente por não conseguir responder tudo a tempo, <b>RealWise é</b> um atendente de IA pronto para compartilhar que responde, agenda e entrega o cliente pronto no seu WhatsApp. <b>Diferente de</b> construtores de chatbot que entregam uma tela em branco, <b>RealWise constrói o conhecimento com você</b> numa entrevista guiada — e mostra, em número, o quão pronto ele está antes de qualquer cliente falar com ele.</p>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Tom de voz</h2>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3 style="margin-top:0;color:var(--primary-ink)">Somos</h3>
+            <p style="margin:0">Diretos, frases curtas, específicos com número, honestos sobre limite ("a IA não fecha venda — ela entrega o cliente pronto"), informais no PT-BR falado.</p>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0;color:var(--muted)">Não somos</h3>
+            <p style="margin:0">Corporativos, cheios de adjetivo vago, hiperbólicos, em português formal de "prezado cliente", com jargão técnico (RAG, embedding, prompt) na frente do usuário final.</p>
+          </div>
+        </div>
+        <p class="footnote">Palavras banidas: revolucionário, transformar, potencializar, solução completa, inovador, disruptivo, descomplicar, chatbot. Vocabulário preferido: atendente, responde, agenda, seu link, sua bio, prontidão.</p>
+      </section>
+
+      <section class="block">
+        <h2>Direção visual</h2>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3 style="margin-top:0">Paleta</h3>
+            <div style="display:flex; gap:10px; margin:12px 0;">
+              <div style="width:40px;height:40px;border-radius:8px;background:#1F5F52" title="Primária"></div>
+              <div style="width:40px;height:40px;border-radius:8px;background:#C77A3B" title="Acento"></div>
+              <div style="width:40px;height:40px;border-radius:8px;background:#F2EEE6;border:1px solid #E4DED2" title="Neutro claro"></div>
+              <div style="width:40px;height:40px;border-radius:8px;background:#1C2420" title="Tinta"></div>
+            </div>
+            <p style="margin:0">Verde-petróleo profundo como primária (confiança + crescimento, sem imitar o verde do WhatsApp); âmbar/cobre como acento para CTAs. Neutros quentes, nunca cinza-azulado puro — é essa escolha que evita a leitura de "mais um app de IA genérico".</p>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Tipografia &amp; forma</h3>
+            <p style="margin:0">Serifada humanista em títulos (esta própria página usa essa lógica — ver <code>--serif</code>), sans altamente legível no corpo, mínimo 16px. Raios de 8–12px, nunca pill-shaped em tudo. Zero gradiente roxo-azul, zero ícone-emoji como marcador de seção.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Tagline</h2>
+        <div class="card" style="text-align:center; padding:32px 20px;">
+          <div style="font-family:var(--serif); font-size:1.6rem; color:var(--primary-ink);">"Seu atendimento não dorme."</div>
+          <p style="margin:10px 0 0">Subtítulo padrão: "Responde, agenda, e te passa o cliente pronto no WhatsApp."</p>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Protegendo o moat — não só descrevendo ele</h2>
+        <div class="sub">O "banco de perguntas de entrevista acumulado" foi apontado como diferencial, mas o plano original não dizia como defendê-lo.</div>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3 style="margin-top:0">O que é copiável em um sprint</h3>
+            <p style="margin:0">A ideia de "IA entrevista o dono" é óbvia o bastante para qualquer concorrente com engenharia decente implementar em semanas — a Superlógica já mostra isso (§Panorama competitivo). Não é a <i>ideia</i> da entrevista que é o moat.</p>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">O que realmente compõe com o tempo</h3>
+            <p style="margin:0">O <b>conteúdo</b> do banco de perguntas por nicho, refinado por centenas de entrevistas reais e pela fila de perguntas-não-respondidas de clientes reais — isso não tem atalho, só tempo de mercado. É dado proprietário, não código.</p>
+          </div>
+        </div>
+        <p style="margin-top:14px;">Ação concreta: versionar o <code>NicheTemplate</code> como ativo interno auditável (já está no modelo de dados, §Técnico), nunca expor o banco de perguntas ocultas de avaliação publicamente, e tratar "número de entrevistas completas por nicho" como métrica interna de defensibilidade — reportada junto com MRR, não só como vaidade de produto. Se um concorrente com mais caixa decidir copiar a mecânica, a resposta não é proteger a ideia — é ter mais entrevistas reais acumuladas do que ele consegue comprar em tempo.</p>
+      </section>
+
+      <section class="block">
+        <h2>Redes sociais</h2>
+        <p>Instagram como prioridade (~70% do esforço) — é onde o comprador vive. LinkedIn secundário (~25%) para credibilidade e "build in public". TikTok e X ficam fora do MVP. A própria bio do Instagram da RealWise aponta para um chat RealWise real — a melhor prova possível.</p>
+        <div class="grid cols-3">
+          <div class="card"><b>30%</b><p style="margin:6px 0 0">O atendimento que você está perdendo — dor nomeada e quantificada</p></div>
+          <div class="card"><b>20%</b><p style="margin:6px 0 0">Vendo por dentro — bastidores do fundador construindo</p></div>
+          <div class="card"><b>20%</b><p style="margin:6px 0 0">Funciona assim — demo de 15–30s de uma funcionalidade</p></div>
+        </div>
+      </section>
+    </section>
+
+    <!-- ============ 05 RISCOS ============ -->
+    <section class="panel" id="panel-riscos">
+      <header>
+        <div class="eyebrow">Antes de começar a implementar</div>
+        <h1>Decisões em aberto e riscos mapeados</h1>
+        <p>Nada aqui bloqueia o planejamento — mas várias coisas bloqueiam o código. Esta seção existe para você decidir, não para eu decidir por você.</p>
+      </header>
+
+      <section class="block">
+        <h2>Decisões abertas, por ordem de bloqueio</h2>
+
+        <div class="decision">
+          <h4>1. Par de nichos do MVP <span class="tag">bloqueante — semana 1</span></h4>
+          <p style="margin:0">Define templates, banco de perguntas da entrevista, fluxos fixos, base de avaliação e a primeira lista de prospecção.</p>
+          <div class="rec"><b>Recomendação:</b> academias de luta (agendamento, decisor único, canal de federações) + locação imobiliária (captação de documentos, onde a entrevista guiada mais se destaca). Mas esta é genuinamente sua escolha — deve seguir a rede que você já alcança este mês.</div>
+        </div>
+
+        <div class="decision">
+          <h4>2. Stack e modelo de LLM <span class="tag">bloqueante — semana 1–2</span></h4>
+          <p style="margin:0">Qual servidor de inferência e qual modelo aberto.</p>
+          <div class="rec"><b>Recomendação:</b> Ollama no MVP → vLLM a partir do nível 1, com failover gerenciado desde o dia um. Modelo: construir um banco de 100 perguntas por nicho em PT-BR e testar 3–4 candidatos de 8–12B antes de decidir — 3 dias bem gastos.</div>
+        </div>
+
+        <div class="decision">
+          <h4>3. Compromisso final com o nome <span class="tag">bloqueante — semana 1</span></h4>
+          <p style="margin:0">"RealWise" tem um risco a verificar: <i>Real</i> pode soar como imobiliário específico, estreitando a percepção sobre os outros cinco nichos.</p>
+          <div class="rec"><b>Recomendação:</b> manter o nome e neutralizar com a tagline — <i>mas antes de qualquer gasto com design</i>, verificar disponibilidade no INPI (classes 9, 35, 42) e o domínio <code>realwise.com.br</code>.</div>
+        </div>
+
+        <div class="decision">
+          <h4>4. Números de preço <span class="tag">antes da primeira venda</span></h4>
+          <p style="margin:0">R$297 / R$597 / R$1.197 são uma âncora, não uma verdade. Testar com os primeiros 10 tenants e observar não só a taxa de fechamento, mas quem fecha.</p>
+        </div>
+
+        <div class="decision">
+          <h4>5. App nativo <span class="tag">adiado</span></h4>
+          <p style="margin:0">Sem app nativo antes do mês 12. A única justificativa real — push de lead quente para o dono — pode ser resolvida via um hack de notificação por WhatsApp/Telegram enquanto isso.</p>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Riscos mapeados</h2>
+        <div class="scrollx">
+        <table>
+          <tr><th>Risco</th><th>Severidade</th><th>Mitigação</th></tr>
+          <tr><td>Servidor de IA auto-hospedado cai</td><td><span class="pill red dot">Alta</span></td><td>Failover automático para API gerenciada desde o dia 1; fluxos fixos continuam funcionando sem modelo</td></tr>
+          <tr><td>RAG responde errado para um cliente real</td><td><span class="pill red dot">Alta</span></td><td>Abstenção conservadora; preços e horários servidos por fluxo determinístico, nunca gerados</td></tr>
+          <tr><td>Vazamento de dados entre tenants</td><td><span class="pill red dot">Alta</span></td><td><code>business_id</code> em toda tabela + RLS do Postgres como segunda camada</td></tr>
+          <tr><td>Dados sensíveis em nichos de captação (documento, saúde)</td><td><span class="pill red dot">Alta</span></td><td>Consentimento explícito separado; considerar não suportar upload de imagem de saúde no MVP</td></tr>
+          <tr><td>Papel de controlador/operador indefinido (LGPD)</td><td><span class="pill red dot">Alta</span></td><td>Tenant é controlador, RealWise é operador — DPA assinado no onboarding</td></tr>
+          <tr><td>Dependência de compartilhamento manual do link</td><td><span class="pill red dot">Alta</span></td><td>Etapa de verificação obrigatória no onboarding + nudge se abertura do link ficar em zero</td></tr>
+          <tr><td>Decaimento do conhecimento (preço desatualizado)</td><td><span class="pill red dot">Alta</span></td><td>Componente de atualidade no medidor + fila de perguntas não respondidas como gancho de reengajamento</td></tr>
+          <tr><td>Qualidade do PT-BR em modelo aberto</td><td><span class="pill amber dot">Média</span></td><td>Banco de avaliação de 100 perguntas por nicho antes de escolher o modelo</td></tr>
+          <tr><td>Nicho de estética saturado</td><td><span class="pill amber dot">Média</span></td><td>Não liderar por aqui — entrar na fase 2 com cases em mãos</td></tr>
+          <tr><td>IA dando conselho profissional vinculante</td><td><span class="pill red dot">Alta</span></td><td>Guardrails no prompt + validação pós-geração; "a IA informa e organiza, o humano decide"</td></tr>
+        </table>
+        </div>
+      </section>
+
+      <div class="callout" style="margin-top:30px;">
+        <p><b>Próximo passo sugerido:</b> resolver as decisões 1–3 acima (nicho, stack de LLM, nome) — o resto do plano já está pronto para virar repositório assim que essas três estiverem fechadas.</p>
+      </div>
+    </section>
+
+    <!-- ============ 06 VALIDAÇÃO ============ -->
+    <section class="panel" id="panel-validacao">
+      <header>
+        <div class="eyebrow">O que foi verificado e o que ainda é estimativa</div>
+        <h1>Validação e lacunas fechadas</h1>
+        <p>Depois da primeira versão deste plano, uma pesquisa dedicada checou concorrentes reais, custo de abertura de empresa, registro de marca e preço de infraestrutura — e resolveu cinco lacunas operacionais que estavam faltando: fluxo de caixa, fator de ônibus, SLA de suporte, múltiplas unidades e proteção do moat. Esta aba resume o que mudou e com que grau de confiança.</p>
+      </header>
+
+      <section class="block">
+        <h2>Legenda de confiança</h2>
+        <div class="grid cols-3">
+          <div class="card"><span class="src ok">verificado</span><p style="margin:8px 0 0">Fonte pública nomeada, dado atual e específico</p></div>
+          <div class="card"><span class="src part">parcial</span><p style="margin:8px 0 0">Fonte existe mas com conflito, estimativa de terceiro, ou faixa ampla</p></div>
+          <div class="card"><span class="src none">não verificado</span><p style="margin:8px 0 0">Busca não encontrou dado confiável — tratado como estimativa, não fato</p></div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>O que mudou de "afirmado" para "sourced"</h2>
+        <div class="scrollx">
+        <table>
+          <tr><th>Item</th><th>Antes</th><th>Depois desta rodada</th><th>Confiança</th></tr>
+          <tr><td>Concorrentes</td><td>5 arquétipos sem nome</td><td>7 empresas reais nomeadas, com preço público onde existia</td><td><span class="src ok">verificado</span></td></tr>
+          <tr><td>Nicho imobiliário</td><td>"crowded mas ok"</td><td>Superlógica já vende IA 24h com qualificação de lead — recomendação de GTM revisada</td><td><span class="src ok">verificado</span></td></tr>
+          <tr><td>Custo de abertura de empresa</td><td>ausente do plano</td><td>R$870–3.500 único + R$250–1.050/mês contador</td><td><span class="src ok">verificado</span></td></tr>
+          <tr><td>Registro de marca INPI</td><td>"verificar disponibilidade" sem custo</td><td>R$440–1.720, 18–36 meses de concessão</td><td><span class="src ok">verificado</span></td></tr>
+          <tr><td>Custo de ToS/Privacidade/DPA</td><td>ausente</td><td>Sem tabela pública confirmada — sinalizado como "pedir orçamento real", não estimado</td><td><span class="src none">não verificado</span></td></tr>
+          <tr><td>Preço Hetzner GEX44</td><td>€185/mês sem fonte</td><td>€184/mês confirmado por múltiplas fontes de jul/2026, mas com sinal de reajuste para €234 e possível troca de nome de linha</td><td><span class="src part">parcial</span></td></tr>
+          <tr><td>Fluxo de caixa pré-receita</td><td>ausente</td><td>Ponto de equilíbrio calculado (~5 tenants), custo fixo e de formação explicitados</td><td>cálculo próprio, não pesquisa externa</td></tr>
+          <tr><td>Fator de ônibus / SLA</td><td>risco nomeado, sem plano</td><td>Runbook de ausência + gatilho de contratação revisado para 20 tenants</td><td>decisão interna, não pesquisa externa</td></tr>
+          <tr><td>Multi-unidade / troca de número</td><td>ausente do modelo de dados</td><td><code>WhatsappRoutingNumber</code> usado desde o MVP + campo <code>parent_business_id</code></td><td>decisão interna, não pesquisa externa</td></tr>
+        </table>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>O que ainda falta verificar antes de qualquer gasto</h2>
+        <div class="grid cols-2">
+          <div class="card"><b>Legal</b><p style="margin:6px 0 0">Pedir 2–3 orçamentos reais de advogado/escritório LGPD para ToS + Privacidade + DPA antes de fixar o número de R$3.000 usado no fluxo de caixa — é um piso estimado, não uma cotação.</p></div>
+          <div class="card"><b>Infraestrutura</b><p style="margin:6px 0 0">Confirmar direto no console da Hetzner o preço atual da linha GPU (GEX44 ou sucessora) antes de orçar o Nível 0 — há sinal de reajuste de preço e renomeação de produto.</p></div>
+          <div class="card"><b>Mercado</b><p style="margin:6px 0 0">O SAM de ≈R$600M/ano ainda não foi cruzado com dados oficiais (IBGE/CNAE) — tratar como ordem de grandeza direcional, não como número para pitch de investidor.</p></div>
+          <div class="card"><b>Concorrência em academias/escolas</b><p style="margin:6px 0 0">EVO, Sofit e Vista Software são concorrentes conhecidos mas não tiveram preço ou recurso de IA confirmado nesta rodada — merecem uma pesquisa dedicada antes da entrada nesses nichos.</p></div>
+        </div>
+      </section>
+    </section>
+
+    <!-- ============ 07 SISTEMA DE DESIGN ============ -->
+    <section class="panel" id="panel-sistema">
+      <header>
+        <div class="eyebrow">Um token, três telas</div>
+        <h1>Sistema de design compartilhado</h1>
+        <p>Extraído a partir da referência visual que você trouxe e adaptado ao hue da marca: cinzas quentes neutros, um único acento verde, cartões planos sem sombra pesada, badges em pílula para variação, sidebar de ícone-linha e um assistente de IA com painel de resultado estruturado separado da conversa. Estes tokens alimentam <b>admin interno</b>, <b>dashboard do negócio</b> e o <b>chat mobile-first do cliente final</b> — um sistema, três renderizações.</p>
+      </header>
+
+      <section class="block">
+        <h2>Paleta — claro e escuro</h2>
+        <div class="swatch-row">
+          <div class="swatch"><div class="chip-color" style="background:#F0EFED"></div><div class="lbl">bg</div><div class="hex">#F0EFED</div></div>
+          <div class="swatch"><div class="chip-color" style="background:#FFFFFF;border:1px solid #E6E2DC"></div><div class="lbl">surface</div><div class="hex">#FFFFFF</div></div>
+          <div class="swatch"><div class="chip-color" style="background:#1F5F52"></div><div class="lbl">accent</div><div class="hex">#1F5F52</div></div>
+          <div class="swatch"><div class="chip-color" style="background:#2F8F4E"></div><div class="lbl">positive</div><div class="hex">#2F8F4E</div></div>
+          <div class="swatch"><div class="chip-color" style="background:#C0432C"></div><div class="lbl">negative</div><div class="hex">#C0432C</div></div>
+          <div class="swatch"><div class="chip-color" style="background:#B8862B"></div><div class="lbl">warning</div><div class="hex">#B8862B</div></div>
+          <div class="swatch"><div class="chip-color" style="background:#E8A23A"></div><div class="lbl">dot·laranja</div><div class="hex">#E8A23A</div></div>
+          <div class="swatch"><div class="chip-color" style="background:#4B7FD1"></div><div class="lbl">dot·azul</div><div class="hex">#4B7FD1</div></div>
+          <div class="swatch"><div class="chip-color" style="background:#9A6FC9"></div><div class="lbl">dot·roxo</div><div class="hex">#9A6FC9</div></div>
+          <div class="swatch"><div class="chip-color" style="background:#0F1311"></div><div class="lbl">bg·escuro</div><div class="hex">#0F1311</div></div>
+          <div class="swatch"><div class="chip-color" style="background:#1A211C;border:1px solid #2A322C"></div><div class="lbl">surface·escuro</div><div class="hex">#1A211C</div></div>
+          <div class="swatch"><div class="chip-color" style="background:#6FBFA6"></div><div class="lbl">accent·escuro</div><div class="hex">#6FBFA6</div></div>
+        </div>
+        <p class="footnote">Semântica separada do acento de marca: verde de "positivo" e verde de "marca" são o mesmo hue de propósito — no modo escuro divergem levemente para manter contraste legível em ambos.</p>
+      </section>
+
+      <section class="block">
+        <h2>Tipografia &amp; ícones</h2>
+        <div class="grid cols-3">
+          <div class="card"><b>Display</b><p style="margin:6px 0 0;font-family:var(--serif);font-size:1.3rem;">Iowan Old Style</p><p class="footnote">Títulos, valores de KPI, saudação do chat</p></div>
+          <div class="card"><b>Corpo</b><p style="margin:6px 0 0;font-size:1.05rem;">System UI sans</p><p class="footnote">Labels, parágrafos, navegação, botões</p></div>
+          <div class="card"><b>Dados</b><p style="margin:6px 0 0;font-family:var(--mono);font-size:1.05rem;">123.456,78</p><p class="footnote">Tabular-nums em toda tabela, KPI e planilha</p></div>
+        </div>
+        <p class="footnote" style="margin-top:10px;">Ícones: apenas contorno (stroke 1.5px, grade 20-22px) — nunca misturar preenchido com contorno, nunca emoji como ícone funcional.</p>
+      </section>
+
+      <section class="block">
+        <h2>Mesmo sistema, três telas</h2>
+        <div class="grid cols-2" style="align-items:start;">
+          <div class="card">
+            <h3 style="margin-top:0">Admin / Dashboard do negócio</h3>
+            <div class="mock-dash">
+              <div class="mock-side">
+                <div class="mi on">◧ Início</div>
+                <div class="mi">✦ Assistente</div>
+                <div class="mi">☰ Leads</div>
+                <div class="mi">▦ Base</div>
+                <div class="mi">⚙ Config</div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-kpis">
+                  <div class="mock-kpi"><div class="t">Leads<span class="mock-pill">+11%</span></div><div class="v">128</div></div>
+                  <div class="mock-kpi"><div class="t">Conversas<span class="mock-pill">+7%</span></div><div class="v">842</div></div>
+                  <div class="mock-kpi"><div class="t">Abandono<span class="mock-pill n">-3%</span></div><div class="v">14%</div></div>
+                </div>
+                <div class="mock-chart">
+                  <svg viewBox="0 0 260 60" width="100%" height="60"><polyline points="0,45 30,40 60,42 90,30 120,25 150,15 180,20 210,10 240,8" fill="none" stroke="var(--primary)" stroke-width="2"/></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Chat do cliente final (mobile)</h3>
+            <div class="mock-chat">
+              <div class="hd"><span class="dot"></span> Studio Fênix — Online agora</div>
+              <div class="body">
+                <div class="a">Oi! Posso ajudar com horários, valores, aula experimental ou agendar. O que você precisa?</div>
+                <div class="chips"><span class="chip-s">Quanto custa?</span><span class="chip-s">Horários</span><span class="chip-s">Agendar</span></div>
+                <div class="u">Quanto custa a mensalidade?</div>
+                <div class="a">A mensalidade é R$180/mês. Tem plano trimestral com desconto. Quer agendar uma aula experimental?</div>
+                <div class="chips"><span class="chip-s">📅 Agendar</span><span class="chip-s">💬 Falar com atendente</span></div>
+              </div>
+              <div class="inp">Escreva sua pergunta… <span>➤</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="footnote" style="margin-top:14px;">Admin e dashboard do negócio compartilham a mesma sidebar de ícone-linha e cartões de KPI; o chat do cliente final não tem sidebar nenhuma no mobile — é tela cheia, header fino, input fixo embaixo.</p>
+      </section>
+
+      <section class="block">
+        <h2>Tokens (JSON)</h2>
+        <div class="sub">Fonte única de verdade para as três apps — cores, tipografia, raios, componentes. Copiar para <code>packages/ui/tokens.json</code> quando o repositório for criado.</div>
+        <pre class="codeblock">{
+  "color": {
+    "light": { "bg":"#F0EFED", "surface":"#FFFFFF", "accent":"#1F5F52",
+               "positive":"#2F8F4E", "negative":"#C0432C", "warning":"#B8862B" },
+    "dark":  { "bg":"#0F1311", "surface":"#1A211C", "accent":"#6FBFA6",
+               "positive":"#67C389", "negative":"#E38672", "warning":"#E0BD70" }
+  },
+  "typography": {
+    "display": "Iowan Old Style, Palatino Linotype, serif",
+    "body": "-apple-system, Segoe UI, Roboto, sans-serif",
+    "mono": "ui-monospace, SF Mono, Menlo, monospace"
+  },
+  "radius": { "card":"16px", "pill":"999px", "input":"12px" },
+  "iconography": { "style":"outline, 1.5px stroke, 20-22px grid, Lucide" },
+  "components": [
+    "sidebarNav", "kpiCard", "chartCard(gauge/sparkline)",
+    "pillBadge", "dataTable", "chatPanel", "historySidebar"
+  ]
+}</pre>
+        <p class="footnote">Arquivo completo (com estados, espaçamento e regras de cada componente) anexado como <code>realwise-tokens.json</code> junto a este plano.</p>
+      </section>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  var buttons = document.querySelectorAll('#tabs button');
+  function go(id){
+    buttons.forEach(function(b){ b.setAttribute('aria-selected', b.dataset.tab === id ? 'true':'false'); });
+    document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+    document.getElementById('panel-'+id).classList.add('active');
+    window.scrollTo(0,0);
+  }
+  buttons.forEach(function(b){ b.addEventListener('click', function(){ go(b.dataset.tab); }); });
+</script>
