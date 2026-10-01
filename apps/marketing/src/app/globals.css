@@ -6,6 +6,24 @@ html {
   scroll-behavior: smooth;
 }
 
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+.animate-float-slow {
+  animation: float 8s ease-in-out infinite 1s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float, .animate-float-slow {
+    animation: none;
+  }
+}
+
 body {
   background: #F3EEE3;
   color: #17221C;
