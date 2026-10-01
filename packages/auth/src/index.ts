@@ -3,7 +3,11 @@ export { verifyPhoneIdToken, normalizePhone, type VerifiedPhoneIdentity } from "
 export {
   signBusinessSession,
   signVisitorSession,
-  verifySession,
+  signAdminSession,
+  verifyBusinessSession,
+  verifyVisitorSession,
+  verifyAdminSession,
   type BusinessSessionClaims,
   type VisitorSessionClaims,
+  type AdminSessionClaims,
 } from "./session";

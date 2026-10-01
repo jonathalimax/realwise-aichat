@@ -6,7 +6,7 @@ export interface VerifiedPhoneIdentity {
 }
 
 export async function verifyPhoneIdToken(idToken: string): Promise<VerifiedPhoneIdentity> {
-  const decoded = await firebaseAuth().verifyIdToken(idToken);
+  const decoded = await firebaseAuth().verifyIdToken(idToken, true);
   if (!decoded.phone_number) {
     throw new Error("Token has no phone_number claim");
   }

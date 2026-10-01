@@ -8,6 +8,9 @@ mkdir -p "$OUT_DIR"
 
 SYSTEM_PROMPT="Você é o atendente de uma imobiliária/concessionária brasileira. Responda em português brasileiro natural, direto, sem gírias de IA. Se não souber a resposta exata, diga que vai confirmar com um atendente humano."
 
+QUESTIONS_TMP=$(mktemp -t rw_bench_questions.XXXXXX)
+trap 'rm -f "$QUESTIONS_TMP"' EXIT
+
 for MODEL in "${MODELS[@]}"; do
   SAFE_NAME=$(echo "$MODEL" | tr ':/' '__')
   OUT_FILE="$OUT_DIR/${SAFE_NAME}.jsonl"
@@ -19,7 +22,7 @@ d = json.load(open('$QUESTIONS_FILE'))
 for niche, qs in d.items():
     for q in qs:
         print(json.dumps({'niche': niche, 'question': q}))
-" > /tmp/rw_bench_questions.jsonl
+" > "$QUESTIONS_TMP"
 
   while IFS= read -r line; do
     NICHE=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['niche'])" "$line")
@@ -49,8 +52,7 @@ print(json.dumps(out, ensure_ascii=False))
 " "$RESPONSE" "$NICHE" "$Q" "$LATENCY_MS" >> "$OUT_FILE"
 
     echo "[$MODEL] ($NICHE) ${LATENCY_MS}ms :: $Q"
-  done < /tmp/rw_bench_questions.jsonl
+  done < "$QUESTIONS_TMP"
 done
 
-rm -f /tmp/rw_bench_questions.jsonl
 echo "Done. Results in $OUT_DIR"
