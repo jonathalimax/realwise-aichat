@@ -7,6 +7,9 @@ async function request(path: string, options?: RequestInit) {
     headers: { "content-type": "application/json", ...options?.headers },
     cache: "no-store",
   });
+  if (res.status === 401 && typeof window !== "undefined" && window.location.pathname !== "/login") {
+    window.location.href = "/login";
+  }
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   return res.json();
 }
