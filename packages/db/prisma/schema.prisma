@@ -84,6 +84,8 @@ model Business {
   websiteUrl      String?
   websiteContentHash String?
   websiteSyncedAt DateTime?
+  cachedChips     Json?
+  cachedChipsAt   DateTime?
   status          BusinessStatus @default(onboarding)
   confidenceScore Int            @default(0)
   confidenceBreakdown Json?

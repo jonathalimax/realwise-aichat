@@ -7,5 +7,6 @@ import { BookingsModule } from "../bookings/bookings.module";
   imports: [BookingsModule],
   controllers: [ChatController],
   providers: [ChatService],
+  exports: [ChatService],
 })
 export class ChatModule {}

@@ -3,9 +3,7 @@ import { prisma } from "@realwise/db";
 import { fetchWebsiteText } from "../website-extract";
 import { chunkMarkdown } from "../chunking";
 import { embedText } from "../embeddings";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3006";
-const INTERNAL_TOKEN = process.env.INFERENCE_GATEWAY_TOKEN;
+import { callInternalApi } from "../internal-api";
 
 export interface WebsiteSyncJobData {
   businessId: string;
@@ -72,12 +70,10 @@ export async function processWebsiteSync(job: Job<WebsiteSyncJobData>) {
       data: { websiteContentHash: contentHash, websiteSyncedAt: new Date() },
     });
 
-    if (INTERNAL_TOKEN) {
-      await fetch(`${API_URL}/internal/businesses/${businessId}/confidence/recompute`, {
-        method: "POST",
-        headers: { "x-internal-token": INTERNAL_TOKEN },
-      }).catch((err) => console.error(`confidence recompute call failed for ${businessId}`, err));
-    }
+    await Promise.all([
+      callInternalApi("/confidence/recompute", businessId),
+      callInternalApi("/chips/regenerate", businessId),
+    ]);
   } catch (error) {
     await prisma.knowledgeDocument.update({
       where: { id: document.id },

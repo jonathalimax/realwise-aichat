@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { nicheTemplates } from "@realwise/profile-schema";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
+import { ChatService } from "../chat/chat.service";
 
 const ABSTENTION_MARKERS = [
   "não tenho essa informação",
@@ -19,7 +20,13 @@ function looksLikeAbstention(text: string): boolean {
 
 @Injectable()
 export class OnboardingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly chat: ChatService) {}
+
+  // Fire-and-forget — chip regeneration is an inference call and must never slow down a field
+  // save/approve response. Swallow errors; the next successful regeneration will self-correct.
+  private regenerateChipsInBackground(businessId: string) {
+    this.chat.regenerateChips(businessId).catch(() => {});
+  }
 
   async getProfile(businessId: string) {
     const profile = await this.prisma.client.businessProfile.findUnique({ where: { businessId } });
@@ -37,7 +44,7 @@ export class OnboardingService {
     data[fieldKey] = value;
     fieldStatus[fieldKey] = { source, approvedByOwner: false, updatedAt: new Date().toISOString() };
 
-    return this.prisma.client.businessProfile.upsert({
+    const result = await this.prisma.client.businessProfile.upsert({
       where: { businessId },
       update: { data: data as any, fieldStatus: fieldStatus as any },
       create: {
@@ -47,6 +54,8 @@ export class OnboardingService {
         fieldStatus: fieldStatus as any,
       },
     });
+    this.regenerateChipsInBackground(businessId);
+    return result;
   }
 
   async approveField(businessId: string, fieldKey: string) {
@@ -54,7 +63,9 @@ export class OnboardingService {
     if (!existing) throw new NotFoundException("Profile not found");
     const fieldStatus = existing.fieldStatus as Record<string, any>;
     if (fieldStatus[fieldKey]) fieldStatus[fieldKey].approvedByOwner = true;
-    return this.prisma.client.businessProfile.update({ where: { businessId }, data: { fieldStatus } });
+    const result = await this.prisma.client.businessProfile.update({ where: { businessId }, data: { fieldStatus } });
+    this.regenerateChipsInBackground(businessId);
+    return result;
   }
 
   private async runEvalQuestions(businessId: string, businessName: string, niche: string, profileSummary: string, evalQuestions: string[]): Promise<number> {

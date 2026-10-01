@@ -3,6 +3,7 @@ import { prisma } from "@realwise/db";
 import { extractTextFromDocument } from "../extract-text";
 import { chunkMarkdown } from "../chunking";
 import { embedText } from "../embeddings";
+import { callInternalApi } from "../internal-api";
 
 export interface DocumentIngestionJobData {
   documentId: string;
@@ -44,6 +45,11 @@ export async function processDocumentIngestion(job: Job<DocumentIngestionJobData
       where: { id: documentId },
       data: { status: "processed", extractedMarkdown: markdown, ocrUsed },
     });
+
+    await Promise.all([
+      callInternalApi("/confidence/recompute", document.businessId),
+      callInternalApi("/chips/regenerate", document.businessId),
+    ]);
   } catch (error) {
     await prisma.knowledgeDocument.update({
       where: { id: documentId },
