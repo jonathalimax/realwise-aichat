@@ -1,8 +1,26 @@
 import { createHash } from "crypto";
+import { lookup as dnsLookup, LookupAllOptions } from "dns";
 import * as cheerio from "cheerio";
-import { assertPublicHttpUrl } from "./url-safety";
+import { Agent } from "undici";
+import { assertPublicHttpUrl, isBlockedIp } from "./url-safety";
 
 const MAX_REDIRECTS = 5;
+
+// Validates the resolved address at the moment the socket actually connects, closing the
+// TOCTOU window a separate pre-fetch dns.lookup() would leave open to DNS rebinding.
+function safeLookup(hostname: string, options: any, callback: any) {
+  dnsLookup(hostname, { ...options, all: true } as LookupAllOptions, (err, addresses) => {
+    if (err) return callback(err);
+    const list = Array.isArray(addresses) ? addresses : [addresses];
+    if (list.length === 0 || list.some((a) => isBlockedIp(a.address))) {
+      return callback(new Error(`Resolved address for ${hostname} is not a public unicast address`));
+    }
+    if (options?.all) return callback(null, list);
+    callback(null, list[0].address, list[0].family);
+  });
+}
+
+const safeAgent = new Agent({ connect: { lookup: safeLookup, timeout: 15000 } as any });
 
 async function safeFetch(rawUrl: string, redirectsLeft = MAX_REDIRECTS): Promise<Response> {
   const url = await assertPublicHttpUrl(rawUrl);
@@ -11,6 +29,8 @@ async function safeFetch(rawUrl: string, redirectsLeft = MAX_REDIRECTS): Promise
     headers: { "user-agent": "RealwiseBot/1.0 (+https://realwise.com.br)" },
     signal: AbortSignal.timeout(15000),
     redirect: "manual",
+    // @ts-expect-error — dispatcher is a Node/undici extension accepted by global fetch, not in the DOM lib types
+    dispatcher: safeAgent,
   });
 
   if ([301, 302, 303, 307, 308].includes(res.status)) {
