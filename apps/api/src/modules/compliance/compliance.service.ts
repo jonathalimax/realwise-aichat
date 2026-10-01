@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { createHash } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 
@@ -39,14 +39,18 @@ export class ComplianceService {
   }
 
   async fulfillRequest(businessId: string, requestId: string, notes: string) {
-    return this.prisma.client.dataSubjectRequest.update({
-      where: { id: requestId },
+    const result = await this.prisma.client.dataSubjectRequest.updateMany({
+      where: { id: requestId, businessId },
       data: { status: "fulfilled", fulfilledAt: new Date(), fulfillmentNotes: notes },
     });
+    if (result.count === 0) throw new NotFoundException("Request not found");
+    return result;
   }
 
   async deleteLeadData(businessId: string, leadId: string) {
+    const lead = await this.prisma.client.lead.findFirst({ where: { id: leadId, businessId } });
+    if (!lead) throw new NotFoundException("Lead not found");
     await this.prisma.client.conversation.deleteMany({ where: { businessId, leadId } });
-    return this.prisma.client.lead.delete({ where: { id: leadId } });
+    return this.prisma.client.lead.delete({ where: { id: lead.id } });
   }
 }
