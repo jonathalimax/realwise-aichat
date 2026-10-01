@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getBusiness, getChips, startConversation, sendMessage } from "../lib/api";
+import { getBusiness, getChips, startConversation, sendMessage, bookAppointment, identifyVisitor } from "../lib/api";
 
 interface Message {
   role: "visitor" | "assistant";
@@ -15,6 +15,11 @@ export function ChatScreen({ slug }: { slug: string }) {
   const [chips, setChips] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [showBooking, setShowBooking] = useState(false);
+  const [bookingDate, setBookingDate] = useState("");
+  const [bookingTime, setBookingTime] = useState("");
+  const [bookingName, setBookingName] = useState("");
+  const [bookingPhone, setBookingPhone] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,7 +33,7 @@ export function ChatScreen({ slug }: { slug: string }) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, showBooking]);
 
   async function ensureConversation() {
     if (conversationId || !business) return conversationId;
@@ -39,6 +44,14 @@ export function ChatScreen({ slug }: { slug: string }) {
 
   async function handleSend(text: string) {
     if (!text.trim() || !business) return;
+    if (text.toLowerCase().includes("agendar")) {
+      setMessages((prev) => [...prev, { role: "visitor", content: text }]);
+      setInput("");
+      await ensureConversation();
+      setShowBooking(true);
+      return;
+    }
+
     setSending(true);
     setMessages((prev) => [...prev, { role: "visitor", content: text }]);
     setInput("");
@@ -54,6 +67,20 @@ export function ChatScreen({ slug }: { slug: string }) {
     } finally {
       setSending(false);
     }
+  }
+
+  async function confirmBooking() {
+    if (!conversationId || !bookingDate || !bookingTime || !bookingName || !bookingPhone) return;
+    await identifyVisitor(slug, bookingName, bookingPhone);
+    const startsAt = new Date(`${bookingDate}T${bookingTime}:00`);
+    const endsAt = new Date(startsAt.getTime() + 30 * 60 * 1000);
+    const serviceName = business.niche === "imobiliaria" ? "Visita ao imóvel" : "Test-drive";
+    await bookAppointment(business.id, conversationId, serviceName, startsAt.toISOString(), endsAt.toISOString());
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: `Agendado: ${serviceName} em ${startsAt.toLocaleDateString("pt-BR")} às ${bookingTime}. Vamos confirmar com você em breve.` },
+    ]);
+    setShowBooking(false);
   }
 
   if (!business) {
@@ -95,10 +122,40 @@ export function ChatScreen({ slug }: { slug: string }) {
             {m.content}
           </div>
         ))}
+
+        {showBooking && (
+          <div className="max-w-[90%] rounded-2xl border border-border bg-surface p-4 text-sm">
+            <div className="mb-2 text-xs uppercase tracking-wide text-ink-soft">
+              Agendar {business.niche === "imobiliaria" ? "visita" : "test-drive"}
+            </div>
+            <div className="flex gap-2">
+              <input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm" />
+              <input type="time" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm" />
+            </div>
+            <input
+              value={bookingName}
+              onChange={(e) => setBookingName(e.target.value)}
+              placeholder="Seu nome"
+              className="mt-2 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm"
+            />
+            <input
+              value={bookingPhone}
+              onChange={(e) => setBookingPhone(e.target.value)}
+              placeholder="Seu telefone (WhatsApp)"
+              className="mt-2 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm"
+            />
+            <p className="mt-2 text-[0.7rem] text-ink-soft">
+              Ao confirmar, você concorda em compartilhar esses dados com {business.name} para este atendimento.
+            </p>
+            <button onClick={confirmBooking} className="mt-2 w-full rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
+              Confirmar
+            </button>
+          </div>
+        )}
         <div ref={bottomRef} />
       </main>
 
-      {chips.length > 0 && (
+      {chips.length > 0 && !showBooking && (
         <div className="flex gap-2 overflow-x-auto px-4 pb-2">
           {chips.map((chip) => (
             <button

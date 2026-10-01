@@ -3,6 +3,7 @@ import { nicheTemplates } from "@realwise/profile-schema";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
+import { BookingsService } from "../bookings/bookings.service";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 
@@ -10,7 +11,7 @@ const ESCALATION_KEYWORDS = ["falar com atendente", "falar com uma pessoa", "hum
 
 @Injectable()
 export class ChatService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly bookings: BookingsService) {}
 
   async getOrCreateConversation(businessId: string, visitorToken: string, leadId?: string) {
     let conversation = await this.prisma.client.conversation.findFirst({
@@ -116,6 +117,35 @@ export class ChatService {
     } catch {
       return { text: ABSTENTION_FALLBACK, abstained: true, model: undefined, inputTokens: 0, outputTokens: 0, latencyMs: 0 };
     }
+  }
+
+  async bookAppointment(
+    businessId: string,
+    conversationId: string,
+    leadId: string | undefined,
+    serviceName: string,
+    startsAt: string,
+    endsAt: string,
+  ) {
+    const appointment = await this.bookings.createAppointment(
+      businessId,
+      leadId,
+      conversationId,
+      serviceName,
+      new Date(startsAt),
+      new Date(endsAt),
+      "chat",
+    );
+    await this.prisma.client.message.create({
+      data: {
+        conversationId,
+        businessId,
+        role: "assistant",
+        content: `Agendado: ${serviceName} em ${new Date(startsAt).toLocaleString("pt-BR")}. Vamos confirmar com você em breve.`,
+        answerSource: "fixed_flow",
+      },
+    });
+    return appointment;
   }
 
   async escalate(businessId: string, conversationId: string, topic: string) {

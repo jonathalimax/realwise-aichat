@@ -29,7 +29,14 @@ export function sendMessage(businessId: string, conversationId: string, text: st
   });
 }
 
-export function identifyVisitor(businessSlug: string, name: string, phone: string) {
+export function bookAppointment(businessId: string, conversationId: string, serviceName: string, startsAt: string, endsAt: string) {
+  return request(`/chat/${businessId}/conversations/${conversationId}/book`, {
+    method: "POST",
+    body: JSON.stringify({ serviceName, startsAt, endsAt }),
+  });
+}
+
+export function identifyVisitor(businessSlug: string, name: string, phone: string): Promise<{ lead: any }> {
   return request(`/auth/visitor/identify`, {
     method: "POST",
     body: JSON.stringify({ businessSlug, name, phone }),

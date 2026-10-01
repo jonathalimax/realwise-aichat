@@ -1,5 +1,5 @@
-import { Body, Controller, Post, Res } from "@nestjs/common";
-import type { CookieOptions, Response } from "express";
+import { Body, Controller, Post, Req, Res } from "@nestjs/common";
+import type { CookieOptions, Request, Response } from "express";
 import { AuthService } from "./auth.service";
 
 const SESSION_COOKIE_OPTIONS: CookieOptions = {
@@ -33,9 +33,10 @@ export class AuthController {
     @Body("businessSlug") businessSlug: string,
     @Body("name") name: string,
     @Body("phone") phone: string,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { token, lead } = await this.auth.identifyVisitor(businessSlug, name, phone);
+    const { token, lead } = await this.auth.identifyVisitor(businessSlug, name, phone, req.ip ?? "", req.headers["user-agent"] ?? "");
     res.cookie("rw_visitor_session", token, SESSION_COOKIE_OPTIONS);
     return { lead };
   }

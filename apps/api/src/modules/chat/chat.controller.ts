@@ -40,4 +40,17 @@ export class ChatController {
     const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
     return this.chat.sendMessage(businessId, conversationId, text, token, visitor.leadId);
   }
+
+  @Post(":businessId/conversations/:conversationId/book")
+  book(
+    @Param("businessId") businessId: string,
+    @Param("conversationId") conversationId: string,
+    @Body("serviceName") serviceName: string,
+    @Body("startsAt") startsAt: string,
+    @Body("endsAt") endsAt: string,
+    @CurrentVisitor() visitor: VisitorContext,
+  ) {
+    assertBusinessMatch(visitor, businessId);
+    return this.chat.bookAppointment(businessId, conversationId, visitor.leadId, serviceName, startsAt, endsAt);
+  }
 }

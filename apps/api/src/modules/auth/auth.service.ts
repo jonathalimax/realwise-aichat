@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { verifyPhoneIdToken, normalizePhone, signBusinessSession, signVisitorSession, signAdminSession } from "@realwise/auth";
+import { createHash } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
+
+const CONSENT_TEXT_VERSION = "2026-01";
 
 @Injectable()
 export class AuthService {
@@ -27,7 +30,7 @@ export class AuthService {
     return { token, business };
   }
 
-  async identifyVisitor(businessSlug: string, name: string, phone: string) {
+  async identifyVisitor(businessSlug: string, name: string, phone: string, ip: string, userAgent: string) {
     const business = await this.prisma.client.business.findUnique({ where: { slug: businessSlug } });
     if (!business) throw new NotFoundException("Business not found");
 
@@ -36,6 +39,18 @@ export class AuthService {
       where: { businessId_phoneNormalized: { businessId: business.id, phoneNormalized } },
       update: { name, lastSeenAt: new Date(), sessionCount: { increment: 1 } },
       create: { businessId: business.id, name, phone, phoneNormalized },
+    });
+
+    await this.prisma.client.consentRecord.create({
+      data: {
+        businessId: business.id,
+        leadId: lead.id,
+        phoneHash: createHash("sha256").update(phoneNormalized).digest("hex"),
+        consentTextVersion: CONSENT_TEXT_VERSION,
+        purposes: ["atendimento", "agendamento"],
+        ipAddress: ip,
+        userAgent,
+      },
     });
 
     const token = await signVisitorSession({ businessId: business.id, leadId: lead.id, phoneNumber: phoneNormalized, name });
