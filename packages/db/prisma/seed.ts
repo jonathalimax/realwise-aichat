@@ -13,8 +13,8 @@ async function main() {
       documentQuota: 10,
       whatsappNumberQuota: 1,
       features: { analytics: "basic" },
-      stripePriceId: "price_essencial_placeholder",
-      stripeSetupPriceId: "price_essencial_setup_placeholder",
+      stripePriceId: "price_1ULfqwRo53xwsjMqTLbkA197",
+      stripeSetupPriceId: "price_1ULfqxRo53xwsjMqIJW2Xi67",
     },
   });
 
@@ -30,8 +30,8 @@ async function main() {
       documentQuota: 50,
       whatsappNumberQuota: 3,
       features: { analytics: "full", branding: true },
-      stripePriceId: "price_profissional_placeholder",
-      stripeSetupPriceId: "price_profissional_setup_placeholder",
+      stripePriceId: "price_1ULfqzRo53xwsjMq7vyUykVZ",
+      stripeSetupPriceId: "price_1ULfqzRo53xwsjMqfVBsHkZM",
     },
   });
 
@@ -47,8 +47,8 @@ async function main() {
       documentQuota: 999999,
       whatsappNumberQuota: 10,
       features: { analytics: "full", branding: true, customDomain: true },
-      stripePriceId: "price_studio_placeholder",
-      stripeSetupPriceId: "price_studio_setup_placeholder",
+      stripePriceId: "price_1ULfr1Ro53xwsjMq2jtiANbN",
+      stripeSetupPriceId: "price_1ULfr2Ro53xwsjMqAPh14Ywo",
     },
   });
 
