@@ -1,0 +1,232 @@
+<title>RealWise — Telas</title>
+<style>
+  :root{
+    --bg:#F0EFED; --bg-2:#E7E5E2; --surface:#FFFFFF; --ink:#15201B; --ink-soft:#5B655F; --muted:#8C9490;
+    --border:#E6E2DC; --accent:#1F5F52; --accent-soft:#E4EEE9; --accent-ink:#0F332C;
+    --positive:#2F8F4E; --positive-soft:#E4F3E8; --negative:#C0432C; --negative-soft:#FBEAE4;
+    --warning:#B8862B; --warning-soft:#F7EED6;
+    --serif:"Iowan Old Style","Palatino Linotype","URW Palladio L",P052,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0F1311; --bg-2:#161B18; --surface:#1A211C; --ink:#EDEAE2; --ink-soft:#AEB6AE; --muted:#75817A;
+    --border:#2A322C; --accent:#6FBFA6; --accent-soft:#1E3730; --accent-ink:#CFE9DE;
+    --positive:#67C389; --positive-soft:#1D3324; --negative:#E38672; --negative-soft:#3A241E;
+    --warning:#E0BD70; --warning-soft:#3A311B;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0F1311; --bg-2:#161B18; --surface:#1A211C; --ink:#EDEAE2; --ink-soft:#AEB6AE; --muted:#75817A;
+      --border:#2A322C; --accent:#6FBFA6; --accent-soft:#1E3730; --accent-ink:#CFE9DE;
+      --positive:#67C389; --positive-soft:#1D3324; --negative:#E38672; --negative-soft:#3A241E;
+      --warning:#E0BD70; --warning-soft:#3A311B;
+    }
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15px;}
+  .topnav{position:sticky; top:0; z-index:10; display:flex; gap:6px; padding:14px 20px; background:var(--bg); border-bottom:1px solid var(--border); flex-wrap:wrap;}
+  .topnav button{all:unset; cursor:pointer; padding:8px 16px; border-radius:99px; font-size:.84rem; font-weight:600; color:var(--ink-soft); border:1px solid var(--border);}
+  .topnav button[aria-selected="true"]{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .stage{padding:40px 20px 80px; display:flex; justify-content:center;}
+  .view{display:none; width:100%; max-width:1180px;}
+  .view.active{display:block;}
+  h1,h2,h3{font-family:var(--serif); margin:0;}
+  table{border-collapse:collapse; width:100%; font-size:.86rem;}
+  td,th{text-align:left; padding:10px 12px; border-bottom:1px solid var(--border);}
+  th{font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:700;}
+  .num{font-variant-numeric:tabular-nums; font-family:var(--mono);}
+
+  /* ---- phone chrome ---- */
+  .phone{width:390px; margin:0 auto; border:10px solid #000; border-radius:46px; overflow:hidden; background:var(--surface); box-shadow:0 20px 60px rgba(0,0,0,.25); height:780px; display:flex; flex-direction:column;}
+  :root[data-theme="dark"] .phone, :root:not([data-theme="light"]) .phone{border-color:#111;}
+  .chat-hd{padding:16px 18px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; flex:none;}
+  .chat-hd .av{width:38px;height:38px;border-radius:10px;background:var(--accent-soft); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-weight:700;}
+  .chat-hd .t{font-weight:700; font-size:.92rem;}
+  .chat-hd .s{font-size:.72rem; color:var(--positive); display:flex; align-items:center; gap:4px;}
+  .chat-hd .s::before{content:"";width:6px;height:6px;border-radius:99px;background:var(--positive);}
+  .chat-body{flex:1; overflow-y:auto; padding:16px 16px 8px; display:flex; flex-direction:column; gap:12px;}
+  .bubble-a{background:var(--bg-2); border-radius:14px 14px 14px 4px; padding:10px 14px; font-size:.86rem; max-width:84%; line-height:1.45;}
+  .bubble-u{background:var(--accent); color:#fff; border-radius:14px 14px 4px 14px; padding:10px 14px; font-size:.86rem; max-width:78%; align-self:flex-end; line-height:1.45;}
+  .chips{display:flex; gap:7px; flex-wrap:wrap;}
+  .chip{font-size:.74rem; border:1px solid var(--border); border-radius:99px; padding:6px 12px; color:var(--ink-soft); background:var(--surface);}
+  .chip.action{border-color:var(--accent); color:var(--accent-ink); background:var(--accent-soft); font-weight:600;}
+  .table-mini{border:1px solid var(--border); border-radius:10px; overflow:hidden; font-size:.76rem; margin:2px 0;}
+  .table-mini table{font-size:.76rem;}
+  .table-mini th,.table-mini td{padding:6px 9px;}
+  .card-inline{border:1px solid var(--border); border-radius:12px; padding:12px 14px; background:var(--surface); max-width:88%;}
+  .card-inline .h{font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:6px;}
+  .card-inline .row{display:flex; justify-content:space-between; font-size:.82rem; padding:4px 0; border-bottom:1px dashed var(--border);}
+  .card-inline .row:last-child{border:none;}
+  .wa-btn{margin-top:8px; background:#25D366; color:#fff; border-radius:10px; padding:9px; text-align:center; font-size:.82rem; font-weight:700;}
+  .chat-input{flex:none; padding:10px 14px 18px; border-top:1px solid var(--border); display:flex; gap:8px; align-items:center;}
+  .chat-input .box{flex:1; border:1px solid var(--border); border-radius:99px; padding:10px 16px; font-size:.82rem; color:var(--muted); background:var(--bg-2);}
+  .chat-input .send{width:36px;height:36px;border-radius:99px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-size:.9rem;}
+
+  /* ---- dashboard shell ---- */
+  .shell{display:flex; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:var(--surface); min-height:720px;}
+  .side{width:220px; flex:none; background:var(--bg-2); border-right:1px solid var(--border); padding:20px 14px; display:flex; flex-direction:column; gap:3px;}
+  .side .brand{font-family:var(--serif); font-weight:700; font-size:1.05rem; padding:0 8px 18px;}
+  .side .item{font-size:.82rem; padding:9px 10px; border-radius:8px; color:var(--ink-soft); display:flex; gap:9px; align-items:center;}
+  .side .item.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:600;}
+  .main{flex:1; padding:26px 28px; display:flex; flex-direction:column; gap:20px; min-width:0;}
+  .main-hd{display:flex; justify-content:space-between; align-items:baseline;}
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:14px;}
+  .kpi{border:1px solid var(--border); border-radius:12px; padding:14px 16px;}
+  .kpi .l{font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; display:flex; justify-content:space-between;}
+  .kpi .v{font-family:var(--mono); font-size:1.4rem; margin-top:6px;}
+  .pill{font-size:.64rem; font-weight:700; padding:1px 7px; border-radius:99px;}
+  .pill.pos{background:var(--positive-soft); color:var(--positive);}
+  .pill.neg{background:var(--negative-soft); color:var(--negative);}
+  .band{font-size:.72rem; font-weight:700; padding:2px 8px; border-radius:99px;}
+  .band.hot{background:var(--negative-soft); color:var(--negative);}
+  .band.warm{background:var(--warning-soft); color:var(--warning);}
+  .band.cold{background:var(--bg-2); color:var(--muted);}
+  .panel-card{border:1px solid var(--border); border-radius:12px; padding:18px 20px;}
+  .grid2{display:grid; grid-template-columns:1.3fr 1fr; gap:16px;}
+  .btn-wa{background:#25D366; color:#fff; border:none; border-radius:8px; padding:6px 12px; font-size:.76rem; font-weight:700; cursor:pointer;}
+</style>
+
+<div class="topnav" id="nav">
+  <button data-v="chat" aria-selected="true">Chat — Concessionária (mobile)</button>
+  <button data-v="dash" aria-selected="false">Dashboard — Imobiliária</button>
+  <button data-v="admin" aria-selected="false">Admin interno</button>
+</div>
+
+<div class="stage">
+
+  <!-- CHAT MOBILE -->
+  <div class="view active" id="v-chat">
+    <div class="phone">
+      <div class="chat-hd">
+        <div class="av">AS</div>
+        <div style="flex:1">
+          <div class="t">AutoSul Veículos</div>
+          <div class="s">Online agora</div>
+        </div>
+      </div>
+      <div class="chat-body">
+        <div class="bubble-a">Oi! Posso ajudar com estoque, financiamento, avaliação do seu carro na troca ou agendar um test-drive. O que você precisa?</div>
+        <div class="chips">
+          <span class="chip">Ver estoque</span>
+          <span class="chip">Simular financiamento</span>
+          <span class="chip action">📅 Agendar test-drive</span>
+        </div>
+        <div class="bubble-u">Vocês têm o Corolla 2023 em estoque?</div>
+        <div class="bubble-a">Temos sim! Corolla 2023, automático, 18.400 km, prata.</div>
+        <div class="table-mini">
+          <table>
+            <tr><th>Modelo</th><th>Ano</th><th>Km</th><th>Preço</th></tr>
+            <tr><td>Corolla XEi</td><td>2023</td><td class="num">18.400</td><td class="num">R$ 128.900</td></tr>
+          </table>
+        </div>
+        <div class="chips">
+          <span class="chip">Quero financiar</span>
+          <span class="chip">Aceita meu carro na troca?</span>
+          <span class="chip action">📅 Agendar test-drive</span>
+        </div>
+        <div class="bubble-u">Quero agendar um test-drive amanhã de manhã</div>
+        <div class="card-inline">
+          <div class="h">Agendar test-drive</div>
+          <div class="row"><span>Veículo</span><span>Corolla XEi 2023</span></div>
+          <div class="row"><span>Data</span><span>Qui, 02/10</span></div>
+          <div class="row"><span>Horário</span><span>09:30</span></div>
+          <div class="chips" style="margin-top:8px;">
+            <span class="chip action">Confirmar</span>
+            <span class="chip">Trocar horário</span>
+          </div>
+        </div>
+      </div>
+      <div class="chat-input">
+        <div class="box">Escreva sua pergunta…</div>
+        <div class="send">➤</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="view" id="v-dash">
+    <div class="shell">
+      <div class="side">
+        <div class="brand">RealWise</div>
+        <div class="item on">◧ &nbsp;Início</div>
+        <div class="item">✦ &nbsp;Assistente</div>
+        <div class="item">☰ &nbsp;Leads</div>
+        <div class="item">▦ &nbsp;Base de conhecimento</div>
+        <div class="item">◷ &nbsp;Agenda</div>
+        <div class="item">📈 &nbsp;Análises</div>
+        <div class="item">⚙ &nbsp;Configurações</div>
+      </div>
+      <div class="main">
+        <div class="main-hd">
+          <h1 style="font-size:1.5rem;">Imobiliária Vale Real</h1>
+          <span class="footnote" style="color:var(--muted); font-size:.8rem;">Últimos 7 dias</span>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><div class="l">Leads <span class="pill pos">+14%</span></div><div class="v">86</div></div>
+          <div class="kpi"><div class="l">Conversas <span class="pill pos">+9%</span></div><div class="v">312</div></div>
+          <div class="kpi"><div class="l">Visitas agendadas <span class="pill pos">+22%</span></div><div class="v">41</div></div>
+          <div class="kpi"><div class="l">Prontidão</div><div class="v">82%</div></div>
+        </div>
+        <div class="grid2">
+          <div class="panel-card">
+            <h3 style="font-size:1rem; margin-bottom:12px;">Leads</h3>
+            <table>
+              <tr><th>Nome</th><th>Última msg.</th><th>Temp.</th><th></th></tr>
+              <tr><td>Marina Souza</td><td>Perguntou sobre fiador</td><td><span class="band hot">🔥 Quente</span></td><td><button class="btn-wa">WhatsApp</button></td></tr>
+              <tr><td>Carlos Lima</td><td>Agendou visita sáb.</td><td><span class="band hot">🔥 Quente</span></td><td><button class="btn-wa">WhatsApp</button></td></tr>
+              <tr><td>Fernanda Dias</td><td>Perguntou preço</td><td><span class="band warm">🌤 Morno</span></td><td><button class="btn-wa">WhatsApp</button></td></tr>
+              <tr><td>João Pedro</td><td>Só viu 1 imóvel</td><td><span class="band cold">❄️ Frio</span></td><td><button class="btn-wa">WhatsApp</button></td></tr>
+            </table>
+          </div>
+          <div class="panel-card">
+            <h3 style="font-size:1rem; margin-bottom:12px;">Perguntas mais feitas</h3>
+            <table>
+              <tr><td>Documentos p/ alugar</td><td class="num">38</td></tr>
+              <tr><td>Aceita fiador?</td><td class="num">29</td></tr>
+              <tr><td>Valor do condomínio</td><td class="num">24</td></tr>
+              <tr><td>Aceita pets?</td><td class="num">17</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="view" id="v-admin">
+    <div class="shell">
+      <div class="side">
+        <div class="brand">RealWise · Admin</div>
+        <div class="item on">◧ &nbsp;Tenants</div>
+        <div class="item">📈 &nbsp;Métricas globais</div>
+        <div class="item">🧩 &nbsp;Templates de nicho</div>
+        <div class="item">🧠 &nbsp;Modelo &amp; infra</div>
+        <div class="item">💳 &nbsp;Cobrança</div>
+        <div class="item">☎ &nbsp;Suporte</div>
+      </div>
+      <div class="main">
+        <div class="main-hd"><h1 style="font-size:1.5rem;">Tenants</h1></div>
+        <table>
+          <tr><th>Negócio</th><th>Nicho</th><th>Status</th><th>Plano</th><th>Confiança</th><th>MRR</th></tr>
+          <tr><td>Imobiliária Vale Real</td><td>Imobiliária</td><td><span class="pill pos">Ativo</span></td><td>Profissional</td><td class="num">82%</td><td class="num">R$ 597</td></tr>
+          <tr><td>AutoSul Veículos</td><td>Concessionária</td><td><span class="pill pos">Ativo</span></td><td>Studio</td><td class="num">90%</td><td class="num">R$ 1.197</td></tr>
+          <tr><td>Imóveis Bairro Novo</td><td>Imobiliária</td><td><span class="pill neg">Onboarding parado há 8d</span></td><td>Essencial</td><td class="num">34%</td><td class="num">R$ 297</td></tr>
+          <tr><td>Veículos Premium RS</td><td>Concessionária</td><td><span class="pill pos">Ativo</span></td><td>Profissional</td><td class="num">77%</td><td class="num">R$ 597</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  var btns = document.querySelectorAll('#nav button');
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){
+      btns.forEach(function(x){x.setAttribute('aria-selected', x===b ? 'true':'false');});
+      document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active');});
+      document.getElementById('v-'+b.dataset.v).classList.add('active');
+    });
+  });
+</script>

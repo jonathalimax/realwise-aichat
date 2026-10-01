@@ -242,6 +242,7 @@
       <button data-tab="riscos" aria-selected="false"><span class="n">05</span> Riscos &amp; Decisões</button>
       <button data-tab="validacao" aria-selected="false"><span class="n">06</span> Validação</button>
       <button data-tab="sistema" aria-selected="false"><span class="n">07</span> Sistema de Design</button>
+      <button data-tab="features" aria-selected="false"><span class="n">08</span> Features MVP × V1</button>
     </nav>
     <div class="side-foot">
       <b>Seu atendimento não dorme.</b><br/>
@@ -749,22 +750,21 @@
       <section class="block">
         <h2>Decisões abertas, por ordem de bloqueio</h2>
 
-        <div class="decision">
-          <h4>1. Par de nichos do MVP <span class="tag">bloqueante — semana 1</span></h4>
-          <p style="margin:0">Define templates, banco de perguntas da entrevista, fluxos fixos, base de avaliação e a primeira lista de prospecção.</p>
-          <div class="rec"><b>Recomendação:</b> academias de luta (agendamento, decisor único, canal de federações) + locação imobiliária (captação de documentos, onde a entrevista guiada mais se destaca). Mas esta é genuinamente sua escolha — deve seguir a rede que você já alcança este mês.</div>
+        <div class="decision" style="border-left-color:var(--green);">
+          <h4>1. Par de nichos do MVP <span class="tag" style="background:var(--green-soft);color:var(--green);">decidido</span></h4>
+          <p style="margin:0"><b>Imobiliária (locação)</b> + <b>concessionária</b> — dois nichos intake-heavy, mesma força de entrevista guiada, templates de documento/checklist compartilham mais estrutura entre si do que um par booking+intake teria.</p>
+          <div class="rec"><b>Mitigação de risco já incorporada:</b> no nicho imobiliário, mirar corretores autônomos e pequenas imobiliárias que não usam Superlógica/Vista (ver §Negócio) em vez de competir de frente com quem já tem CRM com IA embutida. Concessionárias não tiveram concorrente direto identificado na pesquisa — é o nicho de entrada mais limpo dos dois.</div>
         </div>
 
-        <div class="decision">
-          <h4>2. Stack e modelo de LLM <span class="tag">bloqueante — semana 1–2</span></h4>
-          <p style="margin:0">Qual servidor de inferência e qual modelo aberto.</p>
-          <div class="rec"><b>Recomendação:</b> Ollama no MVP → vLLM a partir do nível 1, com failover gerenciado desde o dia um. Modelo: construir um banco de 100 perguntas por nicho em PT-BR e testar 3–4 candidatos de 8–12B antes de decidir — 3 dias bem gastos.</div>
+        <div class="decision" style="border-left-color:var(--amber);">
+          <h4>2. Stack e modelo de LLM <span class="tag" style="background:var(--amber-soft);color:var(--amber);">em andamento — rodando local</span></h4>
+          <p style="margin:0">Benchmark iniciado na própria máquina (Apple M2, 16GB) antes de qualquer gasto de VPS — decisão correta para essa fase: não há motivo para pagar por GPU na Hetzner antes de saber qual modelo responde bem em PT-BR.</p>
+          <div class="rec"><b>Status:</b> Ollama local já instalado; <code>qwen2.5:7b-instruct-q4_K_M</code> e <code>llama3.1:8b-instruct-q4_K_M</code> baixados. Banco de 40 perguntas reais (20 imobiliária + 20 concessionária) em <code>ai/evals/pt-br-questions.json</code>, com script de benchmark em <code>ai/evals/run-benchmark.sh</code>. Próximo passo: rodar o script, revisar as respostas (manual ou via skill <code>llm-evaluation</code>) e só então decidir se um dos dois serve para produção ou se vale testar um terceiro candidato. A migração para Hetzner/vLLM só acontece depois que o modelo já estiver validado localmente.</div>
         </div>
 
-        <div class="decision">
-          <h4>3. Compromisso final com o nome <span class="tag">bloqueante — semana 1</span></h4>
-          <p style="margin:0">"RealWise" tem um risco a verificar: <i>Real</i> pode soar como imobiliário específico, estreitando a percepção sobre os outros cinco nichos.</p>
-          <div class="rec"><b>Recomendação:</b> manter o nome e neutralizar com a tagline — <i>mas antes de qualquer gasto com design</i>, verificar disponibilidade no INPI (classes 9, 35, 42) e o domínio <code>realwise.com.br</code>.</div>
+        <div class="decision" style="border-left-color:var(--green);">
+          <h4>3. Compromisso final com o nome <span class="tag" style="background:var(--green-soft);color:var(--green);">decidido</span></h4>
+          <p style="margin:0">RealWise é a marca definitiva — domínio já registrado pelo usuário. O risco de leitura "imobiliário" fica mitigado pela tagline e pelo fato de um dos dois nichos do MVP ser, justamente, imobiliário — a marca não está mais em descompasso com o produto, está alinhada com ele.</p>
         </div>
 
         <div class="decision">
@@ -951,6 +951,127 @@
   ]
 }</pre>
         <p class="footnote">Arquivo completo (com estados, espaçamento e regras de cada componente) anexado como <code>realwise-tokens.json</code> junto a este plano.</p>
+      </section>
+    </section>
+
+    <!-- ============ 08 FEATURES MVP x V1 ============ -->
+    <section class="panel" id="panel-features">
+      <header>
+        <div class="eyebrow">Escopo por release — imobiliária + concessionária</div>
+        <h1>Features: MVP vs. V1 (pós-MVP)</h1>
+        <p>Lista concreta, por superfície, já ajustada ao par de nichos decidido (imobiliária + concessionária). V1 corresponde à Fase 2 do roadmap (meses 4–7) — o que entra depois que os dois nichos do MVP estiverem validados com clientes reais pagando.</p>
+      </header>
+
+      <section class="block">
+        <h2>Chat do cliente final</h2>
+        <div class="split">
+          <div class="in">
+            <h4>MVP</h4>
+            <ul>
+              <li>Identificação por nome + telefone com consentimento LGPD</li>
+              <li>RAG sobre a base do tenant (imóveis ou estoque de veículos)</li>
+              <li>Fluxo fixo: checklist de documentos (imobiliária) / busca de estoque e simulação de entrada (concessionária)</li>
+              <li>Chips iniciais + chips regenerativos pós-resposta</li>
+              <li>Agendamento inline: visita ao imóvel / test-drive</li>
+              <li>Escalonamento para WhatsApp via <code>wa.me</code> com código de referência</li>
+              <li>Reconhecimento de visitante recorrente (nome+telefone, resumo da sessão anterior)</li>
+              <li>Abstenção honesta quando a base não cobre a pergunta</li>
+            </ul>
+          </div>
+          <div class="out">
+            <h4>V1</h4>
+            <ul>
+              <li>Upload de documento pelo próprio cliente dentro do chat (não só descrição em texto)</li>
+              <li>Coleta de depósito/sinal de reserva dentro do chat</li>
+              <li>Lembrete de visita/test-drive via toque único do dono (sem automação própria)</li>
+              <li>Correção inline pelo cliente quando a resposta não ajudou (feed a fila de não-respondidas)</li>
+              <li>Pix como opção de pagamento de taxas dentro do fluxo, quando aplicável</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Onboarding do negócio</h2>
+        <div class="split">
+          <div class="in">
+            <h4>MVP</h4>
+            <ul>
+              <li>Login por telefone + OTP (SMS)</li>
+              <li>Checkout Stripe (assinatura + taxa de setup)</li>
+              <li>Upload de documentos + OCR (tabela de preços, fotos de estoque/imóveis)</li>
+              <li>Entrevista guiada — 2 templates: imobiliária e concessionária</li>
+              <li>Medidor de confiança com lista priorizada do que falta</li>
+              <li>Teste do próprio atendente antes de publicar (obrigatório)</li>
+              <li>Geração de link público + QR + texto pronto para bio</li>
+              <li>Confirmação de que o link foi colado na bio (etapa obrigatória)</li>
+            </ul>
+          </div>
+          <div class="out">
+            <h4>V1</h4>
+            <ul>
+              <li>Onboarding 100% self-serve, sem call assistida pelo fundador</li>
+              <li>Importação direta de planilha de estoque (concessionária) via upload estruturado</li>
+              <li>Entrevista por áudio (nota de voz transcrita)</li>
+              <li>Templates 3 e 4 (próximo par de nichos)</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Dashboard do negócio</h2>
+        <div class="split">
+          <div class="in">
+            <h4>MVP</h4>
+            <ul>
+              <li>Leads com pontuação de comprometimento e sinais explicáveis</li>
+              <li>Botão "Chamar no WhatsApp" com mensagem pré-preenchida</li>
+              <li>Conversas com transcrição e filtros (escalado, agendado, abandonado)</li>
+              <li>Base de conhecimento: editor de perfil + fila de não-respondidas</li>
+              <li>Medidor de prontidão com histórico</li>
+              <li>Análises básicas: volume, horário de pico, perguntas mais feitas, funil de agendamento</li>
+              <li>Cobrança: plano atual, portal Stripe, uso de cota</li>
+            </ul>
+          </div>
+          <div class="out">
+            <h4>V1</h4>
+            <ul>
+              <li>Feedback do dono por lead ("fechou? / não fechou") alimentando a pontuação (fase supervisionada)</li>
+              <li>Agenda com sync de Google Calendar</li>
+              <li>Detecção de desatualização da base (alerta "sem atualização há 45 dias")</li>
+              <li>Exportação CSV de leads e webhook para CRM externo</li>
+              <li>Multi-unidade: visão agregada + por unidade para redes/franquias</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Admin interno &amp; plataforma</h2>
+        <div class="split">
+          <div class="in">
+            <h4>MVP</h4>
+            <ul>
+              <li>Lista de tenants com status, plano, confiança, uso</li>
+              <li>Detalhe do tenant: debug de recuperação por conversa, override de config</li>
+              <li>Gerenciador dos 2 templates de nicho (imobiliária, concessionária)</li>
+              <li>Configuração de modelo com kill-switch manual para failover gerenciado</li>
+              <li>Fila de suporte/escalonamento unificada</li>
+              <li>Postgres + pgvector, Redis + BullMQ, Stripe webhooks, log de consentimento LGPD, endpoint de exclusão de dados</li>
+              <li>Ollama local/Hetzner Nível 0 + failover para API gerenciada</li>
+            </ul>
+          </div>
+          <div class="out">
+            <h4>V1</h4>
+            <ul>
+              <li>Migração de Ollama para vLLM (Nível 1 de infra)</li>
+              <li>Analytics globais: funil completo signup → link colado → 1ª conversa → 1º agendamento</li>
+              <li>Programa de agência/revenda com admin white-label</li>
+              <li>Auditoria formal de LGPD com os sub-skills instalados (<code>lgpd-skills</code>: DPA, política de privacidade, retenção, DSAR)</li>
+            </ul>
+          </div>
+        </div>
       </section>
     </section>
 
