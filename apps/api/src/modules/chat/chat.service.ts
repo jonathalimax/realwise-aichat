@@ -169,7 +169,44 @@ export class ChatService {
       data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
     });
 
-    return { message: assistantMessage, escalated: false };
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    const chips = await this.followUpChips(businessId, business?.niche ?? "imobiliaria", visitorText, answer.text);
+
+    return { message: assistantMessage, escalated: false, chips };
+  }
+
+  // Contextual chips offered after each reply, so the visitor can keep tapping instead of
+  // typing. Grounded only in the exchange that just happened — kept cheap (low maxTokens) since
+  // this runs on every message, unlike the cached initial chips.
+  private async followUpChips(businessId: string, niche: string, lastVisitorText: string, lastAssistantText: string): Promise<string[]> {
+    const template = nicheTemplates[niche as "imobiliaria" | "concessionaria"];
+    const fallback = template?.defaultChips ?? [];
+
+    const systemPrompt = [
+      "Você sugere os próximos 4 chips (pergunta ou ação) para o visitante continuar a conversa sem precisar digitar.",
+      "Baseie-se SOMENTE na última pergunta e resposta abaixo. Sugira follow-ups curtos (até 6 palavras) que sejam o próximo passo natural: aprofundar o mesmo assunto, ou ações como 'Agendar visita' / 'Falar com atendente' quando fizer sentido.",
+      "Nunca repita a pergunta que acabou de ser feita. Nunca invente informação que não esteja na resposta.",
+      "Responda apenas com um array JSON de strings, sem texto adicional.",
+      `Pergunta do cliente: ${lastVisitorText}`,
+      `Resposta da Clara: ${lastAssistantText}`,
+    ].join("\n");
+
+    try {
+      const result = await generateFromGateway({
+        purpose: "chips",
+        businessId,
+        systemPrompt,
+        prompt: "Gere os 4 chips.",
+        maxTokens: 120,
+      });
+      const parsed = JSON.parse(result.text.trim());
+      if (Array.isArray(parsed) && parsed.every((c) => typeof c === "string") && parsed.length > 0) {
+        return parsed.slice(0, 4);
+      }
+    } catch {
+      // fall through to static fallback
+    }
+    return fallback;
   }
 
   private async generateAnswer(businessId: string, conversationId: string, visitorText: string) {

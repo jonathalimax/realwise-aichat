@@ -62,6 +62,8 @@ export function ChatScreen({ slug }: { slug: string }) {
       setMessages((prev) => [...prev, { role: "assistant", content: result.message.content }]);
       if (result.escalated && result.whatsappUrl) {
         window.open(result.whatsappUrl, "_blank");
+      } else if (result.chips?.length) {
+        setChips(result.chips);
       }
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Tive um problema para responder — tenta de novo em instantes." }]);
