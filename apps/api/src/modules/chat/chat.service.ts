@@ -30,7 +30,49 @@ export class ChatService {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException("Business not found");
     const template = nicheTemplates[business.niche];
-    return template?.defaultChips ?? [];
+    const fallback = template?.defaultChips ?? [];
+
+    const [profile, chunks] = await Promise.all([
+      this.prisma.client.businessProfile.findUnique({ where: { businessId } }),
+      this.prisma.client.knowledgeChunk.findMany({
+        where: { businessId },
+        orderBy: [{ document: { createdAt: "desc" } }, { ordinal: "asc" }],
+        take: 12,
+        select: { content: true },
+      }),
+    ]);
+
+    const profileSummary = profile?.cachedSummary ?? JSON.stringify(profile?.data ?? {});
+    const chunkText = chunks.map((c) => c.content).join("\n\n").slice(0, 6000);
+    if (!chunkText && (!profile?.data || Object.keys(profile.data as object).length === 0)) {
+      return fallback; // nothing to ground chips in yet — don't invent generic ones
+    }
+
+    const systemPrompt = [
+      `Você gera sugestões de pergunta (chips) para o chat da ${business.name}.`,
+      "Gere exatamente 4 perguntas curtas (no máximo 6 palavras cada) que um cliente real faria.",
+      "Baseie-se SOMENTE no conteúdo abaixo — use itens, preços ou serviços reais mencionados quando possível, nunca invente.",
+      "Responda apenas com um array JSON de strings, sem nenhum texto adicional.",
+      `Informações do negócio: ${profileSummary}`,
+      `Conteúdo da base de conhecimento: ${chunkText}`,
+    ].join("\n");
+
+    try {
+      const result = await generateFromGateway({
+        purpose: "chips",
+        businessId,
+        systemPrompt,
+        prompt: "Gere os 4 chips.",
+        maxTokens: 150,
+      });
+      const parsed = JSON.parse(result.text.trim());
+      if (Array.isArray(parsed) && parsed.every((c) => typeof c === "string") && parsed.length > 0) {
+        return parsed.slice(0, 4);
+      }
+    } catch {
+      // fall through to static fallback
+    }
+    return fallback;
   }
 
   private detectsEscalation(text: string): boolean {
