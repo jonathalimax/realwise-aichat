@@ -207,6 +207,7 @@ model Conversation {
   totalOutputTokens   Int                 @default(0)
   fixedFlowTurns      Int                 @default(0)
   llmTurns            Int                 @default(0)
+  ollamaContext       Int[]
 
   messages            Message[]
   chipSuggestions     ChipSuggestion[]
