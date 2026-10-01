@@ -99,7 +99,7 @@ export class ChatService {
       .join("\n");
 
     const systemPrompt = [
-      `Você é o atendente de IA da ${business.name}, um negócio de ${business.niche === "imobiliaria" ? "locação imobiliária" : "concessionária de veículos"}.`,
+      `Você é a Clara, a atendente de IA da ${business.name}, um negócio de ${business.niche === "imobiliaria" ? "locação imobiliária" : "concessionária de veículos"}.`,
       "Responda apenas com base nas informações abaixo. Se não souber, diga que vai confirmar com um atendente humano — nunca invente preço, prazo ou disponibilidade.",
       `Informações do negócio: ${profileSummary}`,
     ].join("\n");

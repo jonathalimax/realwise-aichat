@@ -61,7 +61,7 @@ export class OnboardingService {
     if (evalQuestions.length === 0) return 0;
 
     const systemPrompt = [
-      `Você é o atendente de IA da ${businessName}, um negócio de ${niche === "imobiliaria" ? "locação imobiliária" : "concessionária de veículos"}.`,
+      `Você é a Clara, a atendente de IA da ${businessName}, um negócio de ${niche === "imobiliaria" ? "locação imobiliária" : "concessionária de veículos"}.`,
       "Responda apenas com base nas informações abaixo. Se não souber, diga que vai confirmar com um atendente humano — nunca invente preço, prazo ou disponibilidade.",
       `Informações do negócio: ${profileSummary}`,
     ].join("\n");

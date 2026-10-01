@@ -99,7 +99,7 @@ export function ChatScreen({ slug }: { slug: string }) {
         <div>
           <div className="text-sm font-semibold text-ink">{business.name}</div>
           <div className="flex items-center gap-1 text-xs text-positive">
-            <span className="h-1.5 w-1.5 rounded-full bg-positive" /> Online agora
+            <span className="h-1.5 w-1.5 rounded-full bg-positive" /> Clara · Online agora
           </div>
         </div>
       </header>
@@ -107,7 +107,7 @@ export function ChatScreen({ slug }: { slug: string }) {
       <main className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.length === 0 && (
           <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-surface px-4 py-3 text-sm text-ink">
-            Oi! Posso ajudar com {business.niche === "imobiliaria" ? "documentos, visitas e aluguel" : "estoque, financiamento e test-drive"}. O que você precisa?
+            Oi! Eu sou a Clara, da {business.name}. Posso ajudar com {business.niche === "imobiliaria" ? "documentos, visitas e aluguel" : "estoque, financiamento e test-drive"}. O que você precisa?
           </div>
         )}
         {messages.map((m, i) => (
