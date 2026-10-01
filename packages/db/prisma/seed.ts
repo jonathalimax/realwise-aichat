@@ -53,6 +53,18 @@ async function main() {
   });
 
   console.log("Seeded plans: essencial, profissional, studio");
+
+  const adminPhone = process.env.SEED_ADMIN_PHONE;
+  if (adminPhone) {
+    await prisma.adminUser.upsert({
+      where: { phone: adminPhone },
+      update: {},
+      create: { phone: adminPhone, name: process.env.SEED_ADMIN_NAME ?? "Founder", role: "superadmin" },
+    });
+    console.log(`Seeded admin user: ${adminPhone}`);
+  } else {
+    console.log("SEED_ADMIN_PHONE not set — skipping admin user seed. Set it in .env to log into apps/admin.");
+  }
 }
 
 main().finally(() => prisma.$disconnect());

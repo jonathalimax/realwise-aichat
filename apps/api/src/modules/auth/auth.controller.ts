@@ -21,6 +21,13 @@ export class AuthController {
     return { business };
   }
 
+  @Post("admin/verify")
+  async verifyAdmin(@Body("idToken") idToken: string, @Res({ passthrough: true }) res: Response) {
+    const { token, admin } = await this.auth.loginAdminWithFirebaseToken(idToken);
+    res.cookie("rw_admin_session", token, { ...SESSION_COOKIE_OPTIONS, maxAge: 12 * 3600 * 1000 });
+    return { admin: { id: admin.id, name: admin.name, role: admin.role } };
+  }
+
   @Post("visitor/identify")
   async identifyVisitor(
     @Body("businessSlug") businessSlug: string,

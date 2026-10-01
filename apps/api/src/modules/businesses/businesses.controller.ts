@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { BusinessesService } from "./businesses.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
 import { CurrentBusiness } from "../../common/decorators/current-business.decorator";
@@ -40,5 +40,29 @@ export class BusinessesController {
   @Post("me/link-placed")
   confirmLinkPlaced(@CurrentBusiness() session: BusinessSessionClaims) {
     return this.businesses.confirmLinkPlaced(session.businessId);
+  }
+
+  @UseGuards(BusinessSessionGuard)
+  @Get("me/whatsapp-numbers")
+  listWhatsappNumbers(@CurrentBusiness() session: BusinessSessionClaims) {
+    return this.businesses.listWhatsappNumbers(session.businessId);
+  }
+
+  @UseGuards(BusinessSessionGuard)
+  @Post("me/whatsapp-numbers")
+  addWhatsappNumber(@CurrentBusiness() session: BusinessSessionClaims, @Body("label") label: string, @Body("phone") phone: string) {
+    return this.businesses.addWhatsappNumber(session.businessId, label, phone);
+  }
+
+  @UseGuards(BusinessSessionGuard)
+  @Delete("me/whatsapp-numbers/:id")
+  removeWhatsappNumber(@CurrentBusiness() session: BusinessSessionClaims, @Param("id") id: string) {
+    return this.businesses.removeWhatsappNumber(session.businessId, id);
+  }
+
+  @UseGuards(BusinessSessionGuard)
+  @Patch("me/branding")
+  updateBranding(@CurrentBusiness() session: BusinessSessionClaims, @Body() body: { logoUrl?: string; brandColor?: string }) {
+    return this.businesses.updateBranding(session.businessId, body);
   }
 }

@@ -15,3 +15,5 @@ export const getTenants = () => request("/admin/tenants");
 export const getTenantDetail = (id: string) => request(`/admin/tenants/${id}`);
 export const suspendTenant = (id: string) => request(`/admin/tenants/${id}/suspend`, { method: "POST" });
 export const getGlobalMetrics = () => request("/admin/metrics");
+export const verifyAdminFirebaseToken = (idToken: string) =>
+  request("/auth/admin/verify", { method: "POST", body: JSON.stringify({ idToken }) });

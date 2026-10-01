@@ -53,4 +53,25 @@ export class BusinessesService {
   async confirmLinkPlaced(businessId: string) {
     return this.prisma.client.business.update({ where: { id: businessId }, data: { linkPlacedAt: new Date() } });
   }
+
+  async listWhatsappNumbers(businessId: string) {
+    return this.prisma.client.whatsappRoutingNumber.findMany({ where: { businessId }, orderBy: { priority: "asc" } });
+  }
+
+  async addWhatsappNumber(businessId: string, label: string, phone: string) {
+    const count = await this.prisma.client.whatsappRoutingNumber.count({ where: { businessId } });
+    return this.prisma.client.whatsappRoutingNumber.create({
+      data: { businessId, label, phone, priority: count },
+    });
+  }
+
+  async removeWhatsappNumber(businessId: string, numberId: string) {
+    const number = await this.prisma.client.whatsappRoutingNumber.findFirst({ where: { id: numberId, businessId } });
+    if (!number) throw new NotFoundException("Number not found");
+    return this.prisma.client.whatsappRoutingNumber.delete({ where: { id: numberId } });
+  }
+
+  async updateBranding(businessId: string, data: { logoUrl?: string; brandColor?: string }) {
+    return this.prisma.client.business.update({ where: { id: businessId }, data });
+  }
 }
