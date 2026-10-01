@@ -3,6 +3,7 @@ import { Reveal } from "../components/Reveal";
 const WHATSAPP_NUMBER = "5585992265544";
 const WHATSAPP_MSG = encodeURIComponent("Oi! Vi o site da Realwise e quero saber mais.");
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MSG}`;
+const DASHBOARD_LOGIN_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3003"}/login`;
 
 function Pill({ href, className = "", children }: { href: string; className?: string; children: React.ReactNode }) {
   return (
@@ -14,15 +15,6 @@ function Pill({ href, className = "", children }: { href: string; className?: st
     >
       {children}
     </a>
-  );
-}
-
-function ChannelPill({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm text-ink transition-all duration-200 hover:-translate-y-0.5 hover:border-ink/30 hover:shadow-md">
-      {icon}
-      {label}
-    </span>
   );
 }
 
@@ -47,27 +39,32 @@ export default function MarketingHome() {
             <a href="#precos" className="hover:text-ink">Preços</a>
             <a href="#faq" className="hover:text-ink">Perguntas</a>
           </nav>
-          <Pill href={WHATSAPP_URL} className="px-4 py-2 text-xs">Falar no WhatsApp</Pill>
+          <div className="flex items-center gap-2">
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="hidden text-xs font-semibold text-ink-soft hover:text-ink sm:block">
+              Falar no WhatsApp
+            </a>
+            <Pill href={DASHBOARD_LOGIN_URL} className="px-4 py-2 text-xs">Entrar no painel</Pill>
+          </div>
         </div>
       </header>
 
       {/* HERO */}
       <section className="mx-auto max-w-6xl px-5 pb-20 pt-16 text-center md:pb-28 md:pt-24">
         <Reveal>
-          <h1 className="mx-auto max-w-3xl font-serif text-5xl leading-[1.1] text-ink md:text-7xl">
-            Enquanto você dorme, <em className="italic">seu cliente já desistiu</em>.
+          <h1 className="mx-auto max-w-2xl font-serif text-5xl leading-[1.1] text-ink md:text-7xl">
+            Mil clientes perguntam a mesma coisa. <em className="italic">Agora alguém sempre responde.</em>
           </h1>
         </Reveal>
         <Reveal delay={100}>
-          <p className="mx-auto mt-6 max-w-xl text-base text-ink-soft md:text-lg">
-            A Realwise responde quem pergunta preço às 22h, agenda a visita e te passa o cliente pronto no WhatsApp — antes que ele vá pro concorrente.
+          <p className="mx-auto mt-6 max-w-lg text-base text-ink-soft md:text-lg">
+            Qualquer hora, qualquer pergunta repetida — respondida na hora. Ela agenda sozinha, e só te chama no WhatsApp quando o cliente está pronto pra fechar.
           </p>
         </Reveal>
         <Reveal delay={200}>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Pill href={WHATSAPP_URL} className="px-7 py-3.5 text-[0.95rem]">Falar no WhatsApp</Pill>
-            <a href="#solucao" className="inline-flex items-center justify-center rounded-full border border-ink/20 bg-transparent px-7 py-3.5 text-[0.95rem] font-semibold text-ink transition-all duration-200 hover:-translate-y-0.5 hover:bg-surface">
-              Ver a solução
+            <Pill href={DASHBOARD_LOGIN_URL} className="px-7 py-3.5 text-[0.95rem]">Criar meu link grátis</Pill>
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-full border border-ink/20 bg-transparent px-7 py-3.5 text-[0.95rem] font-semibold text-ink transition-all duration-200 hover:-translate-y-0.5 hover:bg-surface">
+              Falar no WhatsApp antes
             </a>
           </div>
         </Reveal>
@@ -107,19 +104,19 @@ export default function MarketingHome() {
       {/* PROBLEM */}
       <section className="bg-ink py-16 text-bg">
         <Reveal className="mx-auto max-w-5xl px-5">
-          <h2 className="text-center font-serif text-2xl md:text-3xl">Todo dia, um cliente seu desiste de esperar.</h2>
+          <h2 className="text-center font-serif text-2xl md:text-3xl">Toda hora, alguém pergunta a mesma coisa. E ninguém responde.</h2>
           <div className="mt-10 grid gap-8 sm:grid-cols-3">
             <div>
               <div className="font-mono text-4xl text-lime">22h47</div>
-              <p className="mt-2 text-sm text-bg/70">é quando chega boa parte das perguntas de preço — bem depois de qualquer um estar na loja pra responder.</p>
+              <p className="mt-2 text-sm text-bg/70">horário típico de quem pergunta preço — quando não tem ninguém pra responder.</p>
             </div>
             <div>
               <div className="font-mono text-4xl text-lime">2h</div>
-              <p className="mt-2 text-sm text-bg/70">é o tempo médio pra um lead esfriar. Quem responde em 5 minutos fecha mais — quem demora, perde pro concorrente.</p>
+              <p className="mt-2 text-sm text-bg/70">tempo médio pra um lead esfriar e ir pro concorrente.</p>
             </div>
             <div>
               <div className="font-mono text-4xl text-lime">R$ 3.500</div>
-              <p className="mt-2 text-sm text-bg/70">custa uma recepcionista por mês, com encargos — e ela não trabalha domingo às 22h.</p>
+              <p className="mt-2 text-sm text-bg/70">custa uma recepcionista por mês — e ela não trabalha domingo às 22h.</p>
             </div>
           </div>
         </Reveal>
@@ -128,28 +125,27 @@ export default function MarketingHome() {
       {/* SOLUTION IN ACTION */}
       <section id="solucao" className="bg-bg-2 py-20">
         <Reveal className="mx-auto max-w-5xl px-5 text-center">
-          <h2 className="font-serif text-3xl text-ink md:text-4xl">A Realwise resolve isso <em className="italic">na hora</em></h2>
-          <p className="mx-auto mt-3 max-w-md text-ink-soft">Enquanto você está ocupado, ela já respondeu, já agendou e já separou quem está pronto pra fechar.</p>
+          <h2 className="font-serif text-3xl text-ink md:text-4xl">Ela responde. Agenda. E só te chama quando vale a pena.</h2>
 
           <div className="mt-10 grid gap-5 md:grid-cols-2">
-            <div className="rounded-3xl bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
-              <div className="mx-auto mb-6 flex w-full max-w-[260px] flex-col gap-2 rounded-2xl border border-border bg-bg p-4">
-                <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.76rem]">Quanto custa a mensalidade?</div>
-                <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.76rem]">R$180/mês. Tem desconto no plano trimestral. Quer agendar uma aula experimental?</div>
-                <div className="ml-auto max-w-[70%] rounded-xl rounded-br-sm bg-ink px-3 py-2 text-[0.76rem] text-bg">22:47</div>
-              </div>
-              <h3 className="font-serif text-lg text-ink">Responde na hora, mesmo de madrugada</h3>
-              <p className="mt-2 text-sm text-ink-soft">Preço, horário, disponibilidade — tudo respondido no segundo, sem seu cliente esperar você acordar.</p>
-            </div>
-
             <div className="rounded-3xl bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
               <div className="mx-auto mb-6 flex w-full max-w-[260px] flex-col gap-2 rounded-2xl border border-border bg-bg p-4">
                 <div className="max-w-[80%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.76rem]">Oi! Qual horário funciona pra visita?</div>
                 <div className="ml-auto max-w-[80%] rounded-xl rounded-br-sm bg-ink px-3 py-2 text-[0.76rem] text-bg">Sábado de manhã</div>
                 <div className="max-w-[80%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.76rem]">Fechado! Te mando a confirmação.</div>
               </div>
-              <h3 className="font-serif text-lg text-ink">Agenda sozinha, sem ida e volta</h3>
-              <p className="mt-2 text-sm text-ink-soft">Cada conversa vira um lead com nota de temperatura. Você abre o painel e já sabe quem chamar primeiro.</p>
+              <h3 className="font-serif text-lg text-ink">Agenda sozinha</h3>
+              <p className="mt-2 text-sm text-ink-soft">O cliente marca o horário direto no chat, sem ida e volta.</p>
+            </div>
+
+            <div className="rounded-3xl bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+              <div className="mx-auto mb-6 flex w-full max-w-[260px] flex-col gap-2 rounded-2xl border border-border bg-bg p-4">
+                <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.76rem]">Quero fechar hoje, pode ser?</div>
+                <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.76rem]">Claro! Vou te passar direto pro WhatsApp.</div>
+                <span className="ml-auto rounded-full bg-lime px-2.5 py-1 text-[0.68rem] font-semibold text-lime-ink">🔥 Lead quente</span>
+              </div>
+              <h3 className="font-serif text-lg text-ink">Só te chama quando o lead está quente</h3>
+              <p className="mt-2 text-sm text-ink-soft">Seu WhatsApp não vira caixa de spam — só recebe quem já está pronto pra decidir.</p>
             </div>
           </div>
         </Reveal>
@@ -171,19 +167,6 @@ export default function MarketingHome() {
               <p className="mt-2 text-sm text-ink-soft">Estoque, simulação de financiamento, avaliação de troca e test-drive, direto no chat.</p>
               <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-accent">Ver página do nicho <span className="transition-transform group-hover:translate-x-1">→</span></span>
             </a>
-          </div>
-        </Reveal>
-      </section>
-
-      {/* CHANNELS */}
-      <section className="py-14">
-        <Reveal className="mx-auto max-w-5xl px-5 text-center">
-          <h2 className="font-serif text-2xl text-ink">Fale com a Realwise <em className="italic">em qualquer canal</em></h2>
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <ChannelPill label="Link na bio" icon={<span>🔗</span>} />
-            <ChannelPill label="Story do Instagram" icon={<span>📸</span>} />
-            <ChannelPill label="QR code no balcão" icon={<span>▦</span>} />
-            <ChannelPill label="Status do WhatsApp" icon={<span className="text-positive">●</span>} />
           </div>
         </Reveal>
       </section>
@@ -308,10 +291,10 @@ export default function MarketingHome() {
           <h3 className="font-serif text-xl text-ink">Pra ter isso rodando, são 4 passos</h3>
           <div className="mt-8 grid gap-4 text-left sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { t: "Você manda o que já tem", d: "Tabela de preços, foto do quadro de horários — o que estiver à mão." },
-              { t: "A IA te entrevista", d: "20 minutos de perguntas simples pra preencher o que falta." },
-              { t: "Você testa e aprova", d: "Conversa com sua própria IA antes de qualquer cliente ver." },
-              { t: "Cola o link na bio", d: "QR code, texto pronto e story prontos. Em minutos está no ar." },
+              { t: "Adicione seu site e documentos", d: "Tabela de preços, horários, políticas — o que estiver à mão." },
+              { t: "Tudo fica privado", d: "Seus documentos ficam na nossa infraestrutura, só pra você — nunca usamos pra treinar modelos de IA." },
+              { t: "A IA te faz algumas perguntas", d: "Só o que faltar depois de ler seus documentos. Rápido." },
+              { t: "Pronto — seu link pra compartilhar", d: "Cola na bio, no story ou manda direto. Em minutos está no ar." },
             ].map((step, i) => (
               <div key={step.t} className="rounded-2xl bg-surface p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
                 <div className="font-mono text-xs text-muted">Passo {i + 1}</div>
@@ -356,7 +339,12 @@ export default function MarketingHome() {
       <section className="mx-auto max-w-2xl px-5 py-20 text-center">
         <Reveal>
           <h2 className="font-serif text-3xl text-ink md:text-4xl">Seu cliente já está mandando mensagem. <em className="italic">A pergunta é quem responde.</em></h2>
-          <Pill href={WHATSAPP_URL} className="mx-auto mt-7 px-7 py-3.5">Falar no WhatsApp</Pill>
+          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Pill href={DASHBOARD_LOGIN_URL} className="px-7 py-3.5">Criar meu link grátis</Pill>
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-ink-soft hover:text-ink">
+              ou falar no WhatsApp antes
+            </a>
+          </div>
         </Reveal>
       </section>
 
