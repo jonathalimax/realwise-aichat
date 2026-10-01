@@ -1,6 +1,7 @@
-import { Body, Controller, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Post, Req, Res, UseGuards } from "@nestjs/common";
 import type { CookieOptions, Request, Response } from "express";
 import { AuthService } from "./auth.service";
+import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 
 const SESSION_COOKIE_OPTIONS: CookieOptions = {
   httpOnly: true,
@@ -28,6 +29,7 @@ export class AuthController {
     return { admin: { id: admin.id, name: admin.name, role: admin.role } };
   }
 
+  @UseGuards(RateLimitGuard)
   @Post("visitor/identify")
   async identifyVisitor(
     @Body("businessSlug") businessSlug: string,

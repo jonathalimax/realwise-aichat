@@ -1,6 +1,7 @@
 import { Body, Controller, ForbiddenException, Get, Param, Post, UseGuards } from "@nestjs/common";
 import { ChatService } from "./chat.service";
 import { VisitorSessionGuard } from "../../common/guards/visitor-session.guard";
+import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import { CurrentVisitor } from "../../common/decorators/current-business.decorator";
 import type { VisitorSessionClaims } from "@realwise/auth";
 
@@ -12,7 +13,7 @@ function assertBusinessMatch(visitor: VisitorContext, businessId: string) {
   }
 }
 
-@UseGuards(VisitorSessionGuard)
+@UseGuards(VisitorSessionGuard, RateLimitGuard)
 @Controller("chat")
 export class ChatController {
   constructor(private readonly chat: ChatService) {}
