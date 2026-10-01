@@ -30,6 +30,7 @@ export default {
         "warning-soft": light.warningSoft,
       },
       fontFamily: {
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
         serif: ["Iowan Old Style", "Palatino Linotype", "serif"],
         mono: ["ui-monospace", "SF Mono", "monospace"],
       },

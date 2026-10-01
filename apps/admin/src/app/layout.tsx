@@ -1,9 +1,12 @@
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+
+const sans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR">
-      <body className="flex min-h-dvh">
+    <html lang="pt-BR" className={sans.variable}>
+      <body className="flex min-h-dvh font-sans">
         <aside className="w-56 flex-none border-r border-border bg-bg-2 px-4 py-6">
           <div className="mb-6 px-2 font-serif text-lg font-bold text-ink">Realwise · Admin</div>
           <nav className="flex flex-col gap-1 text-sm text-ink-soft">

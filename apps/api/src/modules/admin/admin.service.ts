@@ -39,4 +39,59 @@ export class AdminService {
     ]);
     return { tenantCount, liveTenantCount, conversationCount, leadCount };
   }
+
+  async metricsTimeseries(days = 14) {
+    const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+    const [conversations, llmCalls] = await Promise.all([
+      this.prisma.client.conversation.findMany({
+        where: { startedAt: { gte: since } },
+        select: { startedAt: true },
+      }),
+      this.prisma.client.llmCallLog.findMany({
+        where: { createdAt: { gte: since } },
+        select: { createdAt: true, inputTokens: true, outputTokens: true },
+      }),
+    ]);
+
+    const buckets = new Map<string, { date: string; conversations: number; tokens: number }>();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 3600 * 1000);
+      const key = d.toISOString().slice(0, 10);
+      buckets.set(key, { date: key, conversations: 0, tokens: 0 });
+    }
+    for (const c of conversations) {
+      const key = c.startedAt.toISOString().slice(0, 10);
+      const bucket = buckets.get(key);
+      if (bucket) bucket.conversations++;
+    }
+    for (const call of llmCalls) {
+      const key = call.createdAt.toISOString().slice(0, 10);
+      const bucket = buckets.get(key);
+      if (bucket) bucket.tokens += call.inputTokens + call.outputTokens;
+    }
+    return Array.from(buckets.values());
+  }
+
+  async confidenceDistribution() {
+    const businesses = await this.prisma.client.business.findMany({
+      where: { deletedAt: null },
+      select: { confidenceScore: true },
+    });
+    const buckets = [
+      { range: "0-29", count: 0 },
+      { range: "30-49", count: 0 },
+      { range: "50-69", count: 0 },
+      { range: "70-89", count: 0 },
+      { range: "90-100", count: 0 },
+    ];
+    for (const b of businesses) {
+      const s = b.confidenceScore;
+      if (s < 30) buckets[0].count++;
+      else if (s < 50) buckets[1].count++;
+      else if (s < 70) buckets[2].count++;
+      else if (s < 90) buckets[3].count++;
+      else buckets[4].count++;
+    }
+    return buckets;
+  }
 }

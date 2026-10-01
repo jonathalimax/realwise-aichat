@@ -31,4 +31,14 @@ export class AdminController {
   metrics() {
     return this.admin.globalMetrics();
   }
+
+  @Get("metrics/timeseries")
+  metricsTimeseries() {
+    return this.admin.metricsTimeseries();
+  }
+
+  @Get("metrics/confidence-distribution")
+  confidenceDistribution() {
+    return this.admin.confidenceDistribution();
+  }
 }

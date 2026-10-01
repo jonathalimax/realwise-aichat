@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { getTenantDetail, suspendTenant } from "../../../lib/api";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../../components/ui/card";
+import { Badge, statusToBadgeVariant } from "../../../components/ui/badge";
+import { Button } from "../../../components/ui/button";
+import { ConfidenceBreakdownChart } from "../../../components/charts/ConfidenceBreakdownChart";
 
 export default function TenantDetailPage() {
   const params = useParams<{ id: string }>();
@@ -12,37 +16,64 @@ export default function TenantDetailPage() {
     getTenantDetail(params.id).then(setTenant).catch(() => {});
   }, [params.id]);
 
-  if (!tenant) return <p className="text-muted">Carregando…</p>;
+  if (!tenant) return <p className="text-ink-soft">Carregando…</p>;
+
+  const breakdown = tenant.confidenceBreakdown ?? {};
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-serif text-2xl text-ink">{tenant.name || tenant.slug}</h1>
-        <button
+        <div className="flex items-center gap-3">
+          <h1 className="font-serif text-2xl text-ink">{tenant.name || tenant.slug}</h1>
+          <Badge variant={statusToBadgeVariant(tenant.status)}>{tenant.status}</Badge>
+        </div>
+        <Button
+          variant="destructive"
+          size="sm"
           onClick={() => suspendTenant(tenant.id).then(() => location.reload())}
-          className="rounded-lg border border-negative px-3 py-1.5 text-xs font-semibold text-negative"
         >
           Suspender
-        </button>
+        </Button>
       </div>
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        <div className="rounded-card border border-border bg-surface p-4">
-          <div className="text-xs uppercase text-muted">Nicho</div>
-          <div>{tenant.niche}</div>
-        </div>
-        <div className="rounded-card border border-border bg-surface p-4">
-          <div className="text-xs uppercase text-muted">Status</div>
-          <div>{tenant.status}</div>
-        </div>
-        <div className="rounded-card border border-border bg-surface p-4">
-          <div className="text-xs uppercase text-muted">Confiança</div>
-          <div className="font-mono">{tenant.confidenceScore}%</div>
-        </div>
-        <div className="rounded-card border border-border bg-surface p-4">
-          <div className="text-xs uppercase text-muted">Plano</div>
-          <div>{tenant.subscription?.plan?.name ?? "Sem assinatura"}</div>
-        </div>
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs uppercase tracking-wide text-ink-soft">Nicho</div>
+            <div className="mt-1 text-ink">{tenant.niche}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs uppercase tracking-wide text-ink-soft">Confiança</div>
+            <div className="mt-1 font-mono text-ink">{tenant.confidenceScore}%</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs uppercase tracking-wide text-ink-soft">Plano</div>
+            <div className="mt-1 text-ink">{tenant.subscription?.plan?.name ?? "Sem assinatura"}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs uppercase tracking-wide text-ink-soft">Site sincronizado</div>
+            <div className="mt-1 text-ink">{tenant.websiteSyncedAt ? new Date(tenant.websiteSyncedAt).toLocaleDateString("pt-BR") : "—"}</div>
+          </CardContent>
+        </Card>
       </div>
+
+      {Object.keys(breakdown).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Composição da confiança</CardTitle>
+            <CardDescription>Como cada componente contribui para o score de prontidão.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ConfidenceBreakdownChart breakdown={breakdown} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -25,6 +25,7 @@ export default {
         negative: light.negative,
       },
       fontFamily: {
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
         serif: ["Iowan Old Style", "Palatino Linotype", "serif"],
       },
       borderRadius: {
