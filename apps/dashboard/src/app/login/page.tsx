@@ -46,17 +46,17 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-dvh bg-bg text-ink">
+    <div className="flex min-h-dvh flex-col bg-bg text-ink md:flex-row">
       {/* VISUAL PANEL */}
-      <div className="relative hidden w-[46%] flex-col justify-between overflow-hidden bg-ink px-12 py-10 text-bg md:flex">
+      <div className="relative flex w-full flex-col justify-between overflow-hidden bg-ink px-6 py-8 text-bg sm:px-12 sm:py-10 md:w-[46%]">
         <div
           className="pointer-events-none absolute inset-0 opacity-20"
           style={{ backgroundImage: "radial-gradient(circle at 20% 20%, #D7F26B 0, transparent 45%), radial-gradient(circle at 80% 70%, #5FBE94 0, transparent 40%)" }}
         />
         <a href="/" className="relative font-serif text-xl font-bold text-bg">Realwise</a>
 
-        <div className="relative max-w-sm">
-          <h1 className="font-serif text-4xl leading-[1.15] text-bg">
+        <div className="relative max-w-sm py-8 md:py-0">
+          <h1 className="font-serif text-3xl leading-[1.15] text-bg sm:text-4xl">
             Enquanto você dorme, <em className="italic text-lime">a Clara</em> responde.
           </h1>
           <p className="mt-4 text-sm text-bg/70">
@@ -78,14 +78,13 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="relative text-xs text-bg/50">Sem WhatsApp Business API. Sem fila de aprovação. Sem taxa por conversa.</p>
+        <p className="relative hidden text-xs text-bg/50 sm:block">Sem WhatsApp Business API. Sem fila de aprovação. Sem taxa por conversa.</p>
       </div>
 
       {/* FORM PANEL */}
-      <div className="flex w-full flex-1 flex-col justify-center px-6 py-16 sm:px-12 md:w-[54%] md:px-16">
+      <div className="flex w-full flex-1 flex-col justify-center px-6 py-10 sm:px-12 md:w-[54%] md:px-16 md:py-16">
         <div className="mx-auto w-full max-w-sm">
-          <a href="/" className="font-serif text-xl font-bold text-ink md:hidden">Realwise</a>
-          <h2 className="mt-6 font-serif text-3xl text-ink md:mt-0">Entrar na sua conta</h2>
+          <h2 className="font-serif text-3xl text-ink">Entrar na sua conta</h2>
           <p className="mt-2 text-sm text-ink-soft">Use o telefone cadastrado do seu negócio.</p>
 
           <div className="mt-8 flex flex-col gap-4">
