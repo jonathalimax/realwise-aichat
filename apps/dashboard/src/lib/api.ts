@@ -37,6 +37,9 @@ export const setBusinessSlug = (slug: string) => request("/businesses/me/slug", 
 export const publishBusiness = () => request("/businesses/me/publish", { method: "POST" });
 export const confirmLinkPlaced = () => request("/businesses/me/link-placed", { method: "POST" });
 
+export const updateBranding = (logoUrl: string, brandColor: string) =>
+  request("/businesses/me/branding", { method: "PATCH", body: JSON.stringify({ logoUrl, brandColor }) });
+
 export const getWhatsappNumbers = () => request("/businesses/me/whatsapp-numbers");
 export const addWhatsappNumber = (label: string, phone: string) =>
   request("/businesses/me/whatsapp-numbers", { method: "POST", body: JSON.stringify({ label, phone }) });

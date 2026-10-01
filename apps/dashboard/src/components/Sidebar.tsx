@@ -8,6 +8,7 @@ const ITEMS = [
   { href: "/knowledge", label: "Base de conhecimento" },
   { href: "/analytics", label: "Análises" },
   { href: "/billing", label: "Plano e cobrança" },
+  { href: "/settings", label: "Personalização" },
 ];
 
 export function Sidebar() {
