@@ -24,12 +24,12 @@ export class OnboardingService {
 
     return this.prisma.client.businessProfile.upsert({
       where: { businessId },
-      update: { data, fieldStatus },
+      update: { data: data as any, fieldStatus: fieldStatus as any },
       create: {
         businessId,
         templateVersion: "0.1.0",
-        data,
-        fieldStatus,
+        data: data as any,
+        fieldStatus: fieldStatus as any,
       },
     });
   }
