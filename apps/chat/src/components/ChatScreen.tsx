@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { maskBrPhone } from "@realwise/shared";
 import { getBusiness, getChips, startConversation, sendMessage, bookAppointment, identifyVisitor } from "../lib/api";
 
 interface Message {
@@ -140,8 +141,10 @@ export function ChatScreen({ slug }: { slug: string }) {
             />
             <input
               value={bookingPhone}
-              onChange={(e) => setBookingPhone(e.target.value)}
-              placeholder="Seu telefone (WhatsApp)"
+              onChange={(e) => setBookingPhone(maskBrPhone(e.target.value))}
+              placeholder="(11) 99999-9999"
+              type="tel"
+              inputMode="numeric"
               className="mt-2 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm"
             />
             <p className="mt-2 text-[0.7rem] text-ink-soft">

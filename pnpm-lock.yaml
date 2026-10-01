@@ -14,6 +14,9 @@ importers:
 
   apps/admin:
     dependencies:
+      '@realwise/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       firebase:
         specifier: ^11.0.0
         version: 11.10.0
@@ -124,6 +127,9 @@ importers:
 
   apps/chat:
     dependencies:
+      '@realwise/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       next:
         specifier: ^15.0.0
         version: 15.5.27(@opentelemetry/api@1.9.1)(@types/node@22.20.4)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -155,6 +161,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@realwise/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       firebase:
         specifier: ^11.0.0
         version: 11.10.0
