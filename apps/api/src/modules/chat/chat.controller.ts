@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Res, UseGuards } from "@nestjs/common";
+import type { Response } from "express";
 import { ChatService } from "./chat.service";
 import { VisitorSessionGuard } from "../../common/guards/visitor-session.guard";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
@@ -32,6 +33,47 @@ export class ChatController {
   ) {
     const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
     return this.chat.sendMessage(businessId, conversationId, text, token, visitor.leadId);
+  }
+
+  @Post(":businessId/conversations/:conversationId/messages/stream")
+  async streamMessage(
+    @Param("businessId") businessId: string,
+    @Param("conversationId") conversationId: string,
+    @Body("text") text: string,
+    @CurrentVisitor() visitor: VisitorContext,
+    @Res() res: Response,
+  ) {
+    const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
+
+    res.writeHead(200, {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache",
+      connection: "keep-alive",
+    });
+    const send = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const controller = new AbortController();
+    res.on("close", () => {
+      if (!res.writableEnded) controller.abort();
+    });
+
+    try {
+      const result = await this.chat.streamMessage(
+        businessId,
+        conversationId,
+        text,
+        token,
+        (delta) => send("delta", { text: delta }),
+        visitor.leadId,
+        controller.signal,
+      );
+      send("done", result);
+    } catch (error) {
+      send("error", { message: error instanceof Error ? error.message : "stream_failed" });
+    }
+    res.end();
   }
 
   @Post(":businessId/conversations/:conversationId/book")

@@ -1,7 +1,12 @@
 import Fastify from "fastify";
 import { timingSafeEqual } from "crypto";
-import { routeGenerate } from "./router";
+import { routeGenerate, logCall } from "./router";
+import { OllamaProvider } from "./providers/ollama";
+import { ManagedProvider } from "./providers/managed";
 import type { GenerateRequest } from "./types";
+
+const selfHosted = new OllamaProvider();
+const managed = new ManagedProvider();
 
 const INTERNAL_TOKEN = process.env.INFERENCE_GATEWAY_TOKEN;
 if (!INTERNAL_TOKEN || INTERNAL_TOKEN.length < 16) {
@@ -30,6 +35,45 @@ app.post<{ Body: GenerateRequest }>("/generate", async (request, reply) => {
     reply.code(502);
     return { error: error instanceof Error ? error.message : "inference_failed" };
   }
+});
+
+app.post<{ Body: GenerateRequest }>("/generate/stream", async (request, reply) => {
+  reply.raw.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+  });
+
+  const send = (event: string, data: unknown) => {
+    reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const controller = new AbortController();
+  reply.raw.on("close", () => {
+    if (!reply.raw.writableEnded) controller.abort();
+  });
+
+  try {
+    if (await selfHosted.isHealthy()) {
+      const gen = selfHosted.generateStream(request.body, controller.signal);
+      let next = await gen.next();
+      while (!next.done) {
+        send("delta", { text: next.value });
+        next = await gen.next();
+      }
+      const result = next.value;
+      await logCall(request.body, result);
+      send("done", result);
+    } else {
+      const result = await managed.generate(request.body);
+      send("delta", { text: result.text });
+      await logCall(request.body, result);
+      send("done", result);
+    }
+  } catch (error) {
+    send("error", { message: error instanceof Error ? error.message : "inference_failed" });
+  }
+  reply.raw.end();
 });
 
 app.get("/health", async () => ({ ok: true }));

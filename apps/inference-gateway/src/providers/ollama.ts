@@ -42,4 +42,53 @@ export class OllamaProvider implements InferenceProvider {
       latencyMs: Date.now() - start,
     };
   }
+
+  async *generateStream(req: GenerateRequest, signal: AbortSignal): AsyncGenerator<string, GenerateResult, void> {
+    const start = Date.now();
+    const prompt = `${req.systemPrompt}\n\n${req.prompt}`;
+
+    const res = await fetch(`${OLLAMA_URL}/api/generate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: true }),
+      signal,
+    });
+    if (!res.ok || !res.body) throw new Error(`Ollama request failed: ${res.status}`);
+
+    let fullText = "";
+    let promptEvalCount = 0;
+    let evalCount = 0;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const chunk = JSON.parse(line) as { response?: string; done?: boolean; prompt_eval_count?: number; eval_count?: number };
+        if (chunk.response) {
+          fullText += chunk.response;
+          yield chunk.response;
+        }
+        if (chunk.done) {
+          promptEvalCount = chunk.prompt_eval_count ?? 0;
+          evalCount = chunk.eval_count ?? 0;
+        }
+      }
+    }
+
+    return {
+      text: fullText,
+      provider: "self_hosted",
+      model: OLLAMA_MODEL,
+      inputTokens: promptEvalCount,
+      outputTokens: evalCount,
+      latencyMs: Date.now() - start,
+    };
+  }
 }

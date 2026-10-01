@@ -2,7 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/commo
 import { nicheTemplates } from "@realwise/profile-schema";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
 import { PrismaService } from "../../prisma/prisma.service";
-import { generateFromGateway } from "../../inference/gateway-client";
+import { generateFromGateway, generateFromGatewayStream } from "../../inference/gateway-client";
 import { BookingsService } from "../bookings/bookings.service";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
@@ -209,7 +209,7 @@ export class ChatService {
     return fallback;
   }
 
-  private async generateAnswer(businessId: string, conversationId: string, visitorText: string) {
+  private async buildChatPrompt(businessId: string, conversationId: string, visitorText: string) {
     const [business, profile, recentMessages] = await Promise.all([
       this.prisma.client.business.findUnique({ where: { id: businessId } }),
       this.prisma.client.businessProfile.findUnique({ where: { businessId } }),
@@ -235,7 +235,11 @@ export class ChatService {
     ].join("\n");
 
     const prompt = `${history}\nCliente: ${visitorText}`;
+    return { business, systemPrompt, prompt };
+  }
 
+  private async generateAnswer(businessId: string, conversationId: string, visitorText: string) {
+    const { systemPrompt, prompt } = await this.buildChatPrompt(businessId, conversationId, visitorText);
     try {
       const result = await generateFromGateway({
         purpose: "chat",
@@ -254,6 +258,88 @@ export class ChatService {
     } catch {
       return { text: ABSTENTION_FALLBACK, abstained: true, model: undefined, inputTokens: 0, outputTokens: 0, latencyMs: 0 };
     }
+  }
+
+  // Streaming counterpart of sendMessage — same escalation/abstention/chip logic, but the
+  // model's answer is emitted token-by-token via onDelta so the caller can render it as it
+  // arrives instead of waiting for the full response.
+  async streamMessage(
+    businessId: string,
+    conversationId: string,
+    visitorText: string,
+    visitorToken: string,
+    onDelta: (text: string) => void,
+    leadId?: string,
+    signal?: AbortSignal,
+  ) {
+    const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
+    if (!conversation) throw new NotFoundException("Conversation not found");
+
+    const belongsToCaller =
+      conversation.visitorToken === visitorToken || (leadId && conversation.leadId === leadId);
+    if (!belongsToCaller) {
+      throw new ForbiddenException("Conversation does not belong to this visitor");
+    }
+
+    const lastAssistantMessage = await this.prisma.client.message.findFirst({
+      where: { conversationId, role: "assistant" },
+      orderBy: { createdAt: "desc" },
+    });
+    const offeredHandoff = lastAssistantMessage?.answerSource === "abstained";
+
+    await this.prisma.client.message.create({
+      data: { conversationId, businessId, role: "visitor", content: visitorText },
+    });
+
+    if (this.detectsEscalation(visitorText) || (offeredHandoff && this.confirmsEscalation(visitorText))) {
+      const result = await this.escalate(businessId, conversationId, visitorText);
+      onDelta(result.message.content);
+      return result;
+    }
+
+    const { systemPrompt, prompt } = await this.buildChatPrompt(businessId, conversationId, visitorText);
+
+    let fullText = "";
+    let gatewayResult;
+    try {
+      gatewayResult = await generateFromGatewayStream(
+        { purpose: "chat", businessId, systemPrompt, prompt },
+        (delta) => {
+          fullText += delta;
+          onDelta(delta);
+        },
+        signal,
+      );
+    } catch {
+      fullText = ABSTENTION_FALLBACK;
+      onDelta(ABSTENTION_FALLBACK);
+      gatewayResult = { text: ABSTENTION_FALLBACK, provider: "self_hosted" as const, model: "unknown", inputTokens: 0, outputTokens: 0, latencyMs: 0 };
+    }
+
+    const abstained = looksLikeAbstention(fullText);
+    const assistantMessage = await this.prisma.client.message.create({
+      data: {
+        conversationId,
+        businessId,
+        role: "assistant",
+        content: fullText,
+        answerSource: abstained ? "abstained" : "rag",
+        modelUsed: gatewayResult.model,
+        inputTokens: gatewayResult.inputTokens,
+        outputTokens: gatewayResult.outputTokens,
+        latencyMs: gatewayResult.latencyMs,
+      },
+    });
+
+    await this.prisma.client.conversation.update({
+      where: { id: conversationId },
+      data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
+    });
+
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    const chips = await this.followUpChips(businessId, business?.niche ?? "imobiliaria", visitorText, fullText);
+
+    return { message: assistantMessage, escalated: false, chips };
   }
 
   private readonly ALLOWED_SERVICES = new Set(["Visita ao imóvel", "Test-drive"]);

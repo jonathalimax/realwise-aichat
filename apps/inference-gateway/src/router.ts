@@ -30,7 +30,7 @@ export async function routeGenerate(req: GenerateRequest): Promise<GenerateResul
   return result;
 }
 
-async function logCall(req: GenerateRequest, result: GenerateResult | null, error?: string) {
+export async function logCall(req: GenerateRequest, result: GenerateResult | null, error?: string) {
   await prisma.llmCallLog.create({
     data: {
       businessId: req.businessId,

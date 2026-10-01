@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { maskBrPhone } from "@realwise/shared";
-import { getBusiness, getChips, startConversation, sendMessage, bookAppointment, identifyVisitor } from "../lib/api";
+import { getBusiness, getChips, startConversation, streamMessage, bookAppointment, identifyVisitor } from "../lib/api";
 
 interface Message {
   role: "visitor" | "assistant";
@@ -56,13 +56,26 @@ export function ChatScreen({ slug }: { slug: string }) {
     setSending(true);
     setMessages((prev) => [...prev, { role: "visitor", content: text }]);
     setInput("");
+
+    let assistantIndex = -1;
     try {
       const convId = await ensureConversation();
-      const result = await sendMessage(business.id, convId, text);
-      setMessages((prev) => [...prev, { role: "assistant", content: result.message.content }]);
-      if (result.escalated && result.whatsappUrl) {
+      const result = await streamMessage(business.id, convId, text, (delta) => {
+        setSending(false);
+        setMessages((prev) => {
+          const next = [...prev];
+          if (assistantIndex === -1) {
+            assistantIndex = next.length;
+            next.push({ role: "assistant", content: delta });
+          } else {
+            next[assistantIndex] = { role: "assistant", content: next[assistantIndex].content + delta };
+          }
+          return next;
+        });
+      });
+      if (result?.escalated && result?.whatsappUrl) {
         window.open(result.whatsappUrl, "_blank");
-      } else if (result.chips?.length) {
+      } else if (result?.chips?.length) {
         setChips(result.chips);
       }
     } catch {
