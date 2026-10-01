@@ -55,3 +55,7 @@ export const uploadDocumentFile = async (file: File) => {
 };
 export const uploadDocumentText = (filename: string, content: string) =>
   request("/knowledge/documents/text", { method: "POST", body: JSON.stringify({ filename, content }) });
+
+export const getAppointments = () => request("/bookings/appointments");
+export const updateAppointmentStatus = (id: string, status: string) =>
+  request(`/bookings/appointments/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });

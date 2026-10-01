@@ -4,6 +4,7 @@ const ITEMS = [
   { href: "/", label: "Início" },
   { href: "/onboarding", label: "Onboarding" },
   { href: "/leads", label: "Leads" },
+  { href: "/agenda", label: "Agenda" },
   { href: "/knowledge", label: "Base de conhecimento" },
   { href: "/analytics", label: "Análises" },
   { href: "/billing", label: "Plano e cobrança" },
