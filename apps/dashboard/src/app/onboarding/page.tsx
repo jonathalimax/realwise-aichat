@@ -86,6 +86,7 @@ export default function OnboardingPage() {
 
   async function handleRecompute() {
     setConfidence(await recomputeConfidence());
+    setBusiness(await getMe());
   }
 
   async function handleAddWhatsapp() {
@@ -111,9 +112,13 @@ export default function OnboardingPage() {
     <div className="mx-auto max-w-2xl">
       <div className="mb-6 flex gap-2">
         {STEPS.map((label, i) => (
-          <div key={label} className={`flex-1 border-t-2 pt-2 text-xs ${i === step ? "border-accent text-accent-ink font-semibold" : "border-border text-muted"}`}>
+          <button
+            key={label}
+            onClick={() => setStep(i)}
+            className={`flex-1 border-t-2 pt-2 text-left text-xs transition-colors hover:text-ink ${i === step ? "border-accent text-accent-ink font-semibold" : "border-border text-muted"}`}
+          >
             {label}
-          </div>
+          </button>
         ))}
       </div>
 
@@ -184,9 +189,14 @@ export default function OnboardingPage() {
               </div>
             ))}
           </div>
-          <button onClick={() => setStep(2)} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
-            Continuar
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setStep(0)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink-soft">
+              Voltar
+            </button>
+            <button onClick={() => setStep(2)} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
+              Continuar
+            </button>
+          </div>
         </div>
       )}
 
@@ -203,9 +213,14 @@ export default function OnboardingPage() {
               />
             </div>
           ))}
-          <button onClick={() => setStep(3)} className="mt-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
-            Continuar
-          </button>
+          <div className="mt-2 flex gap-2">
+            <button onClick={() => setStep(1)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink-soft">
+              Voltar
+            </button>
+            <button onClick={() => setStep(3)} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
+              Continuar
+            </button>
+          </div>
         </div>
       )}
 
@@ -226,9 +241,14 @@ export default function OnboardingPage() {
               </button>
             </div>
           ))}
-          <button onClick={() => { handleRecompute(); setStep(4); }} className="mt-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
-            Continuar
-          </button>
+          <div className="mt-2 flex gap-2">
+            <button onClick={() => setStep(2)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink-soft">
+              Voltar
+            </button>
+            <button onClick={() => { handleRecompute(); setStep(4); }} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
+              Continuar
+            </button>
+          </div>
         </div>
       )}
 
@@ -244,9 +264,14 @@ export default function OnboardingPage() {
           {whatsappNumbers.map((n) => (
             <div key={n.id} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm">{n.label}: {n.phone}</div>
           ))}
-          <button onClick={() => setStep(5)} className="mt-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
-            Continuar
-          </button>
+          <div className="mt-2 flex gap-2">
+            <button onClick={() => setStep(3)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink-soft">
+              Voltar
+            </button>
+            <button onClick={() => setStep(5)} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
+              Continuar
+            </button>
+          </div>
         </div>
       )}
 
@@ -259,7 +284,12 @@ export default function OnboardingPage() {
               {business.confidenceScore >= 70 ? "Pronto para publicar" : "Preencha os campos obrigatórios para chegar a 70%"}
             </div>
           </div>
-          <button onClick={handleRecompute} className="self-start rounded-lg border border-border px-3 py-2 text-xs">Recalcular</button>
+          <div className="flex gap-2">
+            <button onClick={() => setStep(4)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink-soft">
+              Voltar
+            </button>
+            <button onClick={handleRecompute} className="rounded-lg border border-border px-3 py-2 text-xs">Recalcular</button>
+          </div>
 
           {business.status !== "live" ? (
             <button

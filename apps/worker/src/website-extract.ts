@@ -5,6 +5,11 @@ import { Agent } from "undici";
 import { assertPublicHttpUrl, isBlockedIp } from "./url-safety";
 
 const MAX_REDIRECTS = 5;
+const MAX_PAGES = 40;
+const MAX_DEPTH = 2;
+const MAX_PAGE_CHARS = 20000;
+const CRAWL_DELAY_MS = 250;
+const SKIP_EXTENSIONS = /\.(pdf|jpe?g|png|gif|svg|webp|zip|rar|mp4|mp3|avi|mov|docx?|xlsx?|css|js|ico|woff2?|ttf)$/i;
 
 // Validates the resolved address at the moment the socket actually connects, closing the
 // TOCTOU window a separate pre-fetch dns.lookup() would leave open to DNS rebinding.
@@ -44,25 +49,83 @@ async function safeFetch(rawUrl: string, redirectsLeft = MAX_REDIRECTS): Promise
   return res;
 }
 
-export async function fetchWebsiteText(rawUrl: string): Promise<{ markdown: string; contentHash: string }> {
-  const res = await safeFetch(rawUrl);
-  if (!res.ok) throw new Error(`Website fetch failed: ${res.status}`);
-  const html = await res.text();
-
+function extractPage(html: string, pageUrl: string): { title: string; text: string; links: string[] } {
   const $ = cheerio.load(html);
-  $("script, style, nav, footer, noscript, svg").remove();
+  const base = new URL(pageUrl);
 
+  const links: string[] = [];
+  $("a[href]").each((_, el) => {
+    const href = $(el).attr("href");
+    if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:") || href.startsWith("javascript:")) return;
+    try {
+      const resolved = new URL(href, base);
+      resolved.hash = "";
+      if (resolved.hostname === base.hostname && !SKIP_EXTENSIONS.test(resolved.pathname)) {
+        links.push(resolved.toString());
+      }
+    } catch {
+      // ignore malformed hrefs
+    }
+  });
+
+  $("script, style, nav, footer, noscript, svg").remove();
   const title = $("title").first().text().trim();
-  const bodyText = $("body")
+  const text = $("body")
     .text()
     .replace(/[ \t]+/g, " ")
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
-    .join("\n");
+    // Joined as separate paragraphs (not single-newline lines) so chunkMarkdown's blank-line
+    // paragraph splitter can actually break this up — a page with no blank lines otherwise
+    // becomes one unsplit chunk that can exceed the embedding model's context window.
+    .join("\n\n")
+    .slice(0, MAX_PAGE_CHARS);
 
-  const markdown = title ? `# ${title}\n\n${bodyText}` : bodyText;
+  return { title, text, links: [...new Set(links)] };
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function fetchWebsiteText(seedUrl: string): Promise<{ markdown: string; contentHash: string; pagesVisited: number }> {
+  const visited = new Set<string>();
+  const queue: { url: string; depth: number }[] = [{ url: seedUrl, depth: 0 }];
+  const sections: string[] = [];
+
+  while (queue.length > 0 && visited.size < MAX_PAGES) {
+    const { url, depth } = queue.shift()!;
+    if (visited.has(url)) continue;
+    visited.add(url);
+
+    let res: Response;
+    try {
+      res = await safeFetch(url);
+    } catch {
+      continue; // skip pages that fail SSRF checks or network errors, don't abort the whole crawl
+    }
+    if (!res.ok || !(res.headers.get("content-type") ?? "").includes("html")) continue;
+
+    const html = await res.text();
+    const { title, text, links } = extractPage(html, url);
+    if (text) {
+      sections.push(`## ${title || url}\n\n${text}\n\nFonte: ${url}`);
+    }
+
+    if (depth < MAX_DEPTH) {
+      for (const link of links) {
+        if (!visited.has(link) && queue.length + visited.size < MAX_PAGES) {
+          queue.push({ url: link, depth: depth + 1 });
+        }
+      }
+    }
+
+    if (queue.length > 0) await sleep(CRAWL_DELAY_MS);
+  }
+
+  const markdown = sections.join("\n\n---\n\n");
   const contentHash = createHash("sha256").update(markdown).digest("hex");
 
-  return { markdown, contentHash };
+  return { markdown, contentHash, pagesVisited: visited.size };
 }

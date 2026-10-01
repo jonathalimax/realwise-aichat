@@ -159,12 +159,12 @@ export function ChatScreen({ slug }: { slug: string }) {
       </main>
 
       {chips.length > 0 && !showBooking && (
-        <div className="flex gap-2 overflow-x-auto px-4 pb-2">
+        <div className="flex flex-wrap gap-2 px-4 pb-2">
           {chips.map((chip) => (
             <button
               key={chip}
               onClick={() => handleSend(chip)}
-              className="whitespace-nowrap rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-ink-soft"
+              className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-ink-soft"
             >
               {chip}
             </button>

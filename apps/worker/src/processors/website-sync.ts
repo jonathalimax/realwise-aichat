@@ -16,7 +16,8 @@ export async function processWebsiteSync(job: Job<WebsiteSyncJobData>) {
   const business = await prisma.business.findUnique({ where: { id: businessId } });
   if (!business || !business.websiteUrl) return;
 
-  const { markdown, contentHash } = await fetchWebsiteText(business.websiteUrl);
+  const { markdown, contentHash, pagesVisited } = await fetchWebsiteText(business.websiteUrl);
+  console.log(`website-sync ${businessId}: crawled ${pagesVisited} page(s)`);
 
   if (contentHash === business.websiteContentHash) {
     await prisma.business.update({ where: { id: businessId }, data: { websiteSyncedAt: new Date() } });
