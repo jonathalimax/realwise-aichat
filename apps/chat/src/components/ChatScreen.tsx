@@ -34,7 +34,7 @@ export function ChatScreen({ slug }: { slug: string }) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, showBooking]);
+  }, [messages, showBooking, sending]);
 
   async function ensureConversation() {
     if (conversationId || !business) return conversationId;
@@ -123,6 +123,14 @@ export function ChatScreen({ slug }: { slug: string }) {
             {m.content}
           </div>
         ))}
+
+        {sending && (
+          <div className="flex max-w-[85%] items-center gap-1 rounded-2xl rounded-bl-sm bg-surface px-4 py-3">
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.3s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.15s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft" />
+          </div>
+        )}
 
         {showBooking && (
           <div className="max-w-[90%] rounded-2xl border border-border bg-surface p-4 text-sm">

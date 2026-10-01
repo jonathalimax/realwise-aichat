@@ -49,9 +49,10 @@ export class ChatService {
     }
 
     const systemPrompt = [
-      `Você gera sugestões de pergunta (chips) para o chat da ${business.name}.`,
-      "Gere exatamente 4 perguntas curtas (no máximo 6 palavras cada) que um cliente real faria.",
-      "Baseie-se SOMENTE no conteúdo abaixo — use itens, preços ou serviços reais mencionados quando possível, nunca invente.",
+      `Você gera sugestões de pergunta (chips) para o início do chat da ${business.name}, antes do cliente ter dito qualquer coisa.`,
+      "Gere exatamente 4 perguntas curtas (no máximo 6 palavras cada), amplas e válidas para o negócio como um todo — NUNCA sobre um item/imóvel/veículo específico pelo nome, já que o cliente ainda não sabe quais itens existem.",
+      "Pense em dúvidas transversais que qualquer cliente teria logo de cara: quantidade/catálogo disponível, documentos ou requisitos, política geral (pets, fiador, financiamento), como agendar, horário de atendimento, formas de pagamento.",
+      "Baseie-se SOMENTE no conteúdo abaixo para saber quais dessas dúvidas fazem sentido para este negócio — nunca invente informação, mas não cite nomes próprios de imóveis, veículos ou produtos individuais.",
       "Responda apenas com um array JSON de strings, sem nenhum texto adicional.",
       `Informações do negócio: ${profileSummary}`,
       `Conteúdo da base de conhecimento: ${chunkText}`,
