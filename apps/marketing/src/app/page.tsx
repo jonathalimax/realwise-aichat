@@ -155,8 +155,28 @@ export default function MarketingHome() {
         </Reveal>
       </section>
 
+      {/* NICHE PICKER */}
+      <section id="nichos" className="py-20">
+        <Reveal className="mx-auto max-w-5xl px-5 text-center">
+          <h2 className="font-serif text-3xl text-ink md:text-4xl">Feito pro seu <em className="italic">tipo de negócio</em></h2>
+          <p className="mx-auto mt-3 max-w-md text-ink-soft">A entrevista, os exemplos e as respostas mudam de acordo com o seu nicho.</p>
+          <div className="mt-10 grid gap-5 sm:grid-cols-2">
+            <a href="/imobiliarias" className="group rounded-3xl border border-border bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+              <h3 className="font-serif text-xl text-ink">Imobiliárias</h3>
+              <p className="mt-2 text-sm text-ink-soft">Documentos, fiador, seguro fiança e agendamento de visita — explicado antes do cliente ligar.</p>
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-accent">Ver página do nicho <span className="transition-transform group-hover:translate-x-1">→</span></span>
+            </a>
+            <a href="/concessionarias" className="group rounded-3xl border border-border bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+              <h3 className="font-serif text-xl text-ink">Concessionárias</h3>
+              <p className="mt-2 text-sm text-ink-soft">Estoque, simulação de financiamento, avaliação de troca e test-drive, direto no chat.</p>
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-accent">Ver página do nicho <span className="transition-transform group-hover:translate-x-1">→</span></span>
+            </a>
+          </div>
+        </Reveal>
+      </section>
+
       {/* CHANNELS */}
-      <section id="nichos" className="py-14">
+      <section className="py-14">
         <Reveal className="mx-auto max-w-5xl px-5 text-center">
           <h2 className="font-serif text-2xl text-ink">Fale com a Realwise <em className="italic">em qualquer canal</em></h2>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
