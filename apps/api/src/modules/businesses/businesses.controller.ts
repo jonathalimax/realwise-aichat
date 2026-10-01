@@ -61,6 +61,12 @@ export class BusinessesController {
   }
 
   @UseGuards(BusinessSessionGuard)
+  @Patch("me/slug")
+  setSlug(@CurrentBusiness() session: BusinessSessionClaims, @Body("slug") slug: string) {
+    return this.businesses.setSlug(session.businessId, slug);
+  }
+
+  @UseGuards(BusinessSessionGuard)
   @Patch("me/branding")
   updateBranding(@CurrentBusiness() session: BusinessSessionClaims, @Body() body: { logoUrl?: string; brandColor?: string }) {
     return this.businesses.updateBranding(session.businessId, body);

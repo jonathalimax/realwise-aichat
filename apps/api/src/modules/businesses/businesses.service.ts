@@ -38,6 +38,14 @@ export class BusinessesService {
     return !existing;
   }
 
+  async setSlug(businessId: string, slug: string) {
+    const existing = await this.prisma.client.business.findUnique({ where: { slug } });
+    if (existing && existing.id !== businessId) {
+      throw new Error("Slug already taken");
+    }
+    return this.prisma.client.business.update({ where: { id: businessId }, data: { slug } });
+  }
+
   async publish(businessId: string) {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException("Business not found");
