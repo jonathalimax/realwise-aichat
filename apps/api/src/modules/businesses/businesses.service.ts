@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { assertPublicHttpUrl } from "../../common/url-safety";
 
 @Injectable()
 export class BusinessesService {
@@ -36,6 +37,20 @@ export class BusinessesService {
     businessId: string,
     data: { name?: string; ownerName?: string; niche?: "imobiliaria" | "concessionaria"; timezone?: string; address?: string; websiteUrl?: string },
   ) {
+    if (data.websiteUrl !== undefined && data.websiteUrl !== "") {
+      const business = await this.prisma.client.business.findUnique({
+        where: { id: businessId },
+        include: { subscription: { include: { plan: true } } },
+      });
+      if (business?.subscription?.plan.code !== "studio") {
+        throw new ForbiddenException("Sincronização de site disponível apenas no plano Studio");
+      }
+      try {
+        await assertPublicHttpUrl(data.websiteUrl);
+      } catch (error) {
+        throw new BadRequestException(error instanceof Error ? error.message : "URL do site inválida");
+      }
+    }
     return this.prisma.client.business.update({ where: { id: businessId }, data });
   }
 
