@@ -71,6 +71,13 @@ services:
       - "3004:3004"
     depends_on: [api]
 
+  marketing:
+    build:
+      context: ../..
+      dockerfile: apps/marketing/Dockerfile
+    ports:
+      - "3007:3007"
+
 volumes:
   realwise_pg_data:
   realwise_storage:
