@@ -7,7 +7,7 @@ import { Sheet, SheetTrigger, SheetContent } from "./ui/sheet";
 
 const ITEMS = [
   { href: "/", label: "Início" },
-  { href: "/onboarding", label: "Onboarding" },
+  { href: "/profile", label: "Perfil" },
   { href: "/leads", label: "Leads" },
   { href: "/agenda", label: "Agenda" },
   { href: "/knowledge", label: "Base de conhecimento" },

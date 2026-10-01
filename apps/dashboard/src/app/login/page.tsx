@@ -36,8 +36,8 @@ export default function LoginPage() {
       setLoading(true);
       const credential = await confirmation.confirm(code);
       const idToken = await credential.user.getIdToken();
-      await verifyFirebaseToken(idToken);
-      router.push("/");
+      const { business } = await verifyFirebaseToken(idToken);
+      router.push(business.status === "onboarding" ? "/onboarding" : "/");
     } catch {
       setError("Código inválido ou expirado.");
     } finally {

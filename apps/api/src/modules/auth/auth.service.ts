@@ -13,21 +13,23 @@ export class AuthService {
     const { phoneNumber } = await verifyPhoneIdToken(idToken);
     const phone = normalizePhone(phoneNumber);
 
-    const business = await this.prisma.client.business.upsert({
-      where: { phone },
-      update: {},
-      create: {
-        phone,
-        name: "",
-        slug: `pending-${Date.now()}`,
-        niche: "imobiliaria",
-        ownerName: "",
-        status: "onboarding",
-      },
-    });
+    const existing = await this.prisma.client.business.findUnique({ where: { phone } });
+    const business =
+      existing ??
+      (await this.prisma.client.business.create({
+        data: {
+          phone,
+          name: "",
+          slug: `pending-${Date.now()}`,
+          niche: "imobiliaria",
+          ownerName: "",
+          status: "onboarding",
+          trialEndsAt: new Date(Date.now() + 30 * 24 * 3600 * 1000),
+        },
+      }));
 
     const token = await signBusinessSession({ businessId: business.id, phoneNumber: phone });
-    return { token, business };
+    return { token, business, isNew: !existing };
   }
 
   async identifyVisitor(businessSlug: string, name: string, phone: string, ip: string, userAgent: string, anonVisitorToken?: string) {

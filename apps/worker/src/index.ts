@@ -3,6 +3,7 @@ import { prisma } from "@realwise/db";
 import { redisConnection } from "./redis";
 import { processDocumentIngestion } from "./processors/document-ingestion";
 import { processWebsiteSync } from "./processors/website-sync";
+import { processTrialWatch } from "./processors/trial-watch";
 
 const documentWorker = new Worker("document-ingestion", processDocumentIngestion, {
   connection: redisConnection,
@@ -40,13 +41,23 @@ const scheduleWorker = new Worker(
 );
 scheduleWorker.on("failed", (job, err) => console.error(`website-sync-schedule ${job?.id} failed`, err));
 
+const trialWatchQueue = new Queue("trial-watch", { connection: redisConnection });
+const trialWatchWorker = new Worker("trial-watch", processTrialWatch, { connection: redisConnection });
+trialWatchWorker.on("completed", (job) => console.log(`trial-watch ${job.id} completed`));
+trialWatchWorker.on("failed", (job, err) => console.error(`trial-watch ${job?.id} failed`, err));
+
 async function main() {
   await scheduleQueue.add(
     "weekly-scan",
     {},
     { repeat: { pattern: "0 4 * * 1" }, jobId: "weekly-scan", removeOnComplete: true, removeOnFail: 10 },
   );
-  console.log("Realwise worker running — listening on queues: document-ingestion, website-sync, website-sync-schedule");
+  await trialWatchQueue.add(
+    "daily-check",
+    {},
+    { repeat: { pattern: "0 9 * * *" }, jobId: "daily-check", removeOnComplete: true, removeOnFail: 10 },
+  );
+  console.log("Realwise worker running — listening on queues: document-ingestion, website-sync, website-sync-schedule, trial-watch");
 }
 
 main();

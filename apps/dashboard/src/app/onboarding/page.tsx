@@ -54,7 +54,7 @@ export default function OnboardingPage() {
   }
 
   async function saveBusinessInfo() {
-    await updateBusiness({ name: business.name, ownerName: business.ownerName, niche: business.niche });
+    await updateBusiness({ name: business.name, ownerName: business.ownerName, email: business.email, niche: business.niche });
     if (slug && slugStatus === "available") await setBusinessSlug(slug);
     setStep(1);
     refresh();
@@ -110,6 +110,11 @@ export default function OnboardingPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
+      {business.trialEndsAt && (
+        <div className="mb-4 rounded-lg bg-lime-soft px-3 py-2 text-xs font-semibold text-lime-ink">
+          Você tem 30 dias grátis — seu teste termina em {new Date(business.trialEndsAt).toLocaleDateString("pt-BR")}.
+        </div>
+      )}
       <div className="mb-6 flex gap-2">
         {STEPS.map((label, i) => (
           <button
@@ -135,6 +140,13 @@ export default function OnboardingPage() {
             value={business.ownerName}
             onChange={(e) => setBusiness({ ...business, ownerName: e.target.value })}
             placeholder="Seu nome"
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+          />
+          <input
+            value={business.email ?? ""}
+            onChange={(e) => setBusiness({ ...business, email: e.target.value })}
+            placeholder="Seu e-mail (avisos sobre o período de teste)"
+            type="email"
             className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
           <select

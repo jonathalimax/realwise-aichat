@@ -77,6 +77,7 @@ model Business {
   parentBusinessId String?
   phone           String         @unique
   ownerName       String
+  email           String?
   logoUrl         String?
   brandColor      String?
   timezone        String         @default("America/Sao_Paulo")
@@ -86,6 +87,8 @@ model Business {
   websiteSyncedAt DateTime?
   cachedChips     Json?
   cachedChipsAt   DateTime?
+  trialEndsAt     DateTime?
+  trialReminderSentAt DateTime?
   status          BusinessStatus @default(onboarding)
   confidenceScore Int            @default(0)
   confidenceBreakdown Json?

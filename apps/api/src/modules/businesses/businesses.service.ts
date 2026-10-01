@@ -35,7 +35,7 @@ export class BusinessesService {
 
   async updateProfile(
     businessId: string,
-    data: { name?: string; ownerName?: string; niche?: "imobiliaria" | "concessionaria"; timezone?: string; address?: string; websiteUrl?: string },
+    data: { name?: string; ownerName?: string; email?: string; niche?: "imobiliaria" | "concessionaria"; timezone?: string; address?: string; websiteUrl?: string },
   ) {
     if (data.websiteUrl !== undefined && data.websiteUrl !== "") {
       const business = await this.prisma.client.business.findUnique({
