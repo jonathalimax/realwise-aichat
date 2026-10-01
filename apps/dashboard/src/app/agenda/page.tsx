@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { getAppointments, updateAppointmentStatus } from "../../lib/api";
+import { Card, CardContent } from "../../components/ui/card";
+import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pendente",
@@ -9,6 +12,14 @@ const STATUS_LABEL: Record<string, string> = {
   canceled: "Cancelado",
   no_show: "Não compareceu",
   completed: "Concluído",
+};
+
+const STATUS_VARIANT: Record<string, "neutral" | "positive" | "negative" | "warning"> = {
+  pending: "warning",
+  confirmed: "positive",
+  canceled: "negative",
+  no_show: "negative",
+  completed: "neutral",
 };
 
 export default function AgendaPage() {
@@ -30,29 +41,31 @@ export default function AgendaPage() {
   return (
     <div>
       <h1 className="mb-5 font-serif text-2xl text-ink">Agenda</h1>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         {appointments.map((a) => (
-          <div key={a.id} className="flex items-center justify-between rounded-card border border-border bg-surface px-4 py-3 text-sm">
-            <div>
-              <div className="font-semibold">{a.serviceName}</div>
-              <div className="text-xs text-muted">{new Date(a.startsAt).toLocaleString("pt-BR")}</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted">{STATUS_LABEL[a.status]}</span>
-              {a.status === "pending" && (
-                <button onClick={() => setStatus(a.id, "confirmed")} className="rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-white">
-                  Confirmar
-                </button>
-              )}
-              {a.status !== "canceled" && a.status !== "completed" && (
-                <button onClick={() => setStatus(a.id, "canceled")} className="rounded-lg border border-negative px-3 py-1 text-xs text-negative">
-                  Cancelar
-                </button>
-              )}
-            </div>
-          </div>
+          <Card key={a.id}>
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="font-semibold text-ink">{a.serviceName}</div>
+                <div className="text-xs text-ink-soft">{new Date(a.startsAt).toLocaleString("pt-BR")}</div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={STATUS_VARIANT[a.status]}>{STATUS_LABEL[a.status]}</Badge>
+                {a.status === "pending" && (
+                  <Button size="sm" onClick={() => setStatus(a.id, "confirmed")}>
+                    Confirmar
+                  </Button>
+                )}
+                {a.status !== "canceled" && a.status !== "completed" && (
+                  <Button size="sm" variant="destructive" onClick={() => setStatus(a.id, "canceled")}>
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         ))}
-        {appointments.length === 0 && <p className="text-sm text-muted">Nenhum agendamento ainda.</p>}
+        {appointments.length === 0 && <p className="text-sm text-ink-soft">Nenhum agendamento ainda.</p>}
       </div>
     </div>
   );

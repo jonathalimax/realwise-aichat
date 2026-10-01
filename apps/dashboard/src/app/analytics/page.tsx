@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getTopQuestions } from "../../lib/api";
+import { Card, CardContent } from "../../components/ui/card";
+import { Table, TableBody, TableRow, TableCell } from "../../components/ui/table";
 
 export default function AnalyticsPage() {
   const [questions, setQuestions] = useState<any[]>([]);
@@ -13,16 +15,21 @@ export default function AnalyticsPage() {
   return (
     <div>
       <h1 className="mb-5 font-serif text-2xl text-ink">Perguntas mais feitas</h1>
-      <table className="w-full text-sm">
-        <tbody>
-          {questions.map((q) => (
-            <tr key={q.id} className="border-t border-border">
-              <td className="py-2">{q.questionText}</td>
-              <td className="py-2 text-right font-mono">{q.occurrenceCount}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <Card>
+        <CardContent className="p-5">
+          <Table>
+            <TableBody>
+              {questions.map((q) => (
+                <TableRow key={q.id}>
+                  <TableCell>{q.questionText}</TableCell>
+                  <TableCell className="text-right font-mono">{q.occurrenceCount}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {questions.length === 0 && <p className="text-sm text-ink-soft">Ainda sem dados suficientes.</p>}
+        </CardContent>
+      </Card>
     </div>
   );
 }
