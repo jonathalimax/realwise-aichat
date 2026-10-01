@@ -24,12 +24,18 @@ export class BusinessesService {
   }
 
   async getOwnBusiness(businessId: string) {
-    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    const business = await this.prisma.client.business.findUnique({
+      where: { id: businessId },
+      include: { subscription: { include: { plan: true } } },
+    });
     if (!business) throw new NotFoundException("Business not found");
     return business;
   }
 
-  async updateProfile(businessId: string, data: { name?: string; ownerName?: string; niche?: "imobiliaria" | "concessionaria"; timezone?: string; address?: string }) {
+  async updateProfile(
+    businessId: string,
+    data: { name?: string; ownerName?: string; niche?: "imobiliaria" | "concessionaria"; timezone?: string; address?: string; websiteUrl?: string },
+  ) {
     return this.prisma.client.business.update({ where: { id: businessId }, data });
   }
 

@@ -4,8 +4,8 @@
   "private": true,
   "main": "src/index.ts",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
+    "dev": "tsx watch --env-file=../../.env src/index.ts",
+    "start": "node --env-file=../../.env dist/index.js",
     "build": "tsc"
   },
   "dependencies": {
@@ -13,6 +13,7 @@
     "ioredis": "^5.4.0",
     "pdf-parse": "^1.1.1",
     "mammoth": "^1.8.0",
+    "cheerio": "^1.0.0",
     "@realwise/db": "workspace:*",
     "@realwise/profile-schema": "workspace:*"
   },

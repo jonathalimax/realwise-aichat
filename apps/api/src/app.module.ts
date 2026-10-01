@@ -12,6 +12,7 @@ import { BillingModule } from "./modules/billing/billing.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { ComplianceModule } from "./modules/compliance/compliance.module";
+import { InternalModule } from "./modules/internal/internal.module";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ComplianceModule } from "./modules/compliance/compliance.module";
     AnalyticsModule,
     AdminModule,
     ComplianceModule,
+    InternalModule,
   ],
 })
 export class AppModule {}

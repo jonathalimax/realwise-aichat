@@ -10,7 +10,7 @@ async function bootstrap() {
   app.use(json());
   app.use(cookieParser());
   app.enableCors({ origin: true, credentials: true });
-  const port = process.env.PORT ?? 3001;
+  const port = process.env.API_PORT ?? 3001;
   await app.listen(port);
   console.log(`Realwise API listening on :${port}`);
 }

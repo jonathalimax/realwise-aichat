@@ -37,6 +37,9 @@ export const setBusinessSlug = (slug: string) => request("/businesses/me/slug", 
 export const publishBusiness = () => request("/businesses/me/publish", { method: "POST" });
 export const confirmLinkPlaced = () => request("/businesses/me/link-placed", { method: "POST" });
 
+export const updateWebsiteUrl = (websiteUrl: string) =>
+  request("/businesses/me", { method: "PATCH", body: JSON.stringify({ websiteUrl }) });
+
 export const updateBranding = (logoUrl: string, brandColor: string) =>
   request("/businesses/me/branding", { method: "PATCH", body: JSON.stringify({ logoUrl, brandColor }) });
 

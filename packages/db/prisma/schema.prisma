@@ -81,6 +81,9 @@ model Business {
   brandColor      String?
   timezone        String         @default("America/Sao_Paulo")
   address         String?
+  websiteUrl      String?
+  websiteContentHash String?
+  websiteSyncedAt DateTime?
   status          BusinessStatus @default(onboarding)
   confidenceScore Int            @default(0)
   confidenceBreakdown Json?
