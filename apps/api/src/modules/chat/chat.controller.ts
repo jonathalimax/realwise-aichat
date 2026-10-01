@@ -51,6 +51,7 @@ export class ChatController {
     @CurrentVisitor() visitor: VisitorContext,
   ) {
     assertBusinessMatch(visitor, businessId);
-    return this.chat.bookAppointment(businessId, conversationId, visitor.leadId, serviceName, startsAt, endsAt);
+    const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
+    return this.chat.bookAppointment(businessId, conversationId, visitor.leadId, serviceName, startsAt, endsAt, token);
   }
 }

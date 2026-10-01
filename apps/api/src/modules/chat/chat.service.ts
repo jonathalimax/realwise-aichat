@@ -119,6 +119,9 @@ export class ChatService {
     }
   }
 
+  private readonly ALLOWED_SERVICES = new Set(["Visita ao imóvel", "Test-drive"]);
+  private readonly MAX_BOOKING_DURATION_MS = 4 * 60 * 60 * 1000;
+
   async bookAppointment(
     businessId: string,
     conversationId: string,
@@ -126,7 +129,29 @@ export class ChatService {
     serviceName: string,
     startsAt: string,
     endsAt: string,
+    visitorToken: string,
   ) {
+    const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
+    if (!conversation) throw new NotFoundException("Conversation not found");
+    const belongsToCaller =
+      conversation.visitorToken === visitorToken || (leadId && conversation.leadId === leadId);
+    if (!belongsToCaller) throw new ForbiddenException("Conversation does not belong to this visitor");
+
+    if (!this.ALLOWED_SERVICES.has(serviceName)) {
+      throw new ForbiddenException("Invalid service name");
+    }
+
+    const start = new Date(startsAt);
+    const end = new Date(endsAt);
+    const now = new Date();
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new ForbiddenException("Invalid date");
+    }
+    if (start <= now) throw new ForbiddenException("Start time must be in the future");
+    if (end <= start || end.getTime() - start.getTime() > this.MAX_BOOKING_DURATION_MS) {
+      throw new ForbiddenException("Invalid appointment duration");
+    }
+
     const appointment = await this.bookings.createAppointment(
       businessId,
       leadId,

@@ -35,11 +35,20 @@ export class AuthService {
     if (!business) throw new NotFoundException("Business not found");
 
     const phoneNormalized = normalizePhone(phone);
-    const lead = await this.prisma.client.lead.upsert({
+    // Phone is not OTP-verified here (low-friction-by-design, see plan §14.4) — so on a match
+    // against an existing lead we only bump recency, never overwrite the name an attacker could
+    // spoof by typing someone else's number.
+    const existingLead = await this.prisma.client.lead.findUnique({
       where: { businessId_phoneNormalized: { businessId: business.id, phoneNormalized } },
-      update: { name, lastSeenAt: new Date(), sessionCount: { increment: 1 } },
-      create: { businessId: business.id, name, phone, phoneNormalized },
     });
+    const lead = existingLead
+      ? await this.prisma.client.lead.update({
+          where: { id: existingLead.id },
+          data: { lastSeenAt: new Date(), sessionCount: { increment: 1 } },
+        })
+      : await this.prisma.client.lead.create({
+          data: { businessId: business.id, name, phone, phoneNormalized },
+        });
 
     await this.prisma.client.consentRecord.create({
       data: {
