@@ -1,6 +1,21 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { nicheTemplates } from "@realwise/profile-schema";
 import { PrismaService } from "../../prisma/prisma.service";
+import { generateFromGateway } from "../../inference/gateway-client";
+
+const ABSTENTION_MARKERS = [
+  "não tenho essa informação",
+  "não sei",
+  "vou confirmar",
+  "deixa eu confirmar",
+  "não tenho certeza",
+  "preciso verificar",
+];
+
+function looksLikeAbstention(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return ABSTENTION_MARKERS.some((marker) => normalized.includes(marker));
+}
 
 @Injectable()
 export class OnboardingService {
@@ -42,6 +57,44 @@ export class OnboardingService {
     return this.prisma.client.businessProfile.update({ where: { businessId }, data: { fieldStatus } });
   }
 
+  private async runEvalQuestions(businessId: string, businessName: string, niche: string, profileSummary: string, evalQuestions: string[]): Promise<number> {
+    if (evalQuestions.length === 0) return 0;
+
+    const systemPrompt = [
+      `Você é o atendente de IA da ${businessName}, um negócio de ${niche === "imobiliaria" ? "locação imobiliária" : "concessionária de veículos"}.`,
+      "Responda apenas com base nas informações abaixo. Se não souber, diga que vai confirmar com um atendente humano — nunca invente preço, prazo ou disponibilidade.",
+      `Informações do negócio: ${profileSummary}`,
+    ].join("\n");
+
+    let grounded = 0;
+    for (const question of evalQuestions) {
+      try {
+        const result = await generateFromGateway({
+          purpose: "eval",
+          businessId,
+          systemPrompt,
+          prompt: `Cliente: ${question}`,
+          maxTokens: 200,
+        });
+        if (!looksLikeAbstention(result.text)) grounded++;
+      } catch {
+        // Inference unavailable — treat as not grounded rather than failing the whole recompute.
+      }
+    }
+    return grounded / evalQuestions.length;
+  }
+
+  private async computeRealWorldFit(businessId: string): Promise<number | null> {
+    const recentMessages = await this.prisma.client.message.findMany({
+      where: { businessId, role: "assistant", answerSource: { in: ["rag", "abstained"] } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    if (recentMessages.length === 0) return null;
+    const abstained = recentMessages.filter((m) => m.answerSource === "abstained").length;
+    return 1 - abstained / recentMessages.length;
+  }
+
   async recomputeConfidence(businessId: string) {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     const profile = await this.prisma.client.businessProfile.findUnique({ where: { businessId } });
@@ -61,7 +114,15 @@ export class OnboardingService {
     const approvedCount = Object.values(fieldStatus).filter((s: any) => s.approvedByOwner).length;
     const ownerReview = allFields.length ? approvedCount / allFields.length : 0;
 
-    let score = Math.round(coverage * 30 + documentDepth * 20 + 60 * 0.2 + 0 * 0.15 + 100 * 0.1 + ownerReview * 5);
+    const profileSummary = profile?.cachedSummary ?? JSON.stringify(data);
+    const answerAbility = await this.runEvalQuestions(businessId, business.name, business.niche, profileSummary, template.evalQuestions);
+
+    const realWorldFit = await this.computeRealWorldFit(businessId);
+    const realWorldFitScore = realWorldFit ?? answerAbility; // no live traffic yet — fall back to the simulated score
+
+    let score = Math.round(
+      coverage * 30 + documentDepth * 20 + answerAbility * 100 * 0.2 + realWorldFitScore * 100 * 0.15 + 100 * 0.1 + ownerReview * 5,
+    );
     if (filledRequired.length < requiredFields.length) {
       score = Math.min(score, 70);
     }
@@ -71,10 +132,10 @@ export class OnboardingService {
       where: { id: businessId },
       data: {
         confidenceScore: score,
-        confidenceBreakdown: { coverage, documentDepth, ownerReview } as any,
+        confidenceBreakdown: { coverage, documentDepth, ownerReview, answerAbility, realWorldFit: realWorldFitScore } as any,
       },
     });
 
-    return { score, coverage, documentDepth, ownerReview };
+    return { score, coverage, documentDepth, ownerReview, answerAbility, realWorldFit: realWorldFitScore };
   }
 }
