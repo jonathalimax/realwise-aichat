@@ -3,6 +3,7 @@ import { nicheTemplates } from "@realwise/profile-schema";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway, generateFromGatewayStream } from "../../inference/gateway-client";
+import { embedText } from "../../inference/embed-client";
 import { BookingsService } from "../bookings/bookings.service";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
@@ -209,6 +210,26 @@ export class ChatService {
     return fallback;
   }
 
+  // Vector-similarity retrieval over the business's actual ingested documents (uploads, crawled
+  // website) — without this, Clara only ever sees the small structured profile fields and can
+  // never answer anything that only exists in the raw documents (e.g. "which houses do you have?").
+  private async retrieveRelevantChunks(businessId: string, visitorText: string): Promise<string[]> {
+    try {
+      const embedding = await embedText(visitorText);
+      const rows = await this.prisma.client.$queryRawUnsafe<{ content: string }[]>(
+        `SELECT content FROM "KnowledgeChunk"
+         WHERE "businessId" = $1 AND embedding IS NOT NULL
+         ORDER BY embedding <=> $2::vector
+         LIMIT 5`,
+        businessId,
+        `[${embedding.join(",")}]`,
+      );
+      return rows.map((r) => r.content);
+    } catch {
+      return []; // embedding/DB hiccup — fall back to structured profile data only
+    }
+  }
+
   private async buildChatPrompt(businessId: string, conversationId: string, visitorText: string) {
     const [business, profile, recentMessages] = await Promise.all([
       this.prisma.client.business.findUnique({ where: { id: businessId } }),
@@ -228,10 +249,16 @@ export class ChatService {
       .map((m) => `${m.role === "visitor" ? "Cliente" : "Atendente"}: ${m.content}`)
       .join("\n");
 
+    const retrievedChunks = await this.retrieveRelevantChunks(businessId, visitorText);
+    const documentContext = retrievedChunks.length
+      ? `\nTrechos relevantes da base de documentos:\n${retrievedChunks.map((c) => `- ${c}`).join("\n")}`
+      : "";
+
     const systemPrompt = [
       `Você é a Clara, a atendente de IA da ${business.name}, um negócio de ${business.niche === "imobiliaria" ? "locação imobiliária" : "concessionária de veículos"}.`,
-      "Responda apenas com base nas informações abaixo. Se não souber, diga que vai confirmar com um atendente humano — nunca invente preço, prazo ou disponibilidade.",
-      `Informações do negócio: ${profileSummary}`,
+      "Responda apenas com base nas informações abaixo (dados estruturados do negócio e trechos de documentos). Se não souber, diga que vai confirmar com um atendente humano — nunca invente preço, prazo ou disponibilidade.",
+      "Se o cliente pedir uma lista (ex: imóveis disponíveis), liste os itens concretos encontrados nos trechos de documentos abaixo, não apenas um resumo genérico.",
+      `Informações do negócio: ${profileSummary}${documentContext}`,
     ].join("\n");
 
     const prompt = `${history}\nCliente: ${visitorText}`;
