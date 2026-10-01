@@ -39,7 +39,7 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-4 px-6">
-      <h1 className="font-serif text-2xl text-ink">Entrar na RealWise</h1>
+      <h1 className="font-serif text-2xl text-ink">Entrar na Realwise</h1>
       {!confirmation ? (
         <>
           <input

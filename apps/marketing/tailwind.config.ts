@@ -9,16 +9,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: light.bg,
-        "bg-2": light.bgCanvasInset,
+        bg: "#F3EEE3",
+        "bg-2": "#EAE2D2",
         surface: light.surface,
-        ink: light.ink,
+        ink: "#17221C",
         "ink-soft": light.inkSoft,
         muted: light.inkMuted,
-        border: light.border,
+        border: "#E3DAC6",
         accent: light.accent,
         "accent-soft": light.accentSoft,
         "accent-ink": light.accentInk,
+        clay: "#C47B4F",
+        "clay-soft": "#F1E0D1",
         positive: light.positive,
         "positive-soft": light.positiveSoft,
         negative: light.negative,

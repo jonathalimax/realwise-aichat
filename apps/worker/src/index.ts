@@ -10,4 +10,4 @@ const documentWorker = new Worker("document-ingestion", processDocumentIngestion
 documentWorker.on("completed", (job) => console.log(`document-ingestion ${job.id} completed`));
 documentWorker.on("failed", (job, err) => console.error(`document-ingestion ${job?.id} failed`, err));
 
-console.log("RealWise worker running — listening on queue: document-ingestion");
+console.log("Realwise worker running — listening on queue: document-ingestion");

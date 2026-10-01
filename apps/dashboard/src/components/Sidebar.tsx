@@ -14,7 +14,7 @@ const ITEMS = [
 export function Sidebar() {
   return (
     <aside className="w-56 flex-none border-r border-border bg-bg-2 px-4 py-6">
-      <div className="mb-6 px-2 font-serif text-lg font-bold text-ink">RealWise</div>
+      <div className="mb-6 px-2 font-serif text-lg font-bold text-ink">Realwise</div>
       <nav className="flex flex-col gap-1">
         {ITEMS.map((item) => (
           <Link

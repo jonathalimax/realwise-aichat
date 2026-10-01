@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "RealWise — Seu atendimento não dorme",
+  title: "Realwise — Seu atendimento não dorme",
   description: "Um link no seu Instagram que responde, agenda e te passa o cliente pronto no WhatsApp. Sem contratar ninguém.",
 };
 

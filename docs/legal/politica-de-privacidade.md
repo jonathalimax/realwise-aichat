@@ -1,12 +1,12 @@
 <!-- RASCUNHO GERADO POR IA — NÃO PUBLICAR SEM REVISÃO DE ADVOGADO. Ver docs/legal/README.md. -->
 
-# Política de Privacidade — RealWise
+# Política de Privacidade — Realwise
 
 Última atualização: [DATA]
 
 ## 1. Quem somos
 
-RealWise ("nós") opera uma plataforma de atendimento via chat com inteligência artificial para negócios ("Tenant" ou "Cliente Contratante") e os usuários finais desses negócios ("Visitante" ou "Titular"). Esta política descreve como tratamos dados pessoais na condição de **operador** (processor) em nome do Tenant, que é o **controlador** dos dados de seus próprios clientes.
+Realwise ("nós") opera uma plataforma de atendimento via chat com inteligência artificial para negócios ("Tenant" ou "Cliente Contratante") e os usuários finais desses negócios ("Visitante" ou "Titular"). Esta política descreve como tratamos dados pessoais na condição de **operador** (processor) em nome do Tenant, que é o **controlador** dos dados de seus próprios clientes.
 
 ## 2. Dados que coletamos
 

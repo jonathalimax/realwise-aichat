@@ -36,5 +36,5 @@ app.get("/health", async () => ({ ok: true }));
 
 const port = Number(process.env.PORT ?? 3002);
 app.listen({ port, host: "0.0.0.0" }).then(() => {
-  console.log(`RealWise inference-gateway listening on :${port}`);
+  console.log(`Realwise inference-gateway listening on :${port}`);
 });

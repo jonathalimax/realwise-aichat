@@ -1,14 +1,14 @@
 <!-- RASCUNHO GERADO POR IA — NÃO PUBLICAR SEM REVISÃO DE ADVOGADO. Ver docs/legal/README.md. -->
 
-# Contrato de Operação de Dados (DPA) — RealWise × Tenant
+# Contrato de Operação de Dados (DPA) — Realwise × Tenant
 
-Rascunho estrutural. Define RealWise como **operador** e o Tenant (negócio contratante) como **controlador**, nos termos do art. 39 da LGPD.
+Rascunho estrutural. Define Realwise como **operador** e o Tenant (negócio contratante) como **controlador**, nos termos do art. 39 da LGPD.
 
 ## 1. Objeto
 
-RealWise trata dados pessoais dos clientes do Tenant exclusivamente para prestar o serviço de atendimento automatizado contratado, conforme instruções documentadas do Tenant e os Termos de Serviço.
+Realwise trata dados pessoais dos clientes do Tenant exclusivamente para prestar o serviço de atendimento automatizado contratado, conforme instruções documentadas do Tenant e os Termos de Serviço.
 
-## 2. Obrigações do operador (RealWise)
+## 2. Obrigações do operador (Realwise)
 
 - Tratar dados apenas conforme instruções do Tenant e a finalidade contratada.
 - Garantir confidencialidade de quem acessa os dados.
@@ -29,7 +29,7 @@ O Tenant autoriza o uso dos subprocessadores acima. Qualquer novo subprocessador
 
 ## 4. Transferência internacional
 
-Dados hospedados na União Europeia (Hetzner, Alemanha). RealWise declara adotar salvaguardas compatíveis com o art. 33 da LGPD para qualquer transferência internacional decorrente do uso de subprocessadores.
+Dados hospedados na União Europeia (Hetzner, Alemanha). Realwise declara adotar salvaguardas compatíveis com o art. 33 da LGPD para qualquer transferência internacional decorrente do uso de subprocessadores.
 
 ## 5. Dados sensíveis
 
