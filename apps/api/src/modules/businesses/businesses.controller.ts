@@ -2,17 +2,20 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@n
 import { BusinessesService } from "./businesses.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
 import { CurrentBusiness } from "../../common/decorators/current-business.decorator";
+import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import type { BusinessSessionClaims } from "@realwise/auth";
 
 @Controller("businesses")
 export class BusinessesController {
   constructor(private readonly businesses: BusinessesService) {}
 
+  @UseGuards(RateLimitGuard)
   @Get("public/:slug")
   getPublic(@Param("slug") slug: string) {
     return this.businesses.getBySlug(slug);
   }
 
+  @UseGuards(RateLimitGuard)
   @Get("slug-available/:slug")
   slugAvailable(@Param("slug") slug: string) {
     return this.businesses.isSlugAvailable(slug);

@@ -3,6 +3,7 @@ import type { Response } from "express";
 import { CalendarService } from "./calendar.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
 import { CurrentBusiness } from "../../common/decorators/current-business.decorator";
+import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import type { BusinessSessionClaims } from "@realwise/auth";
 
 @Controller("calendar")
@@ -41,6 +42,7 @@ export class CalendarController {
 
   // Wrapped in an object (never a bare null body) so the client can always parse the JSON response,
   // even when calendar sync isn't connected.
+  @UseGuards(RateLimitGuard)
   @Get(":businessId/slots")
   async slots(@Param("businessId") businessId: string, @Query("date") date: string) {
     const from = date ? new Date(date) : new Date();

@@ -1,36 +1,51 @@
-import { CanActivate, ExecutionContext, Injectable, HttpException, HttpStatus } from "@nestjs/common";
+import { CanActivate, ExecutionContext, Injectable, HttpException, HttpStatus, Type } from "@nestjs/common";
 
-const WINDOW_MS = 60_000;
-const MAX_REQUESTS_PER_WINDOW = 20;
-
-const hits = new Map<string, number[]>();
-
-setInterval(() => {
-  const cutoff = Date.now() - WINDOW_MS;
-  for (const [key, timestamps] of hits) {
-    const kept = timestamps.filter((t) => t > cutoff);
-    if (kept.length === 0) hits.delete(key);
-    else hits.set(key, kept);
-  }
-}, WINDOW_MS).unref();
-
-@Injectable()
-export class RateLimitGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
-    const req = context.switchToHttp().getRequest();
-    const visitorToken = req.visitor?.visitorToken ?? req.visitor?.leadId;
-    const key = visitorToken ? `v:${visitorToken}` : `ip:${req.ip}`;
-
-    const now = Date.now();
-    const cutoff = now - WINDOW_MS;
-    const timestamps = (hits.get(key) ?? []).filter((t) => t > cutoff);
-
-    if (timestamps.length >= MAX_REQUESTS_PER_WINDOW) {
-      throw new HttpException("Too many requests — devagar um pouco.", HttpStatus.TOO_MANY_REQUESTS);
-    }
-
-    timestamps.push(now);
-    hits.set(key, timestamps);
-    return true;
-  }
+interface RateLimitOptions {
+  windowMs: number;
+  maxRequests: number;
+  // Login endpoints have no visitor-session cookie yet (they ARE the login step), so this keys by IP only.
+  ipOnly?: boolean;
 }
+
+function createRateLimitGuard(options: RateLimitOptions): Type<CanActivate> {
+  const { windowMs, maxRequests, ipOnly } = options;
+  const hits = new Map<string, number[]>();
+
+  setInterval(() => {
+    const cutoff = Date.now() - windowMs;
+    for (const [key, timestamps] of hits) {
+      const kept = timestamps.filter((t) => t > cutoff);
+      if (kept.length === 0) hits.delete(key);
+      else hits.set(key, kept);
+    }
+  }, windowMs).unref();
+
+  @Injectable()
+  class ScopedRateLimitGuard implements CanActivate {
+    canActivate(context: ExecutionContext): boolean {
+      const req = context.switchToHttp().getRequest();
+      const visitorToken = !ipOnly && (req.visitor?.visitorToken ?? req.visitor?.leadId);
+      const key = visitorToken ? `v:${visitorToken}` : `ip:${req.ip}`;
+
+      const now = Date.now();
+      const cutoff = now - windowMs;
+      const timestamps = (hits.get(key) ?? []).filter((t) => t > cutoff);
+
+      if (timestamps.length >= maxRequests) {
+        throw new HttpException("Too many requests — devagar um pouco.", HttpStatus.TOO_MANY_REQUESTS);
+      }
+
+      timestamps.push(now);
+      hits.set(key, timestamps);
+      return true;
+    }
+  }
+
+  return ScopedRateLimitGuard;
+}
+
+// Default guard used by chat/public endpoints: 20 requests/minute, visitor-token-aware.
+export const RateLimitGuard = createRateLimitGuard({ windowMs: 60_000, maxRequests: 20 });
+
+// Tighter, IP-only guard for login/OTP-verification endpoints (brute-force sensitive).
+export const AuthRateLimitGuard = createRateLimitGuard({ windowMs: 15 * 60_000, maxRequests: 10, ipOnly: true });

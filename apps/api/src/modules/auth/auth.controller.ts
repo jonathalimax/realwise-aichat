@@ -1,7 +1,7 @@
 import { Body, Controller, Post, Req, Res, UseGuards } from "@nestjs/common";
 import type { CookieOptions, Request, Response } from "express";
 import { AuthService } from "./auth.service";
-import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
+import { RateLimitGuard, AuthRateLimitGuard } from "../../common/guards/rate-limit.guard";
 
 const SESSION_COOKIE_OPTIONS: CookieOptions = {
   httpOnly: true,
@@ -15,6 +15,7 @@ const SESSION_COOKIE_OPTIONS: CookieOptions = {
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  @UseGuards(AuthRateLimitGuard)
   @Post("business/verify")
   async verifyBusiness(@Body("idToken") idToken: string, @Res({ passthrough: true }) res: Response) {
     const { token, business } = await this.auth.loginBusinessWithFirebaseToken(idToken);
@@ -22,6 +23,7 @@ export class AuthController {
     return { business };
   }
 
+  @UseGuards(AuthRateLimitGuard)
   @Post("admin/verify")
   async verifyAdmin(@Body("idToken") idToken: string, @Res({ passthrough: true }) res: Response) {
     const { token, admin } = await this.auth.loginAdminWithFirebaseToken(idToken);
