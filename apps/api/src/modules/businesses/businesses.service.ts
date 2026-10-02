@@ -73,9 +73,15 @@ export class BusinessesService {
   async setSlug(businessId: string, slug: string) {
     const existing = await this.prisma.client.business.findUnique({ where: { slug } });
     if (existing && existing.id !== businessId) {
-      throw new Error("Slug already taken");
+      throw new BadRequestException("Slug already taken");
     }
-    return this.prisma.client.business.update({ where: { id: businessId }, data: { slug } });
+    try {
+      return await this.prisma.client.business.update({ where: { id: businessId }, data: { slug } });
+    } catch (err: any) {
+      // Belt-and-suspenders for the check-then-update race the findUnique above can't fully close.
+      if (err?.code === "P2002") throw new BadRequestException("Slug already taken");
+      throw err;
+    }
   }
 
   async publish(businessId: string) {

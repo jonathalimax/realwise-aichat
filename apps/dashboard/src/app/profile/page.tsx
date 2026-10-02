@@ -9,6 +9,7 @@ import {
   addWhatsappNumber,
   getWhatsappNumbers,
 } from "../../lib/api";
+import { maskBrPhone } from "@realwise/shared";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
@@ -110,7 +111,13 @@ export default function ProfilePage() {
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">
             <Input value={waLabel} onChange={(e) => setWaLabel(e.target.value)} placeholder="Label" className="w-32" />
-            <Input value={waPhone} onChange={(e) => setWaPhone(e.target.value)} placeholder="(11) 99999-9999" className="flex-1" />
+            <Input
+              value={waPhone}
+              onChange={(e) => setWaPhone(maskBrPhone(e.target.value))}
+              placeholder="(11) 99999-9999"
+              inputMode="numeric"
+              className="flex-1"
+            />
             <Button variant="outline" size="sm" onClick={handleAddWhatsapp}>Adicionar</Button>
           </div>
           {whatsappNumbers.map((n) => (

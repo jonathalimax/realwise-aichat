@@ -38,10 +38,15 @@ function AssistantChat() {
   useEffect(() => {
     const q = searchParams.get("q");
     if (!q || prefillHandled.current) return;
-    prefillHandled.current = true;
     setInput(q);
-    // small delay so the owner sees their question before it auto-sends
-    const timer = setTimeout(() => handleSend(q), 500);
+    // Mark handled only once the timer actually fires — React Strict Mode's dev-only
+    // mount→cleanup→remount cycle clears this timer before it runs on the first pass;
+    // marking the ref up front made the real (second) mount's effect see "already handled"
+    // and skip sending entirely, leaving the question pre-filled but never auto-sent.
+    const timer = setTimeout(() => {
+      prefillHandled.current = true;
+      handleSend(q);
+    }, 500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);

@@ -36,7 +36,11 @@ function buildAllowedOrigins(): string[] {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
-  app.use(helmet());
+  // Default img-src ('self' + data:) would silently block any off-origin business logo
+  // (e.g. a logoUrl pointing at S3/Cloudinary) — this API never serves/renders images itself,
+  // so widening img-src here is safe and only matters if this CSP header is ever inherited
+  // by a page that embeds the API's own responses directly (it isn't, today).
+  app.use(helmet({ contentSecurityPolicy: { directives: { imgSrc: ["'self'", "data:", "https:"] } } }));
   app.use("/billing/webhook", raw({ type: "application/json" }));
   app.use(json());
   app.use(cookieParser());

@@ -54,7 +54,7 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-between bg-ink px-12 py-10 text-bg">
         <a href="/" className="font-serif text-xl font-bold text-bg">Realwise</a>
         <p className="max-w-sm font-serif text-2xl leading-[1.2] text-bg/80">
-          Enquanto você dorme, <em className="italic text-lime">a Clara</em> responde.
+          Enquanto você dorme, <em className="italic text-[#0B4D38]">a Clara</em> responde.
         </p>
       </div>
 

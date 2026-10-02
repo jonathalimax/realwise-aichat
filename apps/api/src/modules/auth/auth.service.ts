@@ -13,23 +13,35 @@ export class AuthService {
     const { phoneNumber } = await verifyPhoneIdToken(idToken);
     const phone = normalizePhone(phoneNumber);
 
-    const existing = await this.prisma.client.business.findUnique({ where: { phone } });
-    const business =
-      existing ??
-      (await this.prisma.client.business.create({
-        data: {
-          phone,
-          name: "",
-          slug: `pending-${Date.now()}`,
-          niche: "imobiliaria",
-          ownerName: "",
-          status: "onboarding",
-          trialEndsAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
-        },
-      }));
+    let existing = await this.prisma.client.business.findUnique({ where: { phone } });
+    let isNew = false;
+    if (!existing) {
+      try {
+        existing = await this.prisma.client.business.create({
+          data: {
+            phone,
+            name: "",
+            // Date.now() alone is millisecond-resolution and collided under concurrent signups
+            // (the slug is @unique) — a random suffix makes a collision practically impossible.
+            slug: `pending-${Date.now()}-${createHash("sha1").update(`${phone}${Math.random()}`).digest("hex").slice(0, 6)}`,
+            niche: "imobiliaria",
+            ownerName: "",
+            status: "onboarding",
+            trialEndsAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+          },
+        });
+        isNew = true;
+      } catch (err: any) {
+        // Two concurrent signups for the same new phone number raced on the phone unique
+        // constraint — the loser just re-reads the winner's row instead of 500ing.
+        if (err?.code !== "P2002") throw err;
+        existing = await this.prisma.client.business.findUniqueOrThrow({ where: { phone } });
+      }
+    }
+    const business = existing;
 
     const token = await signBusinessSession({ businessId: business.id, phoneNumber: phone });
-    return { token, business, isNew: !existing };
+    return { token, business, isNew };
   }
 
   async identifyVisitor(businessSlug: string, name: string, phone: string, ip: string, userAgent: string, anonVisitorToken?: string) {

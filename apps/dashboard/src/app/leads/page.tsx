@@ -9,6 +9,7 @@ import { Badge } from "../../components/ui/badge";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Button } from "../../components/ui/button";
 import { DataTableToolbar, FilterDropdown } from "../../components/ui/data-table-toolbar";
+import { Tooltip } from "../../components/ui/tooltip";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../../components/ui/dropdown-menu";
 import {
   Table,
@@ -34,6 +35,24 @@ const BAND_OPTIONS = [
 ];
 
 type SortKey = "commitmentScore" | "lastSeenAt";
+
+function ScoreExplanation({ lead }: { lead: any }) {
+  const signals: { label: string; points: number }[] = lead.scoreSignals ?? [];
+  if (signals.length === 0) {
+    return <span className="text-ink-soft">Sem atividade suficiente para explicar a pontuação ainda.</span>;
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="font-semibold text-ink">Por que {lead.commitmentScore} pontos?</div>
+      {signals.map((s, i) => (
+        <div key={i} className="flex items-center justify-between gap-3 text-ink-soft">
+          <span>{s.label}</span>
+          <span className="font-mono text-ink">+{s.points}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function LeadsPage() {
   const searchParams = useSearchParams();
@@ -178,12 +197,18 @@ export default function LeadsPage() {
                     <TableCell>{lead.name ?? "—"}</TableCell>
                     <TableCell className="font-mono">{lead.phone}</TableCell>
                     <TableCell>
-                      <Badge variant={BAND_VARIANT[lead.scoreBand]} className="gap-1">
-                        <BandIcon className="h-3 w-3" />
-                        {BAND_LABELS[lead.scoreBand]}
-                      </Badge>
+                      <Tooltip content={<ScoreExplanation lead={lead} />}>
+                        <Badge variant={BAND_VARIANT[lead.scoreBand]} className="gap-1">
+                          <BandIcon className="h-3 w-3" />
+                          {BAND_LABELS[lead.scoreBand]}
+                        </Badge>
+                      </Tooltip>
                     </TableCell>
-                    <TableCell className="font-mono">{lead.commitmentScore}</TableCell>
+                    <TableCell className="font-mono">
+                      <Tooltip content={<ScoreExplanation lead={lead} />}>
+                        <span>{lead.commitmentScore}</span>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell className="text-ink-soft">
                       {lead.lastSeenAt ? new Date(lead.lastSeenAt).toLocaleDateString("pt-BR") : "—"}
                     </TableCell>
