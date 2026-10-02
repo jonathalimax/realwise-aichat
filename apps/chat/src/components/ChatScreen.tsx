@@ -2,7 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { maskBrPhone } from "@realwise/shared";
-import { getBusiness, startConversation, streamMessage, bookAppointment, identifyVisitor, startFlow, advanceFlow, getAvailableSlots } from "../lib/api";
+import {
+  getBusiness,
+  startConversation,
+  getConversationHistory,
+  streamMessage,
+  bookAppointment,
+  identifyVisitor,
+  startFlow,
+  advanceFlow,
+  getAvailableSlots,
+} from "../lib/api";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
@@ -55,7 +65,15 @@ function nextMessageId() {
   return `m${messageIdCounter}`;
 }
 
-export function ChatScreen({ slug }: { slug: string }) {
+export function ChatScreen({
+  slug,
+  resumeConversationId,
+  resumeToken,
+}: {
+  slug: string;
+  resumeConversationId?: string;
+  resumeToken?: string;
+}) {
   const [business, setBusiness] = useState<any>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -69,26 +87,52 @@ export function ChatScreen({ slug }: { slug: string }) {
   const [bookingPhone, setBookingPhone] = useState("");
   const [availableSlots, setAvailableSlots] = useState<{ start: string; end: string }[] | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ start: string; end: string } | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [flowRestored, setFlowRestored] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getBusiness(slug).then(setBusiness).catch(() => setBusiness(null));
   }, [slug]);
 
+  // Resolves the conversation eagerly (resume link id, or a fresh/matching one via the visitor
+  // cookie) and loads its full message history BEFORE anything renders as an empty chat.
   useEffect(() => {
     if (!business) return;
-    ensureConversation();
-  }, [business]);
+    (async () => {
+      let convId = resumeConversationId ?? null;
+      if (!convId) {
+        const conversation = await startConversation(business.id);
+        convId = conversation.id;
+      }
+      setConversationId(convId);
+      try {
+        const history = await getConversationHistory(business.id, convId!, resumeConversationId ? resumeToken : undefined);
+        setMessages(history.messages.map((m: any) => ({ id: m.id, role: m.role, content: m.content })));
+        if (history.flowSnapshot) {
+          setBubbles(history.flowSnapshot.bubbles ?? []);
+          setFlowRestored(true);
+        }
+      } catch {
+        // History fetch failing must not block the chat — the flow/start effect below still
+        // runs and starts a fresh conversation experience.
+      } finally {
+        setHistoryLoaded(true);
+      }
+    })();
+  }, [business, resumeConversationId, resumeToken]);
 
+  // Only starts the scripted flow from the beginning for conversations with no stored
+  // flowSnapshot — a resumed conversation already restored its bubbles above.
   useEffect(() => {
-    if (!business || !conversationId) return;
+    if (!business || !conversationId || !historyLoaded || flowRestored) return;
     startFlow(business.id, conversationId)
       .then((result) => {
         setMessages((prev) => (prev.length === 0 ? [{ id: nextMessageId(), role: "assistant", content: result.message }] : prev));
         setBubbles(result.bubbles ?? []);
       })
       .catch(() => {});
-  }, [business, conversationId]);
+  }, [business, conversationId, historyLoaded, flowRestored]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

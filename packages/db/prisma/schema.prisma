@@ -197,6 +197,7 @@ model Conversation {
   leadId              String?
   lead                Lead?               @relation(fields: [leadId], references: [id])
   visitorToken        String
+  resumeToken         String?             @unique
   status              ConversationStatus  @default(active)
   channel             String?
   referrer            String?

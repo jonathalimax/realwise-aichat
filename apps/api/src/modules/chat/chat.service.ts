@@ -1,5 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { randomBytes } from "crypto";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
+import type { Business, Conversation } from "@realwise/db";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway, generateFromGatewayStream } from "../../inference/gateway-client";
 import { BookingsService } from "../bookings/bookings.service";
@@ -45,10 +47,42 @@ export class ChatService {
     });
     if (!conversation) {
       conversation = await this.prisma.client.conversation.create({
-        data: { businessId, visitorToken, leadId, status: "active" },
+        data: { businessId, visitorToken, leadId, status: "active", resumeToken: randomBytes(16).toString("base64url") },
       });
     }
     return conversation;
+  }
+
+  // Full ordered history plus the flow's last-known position, so the frontend can repaint the
+  // visitor's prior bubbles/state on reopen instead of restarting the scripted flow from scratch.
+  async getHistory(businessId: string, conversationId: string, visitorToken: string, leadId?: string, resumeToken?: string) {
+    const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
+    if (!conversation) throw new NotFoundException("Conversation not found");
+
+    const ownsViaVisitor = conversation.visitorToken === visitorToken || (leadId && conversation.leadId === leadId);
+    const ownsViaResumeToken = Boolean(resumeToken) && conversation.resumeToken === resumeToken;
+    if (!ownsViaVisitor && !ownsViaResumeToken) {
+      throw new ForbiddenException("Conversation does not belong to this visitor");
+    }
+
+    const messages = await this.prisma.client.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return {
+      conversation: { id: conversation.id, visitorToken: conversation.visitorToken },
+      messages,
+      flowSnapshot: conversation.flowSnapshot ?? null,
+      resumedViaToken: ownsViaResumeToken && !ownsViaVisitor,
+    };
+  }
+
+  // Ready for the email/WhatsApp notification code paths (see notifyOwner/escalate) to link a
+  // visitor straight back into their existing conversation from any device.
+  buildResumeLink(business: Pick<Business, "slug">, conversation: Pick<Conversation, "id" | "resumeToken">): string {
+    const chatUrl = process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005";
+    return `${chatUrl}/${business.slug}?c=${conversation.id}&t=${conversation.resumeToken}`;
   }
 
   private detectsEscalation(text: string): boolean {

@@ -7,7 +7,9 @@ const ANON_COOKIE_OPTIONS = {
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax" as const,
   path: "/",
-  maxAge: 24 * 3600 * 1000,
+  // 30 days — long enough for a slow-considering lead to come back on the same device/browser,
+  // short enough to not be a permanent fingerprint.
+  maxAge: 30 * 24 * 3600 * 1000,
 };
 
 @Injectable()

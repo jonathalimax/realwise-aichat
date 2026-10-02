@@ -18,6 +18,13 @@ export function startConversation(businessId: string) {
   return request(`/chat/${businessId}/conversations`, { method: "POST" });
 }
 
+// `resumeToken` is only needed when opening via a cross-device resume link (?c=&t=); the cookie
+// path (same device/browser) authorizes without it.
+export function getConversationHistory(businessId: string, conversationId: string, resumeToken?: string) {
+  const qs = resumeToken ? `?t=${encodeURIComponent(resumeToken)}` : "";
+  return request(`/chat/${businessId}/conversations/${conversationId}/messages${qs}`);
+}
+
 export function sendMessage(businessId: string, conversationId: string, text: string) {
   return request(`/chat/${businessId}/conversations/${conversationId}/messages`, {
     method: "POST",

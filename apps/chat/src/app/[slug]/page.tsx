@@ -1,6 +1,13 @@
 import { ChatScreen } from "../../components/ChatScreen";
 
-export default async function BusinessChatPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function BusinessChatPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ c?: string; t?: string }>;
+}) {
   const { slug } = await params;
-  return <ChatScreen slug={slug} />;
+  const { c, t } = await searchParams;
+  return <ChatScreen slug={slug} resumeConversationId={c} resumeToken={t} />;
 }

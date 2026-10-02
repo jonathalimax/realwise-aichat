@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { ChatService } from "./chat.service";
 import { FlowService } from "./flow.service";
@@ -18,6 +18,31 @@ export class ChatController {
   startConversation(@Param("businessId") businessId: string, @CurrentVisitor() visitor: VisitorContext) {
     const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
     return this.chat.getOrCreateConversation(businessId, token, visitor.leadId);
+  }
+
+  @Get(":businessId/conversations/:conversationId/messages")
+  async getHistory(
+    @Param("businessId") businessId: string,
+    @Param("conversationId") conversationId: string,
+    @Query("t") resumeToken: string | undefined,
+    @CurrentVisitor() visitor: VisitorContext,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
+    const history = await this.chat.getHistory(businessId, conversationId, token, visitor.leadId, resumeToken);
+    // A resume-token open on a device/browser without the matching anon cookie — pin this
+    // business's anon cookie to the conversation's real visitor token so subsequent same-device
+    // requests (send message, book, etc.) keep resolving to the same conversation.
+    if (history.resumedViaToken) {
+      res.cookie(`rw_visitor_anon_${businessId}`, history.conversation.visitorToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 30 * 24 * 3600 * 1000,
+      });
+    }
+    return history;
   }
 
   @Post(":businessId/conversations/:conversationId/messages")
