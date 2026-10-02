@@ -7,6 +7,8 @@ export interface GatewayGenerateParams {
   systemPrompt: string;
   prompt: string;
   maxTokens?: number;
+  // Client-side AbortSignal timeout only — never sent in the request body.
+  timeoutMs?: number;
 }
 
 export interface GatewayGenerateResult {
@@ -19,14 +21,15 @@ export interface GatewayGenerateResult {
 }
 
 export async function generateFromGateway(params: GatewayGenerateParams): Promise<GatewayGenerateResult> {
+  const { timeoutMs, ...body } = params;
   const res = await fetch(`${GATEWAY_URL}/generate`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       ...(GATEWAY_TOKEN ? { "x-internal-token": GATEWAY_TOKEN } : {}),
     },
-    body: JSON.stringify(params),
-    signal: AbortSignal.timeout(25000),
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs ?? 25000),
   });
   if (!res.ok) {
     const body = await res.text();

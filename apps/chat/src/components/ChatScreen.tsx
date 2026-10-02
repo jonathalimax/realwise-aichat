@@ -137,12 +137,22 @@ export function ChatScreen({ slug }: { slug: string }) {
 
   async function handleBubbleTap(bubble: FlowBubble) {
     if (!business) return;
-    setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: bubble.label }]);
-    setSending(true);
+    const isBack = bubble.goto === "__back__";
+
+    // Back is pure local navigation — it replays an already-seen step, so it must not look like
+    // the visitor sent a new message or that Clara is generating a reply.
+    if (!isBack) {
+      setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: bubble.label }]);
+      setSending(true);
+    }
     try {
       const convId = await ensureConversation();
       const result = await advanceFlow(business.id, convId, bubble.goto, bubble.params);
-      setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: result.message }]);
+      if (isBack) {
+        setMessages((prev) => prev.slice(0, -2));
+      } else {
+        setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: result.message }]);
+      }
       setBubbles(result.bubbles ?? []);
     } finally {
       setSending(false);

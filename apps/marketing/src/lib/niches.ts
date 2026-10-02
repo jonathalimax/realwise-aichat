@@ -22,6 +22,7 @@ export interface NicheConfig {
   solutionCard2Messages: ChatMessage[];
   capabilities: { title: string; desc: string }[];
   faqExtra: [string, string];
+  earlyAccess?: boolean;
 }
 
 const CAPABILITY_ICON_PATHS = [
@@ -105,5 +106,42 @@ export const NICHES: Record<string, NicheConfig> = {
       { title: "Nunca inventa resposta", desc: "Se não sabe algo, admite e te chama — nunca chuta preço ou prazo pro seu cliente." },
     ],
     faqExtra: ["A IA avalia meu carro na troca?", "Ela coleta fotos, km e modelo e já te passa isso pronto — a avaliação final de valor continua sendo sua."],
+  },
+  estetica: {
+    slug: "estetica",
+    label: "para clínicas de estética",
+    heroPre: "Enquanto você atende, ",
+    heroEm: "sua próxima cliente desiste",
+    heroSub: "A Realwise explica procedimentos, faz a pré-avaliação por foto e agenda a sessão — antes que ela marque na clínica ao lado.",
+    heroBusinessName: "Clínica Bellari",
+    heroBusinessInitials: "CB",
+    heroMessages: [
+      { from: "bot", text: "Oi! Posso tirar dúvidas sobre procedimentos ou agendar uma avaliação." },
+      { from: "user", text: "Quanto custa o preenchimento labial?" },
+      { from: "bot", text: "A partir de R$ 890, depende da quantidade. Quer agendar uma avaliação gratuita?" },
+    ],
+    heroChips: ["Ver procedimentos", "📅 Agendar avaliação"],
+    problemIntro: "Toda semana, uma cliente em potencial desiste de esperar resposta.",
+    solutionCard1Title: "Explica procedimentos na hora, mesmo à noite",
+    solutionCard1Desc: "Valor, duração, cuidados pós — tudo respondido no segundo, sem a cliente esperar você sair do atendimento.",
+    solutionCard1Messages: [
+      { from: "user", text: "Dói fazer botox?" },
+      { from: "bot", text: "É bem tolerável, a maioria descreve como um desconforto leve. Posso te explicar o pós-procedimento também." },
+    ],
+    solutionCard2Title: "Agenda a avaliação sozinha, sem ida e volta",
+    solutionCard2Desc: "Cada conversa vira um lead com nota de temperatura. Você abre o painel e já sabe quem chamar primeiro.",
+    solutionCard2Messages: [
+      { from: "user", text: "Tem horário pra essa semana?" },
+      { from: "bot", text: "Quinta às 14h ou sexta às 10h" },
+      { from: "bot", text: "Fechado! Te mando a confirmação." },
+    ],
+    capabilities: [
+      { title: "Conhece cada procedimento de cor", desc: "Sabe valor, duração e contraindicações sem você digitar nada entre um atendimento e outro." },
+      { title: "Agenda avaliação sem ida e volta", desc: "Marca a avaliação direto no chat, sem sair pra outro app." },
+      { title: "Te chama na hora certa", desc: "Quando a cliente quer tirar uma dúvida clínica, ela já abre o WhatsApp com a conversa pronta." },
+      { title: "Nunca inventa resposta", desc: "Se não sabe algo, admite e te chama — nunca dá indicação clínica no lugar da sua equipe." },
+    ],
+    faqExtra: ["A IA dá indicação de procedimento?", "Não. Ela explica o que está na sua base e organiza a pré-avaliação — qualquer indicação clínica continua sendo sua, da sua equipe."],
+    earlyAccess: true,
   },
 };

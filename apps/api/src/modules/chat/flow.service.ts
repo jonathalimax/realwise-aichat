@@ -25,6 +25,16 @@ interface FlowDef {
   nodes: Record<string, FlowNode>;
 }
 
+interface FlowSnapshot {
+  nodeId: string;
+  message: string;
+  bubbles: FlowBubble[];
+  input: string | null;
+  params: Record<string, unknown>;
+}
+
+const MAX_FLOW_HISTORY = 25;
+
 const FLOWS: Record<string, FlowDef> = {
   imobiliaria: imobiliariaFlow as unknown as FlowDef,
   concessionaria: concessionariaFlow as unknown as FlowDef,
@@ -89,11 +99,66 @@ export class FlowService {
         businessId,
         systemPrompt,
         prompt: "Gere a resposta para o cliente.",
+        // CPU inference on a RAG-grounded prompt routinely exceeds the default 25s used for short
+        // chip/chat calls — this path was silently timing out and falling through to blank text.
+        timeoutMs: 60000,
       });
       return result.text;
     } catch {
       return substituted.replace(PLACEHOLDER_PATTERN, "");
     }
+  }
+
+  // Derives region/bairro bubbles from what's actually mentioned in the business's ingested
+  // documents instead of a hardcoded list — cached on Business since extraction is an LLM call.
+  private async dynamicRegionBubbles(businessId: string): Promise<FlowBubble[]> {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) return [];
+
+    const isFresh = business.cachedLocationsAt && Date.now() - business.cachedLocationsAt.getTime() < 12 * 3600 * 1000;
+    if (isFresh && Array.isArray(business.cachedLocations)) {
+      return (business.cachedLocations as string[]).map((name) => ({
+        label: name,
+        goto: "resultados",
+        params: { regiao: name },
+      }));
+    }
+
+    const chunks = await this.prisma.client.knowledgeChunk.findMany({
+      where: { businessId },
+      select: { content: true },
+      take: 40,
+    });
+    const chunkText = chunks.map((c) => c.content).join("\n\n").slice(0, 6000);
+
+    let names: string[] = [];
+    if (chunkText) {
+      try {
+        const result = await generateFromGateway({
+          purpose: "extraction",
+          businessId,
+          systemPrompt: [
+            "Extraia os nomes de bairros ou regiões citados nos trechos de documentos abaixo.",
+            "Responda apenas com um array JSON de até 6 strings, cada uma um bairro/região real mencionado no texto — nunca invente um nome que não apareça.",
+            "Se nenhum bairro ou região for citado, responda com um array vazio [].",
+            `Trechos:\n${chunkText}`,
+          ].join("\n"),
+          prompt: "Gere o array de bairros/regiões.",
+          maxTokens: 150,
+        });
+        const parsed = JSON.parse(result.text.trim());
+        if (Array.isArray(parsed)) names = parsed.filter((n) => typeof n === "string").slice(0, 6);
+      } catch {
+        names = [];
+      }
+    }
+
+    await this.prisma.client.business.update({
+      where: { id: businessId },
+      data: { cachedLocations: names as any, cachedLocationsAt: new Date() },
+    });
+
+    return names.map((name) => ({ label: name, goto: "resultados", params: { regiao: name } }));
   }
 
   private async currentState(conversationId: string) {
@@ -102,12 +167,25 @@ export class FlowService {
     return conversation;
   }
 
-  private async emit(businessId: string, niche: string, nodeId: string, params: Record<string, unknown>) {
+  private async emit(businessId: string, niche: string, nodeId: string, params: Record<string, unknown>): Promise<FlowSnapshot> {
     const flow = this.flowFor(niche);
     const node = flow.nodes[nodeId] ?? flow.nodes[flow.start];
     const message = await this.resolveMessage(businessId, node, params);
-    const bubbles = [...(node.bubbles ?? []), ...flow.global_bubbles];
-    return { nodeId: node.id, message, bubbles, input: node.input ?? null };
+
+    let bubbles: FlowBubble[];
+    if (node.id === "busca_bairro") {
+      // Only the location-agnostic bubbles from the script ("Perto de mim" / "Tanto faz") plus
+      // real region names derived from the business's own documents — no hardcoded zone list.
+      const locationAgnostic = (node.bubbles ?? []).filter(
+        (b) => b.params?.regiao === "geo" || b.params?.regiao === "any",
+      );
+      const regions = await this.dynamicRegionBubbles(businessId);
+      bubbles = [...regions, ...locationAgnostic, ...flow.global_bubbles];
+    } else {
+      bubbles = [...(node.bubbles ?? []), ...flow.global_bubbles];
+    }
+
+    return { nodeId: node.id, message, bubbles, input: node.input ?? null, params };
   }
 
   async start(businessId: string, conversationId: string) {
@@ -119,14 +197,16 @@ export class FlowService {
     const nodeId = conversation.flowNodeId ?? flow.start;
     const params = (conversation.flowParams as Record<string, unknown>) ?? {};
 
+    const snapshot = await this.emit(businessId, business.niche, nodeId, params);
+
     if (!conversation.flowNodeId) {
       await this.prisma.client.conversation.update({
         where: { id: conversationId },
-        data: { flowNodeId: flow.start, flowStack: [] },
+        data: { flowNodeId: flow.start, flowHistory: [], flowSnapshot: snapshot as any },
       });
     }
 
-    return this.emit(businessId, business.niche, nodeId, params);
+    return snapshot;
   }
 
   async advance(businessId: string, conversationId: string, goto: string, bubbleParams: Record<string, unknown> = {}) {
@@ -134,25 +214,52 @@ export class FlowService {
     if (!business) throw new NotFoundException("Business not found");
 
     const conversation = await this.currentState(conversationId);
-    const currentNodeId = conversation.flowNodeId ?? this.flowFor(business.niche).start;
-    const stack = [...conversation.flowStack];
+    const history = (conversation.flowHistory as unknown as FlowSnapshot[]) ?? [];
 
-    let targetNodeId: string;
+    // Back is pure local navigation: replay the exact snapshot that was already shown instead of
+    // re-resolving the node, so it never triggers an LLM/RAG call or reads as "messaging Clara".
     if (goto === "__back__") {
-      targetNodeId = stack.pop() ?? this.flowFor(business.niche).start;
-    } else {
-      stack.push(currentNodeId);
-      targetNodeId = goto;
+      const previous = history[history.length - 1];
+      if (!previous) {
+        const flow = this.flowFor(business.niche);
+        const snapshot = await this.emit(businessId, business.niche, flow.start, {});
+        await this.prisma.client.conversation.update({
+          where: { id: conversationId },
+          data: { flowNodeId: flow.start, flowParams: {}, flowHistory: [], flowSnapshot: snapshot as any },
+        });
+        return snapshot;
+      }
+
+      await this.prisma.client.conversation.update({
+        where: { id: conversationId },
+        data: {
+          flowNodeId: previous.nodeId,
+          flowParams: previous.params as any,
+          flowHistory: history.slice(0, -1) as any,
+          flowSnapshot: previous as any,
+        },
+      });
+      return previous;
     }
 
+    const currentSnapshot = (conversation.flowSnapshot as unknown as FlowSnapshot) ?? null;
     const mergedParams = { ...(conversation.flowParams as Record<string, unknown>), ...bubbleParams };
+    const nextSnapshot = await this.emit(businessId, business.niche, goto, mergedParams);
+
+    const nextHistory = currentSnapshot ? [...history, currentSnapshot].slice(-MAX_FLOW_HISTORY) : history;
 
     await this.prisma.client.conversation.update({
       where: { id: conversationId },
-      data: { flowNodeId: targetNodeId, flowParams: mergedParams as any, flowStack: stack, fixedFlowTurns: { increment: 1 } },
+      data: {
+        flowNodeId: goto,
+        flowParams: mergedParams as any,
+        flowHistory: nextHistory as any,
+        flowSnapshot: nextSnapshot as any,
+        fixedFlowTurns: { increment: 1 },
+      },
     });
 
-    return this.emit(businessId, business.niche, targetNodeId, mergedParams);
+    return nextSnapshot;
   }
 
   // Free-text input at a node with `on_input` routes to that target node instead of going to the

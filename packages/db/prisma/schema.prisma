@@ -87,6 +87,8 @@ model Business {
   websiteSyncedAt DateTime?
   cachedChips     Json?
   cachedChipsAt   DateTime?
+  cachedLocations Json?
+  cachedLocationsAt DateTime?
   trialEndsAt     DateTime?
   trialReminderSentAt DateTime?
   status          BusinessStatus @default(onboarding)
@@ -214,6 +216,8 @@ model Conversation {
   flowNodeId          String?
   flowParams          Json                @default("{}")
   flowStack           String[]
+  flowSnapshot        Json?
+  flowHistory         Json                @default("[]")
 
   messages            Message[]
   chipSuggestions     ChipSuggestion[]

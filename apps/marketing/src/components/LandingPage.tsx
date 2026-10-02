@@ -48,6 +48,7 @@ function ChatBubble({ msg }: { msg: { from: "bot" | "user"; text: string } }) {
 
 export function LandingPage({ niche }: { niche: NicheConfig }) {
   const WHATSAPP_URL = waUrl(niche.label);
+  const ctaLabel = niche.earlyAccess ? "Entrar na lista de espera" : "Falar no WhatsApp";
 
   return (
     <div className="bg-bg text-ink">
@@ -60,12 +61,19 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
             <a href="#precos" className="hover:text-ink">Preços</a>
             <a href="#faq" className="hover:text-ink">Perguntas</a>
           </nav>
-          <Pill href={WHATSAPP_URL} className="px-4 py-2 text-xs">Falar no WhatsApp</Pill>
+          <Pill href={WHATSAPP_URL} className="px-4 py-2 text-xs">{ctaLabel}</Pill>
         </div>
       </header>
 
       {/* HERO */}
       <section className="mx-auto max-w-6xl px-5 pb-20 pt-16 text-center md:pb-28 md:pt-24">
+        {niche.earlyAccess && (
+          <Reveal>
+            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-1.5 text-xs font-semibold text-ink-soft">
+              <span className="h-1.5 w-1.5 rounded-full bg-lime" /> Em breve — entre na lista de espera
+            </span>
+          </Reveal>
+        )}
         <Reveal>
           <h1 className="mx-auto max-w-3xl font-serif text-5xl leading-[1.1] text-ink md:text-7xl">
             {niche.heroPre}<em className="italic">{niche.heroEm}</em>.
