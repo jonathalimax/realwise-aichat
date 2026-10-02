@@ -24,7 +24,7 @@ export class AuthService {
           niche: "imobiliaria",
           ownerName: "",
           status: "onboarding",
-          trialEndsAt: new Date(Date.now() + 30 * 24 * 3600 * 1000),
+          trialEndsAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
         },
       }));
 

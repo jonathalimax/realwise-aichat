@@ -1,7 +1,7 @@
 import { prisma } from "@realwise/db";
 import { sendEmail } from "../email";
 
-const REMINDER_WINDOW_DAYS = 15;
+const REMINDER_WINDOW_DAYS = 2;
 
 function hasActivePaidSubscription(business: { subscription: { status: string } | null }) {
   return business.subscription?.status === "active";
@@ -11,7 +11,7 @@ export async function processTrialWatch() {
   const now = new Date();
   const reminderCutoff = new Date(now.getTime() + REMINDER_WINDOW_DAYS * 24 * 3600 * 1000);
 
-  // 15 days out: send a one-time reminder that the public link stops working when the trial ends.
+  // 2 days out: send a one-time reminder that the public link stops working when the trial ends.
   const needsReminder = await prisma.business.findMany({
     where: {
       trialEndsAt: { lte: reminderCutoff, gt: now },

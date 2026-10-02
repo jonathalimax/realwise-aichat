@@ -106,7 +106,7 @@ export default function OnboardingPage() {
     <div className="mx-auto max-w-2xl">
       {business.trialEndsAt && (
         <div className="mb-4 rounded-lg bg-lime-soft px-3 py-2 text-xs font-semibold text-lime-ink">
-          Você tem 30 dias grátis — seu teste termina em {new Date(business.trialEndsAt).toLocaleDateString("pt-BR")}.
+          Você tem 7 dias grátis — seu teste termina em {new Date(business.trialEndsAt).toLocaleDateString("pt-BR")}.
         </div>
       )}
       <div className="mb-6 flex gap-2">
