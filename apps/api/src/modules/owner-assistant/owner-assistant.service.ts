@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { nicheTemplates } from "@realwise/profile-schema";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 import { embedText } from "../../inference/embed-client";
@@ -82,8 +83,17 @@ export class OwnerAssistantService {
 
   // Propose-don't-write: returns a pending proposal only — the actual field write happens
   // later, via the existing patchProfileField-backed endpoint, after the owner explicitly confirms.
-  private proposeProfileEditTool(input: { fieldKey?: string; proposedValue?: string; reason?: string }): PendingProposal | null {
+  // fieldKey is constrained to the business's own niche template so a prompt-injected or malformed
+  // tool call can't propose writes to arbitrary/non-existent keys.
+  private async proposeProfileEditTool(
+    businessId: string,
+    input: { fieldKey?: string; proposedValue?: string; reason?: string },
+  ): Promise<PendingProposal | null> {
     if (!input.fieldKey || input.proposedValue === undefined) return null;
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    const template = business ? nicheTemplates[business.niche] : undefined;
+    const allowed = template?.fields.some((f) => f.key === input.fieldKey);
+    if (!allowed) return null;
     return {
       fieldKey: input.fieldKey,
       proposedValue: String(input.proposedValue),
@@ -118,7 +128,7 @@ export class OwnerAssistantService {
       case "searchKnowledgeBase":
         return { result: await this.searchKnowledgeBaseTool(businessId, call.input as any) };
       case "proposeProfileEdit": {
-        const proposal = this.proposeProfileEditTool(call.input as any);
+        const proposal = await this.proposeProfileEditTool(businessId, call.input as any);
         return { result: proposal, pendingProposal: proposal ?? undefined };
       }
       case "generateReport":

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, UnauthorizedException } from "@nestjs/co
 import { randomBytes } from "node:crypto";
 import { google } from "googleapis";
 import { PrismaService } from "../../prisma/prisma.service";
+import { encryptSecret, decryptSecret } from "../../common/crypto";
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -74,27 +75,32 @@ export class CalendarService {
       create: {
         businessId,
         provider: "google",
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        accessToken: encryptSecret(tokens.access_token),
+        refreshToken: encryptSecret(tokens.refresh_token),
         calendarId: "primary",
         syncEnabled: true,
       },
       update: {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        accessToken: encryptSecret(tokens.access_token),
+        refreshToken: encryptSecret(tokens.refresh_token),
         syncEnabled: true,
         connectedAt: new Date(),
       },
     });
   }
 
+  // Tokens stay encrypted outside this service — callers (e.g. the `status` endpoint) only need
+  // connected/syncEnabled, never the raw credentials.
   async getIntegration(businessId: string) {
     return this.prisma.client.calendarIntegration.findUnique({ where: { businessId } });
   }
 
   private async calendarClient(integration: { accessToken: string; refreshToken: string }) {
     const client = this.oauthClient();
-    client.setCredentials({ access_token: integration.accessToken, refresh_token: integration.refreshToken });
+    client.setCredentials({
+      access_token: decryptSecret(integration.accessToken),
+      refresh_token: decryptSecret(integration.refreshToken),
+    });
     return google.calendar({ version: "v3", auth: client });
   }
 
@@ -105,8 +111,11 @@ export class CalendarService {
     if (!integration || !integration.syncEnabled) return null;
 
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    // Same public-access rule as the chat widget itself (getBySlug) — only live businesses are
+    // queryable, so this endpoint can't be used to probe/spam Google's API for arbitrary/dead IDs.
+    if (!business || business.status !== "live") return [];
     const slotRules = await this.prisma.client.bookingSlot.findMany({ where: { businessId, isBlocked: false, kind: "recurring" } });
-    if (!business || slotRules.length === 0) return [];
+    if (slotRules.length === 0) return [];
 
     const calendar = await this.calendarClient(integration);
     const freebusy = await calendar.freebusy.query({
