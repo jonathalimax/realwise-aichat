@@ -61,7 +61,7 @@ export default function MarketingHome() {
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Pill href={DASHBOARD_LOGIN_URL} className="px-7 py-3.5 text-[0.95rem]">Começar agora</Pill>
             <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-full border border-ink/20 bg-transparent px-7 py-3.5 text-[0.95rem] font-semibold text-ink transition-all duration-200 hover:-translate-y-0.5 hover:bg-surface">
-              Falar no WhatsApp antes
+              Tirar dúvidas no WhatsApp
             </a>
           </div>
         </Reveal>
@@ -75,7 +75,7 @@ export default function MarketingHome() {
               <div className="text-left">
                 <div className="text-sm font-semibold">AutoSul Veículos</div>
                 <div className="flex items-center gap-1 text-[0.7rem] text-positive">
-                  <span className="h-1.5 w-1.5 rounded-full bg-positive" /> Online agora
+                  <span className="h-1.5 w-1.5 rounded-full bg-positive" /> Clara · Online agora
                 </div>
               </div>
             </div>
@@ -93,6 +93,12 @@ export default function MarketingHome() {
                 <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-[0.68rem] text-ink-soft">Simular financiamento</span>
                 <span className="rounded-full bg-ink px-2.5 py-1 text-[0.68rem] font-semibold text-bg">📅 Test-drive</span>
               </div>
+            </div>
+            <div className="flex items-center gap-2 border-t border-border px-4 py-3">
+              <div className="flex-1 rounded-full border border-border bg-bg-2 px-4 py-2 text-left text-[0.78rem] text-ink-soft">
+                Escreva sua pergunta…
+              </div>
+              <div className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-accent text-sm text-white">➤</div>
             </div>
           </div>
         </Reveal>
