@@ -5,6 +5,7 @@ import { getAnalyticsSummary, getAnalyticsTimeseries, getMe } from "../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { ActivityChart } from "../components/charts/ActivityChart";
+import { ShareLink } from "../components/ShareLink";
 
 const STATS = [
   { key: "conversations7d", label: "Conversas 7d" },
@@ -32,6 +33,7 @@ export default function HomePage() {
           Prontidão: <span className="ml-1 font-mono font-bold">{business?.confidenceScore ?? 0}%</span>
         </Badge>
       </div>
+      {business?.status === "live" && <ShareLink slug={business.slug} />}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {STATS.map(({ key, label }) => (
           <Card key={key}>
