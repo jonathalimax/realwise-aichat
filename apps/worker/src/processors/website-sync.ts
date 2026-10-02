@@ -72,7 +72,6 @@ export async function processWebsiteSync(job: Job<WebsiteSyncJobData>) {
 
     await Promise.all([
       callInternalApi("/confidence/recompute", businessId),
-      callInternalApi("/chips/regenerate", businessId),
       callInternalApi("/flow-options/regenerate", businessId),
     ]);
   } catch (error) {

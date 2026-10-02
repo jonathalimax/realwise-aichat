@@ -85,8 +85,6 @@ model Business {
   websiteUrl      String?
   websiteContentHash String?
   websiteSyncedAt DateTime?
-  cachedChips     Json?
-  cachedChipsAt   DateTime?
   cachedLocations Json?
   cachedLocationsAt DateTime?
   cachedFlowOptions Json?
@@ -222,7 +220,6 @@ model Conversation {
   flowHistory         Json                @default("[]")
 
   messages            Message[]
-  chipSuggestions     ChipSuggestion[]
   appointments        Appointment[]
 }
 
@@ -283,21 +280,6 @@ model Lead {
   appointments      Appointment[]
 
   @@unique([businessId, phoneNormalized])
-}
-
-model ChipSuggestion {
-  id              String        @id @default(uuid())
-  conversationId  String
-  conversation    Conversation  @relation(fields: [conversationId], references: [id])
-  businessId      String
-  afterMessageId  String?
-  label           String
-  questionText    String?
-  kind            String
-  position        Int
-  shownAt         DateTime      @default(now())
-  clickedAt       DateTime?
-  validatedAgainstKb Boolean    @default(false)
 }
 
 model BookingSlot {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Param, Post, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { ChatService } from "./chat.service";
 import { FlowService } from "./flow.service";
@@ -13,11 +13,6 @@ type VisitorContext = Partial<VisitorSessionClaims> & { visitorToken?: string };
 @Controller("chat")
 export class ChatController {
   constructor(private readonly chat: ChatService, private readonly flow: FlowService) {}
-
-  @Get(":businessId/chips")
-  chips(@Param("businessId") businessId: string) {
-    return this.chat.initialChips(businessId);
-  }
 
   @Post(":businessId/conversations")
   startConversation(@Param("businessId") businessId: string, @CurrentVisitor() visitor: VisitorContext) {

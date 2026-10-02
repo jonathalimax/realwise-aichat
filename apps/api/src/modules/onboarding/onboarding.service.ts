@@ -2,7 +2,6 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { nicheTemplates } from "@realwise/profile-schema";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
-import { ChatService } from "../chat/chat.service";
 
 const ABSTENTION_MARKERS = [
   "não tenho essa informação",
@@ -20,13 +19,7 @@ function looksLikeAbstention(text: string): boolean {
 
 @Injectable()
 export class OnboardingService {
-  constructor(private readonly prisma: PrismaService, private readonly chat: ChatService) {}
-
-  // Fire-and-forget — chip regeneration is an inference call and must never slow down a field
-  // save/approve response. Swallow errors; the next successful regeneration will self-correct.
-  private regenerateChipsInBackground(businessId: string) {
-    this.chat.regenerateChips(businessId).catch(() => {});
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   async getProfile(businessId: string) {
     const profile = await this.prisma.client.businessProfile.findUnique({ where: { businessId } });
@@ -54,7 +47,6 @@ export class OnboardingService {
         fieldStatus: fieldStatus as any,
       },
     });
-    this.regenerateChipsInBackground(businessId);
     return result;
   }
 
@@ -64,7 +56,6 @@ export class OnboardingService {
     const fieldStatus = existing.fieldStatus as Record<string, any>;
     if (fieldStatus[fieldKey]) fieldStatus[fieldKey].approvedByOwner = true;
     const result = await this.prisma.client.businessProfile.update({ where: { businessId }, data: { fieldStatus } });
-    this.regenerateChipsInBackground(businessId);
     return result;
   }
 

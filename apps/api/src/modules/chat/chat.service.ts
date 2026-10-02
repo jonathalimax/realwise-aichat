@@ -1,5 +1,4 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { nicheTemplates } from "@realwise/profile-schema";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway, generateFromGatewayStream } from "../../inference/gateway-client";
@@ -50,75 +49,6 @@ export class ChatService {
       });
     }
     return conversation;
-  }
-
-  // Chips are precomputed — this is a read of the cached value, never an inference call, so
-  // opening the chat is instant. Regeneration happens out-of-band via regenerateChips().
-  async initialChips(businessId: string) {
-    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
-    if (!business) throw new NotFoundException("Business not found");
-    if (Array.isArray(business.cachedChips) && business.cachedChips.length > 0) {
-      return business.cachedChips as string[];
-    }
-    const template = nicheTemplates[business.niche];
-    return template?.defaultChips ?? [];
-  }
-
-  // Triggered when the knowledge base actually changes (document processed, website synced,
-  // interview field updated) — never from a chat page load.
-  async regenerateChips(businessId: string) {
-    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
-    if (!business) throw new NotFoundException("Business not found");
-    const template = nicheTemplates[business.niche];
-    const fallback = template?.defaultChips ?? [];
-
-    const [profile, chunks] = await Promise.all([
-      this.prisma.client.businessProfile.findUnique({ where: { businessId } }),
-      this.prisma.client.knowledgeChunk.findMany({
-        where: { businessId },
-        orderBy: [{ document: { createdAt: "desc" } }, { ordinal: "asc" }],
-        take: 12,
-        select: { content: true },
-      }),
-    ]);
-
-    const profileSummary = profile?.cachedSummary ?? JSON.stringify(profile?.data ?? {});
-    const chunkText = chunks.map((c) => c.content).join("\n\n").slice(0, 6000);
-
-    let chips = fallback;
-    if (chunkText || (profile?.data && Object.keys(profile.data as object).length > 0)) {
-      const systemPrompt = [
-        `Você gera sugestões de pergunta (chips) para o início do chat da ${business.name}, antes do cliente ter dito qualquer coisa.`,
-        "Gere exatamente 4 perguntas curtas (no máximo 6 palavras cada), amplas e válidas para o negócio como um todo — NUNCA sobre um item/imóvel/veículo específico pelo nome, já que o cliente ainda não sabe quais itens existem.",
-        "Pense em dúvidas transversais que qualquer cliente teria logo de cara: quantidade/catálogo disponível, documentos ou requisitos, política geral (pets, fiador, financiamento), como agendar, horário de atendimento, formas de pagamento.",
-        "Baseie-se SOMENTE no conteúdo abaixo para saber quais dessas dúvidas fazem sentido para este negócio — nunca invente informação, mas não cite nomes próprios de imóveis, veículos ou produtos individuais.",
-        "Responda apenas com um array JSON de strings, sem nenhum texto adicional.",
-        `Informações do negócio: ${profileSummary}`,
-        `Conteúdo da base de conhecimento: ${chunkText}`,
-      ].join("\n");
-
-      try {
-        const result = await generateFromGateway({
-          purpose: "chips",
-          businessId,
-          systemPrompt,
-          prompt: "Gere os 4 chips.",
-          maxTokens: 150,
-        });
-        const parsed = JSON.parse(result.text.trim());
-        if (Array.isArray(parsed) && parsed.every((c) => typeof c === "string") && parsed.length > 0) {
-          chips = parsed.slice(0, 4);
-        }
-      } catch {
-        // keep fallback
-      }
-    }
-
-    await this.prisma.client.business.update({
-      where: { id: businessId },
-      data: { cachedChips: chips as any, cachedChipsAt: new Date() },
-    });
-    return chips;
   }
 
   private detectsEscalation(text: string): boolean {
@@ -200,44 +130,7 @@ export class ChatService {
       data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
     });
 
-    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
-    const chips = await this.followUpChips(businessId, business?.niche ?? "imobiliaria", visitorText, answer.text);
-
-    return { message: assistantMessage, escalated: false, chips };
-  }
-
-  // Contextual chips offered after each reply, so the visitor can keep tapping instead of
-  // typing. Grounded only in the exchange that just happened — kept cheap (low maxTokens) since
-  // this runs on every message, unlike the cached initial chips.
-  private async followUpChips(businessId: string, niche: string, lastVisitorText: string, lastAssistantText: string): Promise<string[]> {
-    const template = nicheTemplates[niche as "imobiliaria" | "concessionaria"];
-    const fallback = template?.defaultChips ?? [];
-
-    const systemPrompt = [
-      "Você sugere os próximos 4 chips (pergunta ou ação) para o visitante continuar a conversa sem precisar digitar.",
-      "Baseie-se SOMENTE na última pergunta e resposta abaixo. Sugira follow-ups curtos (até 6 palavras) que sejam o próximo passo natural: aprofundar o mesmo assunto, ou ações como 'Agendar visita' / 'Falar com atendente' quando fizer sentido.",
-      "Nunca repita a pergunta que acabou de ser feita. Nunca invente informação que não esteja na resposta.",
-      "Responda apenas com um array JSON de strings, sem texto adicional.",
-      `Pergunta do cliente: ${lastVisitorText}`,
-      `Resposta da Clara: ${lastAssistantText}`,
-    ].join("\n");
-
-    try {
-      const result = await generateFromGateway({
-        purpose: "chips",
-        businessId,
-        systemPrompt,
-        prompt: "Gere os 4 chips.",
-        maxTokens: 120,
-      });
-      const parsed = JSON.parse(result.text.trim());
-      if (Array.isArray(parsed) && parsed.every((c) => typeof c === "string") && parsed.length > 0) {
-        return parsed.slice(0, 4);
-      }
-    } catch {
-      // fall through to static fallback
-    }
-    return fallback;
+    return { message: assistantMessage, escalated: false };
   }
 
   private async buildChatPrompt(businessId: string, conversationId: string, visitorText: string) {
@@ -297,7 +190,7 @@ export class ChatService {
     }
   }
 
-  // Streaming counterpart of sendMessage — same escalation/abstention/chip logic, but the
+  // Streaming counterpart of sendMessage — same escalation/abstention logic, but the
   // model's answer is emitted token-by-token via onDelta so the caller can render it as it
   // arrives instead of waiting for the full response.
   async streamMessage(
@@ -395,10 +288,7 @@ export class ChatService {
       data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
     });
 
-    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
-    const chips = await this.followUpChips(businessId, business?.niche ?? "imobiliaria", visitorText, fullText);
-
-    return { message: assistantMessage, escalated: false, chips };
+    return { message: assistantMessage, escalated: false };
   }
 
   private readonly ALLOWED_SERVICES = new Set(["Visita ao imóvel", "Test-drive"]);

@@ -14,10 +14,6 @@ export function getBusiness(slug: string) {
   return request(`/businesses/public/${slug}`);
 }
 
-export function getChips(businessId: string) {
-  return request(`/chat/${businessId}/chips`);
-}
-
 export function startConversation(businessId: string) {
   return request(`/chat/${businessId}/conversations`, { method: "POST" });
 }
@@ -30,7 +26,7 @@ export function sendMessage(businessId: string, conversationId: string, text: st
 }
 
 // Streams the assistant's reply via SSE, calling onDelta as text arrives, and resolves with the
-// final "done" event payload (message metadata, chips, escalation info).
+// final "done" event payload (message metadata, escalation info).
 export async function streamMessage(
   businessId: string,
   conversationId: string,
