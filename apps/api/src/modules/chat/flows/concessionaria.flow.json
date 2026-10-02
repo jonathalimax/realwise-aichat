@@ -1,0 +1,1786 @@
+{
+  "version": 1,
+  "language": "pt-BR",
+  "start": "start",
+  "entry_points": {
+    "start": "Primeira conversa",
+    "retorno": "Usuário que já conversou antes",
+    "fora_horario": "Fora do horário comercial",
+    "agend_lembrete": "Lembrete antes do agendamento",
+    "pos_test_drive": "Mensagem após o test drive",
+    "nao_entendi": "Fallback para texto não reconhecido",
+    "sem_resultados": "Busca sem resultados",
+    "fin_negado": "Crédito não aprovado"
+  },
+  "global_bubbles": [
+    { "label": "⬅ Voltar", "goto": "__back__" },
+    { "label": "🏠 Menu inicial", "goto": "start" },
+    { "label": "💬 Vendedor", "goto": "atendente" }
+  ],
+  "notes": [
+    "Textos entre {chaves} são placeholders preenchidos pelo backend.",
+    "Nós com 'input' aceitam texto/arquivo opcional; os bubbles continuam visíveis.",
+    "'params' acumulam filtros/contexto ao longo do fluxo.",
+    "'outcomes' indica destinos decididos pelo backend (ex.: crédito aprovado/negado).",
+    "'__back__' volta ao nó anterior da pilha de navegação."
+  ],
+  "nodes": {
+    "start": {
+      "id": "start",
+      "message": "Olá! 👋 Sou o assistente da loja. Como posso te ajudar?",
+      "bubbles": [
+        { "label": "🚗 Quero comprar um carro", "goto": "comprar" },
+        { "label": "💰 Quero vender meu carro", "goto": "vender" },
+        { "label": "🔄 Quero trocar meu carro", "goto": "troca" },
+        { "label": "🏦 Simular financiamento", "goto": "fin_entrada" },
+        { "label": "🛠 Já comprei aqui", "goto": "cliente_id" },
+        { "label": "💬 Falar com um vendedor", "goto": "atendente" },
+        { "label": "ℹ️ Outras dúvidas", "goto": "outras" }
+      ]
+    },
+    "retorno": {
+      "id": "retorno",
+      "message": "Que bom te ver de novo! 😊",
+      "bubbles": [
+        { "label": "▶️ Continuar de onde parei", "goto": "resultados" },
+        { "label": "❤️ Ver carros salvos", "goto": "salvos" },
+        { "label": "📅 Meus agendamentos", "goto": "meus_agend" },
+        { "label": "🔄 Começar de novo", "goto": "start" }
+      ]
+    },
+    "comprar": {
+      "id": "comprar",
+      "message": "Ótimo! Como você quer começar?",
+      "bubbles": [
+        { "label": "Ver carros disponíveis", "goto": "busca_categoria" },
+        { "label": "Já vi um carro no site", "goto": "carro_codigo" },
+        { "label": "Procuro um modelo específico", "goto": "busca_marca" },
+        { "label": "Carros até um valor", "goto": "busca_preco" },
+        { "label": "Carros com parcela que cabe no bolso", "goto": "fin_parcela" },
+        { "label": "Me ajuda a escolher", "goto": "ajuda_perfil" },
+        { "label": "Vocês dão garantia?", "goto": "gar_info" },
+        { "label": "Os carros têm laudo?", "goto": "laudo_info" },
+        { "label": "Agendar visita / test drive", "goto": "agend_inicio" }
+      ]
+    },
+    "ajuda_perfil": {
+      "id": "ajuda_perfil",
+      "message": "Me conta: para que você vai usar o carro?",
+      "bubbles": [
+        { "label": "Dia a dia na cidade", "goto": "busca_preco", "params": { "perfil": "urbano", "categoria": "hatch" } },
+        { "label": "Família / viagens", "goto": "busca_preco", "params": { "perfil": "familia", "categoria": "suv" } },
+        { "label": "Trabalho / carga", "goto": "busca_preco", "params": { "perfil": "trabalho", "categoria": "picape" } },
+        { "label": "Aplicativo (Uber, 99)", "goto": "app_info" },
+        { "label": "Primeiro carro", "goto": "busca_preco", "params": { "perfil": "primeiro", "categoria": "hatch" } },
+        { "label": "Quero economia de combustível", "goto": "busca_preco", "params": { "perfil": "economia" } }
+      ]
+    },
+    "app_info": {
+      "id": "app_info",
+      "message": "Para aplicativo, os apps exigem carro com até {anos_app} anos, 4 portas e ar-condicionado.",
+      "bubbles": [
+        { "label": "Ver carros aceitos em apps", "goto": "resultados", "params": { "app": true } },
+        { "label": "Simular financiamento", "goto": "fin_entrada" },
+        { "label": "Voltar", "goto": "ajuda_perfil" }
+      ]
+    },
+    "busca_categoria": {
+      "id": "busca_categoria",
+      "message": "Que tipo de carro você procura?",
+      "bubbles": [
+        { "label": "Hatch", "goto": "busca_marca", "params": { "categoria": "hatch" } },
+        { "label": "Sedã", "goto": "busca_marca", "params": { "categoria": "seda" } },
+        { "label": "SUV", "goto": "busca_marca", "params": { "categoria": "suv" } },
+        { "label": "Picape", "goto": "busca_marca", "params": { "categoria": "picape" } },
+        { "label": "Minivan / 7 lugares", "goto": "busca_marca", "params": { "categoria": "7lugares" } },
+        { "label": "Esportivo / premium", "goto": "busca_marca", "params": { "categoria": "premium" } },
+        { "label": "Elétrico / híbrido", "goto": "busca_marca", "params": { "categoria": "eletrico" } },
+        { "label": "Moto", "goto": "busca_marca", "params": { "categoria": "moto" } },
+        { "label": "Tanto faz", "goto": "busca_marca", "params": { "categoria": "any" } }
+      ]
+    },
+    "busca_marca": {
+      "id": "busca_marca",
+      "message": "Tem preferência de marca?",
+      "bubbles": [
+        { "label": "Chevrolet", "goto": "busca_modelo", "params": { "marca": "chevrolet" } },
+        { "label": "Fiat", "goto": "busca_modelo", "params": { "marca": "fiat" } },
+        { "label": "Volkswagen", "goto": "busca_modelo", "params": { "marca": "vw" } },
+        { "label": "Toyota", "goto": "busca_modelo", "params": { "marca": "toyota" } },
+        { "label": "Hyundai", "goto": "busca_modelo", "params": { "marca": "hyundai" } },
+        { "label": "Honda", "goto": "busca_modelo", "params": { "marca": "honda" } },
+        { "label": "Jeep", "goto": "busca_modelo", "params": { "marca": "jeep" } },
+        { "label": "Renault", "goto": "busca_modelo", "params": { "marca": "renault" } },
+        { "label": "Outras marcas", "goto": "busca_marca_mais" },
+        { "label": "Tanto faz", "goto": "busca_preco", "params": { "marca": "any" } }
+      ],
+      "input": "marca ou modelo"
+    },
+    "busca_marca_mais": {
+      "id": "busca_marca_mais",
+      "message": "Outras marcas no estoque:",
+      "bubbles": [
+        { "label": "Ford", "goto": "busca_modelo", "params": { "marca": "ford" } },
+        { "label": "Nissan", "goto": "busca_modelo", "params": { "marca": "nissan" } },
+        { "label": "Peugeot / Citroën", "goto": "busca_modelo", "params": { "marca": "stellantis_fr" } },
+        { "label": "BYD / GWM", "goto": "busca_modelo", "params": { "marca": "chinesas" } },
+        { "label": "Mitsubishi", "goto": "busca_modelo", "params": { "marca": "mitsubishi" } },
+        { "label": "BMW / Mercedes / Audi", "goto": "busca_modelo", "params": { "marca": "premium" } },
+        { "label": "⬅ Ver marcas principais", "goto": "busca_marca" }
+      ]
+    },
+    "busca_modelo": {
+      "id": "busca_modelo",
+      "message": "Modelos {marca} disponíveis:",
+      "bubbles": [
+        { "label": "{modelo_1}", "goto": "busca_preco" },
+        { "label": "{modelo_2}", "goto": "busca_preco" },
+        { "label": "{modelo_3}", "goto": "busca_preco" },
+        { "label": "{modelo_4}", "goto": "busca_preco" },
+        { "label": "Qualquer modelo", "goto": "busca_preco", "params": { "modelo": "any" } }
+      ]
+    },
+    "busca_preco": {
+      "id": "busca_preco",
+      "message": "Qual faixa de preço?",
+      "bubbles": [
+        { "label": "Até R$ 40 mil", "goto": "busca_ano", "params": { "faixa": 1 } },
+        { "label": "R$ 40–60 mil", "goto": "busca_ano", "params": { "faixa": 2 } },
+        { "label": "R$ 60–80 mil", "goto": "busca_ano", "params": { "faixa": 3 } },
+        { "label": "R$ 80–120 mil", "goto": "busca_ano", "params": { "faixa": 4 } },
+        { "label": "R$ 120–200 mil", "goto": "busca_ano", "params": { "faixa": 5 } },
+        { "label": "Acima de R$ 200 mil", "goto": "busca_ano", "params": { "faixa": 6 } },
+        { "label": "Prefiro pensar na parcela", "goto": "fin_parcela" },
+        { "label": "Tanto faz", "goto": "busca_ano", "params": { "faixa": "any" } }
+      ],
+      "input": "valor máximo"
+    },
+    "busca_ano": {
+      "id": "busca_ano",
+      "message": "A partir de qual ano?",
+      "bubbles": [
+        { "label": "Até 5 anos de uso", "goto": "busca_cambio", "params": { "ano_min": "-5" } },
+        { "label": "2015 em diante", "goto": "busca_cambio", "params": { "ano_min": 2015 } },
+        { "label": "2010 em diante", "goto": "busca_cambio", "params": { "ano_min": 2010 } },
+        { "label": "0 km / seminovo recente", "goto": "busca_cambio", "params": { "ano_min": "-1" } },
+        { "label": "Tanto faz", "goto": "busca_cambio", "params": { "ano_min": "any" } }
+      ]
+    },
+    "busca_cambio": {
+      "id": "busca_cambio",
+      "message": "Câmbio?",
+      "bubbles": [
+        { "label": "Automático", "goto": "busca_km", "params": { "cambio": "auto" } },
+        { "label": "Manual", "goto": "busca_km", "params": { "cambio": "manual" } },
+        { "label": "Tanto faz", "goto": "busca_km", "params": { "cambio": "any" } }
+      ]
+    },
+    "busca_km": {
+      "id": "busca_km",
+      "message": "Quilometragem máxima?",
+      "bubbles": [
+        { "label": "Até 30 mil km", "goto": "busca_extras", "params": { "km": 30000 } },
+        { "label": "Até 60 mil km", "goto": "busca_extras", "params": { "km": 60000 } },
+        { "label": "Até 100 mil km", "goto": "busca_extras", "params": { "km": 100000 } },
+        { "label": "Tanto faz", "goto": "busca_extras", "params": { "km": "any" } }
+      ]
+    },
+    "busca_extras": {
+      "id": "busca_extras",
+      "message": "Algum item indispensável?",
+      "bubbles": [
+        { "label": "❄️ Ar-condicionado", "goto": "resultados", "params": { "extra": "ar" } },
+        { "label": "📱 Multimídia / CarPlay", "goto": "resultados", "params": { "extra": "multimidia" } },
+        { "label": "📷 Câmera de ré", "goto": "resultados", "params": { "extra": "camera" } },
+        { "label": "⛽ Flex", "goto": "resultados", "params": { "extra": "flex" } },
+        { "label": "🧑‍🦽 Adaptado PCD", "goto": "pcd_info" },
+        { "label": "🔑 Único dono", "goto": "resultados", "params": { "extra": "unico_dono" } },
+        { "label": "📘 Revisões na concessionária", "goto": "resultados", "params": { "extra": "revisoes" } },
+        { "label": "Nenhum, mostrar resultados", "goto": "resultados" }
+      ]
+    },
+    "pcd_info": {
+      "id": "pcd_info",
+      "message": "Atendemos PCD! Carros novos podem ter isenção de IPI/ICMS; em seminovos, ajudamos na escolha e adaptação.",
+      "bubbles": [
+        { "label": "Ver carros automáticos", "goto": "resultados", "params": { "cambio": "auto" } },
+        { "label": "💬 Falar com especialista PCD", "goto": "handoff", "params": { "setor": "pcd" } },
+        { "label": "Voltar", "goto": "busca_extras" }
+      ]
+    },
+    "resultados": {
+      "id": "resultados",
+      "message": "Encontrei {n} carros para você 👇",
+      "bubbles": [
+        { "label": "➡️ Ver próximo", "goto": "resultados" },
+        { "label": "🔍 Ver detalhes", "goto": "carro_detalhe" },
+        { "label": "🏦 Simular parcela deste", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "💲 Menor preço primeiro", "goto": "resultados", "params": { "ordem": "preco_asc" } },
+        { "label": "🛣 Menor km primeiro", "goto": "resultados", "params": { "ordem": "km_asc" } },
+        { "label": "🆕 Mais novos primeiro", "goto": "resultados", "params": { "ordem": "ano_desc" } },
+        { "label": "🎛 Refinar busca", "goto": "refinar" },
+        { "label": "🔔 Me avise de novos carros", "goto": "alerta_criado" },
+        { "label": "💬 Falar com vendedor", "goto": "handoff" }
+      ]
+    },
+    "sem_resultados": {
+      "id": "sem_resultados",
+      "message": "Não encontrei carros com esses filtros 😕",
+      "bubbles": [
+        { "label": "Ampliar faixa de preço", "goto": "busca_preco" },
+        { "label": "Aceitar carros mais antigos", "goto": "busca_ano" },
+        { "label": "Mudar marca/modelo", "goto": "busca_marca" },
+        { "label": "Remover itens indispensáveis", "goto": "busca_extras" },
+        { "label": "🔔 Me avise quando chegar", "goto": "alerta_criado" },
+        { "label": "Vocês buscam o carro pra mim?", "goto": "encomenda" }
+      ]
+    },
+    "encomenda": {
+      "id": "encomenda",
+      "message": "Sim! Podemos buscar o carro no mercado para você 🔎",
+      "bubbles": [
+        { "label": "Quero encomendar", "goto": "handoff", "params": { "setor": "encomenda" } },
+        { "label": "Tem custo?", "goto": "encomenda_custo" },
+        { "label": "Voltar aos filtros", "goto": "refinar" }
+      ]
+    },
+    "encomenda_custo": {
+      "id": "encomenda_custo",
+      "message": "{regra_encomenda}",
+      "bubbles": [
+        { "label": "Quero encomendar", "goto": "handoff", "params": { "setor": "encomenda" } },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "refinar": {
+      "id": "refinar",
+      "message": "O que você quer mudar?",
+      "bubbles": [
+        { "label": "Tipo de carro", "goto": "busca_categoria" },
+        { "label": "Marca / modelo", "goto": "busca_marca" },
+        { "label": "Preço", "goto": "busca_preco" },
+        { "label": "Ano", "goto": "busca_ano" },
+        { "label": "Câmbio", "goto": "busca_cambio" },
+        { "label": "Quilometragem", "goto": "busca_km" },
+        { "label": "Itens indispensáveis", "goto": "busca_extras" },
+        { "label": "🔄 Nova busca do zero", "goto": "busca_categoria" }
+      ]
+    },
+    "alerta_criado": {
+      "id": "alerta_criado",
+      "message": "Pronto! 🔔 Te aviso quando chegar um carro com esse perfil.",
+      "bubbles": [
+        { "label": "Continuar vendo carros", "goto": "resultados" },
+        { "label": "Gerenciar alertas", "goto": "alertas" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "alertas": {
+      "id": "alertas",
+      "message": "Seus alertas ativos:",
+      "bubbles": [
+        { "label": "Criar novo alerta", "goto": "busca_categoria" },
+        { "label": "Pausar alertas", "goto": "alerta_pausado" },
+        { "label": "Excluir alerta", "goto": "alerta_pausado" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "alerta_pausado": {
+      "id": "alerta_pausado",
+      "message": "Feito! Reative quando quiser.",
+      "bubbles": [
+        { "label": "Ver carros agora", "goto": "busca_categoria" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "carro_detalhe": {
+      "id": "carro_detalhe",
+      "message": "{marca} {modelo} {ano} — {km} km — {preco}. O que você quer ver?",
+      "bubbles": [
+        { "label": "📸 Ver fotos", "goto": "carro_fotos" },
+        { "label": "🎥 Ver vídeo", "goto": "carro_video" },
+        { "label": "📋 Ficha técnica", "goto": "carro_ficha" },
+        { "label": "🧾 Histórico do carro", "goto": "carro_historico" },
+        { "label": "🔍 Laudo cautelar", "goto": "carro_laudo" },
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "🔄 Dar meu carro na troca", "goto": "troca_marca" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "✅ Quero este carro", "goto": "carro_quero" },
+        { "label": "💲 Aceita proposta?", "goto": "carro_proposta_info" },
+        { "label": "❤️ Salvar", "goto": "carro_salvo" },
+        { "label": "🔗 Compartilhar", "goto": "carro_compartilhar" },
+        { "label": "🔁 Ver parecidos", "goto": "resultados", "params": { "similar": true } },
+        { "label": "⬅ Voltar aos resultados", "goto": "resultados" }
+      ]
+    },
+    "carro_fotos": {
+      "id": "carro_fotos",
+      "message": "Aqui estão as fotos 📸",
+      "bubbles": [
+        { "label": "Ver vídeo", "goto": "carro_video" },
+        { "label": "Tem algum detalhe/avaria?", "goto": "carro_avarias" },
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_video": {
+      "id": "carro_video",
+      "message": "Aqui está o vídeo do carro 🎥",
+      "bubbles": [
+        { "label": "Quero uma videochamada ao vivo", "goto": "handoff", "params": { "setor": "video" } },
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_avarias": {
+      "id": "carro_avarias",
+      "message": "{avarias_info}",
+      "bubbles": [
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_ficha": {
+      "id": "carro_ficha",
+      "message": "Motor {motor}, câmbio {cambio}, {combustivel}, consumo {consumo}.",
+      "bubbles": [
+        { "label": "Quais opcionais tem?", "goto": "carro_opcionais" },
+        { "label": "Qual o consumo real?", "goto": "carro_consumo" },
+        { "label": "Quanto custa o seguro?", "goto": "seguro_cotar" },
+        { "label": "Quanto é o IPVA?", "goto": "carro_ipva" },
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_opcionais": {
+      "id": "carro_opcionais",
+      "message": "Opcionais: {opcionais}.",
+      "bubbles": [
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_consumo": {
+      "id": "carro_consumo",
+      "message": "Médias do Inmetro: {cidade} km/l na cidade e {estrada} km/l na estrada.",
+      "bubbles": [
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_ipva": {
+      "id": "carro_ipva",
+      "message": "O IPVA {ano_ipva} deste carro é de cerca de {ipva}. {ipva_status}",
+      "bubbles": [
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_historico": {
+      "id": "carro_historico",
+      "message": "Histórico: {donos} dono(s), {origem}.",
+      "bubbles": [
+        { "label": "Tem manual e chave reserva?", "goto": "carro_manual" },
+        { "label": "Revisões feitas onde?", "goto": "carro_revisoes" },
+        { "label": "Já foi batido?", "goto": "carro_laudo" },
+        { "label": "É de leilão?", "goto": "carro_leilao" },
+        { "label": "Tem multas ou débitos?", "goto": "carro_debitos" },
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_manual": {
+      "id": "carro_manual",
+      "message": "{manual_chave_info}",
+      "bubbles": [
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_revisoes": {
+      "id": "carro_revisoes",
+      "message": "{revisoes_info}",
+      "bubbles": [
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_leilao": {
+      "id": "carro_leilao",
+      "message": "Não vendemos carros de leilão ou com sinistro de grande monta.",
+      "bubbles": [
+        { "label": "Ver laudo cautelar", "goto": "carro_laudo" },
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_debitos": {
+      "id": "carro_debitos",
+      "message": "Todos os carros saem com IPVA, licenciamento e multas quitados até a venda.",
+      "bubbles": [
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_laudo": {
+      "id": "carro_laudo",
+      "message": "Laudo cautelar {resultado_laudo} ✅ Sem passagem por leilão, chassi e motor conferidos.",
+      "bubbles": [
+        { "label": "Ver laudo completo", "goto": "carro_laudo_pdf" },
+        { "label": "Posso levar meu mecânico?", "goto": "carro_mecanico" },
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_laudo_pdf": {
+      "id": "carro_laudo_pdf",
+      "message": "Aqui está o laudo completo 📄",
+      "bubbles": [
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_mecanico": {
+      "id": "carro_mecanico",
+      "message": "Claro! Agende a visita e traga seu mecânico de confiança.",
+      "bubbles": [
+        { "label": "Agendar visita", "goto": "agend_dia" },
+        { "label": "🏦 Simular parcela", "goto": "fin_entrada" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_proposta_info": {
+      "id": "carro_proposta_info",
+      "message": "Estamos abertos a conversar! Como seria o pagamento?",
+      "bubbles": [
+        { "label": "À vista", "goto": "proposta_valor", "params": { "forma": "avista" } },
+        { "label": "Financiado", "goto": "proposta_valor", "params": { "forma": "financiado" } },
+        { "label": "Com meu carro na troca", "goto": "troca_marca" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "proposta_valor": {
+      "id": "proposta_valor",
+      "message": "Qual valor você quer oferecer?",
+      "bubbles": [
+        { "label": "O valor anunciado", "goto": "proposta_enviada" },
+        { "label": "R$ 1 mil a menos", "goto": "proposta_enviada", "params": { "desconto": 1000 } },
+        { "label": "R$ 3 mil a menos", "goto": "proposta_enviada", "params": { "desconto": 3000 } },
+        { "label": "R$ 5 mil a menos", "goto": "proposta_enviada", "params": { "desconto": 5000 } }
+      ],
+      "input": "valor"
+    },
+    "proposta_enviada": {
+      "id": "proposta_enviada",
+      "message": "Proposta enviada 📨 Um vendedor responde em até {prazo}.",
+      "bubbles": [
+        { "label": "Acompanhar proposta", "goto": "proposta_status" },
+        { "label": "Ver outros carros", "goto": "resultados" },
+        { "label": "💬 Falar com vendedor agora", "goto": "handoff" }
+      ]
+    },
+    "proposta_status": {
+      "id": "proposta_status",
+      "message": "Status da proposta: {status}.",
+      "bubbles": [
+        { "label": "Aceitar contraproposta", "goto": "fechar_forma" },
+        { "label": "Fazer nova proposta", "goto": "proposta_valor" },
+        { "label": "Desistir", "goto": "start" },
+        { "label": "💬 Falar com vendedor", "goto": "handoff" }
+      ]
+    },
+    "carro_salvo": {
+      "id": "carro_salvo",
+      "message": "Salvo ❤️",
+      "bubbles": [
+        { "label": "Ver carros salvos", "goto": "salvos" },
+        { "label": "Continuar vendo", "goto": "resultados" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "carro_compartilhar": {
+      "id": "carro_compartilhar",
+      "message": "Link copiado! Envie para quem quiser.",
+      "bubbles": [
+        { "label": "Continuar vendo", "goto": "resultados" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "salvos": {
+      "id": "salvos",
+      "message": "Seus carros salvos ❤️",
+      "bubbles": [
+        { "label": "🔍 Ver detalhes", "goto": "carro_detalhe" },
+        { "label": "⚖️ Comparar carros", "goto": "comparar" },
+        { "label": "📅 Agendar test drive", "goto": "agend_dia" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "comparar": {
+      "id": "comparar",
+      "message": "Comparativo: preço, ano, km, consumo e opcionais lado a lado 👇",
+      "bubbles": [
+        { "label": "Simular parcela do 1º", "goto": "fin_entrada" },
+        { "label": "Simular parcela do 2º", "goto": "fin_entrada" },
+        { "label": "Agendar test drive dos dois", "goto": "agend_dia" },
+        { "label": "Voltar aos salvos", "goto": "salvos" }
+      ]
+    },
+    "carro_codigo": {
+      "id": "carro_codigo",
+      "message": "Digite o código, a placa final ou cole o link do anúncio.",
+      "bubbles": [
+        { "label": "Não sei o código", "goto": "carro_sem_codigo" },
+        { "label": "Buscar por modelo", "goto": "busca_marca" },
+        { "label": "💬 Falar com vendedor", "goto": "handoff" }
+      ],
+      "input": "código ou link"
+    },
+    "carro_sem_codigo": {
+      "id": "carro_sem_codigo",
+      "message": "Sem problema! Onde você viu o carro?",
+      "bubbles": [
+        { "label": "No site da loja", "goto": "busca_marca" },
+        { "label": "Webmotors / OLX / iCarros", "goto": "busca_marca" },
+        { "label": "Instagram / Facebook", "goto": "busca_marca" },
+        { "label": "Passando na loja", "goto": "busca_categoria" }
+      ]
+    },
+    "carro_quero": {
+      "id": "carro_quero",
+      "message": "Que ótimo! 🎉 Como você quer pagar?",
+      "bubbles": [
+        { "label": "À vista", "goto": "fechar_avista" },
+        { "label": "Financiado", "goto": "fin_entrada" },
+        { "label": "Com meu carro na troca", "goto": "troca_marca" },
+        { "label": "Quero ver pessoalmente antes", "goto": "agend_dia" },
+        { "label": "Reservar o carro", "goto": "reserva" }
+      ]
+    },
+    "reserva": {
+      "id": "reserva",
+      "message": "Podemos reservar o carro por {horas}h com um sinal de {sinal}, abatido no valor.",
+      "bubbles": [
+        { "label": "Reservar agora", "goto": "reserva_ok" },
+        { "label": "O sinal é devolvido se eu desistir?", "goto": "reserva_regra" },
+        { "label": "Prefiro não reservar", "goto": "carro_detalhe" }
+      ]
+    },
+    "reserva_regra": {
+      "id": "reserva_regra",
+      "message": "{regra_sinal}",
+      "bubbles": [
+        { "label": "Reservar agora", "goto": "reserva_ok" },
+        { "label": "⬅ Voltar ao carro", "goto": "carro_detalhe" }
+      ]
+    },
+    "reserva_ok": {
+      "id": "reserva_ok",
+      "message": "Carro reservado ✅ Pague o sinal via Pix 👇",
+      "bubbles": [
+        { "label": "Enviar comprovante", "goto": "comprovante" },
+        { "label": "Agendar retirada/visita", "goto": "agend_dia" },
+        { "label": "💬 Falar com vendedor", "goto": "handoff" }
+      ]
+    },
+    "fechar_avista": {
+      "id": "fechar_avista",
+      "message": "Aceitamos Pix, TED ou cartão (consulte taxas). Quer seguir?",
+      "bubbles": [
+        { "label": "Pagar via Pix/TED", "goto": "fechar_docs" },
+        { "label": "Pagar no cartão", "goto": "fechar_cartao" },
+        { "label": "Tem desconto à vista?", "goto": "carro_proposta_info" },
+        { "label": "💬 Falar com vendedor", "goto": "handoff" }
+      ]
+    },
+    "fechar_cartao": {
+      "id": "fechar_cartao",
+      "message": "No cartão, parcelamos em até {parcelas}x com acréscimo de {taxa}.",
+      "bubbles": [
+        { "label": "Seguir no cartão", "goto": "fechar_docs" },
+        { "label": "Prefiro financiar", "goto": "fin_entrada" },
+        { "label": "Voltar", "goto": "fechar_avista" }
+      ]
+    },
+    "fechar_forma": {
+      "id": "fechar_forma",
+      "message": "Como prefere fechar?",
+      "bubbles": [
+        { "label": "À vista", "goto": "fechar_avista" },
+        { "label": "Financiado", "goto": "fin_entrada" },
+        { "label": "Com troca", "goto": "troca_marca" }
+      ]
+    },
+    "fechar_docs": {
+      "id": "fechar_docs",
+      "message": "Para o contrato preciso de CNH, CPF e comprovante de residência 📎",
+      "bubbles": [
+        { "label": "Enviar agora", "goto": "fechar_ok" },
+        { "label": "Levo na loja", "goto": "agend_dia", "params": { "motivo": "retirada" } },
+        { "label": "Meus dados estão seguros?", "goto": "lgpd" }
+      ],
+      "input": "arquivo"
+    },
+    "fechar_ok": {
+      "id": "fechar_ok",
+      "message": "Documentos recebidos ✅ Vamos agendar a retirada do seu carro!",
+      "bubbles": [
+        { "label": "Agendar retirada", "goto": "agend_dia", "params": { "motivo": "retirada" } },
+        { "label": "Vocês entregam em casa?", "goto": "entrega" },
+        { "label": "Como fica a transferência?", "goto": "doc_transf" }
+      ]
+    },
+    "entrega": {
+      "id": "entrega",
+      "message": "{regra_entrega}",
+      "bubbles": [
+        { "label": "Quero entrega", "goto": "handoff", "params": { "setor": "entrega" } },
+        { "label": "Prefiro retirar na loja", "goto": "agend_dia", "params": { "motivo": "retirada" } }
+      ]
+    },
+    "comprovante": {
+      "id": "comprovante",
+      "message": "Envie o comprovante 📎",
+      "bubbles": [
+        { "label": "Enviar depois", "goto": "fim" },
+        { "label": "💬 Falar com vendedor", "goto": "handoff" }
+      ],
+      "input": "arquivo"
+    },
+    "gar_info": {
+      "id": "gar_info",
+      "message": "Todos os carros têm garantia de {garantia} de motor e câmbio.",
+      "bubbles": [
+        { "label": "O que a garantia cobre?", "goto": "gar_cobre" },
+        { "label": "Dá para estender?", "goto": "gar_estendida" },
+        { "label": "Como aciono?", "goto": "pos_garantia" },
+        { "label": "Ver carros", "goto": "busca_categoria" }
+      ]
+    },
+    "gar_cobre": {
+      "id": "gar_cobre",
+      "message": "Cobre motor e câmbio. Não cobre desgaste natural (pneus, freios, embreagem).",
+      "bubbles": [
+        { "label": "Garantia estendida", "goto": "gar_estendida" },
+        { "label": "Voltar", "goto": "gar_info" }
+      ]
+    },
+    "gar_estendida": {
+      "id": "gar_estendida",
+      "message": "Oferecemos garantia estendida de até {meses} meses por {preco_garantia}.",
+      "bubbles": [
+        { "label": "Quero contratar", "goto": "handoff", "params": { "setor": "garantia" } },
+        { "label": "Voltar", "goto": "gar_info" }
+      ]
+    },
+    "laudo_info": {
+      "id": "laudo_info",
+      "message": "Sim! Todos passam por laudo cautelar e vistoria de {n_itens} itens.",
+      "bubbles": [
+        { "label": "O que é laudo cautelar?", "goto": "laudo_oque" },
+        { "label": "Vocês vendem carro de leilão?", "goto": "carro_leilao" },
+        { "label": "Ver carros", "goto": "busca_categoria" }
+      ]
+    },
+    "laudo_oque": {
+      "id": "laudo_oque",
+      "message": "É uma perícia que confere chassi, motor, estrutura e histórico de leilão/sinistro.",
+      "bubbles": [
+        { "label": "Ver carros", "goto": "busca_categoria" },
+        { "label": "Voltar", "goto": "laudo_info" }
+      ]
+    },
+    "doc_transf": {
+      "id": "doc_transf",
+      "message": "A transferência é feita por nós. Leva em média {prazo_transf}.",
+      "bubbles": [
+        { "label": "Quanto custa a transferência?", "goto": "doc_transf_custo" },
+        { "label": "Posso rodar antes da transferência?", "goto": "doc_rodar" },
+        { "label": "Precisa de vistoria no Detran?", "goto": "doc_vistoria" },
+        { "label": "Acompanhar minha transferência", "goto": "pos_transf" }
+      ]
+    },
+    "doc_transf_custo": {
+      "id": "doc_transf_custo",
+      "message": "{regra_custo_transferencia}",
+      "bubbles": [
+        { "label": "Voltar", "goto": "doc_transf" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "doc_rodar": {
+      "id": "doc_rodar",
+      "message": "Sim, com o CRV assinado e o recibo de compra, dentro do prazo legal de 30 dias.",
+      "bubbles": [
+        { "label": "Voltar", "goto": "doc_transf" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "doc_vistoria": {
+      "id": "doc_vistoria",
+      "message": "{regra_vistoria_detran}",
+      "bubbles": [
+        { "label": "Voltar", "goto": "doc_transf" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "lgpd": {
+      "id": "lgpd",
+      "message": "Seus dados são usados só para a compra/financiamento, conforme a LGPD.",
+      "bubbles": [
+        { "label": "Enviar documentos", "goto": "fechar_docs" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "fin_entrada": {
+      "id": "fin_entrada",
+      "message": "Vamos simular! Quanto você tem de entrada?",
+      "bubbles": [
+        { "label": "Sem entrada", "goto": "fin_prazo", "params": { "entrada": 0 } },
+        { "label": "Até R$ 5 mil", "goto": "fin_prazo", "params": { "entrada": 5000 } },
+        { "label": "R$ 5–15 mil", "goto": "fin_prazo", "params": { "entrada": 15000 } },
+        { "label": "R$ 15–30 mil", "goto": "fin_prazo", "params": { "entrada": 30000 } },
+        { "label": "Mais de R$ 30 mil", "goto": "fin_prazo", "params": { "entrada": 50000 } },
+        { "label": "Meu carro é a entrada", "goto": "troca_marca" }
+      ],
+      "input": "valor"
+    },
+    "fin_parcela": {
+      "id": "fin_parcela",
+      "message": "Qual parcela cabe no seu bolso?",
+      "bubbles": [
+        { "label": "Até R$ 800", "goto": "fin_prazo", "params": { "parcela": 800 } },
+        { "label": "R$ 800–1.200", "goto": "fin_prazo", "params": { "parcela": 1200 } },
+        { "label": "R$ 1.200–1.800", "goto": "fin_prazo", "params": { "parcela": 1800 } },
+        { "label": "R$ 1.800–2.500", "goto": "fin_prazo", "params": { "parcela": 2500 } },
+        { "label": "Acima de R$ 2.500", "goto": "fin_prazo", "params": { "parcela": 3500 } }
+      ],
+      "input": "valor"
+    },
+    "fin_prazo": {
+      "id": "fin_prazo",
+      "message": "Em quantas vezes?",
+      "bubbles": [
+        { "label": "24x", "goto": "fin_res", "params": { "meses": 24 } },
+        { "label": "36x", "goto": "fin_res", "params": { "meses": 36 } },
+        { "label": "48x", "goto": "fin_res", "params": { "meses": 48 } },
+        { "label": "60x", "goto": "fin_res", "params": { "meses": 60 } },
+        { "label": "Me mostra todas", "goto": "fin_res", "params": { "meses": "all" } }
+      ]
+    },
+    "fin_res": {
+      "id": "fin_res",
+      "message": "Simulação: parcela de ~{parcela} em {meses}x (taxa estimada {taxa}% a.m.). Sujeito à aprovação.",
+      "bubbles": [
+        { "label": "✅ Pré-aprovar meu crédito", "goto": "fin_cpf" },
+        { "label": "Ver carros nessa parcela", "goto": "resultados", "params": { "por_parcela": true } },
+        { "label": "Simular outro prazo", "goto": "fin_prazo" },
+        { "label": "Simular outra entrada", "goto": "fin_entrada" },
+        { "label": "Dúvidas sobre financiamento", "goto": "fin_duvidas" }
+      ]
+    },
+    "fin_cpf": {
+      "id": "fin_cpf",
+      "message": "Para consultar a pré-aprovação, preciso de alguns dados:",
+      "bubbles": [
+        { "label": "Informar CPF e data de nascimento", "goto": "fin_renda" },
+        { "label": "Isso afeta meu score?", "goto": "fin_score" },
+        { "label": "Meus dados estão seguros?", "goto": "lgpd" }
+      ],
+      "input": "CPF"
+    },
+    "fin_renda": {
+      "id": "fin_renda",
+      "message": "Qual sua renda mensal?",
+      "bubbles": [
+        { "label": "Até R$ 2.500", "goto": "fin_ocupacao", "params": { "renda": 1 } },
+        { "label": "R$ 2.500–5.000", "goto": "fin_ocupacao", "params": { "renda": 2 } },
+        { "label": "R$ 5.000–10.000", "goto": "fin_ocupacao", "params": { "renda": 3 } },
+        { "label": "Acima de R$ 10.000", "goto": "fin_ocupacao", "params": { "renda": 4 } }
+      ],
+      "input": "valor"
+    },
+    "fin_ocupacao": {
+      "id": "fin_ocupacao",
+      "message": "Como você recebe sua renda?",
+      "bubbles": [
+        { "label": "CLT", "goto": "fin_analise", "params": { "ocup": "clt" } },
+        { "label": "Autônomo", "goto": "fin_analise", "params": { "ocup": "autonomo" } },
+        { "label": "Empresário / MEI", "goto": "fin_analise", "params": { "ocup": "empresario" } },
+        { "label": "Aposentado", "goto": "fin_analise", "params": { "ocup": "aposentado" } },
+        { "label": "Motorista de app", "goto": "fin_analise", "params": { "ocup": "app" } },
+        { "label": "Servidor público", "goto": "fin_analise", "params": { "ocup": "servidor" } }
+      ]
+    },
+    "fin_analise": {
+      "id": "fin_analise",
+      "message": "Consultando os bancos parceiros… ⏳",
+      "bubbles": [
+        { "label": "Aguardar resultado", "goto": "fin_aprovado" },
+        { "label": "Me avise quando sair", "goto": "fim" }
+      ],
+      "outcomes": ["fin_aprovado", "fin_negado"]
+    },
+    "fin_aprovado": {
+      "id": "fin_aprovado",
+      "message": "Boa notícia! 🎉 Crédito pré-aprovado em até {valor_aprovado}.",
+      "bubbles": [
+        { "label": "Escolher um carro", "goto": "resultados", "params": { "por_parcela": true } },
+        { "label": "Seguir com o carro que vi", "goto": "fechar_docs" },
+        { "label": "Ver as propostas dos bancos", "goto": "fin_propostas" },
+        { "label": "💬 Falar com vendedor", "goto": "handoff" }
+      ]
+    },
+    "fin_negado": {
+      "id": "fin_negado",
+      "message": "Desta vez não foi aprovado 😕 Mas há caminhos:",
+      "bubbles": [
+        { "label": "Aumentar a entrada", "goto": "fin_entrada" },
+        { "label": "Usar meu carro na troca", "goto": "troca_marca" },
+        { "label": "Incluir outra pessoa (avalista)", "goto": "fin_avalista" },
+        { "label": "Ver carros mais baratos", "goto": "busca_preco" },
+        { "label": "💬 Falar com especialista", "goto": "handoff", "params": { "setor": "credito" } }
+      ]
+    },
+    "fin_avalista": {
+      "id": "fin_avalista",
+      "message": "Um avalista com boa renda pode ajudar na aprovação.",
+      "bubbles": [
+        { "label": "Simular com avalista", "goto": "fin_cpf" },
+        { "label": "Voltar", "goto": "fin_negado" }
+      ]
+    },
+    "fin_propostas": {
+      "id": "fin_propostas",
+      "message": "Propostas: {banco_1} · {banco_2} · {banco_3}",
+      "bubbles": [
+        { "label": "Escolher a de menor parcela", "goto": "fechar_docs" },
+        { "label": "Escolher a de menor taxa", "goto": "fechar_docs" },
+        { "label": "O que é CET?", "goto": "fin_cet" },
+        { "label": "💬 Falar com especialista", "goto": "handoff", "params": { "setor": "credito" } }
+      ]
+    },
+    "fin_duvidas": {
+      "id": "fin_duvidas",
+      "message": "O que você quer saber?",
+      "bubbles": [
+        { "label": "Financia sem entrada?", "goto": "fin_sem_entrada" },
+        { "label": "Tenho nome sujo, consigo?", "goto": "fin_restricao" },
+        { "label": "Não tenho CNH, posso financiar?", "goto": "fin_cnh" },
+        { "label": "Sou autônomo, consigo?", "goto": "fin_autonomo" },
+        { "label": "Isso afeta meu score?", "goto": "fin_score" },
+        { "label": "O que é CET?", "goto": "fin_cet" },
+        { "label": "Posso quitar antes?", "goto": "fin_quitar" },
+        { "label": "Quais bancos?", "goto": "fin_bancos" },
+        { "label": "Tem seguro prestamista?", "goto": "fin_prestamista" }
+      ]
+    },
+    "fin_sem_entrada": {
+      "id": "fin_sem_entrada",
+      "message": "Depende do seu perfil de crédito; muitos bancos financiam até 100%.",
+      "bubbles": [
+        { "label": "Simular agora", "goto": "fin_entrada" },
+        { "label": "Outra dúvida", "goto": "fin_duvidas" },
+        { "label": "💬 Falar com especialista", "goto": "handoff", "params": { "setor": "credito" } }
+      ]
+    },
+    "fin_restricao": {
+      "id": "fin_restricao",
+      "message": "Com restrição é mais difícil, mas alguns bancos analisam com entrada maior.",
+      "bubbles": [
+        { "label": "Simular agora", "goto": "fin_entrada" },
+        { "label": "Outra dúvida", "goto": "fin_duvidas" },
+        { "label": "💬 Falar com especialista", "goto": "handoff", "params": { "setor": "credito" } }
+      ]
+    },
+    "fin_cnh": {
+      "id": "fin_cnh",
+      "message": "Sim, o financiamento é no CPF. CNH só é preciso para dirigir.",
+      "bubbles": [
+        { "label": "Simular agora", "goto": "fin_entrada" },
+        { "label": "Outra dúvida", "goto": "fin_duvidas" },
+        { "label": "💬 Falar com especialista", "goto": "handoff", "params": { "setor": "credito" } }
+      ]
+    },
+    "fin_autonomo": {
+      "id": "fin_autonomo",
+      "message": "Sim, comprovando renda por extratos ou IR.",
+      "bubbles": [
+        { "label": "Simular agora", "goto": "fin_entrada" },
+        { "label": "Outra dúvida", "goto": "fin_duvidas" },
+        { "label": "💬 Falar com especialista", "goto": "handoff", "params": { "setor": "credito" } }
+      ]
+    },
+    "fin_score": {
+      "id": "fin_score",
+      "message": "A simulação não afeta seu score. A pré-aprovação faz uma consulta, que é normal.",
+      "bubbles": [
+        { "label": "Simular agora", "goto": "fin_entrada" },
+        { "label": "Outra dúvida", "goto": "fin_duvidas" },
+        { "label": "💬 Falar com especialista", "goto": "handoff", "params": { "setor": "credito" } }
+      ]
+    },
+    "fin_cet": {
+      "id": "fin_cet",
+      "message": "CET é o Custo Efetivo Total: juros + tarifas + seguros. Compare sempre o CET.",
+      "bubbles": [
+        { "label": "Simular agora", "goto": "fin_entrada" },
+        { "label": "Outra dúvida", "goto": "fin_duvidas" },
+        { "label": "💬 Falar com especialista", "goto": "handoff", "params": { "setor": "credito" } }
+      ]
+    },
+    "fin_quitar": {
+      "id": "fin_quitar",
+      "message": "Sim, e com desconto proporcional dos juros (direito garantido por lei).",
+      "bubbles": [
+        { "label": "Simular agora", "goto": "fin_entrada" },
+        { "label": "Outra dúvida", "goto": "fin_duvidas" },
+        { "label": "💬 Falar com especialista", "goto": "handoff", "params": { "setor": "credito" } }
+      ]
+    },
+    "fin_bancos": {
+      "id": "fin_bancos",
+      "message": "Trabalhamos com {bancos}.",
+      "bubbles": [
+        { "label": "Simular agora", "goto": "fin_entrada" },
+        { "label": "Outra dúvida", "goto": "fin_duvidas" },
+        { "label": "💬 Falar com especialista", "goto": "handoff", "params": { "setor": "credito" } }
+      ]
+    },
+    "fin_prestamista": {
+      "id": "fin_prestamista",
+      "message": "O seguro prestamista é opcional; você pode recusar.",
+      "bubbles": [
+        { "label": "Simular agora", "goto": "fin_entrada" },
+        { "label": "Outra dúvida", "goto": "fin_duvidas" },
+        { "label": "💬 Falar com especialista", "goto": "handoff", "params": { "setor": "credito" } }
+      ]
+    },
+    "troca": {
+      "id": "troca",
+      "message": "Aceitamos seu carro na troca! Vamos avaliar?",
+      "bubbles": [
+        { "label": "Avaliar meu carro", "goto": "troca_marca" },
+        { "label": "Como funciona a troca?", "goto": "troca_como" },
+        { "label": "Meu carro é financiado, aceita?", "goto": "troca_financiado" },
+        { "label": "Aceita moto na troca?", "goto": "troca_moto" },
+        { "label": "Ver carros para trocar", "goto": "busca_categoria" }
+      ]
+    },
+    "troca_como": {
+      "id": "troca_como",
+      "message": "Avaliamos seu carro e o valor vira entrada no novo. Se sobrar, devolvemos a diferença.",
+      "bubbles": [
+        { "label": "Avaliar meu carro", "goto": "troca_marca" },
+        { "label": "Voltar", "goto": "troca" }
+      ]
+    },
+    "troca_financiado": {
+      "id": "troca_financiado",
+      "message": "Sim! Quitamos o saldo devedor e usamos o restante como entrada.",
+      "bubbles": [
+        { "label": "Avaliar meu carro", "goto": "troca_marca" },
+        { "label": "Como sei meu saldo devedor?", "goto": "troca_saldo" },
+        { "label": "Voltar", "goto": "troca" }
+      ]
+    },
+    "troca_saldo": {
+      "id": "troca_saldo",
+      "message": "Peça o boleto de quitação no app ou SAC do seu banco.",
+      "bubbles": [
+        { "label": "Avaliar meu carro", "goto": "troca_marca" },
+        { "label": "Voltar", "goto": "troca" }
+      ]
+    },
+    "troca_moto": {
+      "id": "troca_moto",
+      "message": "{regra_moto}",
+      "bubbles": [
+        { "label": "Avaliar minha moto", "goto": "troca_marca", "params": { "tipo": "moto" } },
+        { "label": "Voltar", "goto": "troca" }
+      ]
+    },
+    "troca_marca": {
+      "id": "troca_marca",
+      "message": "Qual a marca do seu carro?",
+      "bubbles": [
+        { "label": "Chevrolet", "goto": "troca_modelo" },
+        { "label": "Fiat", "goto": "troca_modelo" },
+        { "label": "Volkswagen", "goto": "troca_modelo" },
+        { "label": "Toyota", "goto": "troca_modelo" },
+        { "label": "Hyundai", "goto": "troca_modelo" },
+        { "label": "Honda", "goto": "troca_modelo" },
+        { "label": "Ford", "goto": "troca_modelo" },
+        { "label": "Renault", "goto": "troca_modelo" },
+        { "label": "Outra", "goto": "troca_modelo" },
+        { "label": "Informar pela placa", "goto": "troca_placa" }
+      ],
+      "input": "marca"
+    },
+    "troca_placa": {
+      "id": "troca_placa",
+      "message": "Digite a placa e eu puxo os dados do carro 🔎",
+      "bubbles": [
+        { "label": "Prefiro escolher a marca", "goto": "troca_marca" },
+        { "label": "Voltar", "goto": "troca" }
+      ],
+      "input": "placa"
+    },
+    "troca_modelo": {
+      "id": "troca_modelo",
+      "message": "Qual o modelo?",
+      "bubbles": [
+        { "label": "{modelo_1}", "goto": "troca_ano" },
+        { "label": "{modelo_2}", "goto": "troca_ano" },
+        { "label": "{modelo_3}", "goto": "troca_ano" },
+        { "label": "Outro modelo", "goto": "troca_ano" }
+      ],
+      "input": "modelo"
+    },
+    "troca_ano": {
+      "id": "troca_ano",
+      "message": "Ano do carro?",
+      "bubbles": [
+        { "label": "2022 ou mais novo", "goto": "troca_km" },
+        { "label": "2019–2021", "goto": "troca_km" },
+        { "label": "2015–2018", "goto": "troca_km" },
+        { "label": "2010–2014", "goto": "troca_km" },
+        { "label": "Antes de 2010", "goto": "troca_km" }
+      ],
+      "input": "ano"
+    },
+    "troca_km": {
+      "id": "troca_km",
+      "message": "Quilometragem aproximada?",
+      "bubbles": [
+        { "label": "Até 30 mil km", "goto": "troca_estado" },
+        { "label": "30–60 mil km", "goto": "troca_estado" },
+        { "label": "60–100 mil km", "goto": "troca_estado" },
+        { "label": "Mais de 100 mil km", "goto": "troca_estado" }
+      ],
+      "input": "km"
+    },
+    "troca_estado": {
+      "id": "troca_estado",
+      "message": "Como está o carro?",
+      "bubbles": [
+        { "label": "Impecável", "goto": "troca_situacao" },
+        { "label": "Bom, com pequenos detalhes", "goto": "troca_situacao" },
+        { "label": "Precisa de reparos", "goto": "troca_situacao" },
+        { "label": "Já foi batido", "goto": "troca_situacao", "params": { "batido": true } }
+      ]
+    },
+    "troca_situacao": {
+      "id": "troca_situacao",
+      "message": "Situação do documento:",
+      "bubbles": [
+        { "label": "Quitado e em dia", "goto": "troca_fotos" },
+        { "label": "Financiado", "goto": "troca_fotos", "params": { "financiado": true } },
+        { "label": "Com IPVA/multas em aberto", "goto": "troca_fotos", "params": { "debitos": true } },
+        { "label": "Não sei", "goto": "troca_fotos" }
+      ]
+    },
+    "troca_fotos": {
+      "id": "troca_fotos",
+      "message": "Envie fotos (frente, traseira, laterais, painel e km) para uma avaliação mais precisa 📸",
+      "bubbles": [
+        { "label": "Enviar fotos agora", "goto": "troca_estimativa" },
+        { "label": "Pular fotos", "goto": "troca_estimativa" }
+      ],
+      "input": "arquivo"
+    },
+    "troca_estimativa": {
+      "id": "troca_estimativa",
+      "message": "Estimativa inicial: {faixa_avaliacao} (confirmada na avaliação presencial).",
+      "bubbles": [
+        { "label": "Agendar avaliação presencial", "goto": "agend_dia", "params": { "motivo": "avaliacao" } },
+        { "label": "Usar como entrada", "goto": "fin_entrada", "params": { "entrada": "troca" } },
+        { "label": "Ver carros que cabem na troca", "goto": "resultados", "params": { "por_troca": true } },
+        { "label": "Achei baixo", "goto": "troca_baixo" },
+        { "label": "Quero só vender, sem trocar", "goto": "vender_opcoes" }
+      ]
+    },
+    "troca_baixo": {
+      "id": "troca_baixo",
+      "message": "Entendo! A avaliação presencial costuma ser mais precisa. Itens como revisões e manual valorizam o carro.",
+      "bubbles": [
+        { "label": "Agendar avaliação presencial", "goto": "agend_dia", "params": { "motivo": "avaliacao" } },
+        { "label": "Vender em consignação", "goto": "consig" },
+        { "label": "💬 Negociar com vendedor", "goto": "handoff" }
+      ]
+    },
+    "vender": {
+      "id": "vender",
+      "message": "Compramos seu carro! Como prefere vender?",
+      "bubbles": [
+        { "label": "Venda direta (recebo na hora)", "goto": "vender_direta" },
+        { "label": "Consignação (anunciam por mim)", "goto": "consig" },
+        { "label": "Trocar por outro carro", "goto": "troca" },
+        { "label": "Qual a diferença?", "goto": "vender_diferenca" },
+        { "label": "Quanto vale meu carro?", "goto": "troca_marca" }
+      ]
+    },
+    "vender_opcoes": {
+      "id": "vender_opcoes",
+      "message": "Como prefere vender?",
+      "bubbles": [
+        { "label": "Venda direta", "goto": "vender_direta" },
+        { "label": "Consignação", "goto": "consig" },
+        { "label": "Qual a diferença?", "goto": "vender_diferenca" }
+      ]
+    },
+    "vender_diferenca": {
+      "id": "vender_diferenca",
+      "message": "Venda direta: rápido, pagamento em até {prazo_pagto}. Consignação: você recebe mais, mas espera o carro ser vendido.",
+      "bubbles": [
+        { "label": "Venda direta", "goto": "vender_direta" },
+        { "label": "Consignação", "goto": "consig" }
+      ]
+    },
+    "vender_direta": {
+      "id": "vender_direta",
+      "message": "Avaliamos e pagamos via Pix/TED após a vistoria.",
+      "bubbles": [
+        { "label": "Avaliar meu carro", "goto": "troca_marca" },
+        { "label": "Em quanto tempo recebo?", "goto": "vender_prazo" },
+        { "label": "Compram carro financiado?", "goto": "troca_financiado" },
+        { "label": "Quais documentos preciso?", "goto": "vender_docs" }
+      ]
+    },
+    "vender_prazo": {
+      "id": "vender_prazo",
+      "message": "O pagamento sai em até {prazo_pagto} após a vistoria e assinatura.",
+      "bubbles": [
+        { "label": "Avaliar meu carro", "goto": "troca_marca" },
+        { "label": "Voltar", "goto": "vender" }
+      ]
+    },
+    "vender_docs": {
+      "id": "vender_docs",
+      "message": "CRV (ou ATPV-e), CNH, comprovante de residência, manual e chave reserva.",
+      "bubbles": [
+        { "label": "Perdi o documento", "goto": "vender_doc_perdido" },
+        { "label": "Avaliar meu carro", "goto": "troca_marca" },
+        { "label": "Voltar", "goto": "vender" }
+      ]
+    },
+    "vender_doc_perdido": {
+      "id": "vender_doc_perdido",
+      "message": "Dá para emitir 2ª via no Detran; podemos te orientar.",
+      "bubbles": [
+        { "label": "💬 Falar com despachante", "goto": "handoff", "params": { "setor": "documentacao" } },
+        { "label": "Voltar", "goto": "vender_docs" }
+      ]
+    },
+    "consig": {
+      "id": "consig",
+      "message": "Na consignação, anunciamos seu carro e você recebe quando vender.",
+      "bubbles": [
+        { "label": "Qual a comissão?", "goto": "consig_taxa" },
+        { "label": "O carro fica na loja?", "goto": "consig_onde" },
+        { "label": "Quanto tempo leva?", "goto": "consig_tempo" },
+        { "label": "E se eu precisar do carro?", "goto": "consig_retirar" },
+        { "label": "Quero consignar", "goto": "troca_marca", "params": { "modo": "consignacao" } }
+      ]
+    },
+    "consig_taxa": {
+      "id": "consig_taxa",
+      "message": "{regra_comissao_consig}",
+      "bubbles": [
+        { "label": "Quero consignar", "goto": "troca_marca", "params": { "modo": "consignacao" } },
+        { "label": "Outra dúvida", "goto": "consig" }
+      ]
+    },
+    "consig_onde": {
+      "id": "consig_onde",
+      "message": "{regra_local_consig}",
+      "bubbles": [
+        { "label": "Quero consignar", "goto": "troca_marca", "params": { "modo": "consignacao" } },
+        { "label": "Outra dúvida", "goto": "consig" }
+      ]
+    },
+    "consig_tempo": {
+      "id": "consig_tempo",
+      "message": "Carros bem precificados vendem em média em {tempo_venda}.",
+      "bubbles": [
+        { "label": "Quero consignar", "goto": "troca_marca", "params": { "modo": "consignacao" } },
+        { "label": "Outra dúvida", "goto": "consig" }
+      ]
+    },
+    "consig_retirar": {
+      "id": "consig_retirar",
+      "message": "Você pode retirar quando quiser, conforme o contrato.",
+      "bubbles": [
+        { "label": "Quero consignar", "goto": "troca_marca", "params": { "modo": "consignacao" } },
+        { "label": "Outra dúvida", "goto": "consig" }
+      ]
+    },
+    "agend_inicio": {
+      "id": "agend_inicio",
+      "message": "Vamos agendar! O que você quer fazer?",
+      "bubbles": [
+        { "label": "Test drive", "goto": "agend_qual", "params": { "motivo": "test_drive" } },
+        { "label": "Ver carros na loja", "goto": "agend_dia", "params": { "motivo": "visita" } },
+        { "label": "Avaliar meu carro", "goto": "agend_dia", "params": { "motivo": "avaliacao" } },
+        { "label": "Retirar meu carro", "goto": "agend_dia", "params": { "motivo": "retirada" } },
+        { "label": "Meus agendamentos", "goto": "meus_agend" }
+      ]
+    },
+    "agend_qual": {
+      "id": "agend_qual",
+      "message": "Qual carro você quer dirigir?",
+      "bubbles": [
+        { "label": "Tenho o código", "goto": "carro_codigo" },
+        { "label": "Escolher no estoque", "goto": "busca_categoria" },
+        { "label": "Meus salvos", "goto": "salvos" }
+      ]
+    },
+    "agend_dia": {
+      "id": "agend_dia",
+      "message": "Qual dia fica melhor?",
+      "bubbles": [
+        { "label": "Hoje", "goto": "agend_periodo" },
+        { "label": "Amanhã", "goto": "agend_periodo" },
+        { "label": "Esta semana", "goto": "agend_periodo" },
+        { "label": "Sábado", "goto": "agend_periodo" },
+        { "label": "📅 Escolher data", "goto": "agend_periodo" }
+      ]
+    },
+    "agend_periodo": {
+      "id": "agend_periodo",
+      "message": "Qual período?",
+      "bubbles": [
+        { "label": "Manhã", "goto": "agend_horario" },
+        { "label": "Tarde", "goto": "agend_horario" },
+        { "label": "Fim de tarde", "goto": "agend_horario" }
+      ]
+    },
+    "agend_horario": {
+      "id": "agend_horario",
+      "message": "Horários disponíveis:",
+      "bubbles": [
+        { "label": "{horario_1}", "goto": "agend_confirmar" },
+        { "label": "{horario_2}", "goto": "agend_confirmar" },
+        { "label": "{horario_3}", "goto": "agend_confirmar" },
+        { "label": "Nenhum serve", "goto": "agend_dia" }
+      ]
+    },
+    "agend_confirmar": {
+      "id": "agend_confirmar",
+      "message": "Confirmando: {motivo} em {data} às {hora}. Tudo certo?",
+      "bubbles": [
+        { "label": "✅ Confirmar", "goto": "agend_ok" },
+        { "label": "Mudar data", "goto": "agend_dia" },
+        { "label": "Mudar horário", "goto": "agend_periodo" },
+        { "label": "O que levar?", "goto": "agend_levar" },
+        { "label": "Cancelar", "goto": "start" }
+      ]
+    },
+    "agend_levar": {
+      "id": "agend_levar",
+      "message": "Para test drive: CNH válida. Para avaliação: o carro, documento, manual e chave reserva.",
+      "bubbles": [
+        { "label": "✅ Confirmar", "goto": "agend_ok" },
+        { "label": "Mudar data", "goto": "agend_dia" }
+      ]
+    },
+    "agend_ok": {
+      "id": "agend_ok",
+      "message": "Agendado! 🎉 O vendedor {vendedor} vai te receber.",
+      "bubbles": [
+        { "label": "📅 Adicionar ao calendário", "goto": "agend_ok2" },
+        { "label": "📍 Como chegar", "goto": "info_endereco" },
+        { "label": "Agendar outro horário", "goto": "agend_inicio" },
+        { "label": "Remarcar", "goto": "agend_dia" },
+        { "label": "Cancelar", "goto": "agend_cancelar" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "agend_ok2": {
+      "id": "agend_ok2",
+      "message": "Feito ✅ Te mando um lembrete antes.",
+      "bubbles": [
+        { "label": "Ver carros parecidos", "goto": "resultados", "params": { "similar": true } },
+        { "label": "Simular financiamento", "goto": "fin_entrada" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "meus_agend": {
+      "id": "meus_agend",
+      "message": "Seus agendamentos:",
+      "bubbles": [
+        { "label": "Remarcar", "goto": "agend_dia" },
+        { "label": "Cancelar", "goto": "agend_cancelar" },
+        { "label": "Novo agendamento", "goto": "agend_inicio" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "agend_cancelar": {
+      "id": "agend_cancelar",
+      "message": "Tem certeza que quer cancelar?",
+      "bubbles": [
+        { "label": "Sim, cancelar", "goto": "agend_cancelado" },
+        { "label": "Prefiro remarcar", "goto": "agend_dia" },
+        { "label": "Não, manter", "goto": "meus_agend" }
+      ]
+    },
+    "agend_cancelado": {
+      "id": "agend_cancelado",
+      "message": "Cancelado. Quer ver outras opções?",
+      "bubbles": [
+        { "label": "Ver carros", "goto": "busca_categoria" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "agend_lembrete": {
+      "id": "agend_lembrete",
+      "message": "Lembrete: {motivo} {quando} 📍 {endereco}",
+      "bubbles": [
+        { "label": "✅ Estarei lá", "goto": "agend_ok2" },
+        { "label": "Vou atrasar", "goto": "agend_atraso" },
+        { "label": "Remarcar", "goto": "agend_dia" },
+        { "label": "Cancelar", "goto": "agend_cancelar" }
+      ]
+    },
+    "agend_atraso": {
+      "id": "agend_atraso",
+      "message": "Avisei o vendedor. Quanto tempo de atraso?",
+      "bubbles": [
+        { "label": "Uns 10 min", "goto": "agend_ok2" },
+        { "label": "Uns 30 min", "goto": "agend_ok2" },
+        { "label": "Melhor remarcar", "goto": "agend_dia" }
+      ]
+    },
+    "pos_test_drive": {
+      "id": "pos_test_drive",
+      "message": "E aí, o que achou do carro? 🚗",
+      "bubbles": [
+        { "label": "😍 Gostei, quero fechar", "goto": "carro_quero" },
+        { "label": "🏦 Quero simular a parcela", "goto": "fin_entrada" },
+        { "label": "🔁 Quero ver outros parecidos", "goto": "resultados", "params": { "similar": true } },
+        { "label": "👎 Não gostei", "goto": "pos_td_motivo" },
+        { "label": "💬 Falar com o vendedor", "goto": "handoff" }
+      ]
+    },
+    "pos_td_motivo": {
+      "id": "pos_td_motivo",
+      "message": "Obrigado pelo retorno! O que não agradou?",
+      "bubbles": [
+        { "label": "Preço", "goto": "busca_preco" },
+        { "label": "Espaço interno", "goto": "busca_categoria" },
+        { "label": "Desempenho / motor", "goto": "busca_marca" },
+        { "label": "Câmbio", "goto": "busca_cambio" },
+        { "label": "Estado do carro", "goto": "resultados", "params": { "similar": true } },
+        { "label": "Outro motivo", "goto": "handoff" }
+      ]
+    },
+    "cliente_id": {
+      "id": "cliente_id",
+      "message": "Para localizar sua compra, informe seu CPF.",
+      "bubbles": [
+        { "label": "Comprei em nome de outra pessoa", "goto": "handoff" },
+        { "label": "Voltar", "goto": "start" }
+      ],
+      "input": "CPF",
+      "on_input": "cliente"
+    },
+    "cliente": {
+      "id": "cliente",
+      "message": "Olá, {nome}! Como está o {carro}? Em que posso ajudar?",
+      "bubbles": [
+        { "label": "📄 Transferência / documento", "goto": "pos_transf" },
+        { "label": "🛡 Acionar garantia", "goto": "pos_garantia" },
+        { "label": "🔧 Problema no carro", "goto": "pos_problema" },
+        { "label": "🏦 Boleto do financiamento", "goto": "pos_boleto" },
+        { "label": "🧾 Nota fiscal / contrato", "goto": "pos_nf" },
+        { "label": "🔑 Chave reserva / manual", "goto": "pos_chave" },
+        { "label": "🛡 Cotar seguro", "goto": "seguro_cotar" },
+        { "label": "🔄 Quero trocar de novo", "goto": "troca" },
+        { "label": "⭐ Avaliar a loja", "goto": "avaliacao" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_transf": {
+      "id": "pos_transf",
+      "message": "Status da transferência: {status_transf}.",
+      "bubbles": [
+        { "label": "Quando fica pronto?", "goto": "pos_transf_prazo" },
+        { "label": "Já posso pegar o CRLV digital?", "goto": "pos_crlv" },
+        { "label": "Tem multa no meu nome do dono anterior?", "goto": "pos_multa" },
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_transf_prazo": {
+      "id": "pos_transf_prazo",
+      "message": "Previsão: {data_prevista}.",
+      "bubbles": [
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_crlv": {
+      "id": "pos_crlv",
+      "message": "Assim que concluída, o CRLV-e aparece no app Carteira Digital de Trânsito.",
+      "bubbles": [
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_multa": {
+      "id": "pos_multa",
+      "message": "Infrações anteriores à compra são de responsabilidade do antigo dono/loja. Envie a notificação.",
+      "bubbles": [
+        { "label": "Enviar notificação", "goto": "comprovante" },
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_garantia": {
+      "id": "pos_garantia",
+      "message": "Vamos abrir um chamado de garantia. Qual o problema?",
+      "bubbles": [
+        { "label": "Motor (barulho, falha, fumaça)", "goto": "pos_gar_desc", "params": { "cat": "motor" } },
+        { "label": "Câmbio (trancos, não engata)", "goto": "pos_gar_desc", "params": { "cat": "cambio" } },
+        { "label": "Luz de alerta no painel", "goto": "pos_gar_desc", "params": { "cat": "painel" } },
+        { "label": "Vazamento de óleo/água", "goto": "pos_gar_desc", "params": { "cat": "vazamento" } },
+        { "label": "Outro problema", "goto": "pos_gar_desc", "params": { "cat": "outro" } },
+        { "label": "Acompanhar chamado", "goto": "pos_gar_status" }
+      ]
+    },
+    "pos_gar_desc": {
+      "id": "pos_gar_desc",
+      "message": "Descreva o problema e envie foto ou vídeo, se puder 📸",
+      "bubbles": [
+        { "label": "Enviar sem foto", "goto": "pos_gar_agend" },
+        { "label": "🚨 O carro parou / não liga", "goto": "pos_guincho" }
+      ],
+      "input": "texto/arquivo"
+    },
+    "pos_guincho": {
+      "id": "pos_guincho",
+      "message": "Vamos acionar o guincho 🚛 Envie sua localização.",
+      "bubbles": [
+        { "label": "📍 Enviar localização", "goto": "handoff", "params": { "prioridade": "urgente" } },
+        { "label": "💬 Falar com atendente agora", "goto": "handoff", "params": { "prioridade": "urgente" } }
+      ]
+    },
+    "pos_gar_agend": {
+      "id": "pos_gar_agend",
+      "message": "Quando você pode trazer o carro?",
+      "bubbles": [
+        { "label": "Hoje", "goto": "pos_gar_ok" },
+        { "label": "Amanhã", "goto": "pos_gar_ok" },
+        { "label": "Esta semana", "goto": "pos_gar_ok" },
+        { "label": "Escolher data", "goto": "pos_gar_ok" }
+      ]
+    },
+    "pos_gar_ok": {
+      "id": "pos_gar_ok",
+      "message": "Chamado #{protocolo} aberto ✅",
+      "bubbles": [
+        { "label": "Acompanhar chamado", "goto": "pos_gar_status" },
+        { "label": "Tem carro reserva?", "goto": "pos_carro_reserva" },
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_gar_status": {
+      "id": "pos_gar_status",
+      "message": "Chamado #{protocolo}: {status}.",
+      "bubbles": [
+        { "label": "Adicionar informação", "goto": "pos_gar_desc" },
+        { "label": "Foi resolvido", "goto": "fim" },
+        { "label": "Ainda não resolveu", "goto": "handoff" },
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_carro_reserva": {
+      "id": "pos_carro_reserva",
+      "message": "{regra_carro_reserva}",
+      "bubbles": [
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_problema": {
+      "id": "pos_problema",
+      "message": "Que tipo de problema?",
+      "bubbles": [
+        { "label": "Coberto pela garantia (motor/câmbio)", "goto": "pos_garantia" },
+        { "label": "Pneus, freios, bateria", "goto": "pos_desgaste" },
+        { "label": "Ar-condicionado", "goto": "pos_gar_desc", "params": { "cat": "ar" } },
+        { "label": "Elétrica / multimídia", "goto": "pos_gar_desc", "params": { "cat": "eletrica" } },
+        { "label": "Não sei se é garantia", "goto": "pos_gar_desc", "params": { "cat": "indefinido" } }
+      ]
+    },
+    "pos_desgaste": {
+      "id": "pos_desgaste",
+      "message": "Itens de desgaste não entram na garantia, mas indicamos oficinas parceiras com desconto.",
+      "bubbles": [
+        { "label": "Ver oficinas parceiras", "goto": "handoff", "params": { "setor": "posvenda" } },
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_boleto": {
+      "id": "pos_boleto",
+      "message": "O boleto do financiamento é emitido pelo banco {banco}.",
+      "bubbles": [
+        { "label": "Como acesso o app do banco?", "goto": "pos_boleto_app" },
+        { "label": "Quero antecipar parcelas", "goto": "fin_quitar" },
+        { "label": "Atrasei uma parcela", "goto": "pos_atraso" },
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_boleto_app": {
+      "id": "pos_boleto_app",
+      "message": "Baixe o app do {banco} e entre com seu CPF; o contrato aparece lá.",
+      "bubbles": [
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_atraso": {
+      "id": "pos_atraso",
+      "message": "Negocie direto com o banco para evitar juros e restrição no nome.",
+      "bubbles": [
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_nf": {
+      "id": "pos_nf",
+      "message": "Aqui estão seus documentos da compra 📄",
+      "bubbles": [
+        { "label": "Contrato", "goto": "pos_nf" },
+        { "label": "Nota fiscal", "goto": "pos_nf" },
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "pos_chave": {
+      "id": "pos_chave",
+      "message": "{chave_manual_status}",
+      "bubbles": [
+        { "label": "Outra dúvida", "goto": "cliente" },
+        { "label": "💬 Falar com atendente", "goto": "handoff" }
+      ]
+    },
+    "seguro_cotar": {
+      "id": "seguro_cotar",
+      "message": "Cotamos com várias seguradoras. Para quem é o seguro?",
+      "bubbles": [
+        { "label": "Para mim", "goto": "seguro_cep" },
+        { "label": "Para outra pessoa", "goto": "seguro_cep" },
+        { "label": "Para carro de app", "goto": "seguro_cep", "params": { "uso": "app" } }
+      ]
+    },
+    "seguro_cep": {
+      "id": "seguro_cep",
+      "message": "Qual o CEP onde o carro dorme?",
+      "bubbles": [
+        { "label": "Usar minha localização", "goto": "seguro_ok" },
+        { "label": "Prefiro falar com corretor", "goto": "handoff", "params": { "setor": "seguros" } }
+      ],
+      "input": "CEP"
+    },
+    "seguro_ok": {
+      "id": "seguro_ok",
+      "message": "Cotação solicitada ✅ Envio as opções em até {prazo}.",
+      "bubbles": [
+        { "label": "Voltar ao menu", "goto": "start" },
+        { "label": "💬 Falar com corretor", "goto": "handoff", "params": { "setor": "seguros" } }
+      ]
+    },
+    "atendente": {
+      "id": "atendente",
+      "message": "Claro! Para agilizar, qual o assunto?",
+      "bubbles": [
+        { "label": "Comprar um carro", "goto": "handoff", "params": { "setor": "vendas" } },
+        { "label": "Vender / avaliar meu carro", "goto": "handoff", "params": { "setor": "avaliacao" } },
+        { "label": "Financiamento", "goto": "handoff", "params": { "setor": "credito" } },
+        { "label": "Pós-venda / garantia", "goto": "handoff", "params": { "setor": "posvenda" } },
+        { "label": "Documentação", "goto": "handoff", "params": { "setor": "documentacao" } },
+        { "label": "Outro assunto", "goto": "handoff" }
+      ]
+    },
+    "handoff": {
+      "id": "handoff",
+      "message": "Chamando um vendedor 🙋 Tempo médio de espera: {espera}.",
+      "bubbles": [
+        { "label": "Enquanto isso, ver carros", "goto": "busca_categoria" },
+        { "label": "Prefiro que me liguem", "goto": "callback" },
+        { "label": "Prefiro WhatsApp", "goto": "handoff_whats" },
+        { "label": "Prefiro videochamada", "goto": "callback", "params": { "canal": "video" } },
+        { "label": "Desistir e voltar ao menu", "goto": "start" }
+      ]
+    },
+    "handoff_whats": {
+      "id": "handoff_whats",
+      "message": "Te chamamos no WhatsApp em instantes ✅",
+      "bubbles": [
+        { "label": "Voltar ao menu", "goto": "start" },
+        { "label": "Prefiro que me liguem", "goto": "callback" }
+      ]
+    },
+    "callback": {
+      "id": "callback",
+      "message": "Qual o melhor horário?",
+      "bubbles": [
+        { "label": "Agora", "goto": "callback_ok" },
+        { "label": "Manhã", "goto": "callback_ok" },
+        { "label": "Tarde", "goto": "callback_ok" },
+        { "label": "Fim de tarde", "goto": "callback_ok" }
+      ]
+    },
+    "callback_ok": {
+      "id": "callback_ok",
+      "message": "Combinado! Vamos te contatar em {telefone} 📞",
+      "bubbles": [
+        { "label": "Mudar telefone", "goto": "callback" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "fora_horario": {
+      "id": "fora_horario",
+      "message": "Nosso horário é {horario}. Posso te ajudar por aqui ou deixar um recado.",
+      "bubbles": [
+        { "label": "Continuar com o assistente", "goto": "start" },
+        { "label": "Deixar recado", "goto": "recado" },
+        { "label": "Me liguem amanhã", "goto": "callback" }
+      ]
+    },
+    "recado": {
+      "id": "recado",
+      "message": "Escreva seu recado que respondemos no próximo horário.",
+      "bubbles": [
+        { "label": "Me liguem amanhã", "goto": "callback" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ],
+      "input": "texto"
+    },
+    "outras": {
+      "id": "outras",
+      "message": "Outras informações:",
+      "bubbles": [
+        { "label": "📍 Endereço da loja", "goto": "info_endereco" },
+        { "label": "🕒 Horário de funcionamento", "goto": "info_horario" },
+        { "label": "📞 Telefones e WhatsApp", "goto": "info_contato" },
+        { "label": "🌐 Site e redes sociais", "goto": "info_redes" },
+        { "label": "🛡 Garantia", "goto": "gar_info" },
+        { "label": "📄 Documentação e transferência", "goto": "doc_transf" },
+        { "label": "🚚 Entregam em outra cidade?", "goto": "entrega" },
+        { "label": "👔 Trabalhe conosco", "goto": "info_trabalhe" },
+        { "label": "🔒 Privacidade dos meus dados", "goto": "lgpd" }
+      ]
+    },
+    "info_endereco": {
+      "id": "info_endereco",
+      "message": "Estamos em {endereco} 📍 Estacionamento para clientes.",
+      "bubbles": [
+        { "label": "Outra informação", "goto": "outras" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "info_horario": {
+      "id": "info_horario",
+      "message": "Funcionamos {horario}. O assistente responde 24h 🤖",
+      "bubbles": [
+        { "label": "Outra informação", "goto": "outras" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "info_contato": {
+      "id": "info_contato",
+      "message": "Telefone {telefone} · WhatsApp {whatsapp}",
+      "bubbles": [
+        { "label": "Outra informação", "goto": "outras" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "info_redes": {
+      "id": "info_redes",
+      "message": "Site: {site} · Instagram: {instagram}",
+      "bubbles": [
+        { "label": "Outra informação", "goto": "outras" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "info_trabalhe": {
+      "id": "info_trabalhe",
+      "message": "Envie seu currículo para {email_rh}.",
+      "bubbles": [
+        { "label": "Outra informação", "goto": "outras" },
+        { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "nao_entendi": {
+      "id": "nao_entendi",
+      "message": "Desculpe, não entendi 🤔 Escolha uma opção ou escreva de outro jeito:",
+      "bubbles": [
+        { "label": "🚗 Comprar carro", "goto": "comprar" },
+        { "label": "💰 Vender meu carro", "goto": "vender" },
+        { "label": "🔄 Trocar meu carro", "goto": "troca" },
+        { "label": "🏦 Financiamento", "goto": "fin_entrada" },
+        { "label": "💬 Falar com vendedor", "goto": "atendente" }
+      ]
+    },
+    "fim": {
+      "id": "fim",
+      "message": "Posso te ajudar com mais alguma coisa?",
+      "bubbles": [
+        { "label": "Sim, outra dúvida", "goto": "start" },
+        { "label": "Não, obrigado", "goto": "avaliacao" }
+      ]
+    },
+    "avaliacao": {
+      "id": "avaliacao",
+      "message": "Como foi seu atendimento?",
+      "bubbles": [
+        { "label": "⭐⭐⭐⭐⭐", "goto": "obrigado", "params": { "nota": 5 } },
+        { "label": "⭐⭐⭐⭐", "goto": "obrigado", "params": { "nota": 4 } },
+        { "label": "⭐⭐⭐", "goto": "avaliacao_melhorar", "params": { "nota": 3 } },
+        { "label": "⭐⭐", "goto": "avaliacao_melhorar", "params": { "nota": 2 } },
+        { "label": "⭐", "goto": "avaliacao_melhorar", "params": { "nota": 1 } }
+      ]
+    },
+    "avaliacao_melhorar": {
+      "id": "avaliacao_melhorar",
+      "message": "Poxa! O que podemos melhorar?",
+      "bubbles": [
+        { "label": "Demorou muito", "goto": "obrigado" },
+        { "label": "Não resolveu meu problema", "goto": "handoff" },
+        { "label": "Difícil de usar", "goto": "obrigado" },
+        { "label": "Outro motivo", "goto": "obrigado" }
+      ],
+      "input": "texto"
+    },
+    "obrigado": {
+      "id": "obrigado",
+      "message": "Obrigado! 💙 Estamos por aqui sempre que precisar.",
+      "bubbles": [
+        { "label": "🔄 Recomeçar", "goto": "start" },
+        { "label": "🚗 Ver carros", "goto": "busca_categoria" }
+      ]
+    }
+  }
+}

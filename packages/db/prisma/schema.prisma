@@ -211,6 +211,9 @@ model Conversation {
   fixedFlowTurns      Int                 @default(0)
   llmTurns            Int                 @default(0)
   ollamaContext       Int[]
+  flowNodeId          String?
+  flowParams          Json                @default("{}")
+  flowStack           String[]
 
   messages            Message[]
   chipSuggestions     ChipSuggestion[]

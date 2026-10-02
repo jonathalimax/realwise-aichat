@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { ChatService } from "./chat.service";
+import { FlowService } from "./flow.service";
 import { VisitorSessionGuard } from "../../common/guards/visitor-session.guard";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import { CurrentVisitor } from "../../common/decorators/current-business.decorator";
@@ -11,7 +12,7 @@ type VisitorContext = Partial<VisitorSessionClaims> & { visitorToken?: string };
 @UseGuards(VisitorSessionGuard, RateLimitGuard)
 @Controller("chat")
 export class ChatController {
-  constructor(private readonly chat: ChatService) {}
+  constructor(private readonly chat: ChatService, private readonly flow: FlowService) {}
 
   @Get(":businessId/chips")
   chips(@Param("businessId") businessId: string) {
@@ -74,6 +75,21 @@ export class ChatController {
       send("error", { message: error instanceof Error ? error.message : "stream_failed" });
     }
     res.end();
+  }
+
+  @Post(":businessId/conversations/:conversationId/flow/start")
+  startFlow(@Param("businessId") businessId: string, @Param("conversationId") conversationId: string) {
+    return this.flow.start(businessId, conversationId);
+  }
+
+  @Post(":businessId/conversations/:conversationId/flow/advance")
+  advanceFlow(
+    @Param("businessId") businessId: string,
+    @Param("conversationId") conversationId: string,
+    @Body("goto") goto: string,
+    @Body("params") params: Record<string, unknown>,
+  ) {
+    return this.flow.advance(businessId, conversationId, goto, params ?? {});
   }
 
   @Post(":businessId/conversations/:conversationId/book")

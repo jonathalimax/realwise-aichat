@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { maskBrPhone } from "@realwise/shared";
-import { getBusiness, getChips, startConversation, streamMessage, bookAppointment, identifyVisitor } from "../lib/api";
+import { getBusiness, startConversation, streamMessage, bookAppointment, identifyVisitor, startFlow, advanceFlow } from "../lib/api";
+
+interface FlowBubble {
+  label: string;
+  goto: string;
+  params?: Record<string, unknown>;
+}
 
 interface Message {
   id: string;
@@ -50,7 +56,7 @@ export function ChatScreen({ slug }: { slug: string }) {
   const [business, setBusiness] = useState<any>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [chips, setChips] = useState<string[]>([]);
+  const [bubbles, setBubbles] = useState<FlowBubble[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
@@ -66,8 +72,18 @@ export function ChatScreen({ slug }: { slug: string }) {
 
   useEffect(() => {
     if (!business) return;
-    getChips(business.id).then(setChips).catch(() => setChips([]));
+    ensureConversation();
   }, [business]);
+
+  useEffect(() => {
+    if (!business || !conversationId) return;
+    startFlow(business.id, conversationId)
+      .then((result) => {
+        setMessages((prev) => (prev.length === 0 ? [{ id: nextMessageId(), role: "assistant", content: result.message }] : prev));
+        setBubbles(result.bubbles ?? []);
+      })
+      .catch(() => {});
+  }, [business, conversationId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -109,11 +125,25 @@ export function ChatScreen({ slug }: { slug: string }) {
       });
       if (result?.escalated && result?.whatsappUrl) {
         window.open(result.whatsappUrl, "_blank");
-      } else if (result?.chips?.length) {
-        setChips(result.chips);
+      } else if (result?.flow?.bubbles) {
+        setBubbles(result.flow.bubbles);
       }
     } catch {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "Tive um problema para responder — tenta de novo em instantes." }]);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleBubbleTap(bubble: FlowBubble) {
+    if (!business) return;
+    setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: bubble.label }]);
+    setSending(true);
+    try {
+      const convId = await ensureConversation();
+      const result = await advanceFlow(business.id, convId, bubble.goto, bubble.params);
+      setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: result.message }]);
+      setBubbles(result.bubbles ?? []);
     } finally {
       setSending(false);
     }
@@ -155,11 +185,6 @@ export function ChatScreen({ slug }: { slug: string }) {
       </header>
 
       <main className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        {messages.length === 0 && (
-          <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-surface px-4 py-3 text-sm text-ink">
-            Oi! Eu sou a Clara, da {business.name}. Posso ajudar com {business.niche === "imobiliaria" ? "documentos, visitas e aluguel" : "estoque, financiamento e test-drive"}. O que você precisa?
-          </div>
-        )}
         {messages.map((m) => (
           <div
             key={m.id}
@@ -225,15 +250,15 @@ export function ChatScreen({ slug }: { slug: string }) {
         <div ref={bottomRef} />
       </main>
 
-      {chips.length > 0 && !showBooking && (
+      {bubbles.length > 0 && !showBooking && (
         <div className="flex flex-none flex-wrap gap-2 px-4 pb-2">
-          {chips.map((chip) => (
+          {bubbles.map((bubble, i) => (
             <button
-              key={chip}
-              onClick={() => handleSend(chip)}
+              key={`${bubble.goto}-${i}`}
+              onClick={() => handleBubbleTap(bubble)}
               className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-ink-soft"
             >
-              {chip}
+              {bubble.label}
             </button>
           ))}
         </div>

@@ -6,6 +6,7 @@ import { generateFromGateway, generateFromGatewayStream } from "../../inference/
 import { embedText } from "../../inference/embed-client";
 import { BookingsService } from "../bookings/bookings.service";
 import { sendEmail, escapeHtml } from "../../common/email";
+import { FlowService } from "./flow.service";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 
@@ -30,7 +31,11 @@ function looksLikeAbstention(text: string): boolean {
 
 @Injectable()
 export class ChatService {
-  constructor(private readonly prisma: PrismaService, private readonly bookings: BookingsService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bookings: BookingsService,
+    private readonly flow: FlowService,
+  ) {}
 
   async getOrCreateConversation(businessId: string, visitorToken: string, leadId?: string) {
     let conversation = await this.prisma.client.conversation.findFirst({
@@ -149,6 +154,17 @@ export class ChatService {
 
     if (this.detectsEscalation(visitorText) || (offeredHandoff && this.confirmsEscalation(visitorText))) {
       return this.escalate(businessId, conversationId, visitorText);
+    }
+
+    // Free text typed at a flow node with `on_input` (e.g. a CPF field) advances the scripted
+    // flow to its target node instead of going to the LLM.
+    const onInputTarget = await this.flow.onInputTarget(businessId, conversationId);
+    if (onInputTarget) {
+      const flowResult = await this.flow.advance(businessId, conversationId, onInputTarget);
+      const assistantMessage = await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
+      });
+      return { message: assistantMessage, escalated: false, flow: flowResult };
     }
 
     const answer = await this.generateAnswer(businessId, conversationId, visitorText);
@@ -323,6 +339,16 @@ export class ChatService {
       const result = await this.escalate(businessId, conversationId, visitorText);
       onDelta(result.message.content);
       return result;
+    }
+
+    const onInputTarget = await this.flow.onInputTarget(businessId, conversationId);
+    if (onInputTarget) {
+      const flowResult = await this.flow.advance(businessId, conversationId, onInputTarget);
+      const assistantMessage = await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
+      });
+      onDelta(flowResult.message);
+      return { message: assistantMessage, escalated: false, flow: flowResult };
     }
 
     const { systemPrompt, prompt } = await this.buildChatPrompt(businessId, conversationId, visitorText);

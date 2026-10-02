@@ -73,6 +73,17 @@ export async function streamMessage(
   return finalResult;
 }
 
+export function startFlow(businessId: string, conversationId: string) {
+  return request(`/chat/${businessId}/conversations/${conversationId}/flow/start`, { method: "POST" });
+}
+
+export function advanceFlow(businessId: string, conversationId: string, goto: string, params?: Record<string, unknown>) {
+  return request(`/chat/${businessId}/conversations/${conversationId}/flow/advance`, {
+    method: "POST",
+    body: JSON.stringify({ goto, params }),
+  });
+}
+
 export function bookAppointment(businessId: string, conversationId: string, serviceName: string, startsAt: string, endsAt: string) {
   return request(`/chat/${businessId}/conversations/${conversationId}/book`, {
     method: "POST",
