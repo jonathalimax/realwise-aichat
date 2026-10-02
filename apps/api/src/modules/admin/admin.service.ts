@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { estimateCostUsd } from "./model-pricing";
 
 @Injectable()
 export class AdminService {
@@ -43,12 +44,21 @@ export class AdminService {
   async globalMetrics() {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
 
-    const [tenantCount, liveTenantCount, conversationCount, leadCount] = await Promise.all([
+    const [tenantCount, liveTenantCount, conversationCount, leadCount, recentLlmCalls] = await Promise.all([
       this.prisma.client.business.count(),
       this.prisma.client.business.count({ where: { status: "live" } }),
       this.prisma.client.conversation.count(),
       this.prisma.client.lead.count(),
+      this.prisma.client.llmCallLog.findMany({
+        where: { createdAt: { gte: sevenDaysAgo } },
+        select: { provider: true, model: true, inputTokens: true, outputTokens: true },
+      }),
     ]);
+
+    const totalCostUsd7d = recentLlmCalls.reduce(
+      (sum, call) => sum + estimateCostUsd(call.provider, call.model, call.inputTokens, call.outputTokens),
+      0,
+    );
 
     // Snapshot counts as-of-7-days-ago give trend badges a real comparable baseline for lifetime totals.
     const [prevTenantCount, prevLiveTenantCount, prevConversationCount, prevLeadCount] = await Promise.all([
@@ -63,6 +73,7 @@ export class AdminService {
       liveTenantCount,
       conversationCount,
       leadCount,
+      totalCostUsd7d,
       previous: {
         tenantCount: prevTenantCount,
         liveTenantCount: prevLiveTenantCount,
@@ -81,15 +92,15 @@ export class AdminService {
       }),
       this.prisma.client.llmCallLog.findMany({
         where: { createdAt: { gte: since } },
-        select: { createdAt: true, inputTokens: true, outputTokens: true },
+        select: { createdAt: true, inputTokens: true, outputTokens: true, provider: true, model: true },
       }),
     ]);
 
-    const buckets = new Map<string, { date: string; conversations: number; tokens: number }>();
+    const buckets = new Map<string, { date: string; conversations: number; tokens: number; costUsd: number }>();
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(Date.now() - i * 24 * 3600 * 1000);
       const key = d.toISOString().slice(0, 10);
-      buckets.set(key, { date: key, conversations: 0, tokens: 0 });
+      buckets.set(key, { date: key, conversations: 0, tokens: 0, costUsd: 0 });
     }
     for (const c of conversations) {
       const key = c.startedAt.toISOString().slice(0, 10);
@@ -99,7 +110,10 @@ export class AdminService {
     for (const call of llmCalls) {
       const key = call.createdAt.toISOString().slice(0, 10);
       const bucket = buckets.get(key);
-      if (bucket) bucket.tokens += call.inputTokens + call.outputTokens;
+      if (bucket) {
+        bucket.tokens += call.inputTokens + call.outputTokens;
+        bucket.costUsd += estimateCostUsd(call.provider, call.model, call.inputTokens, call.outputTokens);
+      }
     }
     return Array.from(buckets.values());
   }

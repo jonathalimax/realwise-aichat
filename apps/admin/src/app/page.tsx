@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, Activity, MessageSquare, UserCheck, CheckCircle2, Clock, Ban, MoreHorizontal } from "lucide-react";
+import { Users, Activity, MessageSquare, UserCheck, DollarSign, CheckCircle2, Clock, Ban, MoreHorizontal } from "lucide-react";
 import { getTenants, getGlobalMetrics, getMetricsTimeseries, getConfidenceDistribution, bulkSuspendTenants } from "../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from "../components/ui/card";
 import { Badge, statusToBadgeVariant } from "../components/ui/badge";
@@ -111,7 +111,7 @@ export default function TenantsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         {STAT_CARDS.map(({ key, label, icon: Icon }) => (
           <StatCard
             key={key}
@@ -121,6 +121,12 @@ export default function TenantsPage() {
             icon={<Icon className="h-3.5 w-3.5 text-ink-soft" strokeWidth={1.5} />}
           />
         ))}
+        <StatCard
+          label="Custo estimado (7d)"
+          value={metrics ? `$${(metrics.totalCostUsd7d ?? 0).toFixed(2)}` : "—"}
+          context="Estimativa com base em preços públicos, não é a fatura real"
+          icon={<DollarSign className="h-3.5 w-3.5 text-ink-soft" strokeWidth={1.5} />}
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

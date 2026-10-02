@@ -119,7 +119,7 @@ export class FlowService {
     if (!business) return substituted.replace(PLACEHOLDER_PATTERN, "");
 
     const chunks = await retrieveRelevantChunks(this.prisma, businessId, node.message);
-    const chunkText = chunks.join("\n\n").slice(0, 4000);
+    const chunkText = chunks.map((c) => c.content).join("\n\n").slice(0, 4000);
 
     const systemPrompt = [
       `Você é a Clara, atendente de IA da ${business.name}.`,
