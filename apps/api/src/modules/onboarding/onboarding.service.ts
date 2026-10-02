@@ -36,7 +36,16 @@ function validateFieldValue(type: string | undefined, value: unknown): { ok: tru
     }
     case "phone":
       return /\d{8,}/.test(trimmed.replace(/\D/g, "")) ? { ok: true } : { ok: false, reason: "value must contain a valid phone number" };
-    case "hours":
+    case "hours": {
+      // Free-text hours vary a lot ("Seg-Sex 9h-18h", "24 horas", "Fechado aos domingos") — rather than
+      // a strict format, require it to actually look schedule-like (a time pattern or a day/hour keyword)
+      // so garbage like "banana42" (which has a digit but no real time pattern) is rejected.
+      const hasTimePattern = /\d{1,2}\s*[:h]\s*\d{0,2}/i.test(trimmed);
+      const hasKeyword = /(segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|seg|ter|qua|qui|sex|s[áa]b|dom|hora|aberto|fechado)/i.test(trimmed);
+      return trimmed.length > 0 && trimmed.length <= 500 && (hasTimePattern || hasKeyword)
+        ? { ok: true }
+        : { ok: false, reason: "value must look like a valid schedule (horários ou dias da semana)" };
+    }
     case "text":
     default:
       return trimmed.length > 0 && trimmed.length <= 500 ? { ok: true } : { ok: false, reason: "value must be a non-empty reasonable-length string" };
