@@ -15,6 +15,7 @@ const buttonVariants = cva(
       size: {
         default: "h-9 px-4",
         sm: "h-8 px-3 text-xs",
+        pill: "h-12 px-8 text-base rounded-pill",
       },
     },
     defaultVariants: { variant: "default", size: "default" },
