@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Flame, Thermometer, Snowflake, MoreHorizontal } from "lucide-react";
 import { getLeads, getLeadWhatsappLink } from "../../lib/api";
 import { Card, CardContent } from "../../components/ui/card";
@@ -35,6 +36,11 @@ const BAND_OPTIONS = [
 type SortKey = "commitmentScore" | "lastSeenAt";
 
 export default function LeadsPage() {
+  const searchParams = useSearchParams();
+  const onlyIds = useMemo(() => {
+    const raw = searchParams.get("ids");
+    return raw ? new Set(raw.split(",")) : null;
+  }, [searchParams]);
   const [leads, setLeads] = useState<any[]>([]);
   const [filter, setFilter] = useState("");
   const [bands, setBands] = useState<string[]>([]);
@@ -65,7 +71,8 @@ export default function LeadsPage() {
     let rows = leads.filter((lead) => {
       const matchesTerm = !term || lead.name?.toLowerCase().includes(term) || lead.phone?.toLowerCase().includes(term);
       const matchesBand = bands.length === 0 || bands.includes(lead.scoreBand);
-      return matchesTerm && matchesBand;
+      const matchesIds = !onlyIds || onlyIds.has(lead.id);
+      return matchesTerm && matchesBand && matchesIds;
     });
     rows = [...rows].sort((a, b) => {
       const av = sortKey === "commitmentScore" ? a.commitmentScore ?? 0 : new Date(a.lastSeenAt ?? 0).getTime();
@@ -73,7 +80,7 @@ export default function LeadsPage() {
       return sortDir === "asc" ? av - bv : bv - av;
     });
     return rows;
-  }, [leads, filter, bands, sortKey, sortDir]);
+  }, [leads, filter, bands, sortKey, sortDir, onlyIds]);
 
   const allSelected = filtered.length > 0 && filtered.every((lead) => selected.has(lead.id));
 
@@ -121,6 +128,11 @@ export default function LeadsPage() {
   return (
     <div>
       <h1 className="mb-5 font-serif text-2xl text-ink">Leads</h1>
+      {onlyIds && (
+        <Badge variant="warning" className="mb-3">
+          Mostrando apenas leads esfriando
+        </Badge>
+      )}
       <Card>
         <CardContent className="p-5">
           <DataTableToolbar

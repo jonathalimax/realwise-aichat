@@ -37,6 +37,23 @@ export class LeadsService {
     return this.prisma.client.lead.update({ where: { id: leadId }, data: { ownerOutcome: outcome } });
   }
 
+  // Hot/warm leads gone quiet 24h+ with no appointment or escalation follow-up — the ones worth a direct owner nudge.
+  async getCoolingLeads(businessId: string) {
+    const since24h = new Date(Date.now() - 24 * 3600 * 1000);
+    const leads = await this.prisma.client.lead.findMany({
+      where: {
+        businessId,
+        scoreBand: { in: ["hot", "warm"] },
+        lastSeenAt: { lte: since24h },
+        appointments: { none: {} },
+        conversations: { none: { escalatedAt: { not: null } } },
+      },
+      select: { id: true },
+      orderBy: { lastSeenAt: "asc" },
+    });
+    return { count: leads.length, leadIds: leads.map((l) => l.id) };
+  }
+
   async buildWhatsappLink(businessId: string, leadId: string, topic: string) {
     const [lead, business] = await Promise.all([
       this.prisma.client.lead.findFirst({ where: { id: leadId, businessId } }),

@@ -25,6 +25,7 @@ export const getLeadWhatsappLink = (id: string, topic: string) =>
 export const getAnalyticsSummary = () => request("/analytics/summary");
 export const getAnalyticsTimeseries = (days?: number) => request(`/analytics/timeseries${days ? `?days=${days}` : ""}`);
 export const getTopQuestions = () => request("/analytics/top-questions");
+export const getAnalyticsInsights = () => request("/analytics/insights");
 export const getDocuments = () => request("/knowledge/documents");
 export const getUnanswered = () => request("/knowledge/unanswered");
 export const getPlans = () => request("/billing/plans");

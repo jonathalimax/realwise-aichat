@@ -1,9 +1,15 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { LeadsService } from "../leads/leads.service";
+
+const WEEKDAY_LABELS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leadsService: LeadsService,
+  ) {}
 
   async dashboardSummary(businessId: string) {
     const since7d = new Date(Date.now() - 7 * 24 * 3600 * 1000);
@@ -85,5 +91,58 @@ export class AnalyticsService {
     return this.prisma.client.analyticsEvent.create({
       data: { businessId, name, properties: properties as any, conversationId, leadId },
     });
+  }
+
+  private async peakHour(businessId: string) {
+    const since30d = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+    const conversations = await this.prisma.client.conversation.findMany({
+      where: { businessId, startedAt: { gte: since30d } },
+      select: { startedAt: true },
+    });
+    if (conversations.length === 0) return null;
+
+    const buckets = new Map<string, number>();
+    for (const c of conversations) {
+      const weekday = WEEKDAY_LABELS[c.startedAt.getDay()];
+      const hour = c.startedAt.getHours();
+      const key = `${weekday}|${hour}`;
+      buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+    const [topKey, topCount] = [...buckets.entries()].sort((a, b) => b[1] - a[1])[0];
+    const [weekday, hour] = topKey.split("|");
+    const hourNum = Number(hour);
+    const isOutsideBusinessHours = hourNum < 8 || hourNum >= 19;
+    return { weekday, hourRange: `${hour}h–${hourNum + 1}h`, count: topCount, isOutsideBusinessHours };
+  }
+
+  private async conversionFunnel(businessId: string) {
+    const since7d = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const since14d = new Date(Date.now() - 14 * 24 * 3600 * 1000);
+    const [conversations, appointments, prevConversations, prevAppointments] = await Promise.all([
+      this.prisma.client.conversation.count({ where: { businessId, startedAt: { gte: since7d } } }),
+      this.prisma.client.appointment.count({ where: { businessId, createdVia: "chat", startsAt: { gte: since7d } } }),
+      this.prisma.client.conversation.count({ where: { businessId, startedAt: { gte: since14d, lt: since7d } } }),
+      this.prisma.client.appointment.count({ where: { businessId, createdVia: "chat", startsAt: { gte: since14d, lt: since7d } } }),
+    ]);
+    if (conversations === 0) return null;
+    const rate = appointments / conversations;
+    const prevRate = prevConversations > 0 ? prevAppointments / prevConversations : null;
+    return { conversations, appointments, rate, prevRate };
+  }
+
+  async getInsights(businessId: string) {
+    const [cooling, topQuestions, peak, funnel] = await Promise.all([
+      this.leadsService.getCoolingLeads(businessId),
+      this.topQuestions(businessId, 1),
+      this.peakHour(businessId),
+      this.conversionFunnel(businessId),
+    ]);
+
+    return {
+      coolingLeads: cooling,
+      topUnansweredQuestion: topQuestions[0] ?? null,
+      peakHour: peak,
+      conversionFunnel: funnel,
+    };
   }
 }

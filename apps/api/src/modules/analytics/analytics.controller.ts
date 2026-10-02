@@ -30,4 +30,9 @@ export class AnalyticsController {
   topQuestions(@CurrentBusiness() session: BusinessSessionClaims) {
     return this.analytics.topQuestions(session.businessId);
   }
+
+  @Get("insights")
+  insights(@CurrentBusiness() session: BusinessSessionClaims) {
+    return this.analytics.getInsights(session.businessId);
+  }
 }
