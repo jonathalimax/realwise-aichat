@@ -8,16 +8,28 @@ import { Button } from "../../components/ui/button";
 export default function BillingPage() {
   const [plans, setPlans] = useState<any[]>([]);
   const [error, setError] = useState("");
+  const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
     getPlans().then(setPlans).catch(() => setPlans([]));
   }, []);
+
+  useEffect(() => {
+    const selectedPlan = localStorage.getItem("rw_selected_plan");
+    if (!selectedPlan || plans.length === 0) return;
+    const match = plans.find((p) => p.code === selectedPlan);
+    if (!match) return;
+    localStorage.removeItem("rw_selected_plan");
+    setRedirecting(true);
+    choosePlan(match.code);
+  }, [plans]);
 
   async function choosePlan(code: string) {
     try {
       const { url } = await startCheckout(code);
       window.location.href = url;
     } catch (err) {
+      setRedirecting(false);
       setError(err instanceof Error ? err.message : "Não foi possível iniciar o checkout.");
     }
   }
@@ -34,6 +46,7 @@ export default function BillingPage() {
   return (
     <div>
       <h1 className="mb-5 font-serif text-2xl text-ink">Plano e cobrança</h1>
+      {redirecting && <p className="mb-4 text-sm text-ink-soft">Abrindo o checkout do plano escolhido…</p>}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {plans.map((plan) => (
           <Card key={plan.id}>

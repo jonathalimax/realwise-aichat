@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { ConfirmationResult } from "firebase/auth";
 import { maskBrPhone, brPhoneToE164 } from "@realwise/shared";
 import { createRecaptchaVerifier, sendPhoneOtp } from "../../lib/firebase";
@@ -11,12 +11,26 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const plan = searchParams.get("plan");
+    if (plan) localStorage.setItem("rw_selected_plan", plan);
+  }, [searchParams]);
 
   async function handleSendCode() {
     try {
@@ -40,7 +54,14 @@ export default function LoginPage() {
       const credential = await confirmation.confirm(code);
       const idToken = await credential.user.getIdToken();
       const { business } = await verifyFirebaseToken(idToken);
-      router.push(business.status === "onboarding" ? "/onboarding" : "/");
+      const hasSelectedPlan = typeof window !== "undefined" && localStorage.getItem("rw_selected_plan");
+      if (business.status === "onboarding") {
+        router.push("/onboarding");
+      } else if (hasSelectedPlan) {
+        router.push("/billing");
+      } else {
+        router.push("/");
+      }
     } catch {
       setError("Código inválido ou expirado.");
     } finally {

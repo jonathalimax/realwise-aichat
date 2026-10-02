@@ -247,6 +247,7 @@ export default function MarketingHome() {
                 <li>— 1 número de WhatsApp</li>
                 <li>— Analytics básico</li>
               </ul>
+              <Pill href={`${DASHBOARD_LOGIN_URL}?plan=essencial`} className="mt-6 w-full justify-center px-6 py-3">Escolher Essencial</Pill>
             </div>
             <div className="relative rounded-3xl bg-ink p-7 text-bg transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl">
               <span className="absolute -top-3 left-7 rounded-full bg-lime px-3 py-1 text-[0.65rem] font-bold uppercase text-lime-ink">Mais escolhido</span>
@@ -262,6 +263,7 @@ export default function MarketingHome() {
                 <li>— Sua marca e domínio próprio</li>
                 <li>— Suporte prioritário</li>
               </ul>
+              <Pill href={`${DASHBOARD_LOGIN_URL}?plan=profissional`} className="mt-6 w-full justify-center bg-lime px-6 py-3 text-lime-ink">Escolher Profissional</Pill>
             </div>
           </div>
           <p className="mt-6 text-sm text-ink-soft">O que conta como conversa? Uma sessão onde a IA de fato responde algo — perguntas de fluxo fixo (horário, endereço) não contam.</p>
