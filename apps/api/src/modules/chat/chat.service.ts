@@ -3,8 +3,8 @@ import { nicheTemplates } from "@realwise/profile-schema";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway, generateFromGatewayStream } from "../../inference/gateway-client";
-import { embedText } from "../../inference/embed-client";
 import { BookingsService } from "../bookings/bookings.service";
+import { retrieveRelevantChunks } from "./knowledge-retrieval";
 import { CalendarService } from "../calendar/calendar.service";
 import { sendEmail, escapeHtml } from "../../common/email";
 import { FlowService } from "./flow.service";
@@ -169,6 +169,17 @@ export class ChatService {
       return { message: assistantMessage, escalated: false, flow: flowResult };
     }
 
+    // Free text matching one of the current node's own bubbles (e.g. typing "quero alugar" instead
+    // of tapping "🏠 Quero alugar") advances the flow the same way the bubble tap would, at zero LLM cost.
+    const bubbleMatch = await this.flow.matchFreeTextBubble(businessId, conversationId, visitorText);
+    if (bubbleMatch) {
+      const flowResult = await this.flow.advance(businessId, conversationId, bubbleMatch.goto, bubbleMatch.params);
+      const assistantMessage = await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
+      });
+      return { message: assistantMessage, escalated: false, flow: flowResult };
+    }
+
     const answer = await this.generateAnswer(businessId, conversationId, visitorText);
     const assistantMessage = await this.prisma.client.message.create({
       data: {
@@ -229,26 +240,6 @@ export class ChatService {
     return fallback;
   }
 
-  // Vector-similarity retrieval over the business's actual ingested documents (uploads, crawled
-  // website) — without this, Clara only ever sees the small structured profile fields and can
-  // never answer anything that only exists in the raw documents (e.g. "which houses do you have?").
-  private async retrieveRelevantChunks(businessId: string, visitorText: string): Promise<string[]> {
-    try {
-      const embedding = await embedText(visitorText);
-      const rows = await this.prisma.client.$queryRawUnsafe<{ content: string }[]>(
-        `SELECT content FROM "KnowledgeChunk"
-         WHERE "businessId" = $1 AND embedding IS NOT NULL
-         ORDER BY embedding <=> $2::vector
-         LIMIT 5`,
-        businessId,
-        `[${embedding.join(",")}]`,
-      );
-      return rows.map((r) => r.content);
-    } catch {
-      return []; // embedding/DB hiccup — fall back to structured profile data only
-    }
-  }
-
   private async buildChatPrompt(businessId: string, conversationId: string, visitorText: string) {
     const [business, profile, recentMessages] = await Promise.all([
       this.prisma.client.business.findUnique({ where: { id: businessId } }),
@@ -268,7 +259,7 @@ export class ChatService {
       .map((m) => `${m.role === "visitor" ? "Cliente" : "Atendente"}: ${m.content}`)
       .join("\n");
 
-    const retrievedChunks = await this.retrieveRelevantChunks(businessId, visitorText);
+    const retrievedChunks = await retrieveRelevantChunks(this.prisma, businessId, visitorText);
     const documentContext = retrievedChunks.length
       ? `\nTrechos relevantes da base de documentos:\n${retrievedChunks.map((c) => `- ${c}`).join("\n")}`
       : "";
@@ -346,6 +337,18 @@ export class ChatService {
     const onInputTarget = await this.flow.onInputTarget(businessId, conversationId);
     if (onInputTarget) {
       const flowResult = await this.flow.advance(businessId, conversationId, onInputTarget);
+      const assistantMessage = await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
+      });
+      onDelta(flowResult.message);
+      return { message: assistantMessage, escalated: false, flow: flowResult };
+    }
+
+    // Same free-text-matches-a-bubble short-circuit as sendMessage, so typed and tapped intents
+    // behave identically and streaming never pays for an LLM call it doesn't need.
+    const bubbleMatch = await this.flow.matchFreeTextBubble(businessId, conversationId, visitorText);
+    if (bubbleMatch) {
+      const flowResult = await this.flow.advance(businessId, conversationId, bubbleMatch.goto, bubbleMatch.params);
       const assistantMessage = await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
       });

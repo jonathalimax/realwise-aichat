@@ -2,8 +2,8 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import concessionariaFlow from "./flows/concessionaria.flow.json";
 import imobiliariaFlow from "./flows/imobiliaria.flow.json";
 import { PrismaService } from "../../prisma/prisma.service";
-import { embedText } from "../../inference/embed-client";
 import { generateFromGateway } from "../../inference/gateway-client";
+import { retrieveRelevantChunks } from "./knowledge-retrieval";
 
 interface FlowBubble {
   label: string;
@@ -34,6 +34,46 @@ interface FlowSnapshot {
 }
 
 const MAX_FLOW_HISTORY = 25;
+
+const STOPWORDS = new Set([
+  "quero", "queria", "gostaria", "de", "da", "do", "um", "uma", "o", "a", "e",
+  "que", "com", "para", "pra", "meu", "minha", "sobre", "ver", "já", "sou", "ser",
+]);
+
+// Small synonym set for the common top-level intents — NOT a general NLU system, just enough to
+// catch "aluguel"/"comprar um carro" meaning the same as the bubble label's own keyword.
+const SYNONYMS: Record<string, string[]> = {
+  alugar: ["aluguel", "locacao", "locar"],
+  comprar: ["compra", "comprar"],
+  vender: ["venda", "anunciar", "anuncio"],
+  inquilino: ["inquilino"],
+  proprietario: ["proprietario", "anunciar"],
+  atendente: ["atendente", "humano", "pessoa"],
+};
+
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // strip accents (combining marks after NFD decomposition)
+    .replace(/[^a-z0-9\s]/g, " ") // strip emoji/punctuation
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function keywordsOf(label: string): string[] {
+  return normalize(label)
+    .split(" ")
+    .filter((w) => w.length >= 3 && !STOPWORDS.has(w));
+}
+
+function expandWithSynonyms(keywords: string[]): Set<string> {
+  const expanded = new Set<string>(keywords);
+  for (const kw of keywords) {
+    for (const variant of SYNONYMS[kw] ?? []) expanded.add(variant);
+  }
+  return expanded;
+}
 
 const FLOWS: Record<string, FlowDef> = {
   imobiliaria: imobiliariaFlow as unknown as FlowDef,
@@ -78,21 +118,8 @@ export class FlowService {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) return substituted.replace(PLACEHOLDER_PATTERN, "");
 
-    let chunkText = "";
-    try {
-      const embedding = await embedText(node.message);
-      const rows = await this.prisma.client.$queryRawUnsafe<{ content: string }[]>(
-        `SELECT content FROM "KnowledgeChunk"
-         WHERE "businessId" = $1 AND embedding IS NOT NULL
-         ORDER BY embedding <=> $2::vector
-         LIMIT 5`,
-        businessId,
-        `[${embedding.join(",")}]`,
-      );
-      chunkText = rows.map((r) => r.content).join("\n\n").slice(0, 4000);
-    } catch {
-      chunkText = "";
-    }
+    const chunks = await retrieveRelevantChunks(this.prisma, businessId, node.message);
+    const chunkText = chunks.join("\n\n").slice(0, 4000);
 
     const systemPrompt = [
       `Você é a Clara, atendente de IA da ${business.name}.`,
@@ -422,5 +449,35 @@ export class FlowService {
     const flow = this.flowFor(business.niche);
     const node = flow.nodes[conversation.flowNodeId ?? flow.start];
     return node?.on_input ?? null;
+  }
+
+  // Cheap heuristic short-circuit: if free text matches one of the CURRENT node's own bubbles
+  // (what's actually offered right now, including dynamic ones already resolved into the last
+  // snapshot) with high confidence, treat it exactly like a bubble tap — zero LLM cost. Returns
+  // null on anything ambiguous so the caller falls through to the normal LLM path unchanged.
+  async matchFreeTextBubble(
+    businessId: string,
+    conversationId: string,
+    visitorText: string,
+  ): Promise<{ goto: string; params: Record<string, unknown> } | null> {
+    const normalizedText = normalize(visitorText);
+    const wordCount = normalizedText.split(" ").filter(Boolean).length;
+    if (!normalizedText || wordCount > 6) return null; // long freeform messages are left to the LLM
+
+    const conversation = await this.currentState(conversationId);
+    const snapshot = (conversation.flowSnapshot as unknown as FlowSnapshot) ?? null;
+    const bubbles = (snapshot?.bubbles ?? []).filter((b) => b.goto !== "__back__");
+    if (!bubbles.length) return null;
+
+    const matches = bubbles.filter((bubble) => {
+      const expanded = expandWithSynonyms(keywordsOf(bubble.label));
+      if (!expanded.size) return false;
+      return [...expanded].some((kw) => normalizedText.includes(kw));
+    });
+
+    // Exactly one confident match required — ambiguity (0 or 2+ bubbles matching) falls through
+    // to the LLM rather than risk a silent wrong flow-jump.
+    if (matches.length !== 1) return null;
+    return { goto: matches[0].goto, params: matches[0].params ?? {} };
   }
 }
