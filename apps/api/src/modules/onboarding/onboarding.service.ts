@@ -167,6 +167,30 @@ export class OnboardingService {
     return grounded / evalQuestions.length;
   }
 
+  // Freshness decays linearly from 100% (touched within 30d) to a 40% floor (180d+) — mitigates "decaimento do conhecimento".
+  private async computeFreshness(businessId: string, profile: { updatedAt: Date } | null): Promise<number> {
+    const latestDocument = await this.prisma.client.knowledgeDocument.findFirst({
+      where: { businessId },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+
+    const timestamps = [latestDocument?.createdAt, profile?.updatedAt].filter((d): d is Date => !!d);
+    if (timestamps.length === 0) return 0;
+
+    const mostRecent = new Date(Math.max(...timestamps.map((d) => d.getTime())));
+    const ageDays = (Date.now() - mostRecent.getTime()) / (1000 * 60 * 60 * 24);
+
+    const FULL_SCORE_DAYS = 30;
+    const FLOOR_DAYS = 180;
+    const FLOOR = 0.4;
+    if (ageDays <= FULL_SCORE_DAYS) return 1;
+    if (ageDays >= FLOOR_DAYS) return FLOOR;
+
+    const progress = (ageDays - FULL_SCORE_DAYS) / (FLOOR_DAYS - FULL_SCORE_DAYS);
+    return 1 - progress * (1 - FLOOR);
+  }
+
   private async computeRealWorldFit(businessId: string): Promise<number | null> {
     const recentMessages = await this.prisma.client.message.findMany({
       where: { businessId, role: "assistant", answerSource: { in: ["rag", "abstained"] } },
@@ -203,8 +227,10 @@ export class OnboardingService {
     const realWorldFit = await this.computeRealWorldFit(businessId);
     const realWorldFitScore = realWorldFit ?? answerAbility; // no live traffic yet — fall back to the simulated score
 
+    const freshness = await this.computeFreshness(businessId, profile);
+
     let score = Math.round(
-      coverage * 30 + documentDepth * 20 + answerAbility * 100 * 0.2 + realWorldFitScore * 100 * 0.15 + 100 * 0.1 + ownerReview * 5,
+      coverage * 30 + documentDepth * 20 + answerAbility * 100 * 0.2 + realWorldFitScore * 100 * 0.15 + freshness * 100 * 0.1 + ownerReview * 5,
     );
     if (filledRequired.length < requiredFields.length) {
       score = Math.min(score, 70);
@@ -215,10 +241,10 @@ export class OnboardingService {
       where: { id: businessId },
       data: {
         confidenceScore: score,
-        confidenceBreakdown: { coverage, documentDepth, ownerReview, answerAbility, realWorldFit: realWorldFitScore } as any,
+        confidenceBreakdown: { coverage, documentDepth, ownerReview, answerAbility, realWorldFit: realWorldFitScore, freshness } as any,
       },
     });
 
-    return { score, coverage, documentDepth, ownerReview, answerAbility, realWorldFit: realWorldFitScore };
+    return { score, coverage, documentDepth, ownerReview, answerAbility, realWorldFit: realWorldFitScore, freshness };
   }
 }
