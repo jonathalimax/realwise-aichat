@@ -31,13 +31,35 @@ export class AdminService {
   }
 
   async globalMetrics() {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+
     const [tenantCount, liveTenantCount, conversationCount, leadCount] = await Promise.all([
       this.prisma.client.business.count(),
       this.prisma.client.business.count({ where: { status: "live" } }),
       this.prisma.client.conversation.count(),
       this.prisma.client.lead.count(),
     ]);
-    return { tenantCount, liveTenantCount, conversationCount, leadCount };
+
+    // Snapshot counts as-of-7-days-ago give trend badges a real comparable baseline for lifetime totals.
+    const [prevTenantCount, prevLiveTenantCount, prevConversationCount, prevLeadCount] = await Promise.all([
+      this.prisma.client.business.count({ where: { createdAt: { lte: sevenDaysAgo } } }),
+      this.prisma.client.business.count({ where: { status: "live", createdAt: { lte: sevenDaysAgo } } }),
+      this.prisma.client.conversation.count({ where: { startedAt: { lte: sevenDaysAgo } } }),
+      this.prisma.client.lead.count({ where: { firstSeenAt: { lte: sevenDaysAgo } } }),
+    ]);
+
+    return {
+      tenantCount,
+      liveTenantCount,
+      conversationCount,
+      leadCount,
+      previous: {
+        tenantCount: prevTenantCount,
+        liveTenantCount: prevLiveTenantCount,
+        conversationCount: prevConversationCount,
+        leadCount: prevLeadCount,
+      },
+    };
   }
 
   async metricsTimeseries(days = 14) {

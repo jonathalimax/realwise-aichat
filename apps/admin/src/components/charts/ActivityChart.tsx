@@ -1,9 +1,7 @@
 "use client";
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import tokens from "../../../../../packages/ui/tokens.json";
-
-const light = tokens.color.light;
+import { ChartTooltipContent } from "./ChartTooltipContent";
 
 interface Point {
   date: string;
@@ -18,32 +16,29 @@ function formatDate(date: string) {
 
 export function ActivityChart({ data }: { data: Point[] }) {
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={250}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
         <defs>
           <linearGradient id="conversationsFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={light.accent} stopOpacity={0.35} />
-            <stop offset="95%" stopColor={light.accent} stopOpacity={0.02} />
+            <stop offset="5%" stopColor="rgb(var(--accent))" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="rgb(var(--accent))" stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke={light.border} vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={formatDate}
-          tick={{ fontSize: 11, fill: light.inkMuted }}
-          axisLine={{ stroke: light.border }}
+          tick={{ fontSize: 11, fill: "rgb(var(--muted))" }}
+          axisLine={{ stroke: "rgb(var(--border))" }}
           tickLine={false}
         />
-        <YAxis tick={{ fontSize: 11, fill: light.inkMuted }} axisLine={false} tickLine={false} allowDecimals={false} />
-        <Tooltip
-          contentStyle={{ background: light.surface, border: `1px solid ${light.border}`, borderRadius: 12, fontSize: 12 }}
-          labelFormatter={(label) => formatDate(String(label))}
-        />
+        <YAxis tick={{ fontSize: 11, fill: "rgb(var(--muted))" }} axisLine={false} tickLine={false} allowDecimals={false} />
+        <Tooltip content={<ChartTooltipContent labelFormatter={(label) => formatDate(String(label))} />} />
         <Area
-          type="monotone"
+          type="natural"
           dataKey="conversations"
           name="Conversas"
-          stroke={light.accent}
+          stroke="rgb(var(--accent))"
           strokeWidth={2}
           fill="url(#conversationsFill)"
         />

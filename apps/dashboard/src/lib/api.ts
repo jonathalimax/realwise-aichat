@@ -23,7 +23,7 @@ export const getLeadDetail = (id: string) => request(`/leads/${id}`);
 export const getLeadWhatsappLink = (id: string, topic: string) =>
   request(`/leads/${id}/whatsapp-link`, { method: "POST", body: JSON.stringify({ topic }) });
 export const getAnalyticsSummary = () => request("/analytics/summary");
-export const getAnalyticsTimeseries = () => request("/analytics/timeseries");
+export const getAnalyticsTimeseries = (days?: number) => request(`/analytics/timeseries${days ? `?days=${days}` : ""}`);
 export const getTopQuestions = () => request("/analytics/top-questions");
 export const getDocuments = () => request("/knowledge/documents");
 export const getUnanswered = () => request("/knowledge/unanswered");

@@ -7,6 +7,8 @@ export class AnalyticsService {
 
   async dashboardSummary(businessId: string) {
     const since7d = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const since14d = new Date(Date.now() - 14 * 24 * 3600 * 1000);
+    const sevenDaysAgo = since7d;
 
     const [conversations7d, leadsTotal, appointmentsTotal, linkOpenEvents] = await Promise.all([
       this.prisma.client.conversation.count({ where: { businessId, startedAt: { gte: since7d } } }),
@@ -15,7 +17,27 @@ export class AnalyticsService {
       this.prisma.client.analyticsEvent.count({ where: { businessId, name: "link_opened", occurredAt: { gte: since7d } } }),
     ]);
 
-    return { conversations7d, leadsTotal, appointmentsTotal, linkOpens7d: linkOpenEvents };
+    // Prior comparable window for 7d metrics, and as-of-7-days-ago snapshot for lifetime totals.
+    const [prevConversations7d, prevLeadsTotal, prevAppointmentsTotal, prevLinkOpenEvents] = await Promise.all([
+      this.prisma.client.conversation.count({ where: { businessId, startedAt: { gte: since14d, lt: since7d } } }),
+      this.prisma.client.lead.count({ where: { businessId, firstSeenAt: { lte: sevenDaysAgo } } }),
+      // Appointment has no createdAt field; startsAt is the closest available timestamp for the snapshot.
+      this.prisma.client.appointment.count({ where: { businessId, startsAt: { lte: sevenDaysAgo } } }),
+      this.prisma.client.analyticsEvent.count({ where: { businessId, name: "link_opened", occurredAt: { gte: since14d, lt: since7d } } }),
+    ]);
+
+    return {
+      conversations7d,
+      leadsTotal,
+      appointmentsTotal,
+      linkOpens7d: linkOpenEvents,
+      previous: {
+        conversations7d: prevConversations7d,
+        leadsTotal: prevLeadsTotal,
+        appointmentsTotal: prevAppointmentsTotal,
+        linkOpens7d: prevLinkOpenEvents,
+      },
+    };
   }
 
   async timeseries(businessId: string, days = 14) {

@@ -6,6 +6,7 @@ import { getTenantDetail, suspendTenant } from "../../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../../components/ui/card";
 import { Badge, statusToBadgeVariant } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
+import { StatCard } from "../../../components/ui/stat-card";
 import { ConfidenceBreakdownChart } from "../../../components/charts/ConfidenceBreakdownChart";
 
 export default function TenantDetailPage() {
@@ -37,30 +38,13 @@ export default function TenantDetailPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs uppercase tracking-wide text-ink-soft">Nicho</div>
-            <div className="mt-1 text-ink">{tenant.niche}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs uppercase tracking-wide text-ink-soft">Confiança</div>
-            <div className="mt-1 font-mono text-ink">{tenant.confidenceScore}%</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs uppercase tracking-wide text-ink-soft">Plano</div>
-            <div className="mt-1 text-ink">{tenant.subscription?.plan?.name ?? "Sem assinatura"}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs uppercase tracking-wide text-ink-soft">Site sincronizado</div>
-            <div className="mt-1 text-ink">{tenant.websiteSyncedAt ? new Date(tenant.websiteSyncedAt).toLocaleDateString("pt-BR") : "—"}</div>
-          </CardContent>
-        </Card>
+        <StatCard label="Nicho" value={tenant.niche} />
+        <StatCard label="Confiança" value={`${tenant.confidenceScore}%`} />
+        <StatCard label="Plano" value={tenant.subscription?.plan?.name ?? "Sem assinatura"} />
+        <StatCard
+          label="Site sincronizado"
+          value={tenant.websiteSyncedAt ? new Date(tenant.websiteSyncedAt).toLocaleDateString("pt-BR") : "—"}
+        />
       </div>
 
       {Object.keys(breakdown).length > 0 && (

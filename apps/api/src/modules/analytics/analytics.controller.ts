@@ -1,8 +1,15 @@
-import { Controller, Get, UseGuards } from "@nestjs/common";
+import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 import { AnalyticsService } from "./analytics.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
 import { CurrentBusiness } from "../../common/decorators/current-business.decorator";
 import type { BusinessSessionClaims } from "@realwise/auth";
+
+const ALLOWED_DAYS = [7, 30, 90];
+
+function parseDays(days?: string): number {
+  const parsed = Number(days);
+  return ALLOWED_DAYS.includes(parsed) ? parsed : 14;
+}
 
 @UseGuards(BusinessSessionGuard)
 @Controller("analytics")
@@ -15,8 +22,8 @@ export class AnalyticsController {
   }
 
   @Get("timeseries")
-  timeseries(@CurrentBusiness() session: BusinessSessionClaims) {
-    return this.analytics.timeseries(session.businessId);
+  timeseries(@CurrentBusiness() session: BusinessSessionClaims, @Query("days") days?: string) {
+    return this.analytics.timeseries(session.businessId, parseDays(days));
   }
 
   @Get("top-questions")

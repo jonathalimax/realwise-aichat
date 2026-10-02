@@ -1,6 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { AdminService } from "./admin.service";
 import { AdminSessionGuard } from "../../common/guards/admin-session.guard";
+
+const ALLOWED_DAYS = [7, 30, 90];
+
+function parseDays(days?: string): number {
+  const parsed = Number(days);
+  return ALLOWED_DAYS.includes(parsed) ? parsed : 14;
+}
 
 @UseGuards(AdminSessionGuard)
 @Controller("admin")
@@ -33,8 +40,8 @@ export class AdminController {
   }
 
   @Get("metrics/timeseries")
-  metricsTimeseries() {
-    return this.admin.metricsTimeseries();
+  metricsTimeseries(@Query("days") days?: string) {
+    return this.admin.metricsTimeseries(parseDays(days));
   }
 
   @Get("metrics/confidence-distribution")
