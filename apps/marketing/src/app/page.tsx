@@ -52,12 +52,12 @@ export default function MarketingHome() {
       <section className="mx-auto max-w-6xl px-5 pb-20 pt-16 text-center md:pb-28 md:pt-24">
         <Reveal>
           <h1 className="mx-auto max-w-2xl font-serif text-5xl leading-[1.1] text-ink md:text-7xl">
-            Mil clientes perguntam a mesma coisa. <em className="italic">Agora alguém sempre responde.</em>
+            Seu cliente pergunta. <em className="italic">Ela responde na hora.</em>
           </h1>
         </Reveal>
         <Reveal delay={100}>
           <p className="mx-auto mt-6 max-w-lg text-base text-ink-soft md:text-lg">
-            Qualquer hora, qualquer pergunta repetida — respondida na hora. Ela agenda sozinha, e só te chama no WhatsApp quando o cliente está pronto pra fechar.
+            Agenda sozinha e só te chama no WhatsApp quando o lead está pronto pra fechar.
           </p>
         </Reveal>
         <Reveal delay={200}>
@@ -175,12 +175,14 @@ export default function MarketingHome() {
       <section className="bg-bg-2 py-20">
         <Reveal className="mx-auto max-w-5xl px-5 text-center">
           <h2 className="font-serif text-3xl text-ink md:text-4xl">Capacidades da <em className="italic">Realwise</em></h2>
-          <div className="mt-12 grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-12 grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              { title: "Conhece seu negócio de cor", desc: "Sabe preço, horário e política sem você digitar nada no meio da correria do dia.", path: "M12 10h24M12 20h24M12 30h16M8 6h32a2 2 0 012 2v32a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2z" },
+              { title: "Responde em segundos", desc: "Sem bot travado nem resposta de minutos depois — o cliente pergunta e já recebe resposta.", path: "M24 4a20 20 0 100 40 20 20 0 000-40zm0 10v10l7 6" },
               { title: "Agenda sem ida e volta", desc: "Marca visita, test-drive ou avaliação direto no chat, sem sair pra outro app.", path: "M10 8h28a2 2 0 012 2v28a2 2 0 01-2 2H10a2 2 0 01-2-2V10a2 2 0 012-2zM8 18h32M16 4v8M32 4v8M18 26l4 4 8-8" },
               { title: "Te chama na hora certa", desc: "Quando o cliente quer falar com você, ela já abre o WhatsApp com a conversa pronta.", path: "M24 4a10 10 0 00-10 10c0 7 10 18 10 18s10-11 10-18A10 10 0 0024 4zm0 14a4 4 0 110-8 4 4 0 010 8z" },
               { title: "Nunca inventa resposta", desc: "Se não sabe algo, admite e te chama — nunca chuta preço ou prazo pro seu cliente.", path: "M24 42a18 18 0 100-36 18 18 0 000 36zM24 24V10M24 24l10 6" },
+              { title: "Pergunte sobre seus leads", desc: "Pergunte sobre leads, métricas ou sua base em português simples — ela só edita seu perfil com sua aprovação.", path: "M8 8h32v24H18l-6 6v-6H8zM16 16h16M16 22h10" },
+              { title: "Sincroniza com sua agenda", desc: "Pra quem usa Google Calendar, os horários livres já aparecem certos — sem checar duas agendas.", path: "M10 8h28a2 2 0 012 2v28a2 2 0 01-2 2H10a2 2 0 01-2-2V10a2 2 0 012-2zM8 18h32M16 4v8M32 4v8M18 30l4 4 10-10" },
             ].map((cap) => (
               <div key={cap.title} className="group flex flex-col items-center text-center">
                 <div className="mb-4 text-ink">
@@ -199,45 +201,36 @@ export default function MarketingHome() {
         <Reveal className="mx-auto max-w-5xl px-5 text-center">
           <h2 className="font-serif text-3xl text-ink md:text-4xl">Preço</h2>
           <p className="mx-auto mt-2 max-w-md text-ink-soft">Sem letra miúda. Taxa de setup única, mais a mensalidade.</p>
-          <div className="mt-10 grid gap-5 text-left md:grid-cols-3">
+          <div className="mt-10 grid gap-5 text-left md:grid-cols-2">
             <div className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
               <h3 className="font-serif text-lg">Essencial</h3>
               <div className="mt-2 font-mono text-3xl text-ink">R$297<span className="text-sm font-sans text-muted">/mês</span></div>
               <div className="text-xs text-muted">+ R$497 de setup</div>
               <ul className="mt-5 flex flex-col gap-2 text-sm text-ink-soft">
-                <li>— 300 conversas/mês</li>
-                <li>— 10 documentos na base</li>
+                <li>— 100 conversas/mês</li>
+                <li>— 15 documentos na base</li>
                 <li>— Agendamento embutido</li>
                 <li>— 1 número de WhatsApp</li>
+                <li>— Analytics básico</li>
               </ul>
             </div>
             <div className="relative rounded-3xl bg-ink p-7 text-bg transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl">
               <span className="absolute -top-3 left-7 rounded-full bg-lime px-3 py-1 text-[0.65rem] font-bold uppercase text-lime-ink">Mais escolhido</span>
               <h3 className="font-serif text-lg">Profissional</h3>
-              <div className="mt-2 font-mono text-3xl">R$597<span className="text-sm font-sans opacity-60">/mês</span></div>
+              <div className="mt-2 font-mono text-3xl">R$697<span className="text-sm font-sans opacity-60">/mês</span></div>
               <div className="text-xs opacity-60">+ R$997 de setup</div>
-              <ul className="mt-5 flex flex-col gap-2 text-sm opacity-90">
-                <li>— 1.200 conversas/mês</li>
-                <li>— 50 documentos na base</li>
-                <li>— 3 números de WhatsApp</li>
-                <li>— Sua marca no chat</li>
-                <li>— Revisão trimestral da base</li>
-              </ul>
-            </div>
-            <div className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-              <h3 className="font-serif text-lg">Studio</h3>
-              <div className="mt-2 font-mono text-3xl text-ink">R$1.197<span className="text-sm font-sans text-muted">/mês</span></div>
-              <div className="text-xs text-muted">+ R$1.997 de setup</div>
-              <ul className="mt-5 flex flex-col gap-2 text-sm text-ink-soft">
-                <li>— 4.000 conversas/mês</li>
+              <span className="mt-3 inline-block rounded-full bg-lime px-2.5 py-1 text-[0.68rem] font-bold text-lime-ink">50x mais conversas que o Essencial</span>
+              <ul className="mt-4 flex flex-col gap-2 text-sm opacity-90">
+                <li>— 5.000 conversas/mês</li>
                 <li>— Documentos ilimitados</li>
-                <li>— 10 números de WhatsApp</li>
-                <li>— Domínio próprio</li>
-                <li>— Suporte dedicado</li>
+                <li>— 5 números de WhatsApp</li>
+                <li>— Sincronização com Google Calendar</li>
+                <li>— Sua marca e domínio próprio</li>
+                <li>— Suporte prioritário</li>
               </ul>
             </div>
           </div>
-          <p className="mt-6 text-sm text-ink-soft">O que conta como conversa? Uma sessão onde a IA de fato responde algo — perguntas de fluxo fixo (horário, endereço) não contam. Anual sai 2 meses grátis.</p>
+          <p className="mt-6 text-sm text-ink-soft">O que conta como conversa? Uma sessão onde a IA de fato responde algo — perguntas de fluxo fixo (horário, endereço) não contam.</p>
         </Reveal>
       </section>
 
