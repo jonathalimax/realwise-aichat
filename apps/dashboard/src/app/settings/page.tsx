@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getMe, updateBranding, updateWebsiteUrl } from "../../lib/api";
+import { getMe, getOnboardingProfile, updateBranding, updateCustomInstructions, updateWebsiteUrl } from "../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+import { Textarea } from "../../components/ui/textarea";
+
+const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
 
 export default function SettingsPage() {
   const [brandColor, setBrandColor] = useState("#1F5F52");
@@ -19,6 +22,9 @@ export default function SettingsPage() {
   const [planCode, setPlanCode] = useState<string | null>(null);
   const [websiteSaved, setWebsiteSaved] = useState(false);
 
+  const [customInstructions, setCustomInstructions] = useState("");
+  const [customInstructionsSaved, setCustomInstructionsSaved] = useState(false);
+
   useEffect(() => {
     getMe().then((b) => {
       setBrandColor(b.brandColor ?? "#1F5F52");
@@ -28,12 +34,21 @@ export default function SettingsPage() {
       setWebsiteSyncedAt(b.websiteSyncedAt ?? null);
       setPlanCode(b.subscription?.plan?.code ?? null);
     });
+    getOnboardingProfile().then(({ profile }) => {
+      setCustomInstructions(profile?.customInstructions ?? "");
+    });
   }, []);
 
   async function save() {
     await updateBranding(logoUrl, brandColor);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function saveCustomInstructions() {
+    await updateCustomInstructions(customInstructions);
+    setCustomInstructionsSaved(true);
+    setTimeout(() => setCustomInstructionsSaved(false), 2000);
   }
 
   async function saveWebsite() {
@@ -69,6 +84,36 @@ export default function SettingsPage() {
           </div>
           <Button className="self-start" onClick={save}>
             {saved ? "Salvo!" : "Salvar"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Comportamento da Clara</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div>
+            <Label>Instruções personalizadas</Label>
+            <Textarea
+              value={customInstructions}
+              onChange={(e) => setCustomInstructions(e.target.value.slice(0, MAX_CUSTOM_INSTRUCTIONS_LENGTH))}
+              placeholder="Ex: Sempre mencione que oferecemos financiamento em até 48x. Use um tom mais informal e simpático. Nunca compare nossos preços com concorrentes."
+              className="mt-1 min-h-[120px]"
+              maxLength={MAX_CUSTOM_INSTRUCTIONS_LENGTH}
+            />
+            <div className="mt-1 flex items-center justify-between text-xs text-ink-soft">
+              <span>
+                Essas instruções ajustam o tom e as prioridades da Clara, mas nunca sobrepõem as regras de segurança do
+                sistema (ela nunca vai inventar preços, prazos ou informações que não existem nos seus documentos).
+              </span>
+            </div>
+            <div className="mt-1 text-right text-xs text-ink-soft">
+              {customInstructions.length}/{MAX_CUSTOM_INSTRUCTIONS_LENGTH}
+            </div>
+          </div>
+          <Button className="self-start" onClick={saveCustomInstructions}>
+            {customInstructionsSaved ? "Salvo!" : "Salvar"}
           </Button>
         </CardContent>
       </Card>

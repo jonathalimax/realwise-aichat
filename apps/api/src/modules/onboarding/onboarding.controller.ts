@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Post, UseGuards } from "@nestjs/common";
 import { OnboardingService } from "./onboarding.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
 import { CurrentBusiness } from "../../common/decorators/current-business.decorator";
@@ -35,6 +35,11 @@ export class OnboardingController {
     @Body("history") history: { role: "owner" | "clara"; content: string }[],
   ) {
     return this.onboarding.interviewChat(session.businessId, history ?? []);
+  }
+
+  @Patch("custom-instructions")
+  updateCustomInstructions(@CurrentBusiness() session: BusinessSessionClaims, @Body("customInstructions") customInstructions: string) {
+    return this.onboarding.updateCustomInstructions(session.businessId, customInstructions ?? "");
   }
 
   @Post("confidence/recompute")

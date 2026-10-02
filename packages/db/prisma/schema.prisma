@@ -186,6 +186,7 @@ model BusinessProfile {
   fieldStatus      Json
   cachedSummary    String?
   cachedSummaryTokens Int?
+  customInstructions String?
   approvedAt       DateTime?
   updatedAt        DateTime  @updatedAt
 }

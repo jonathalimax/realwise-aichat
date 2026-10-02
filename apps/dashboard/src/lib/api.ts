@@ -62,6 +62,8 @@ export const patchProfileField = (fieldKey: string, value: unknown, source: stri
 export const approveProfileField = (fieldKey: string) =>
   request("/onboarding/profile/field/approve", { method: "POST", body: JSON.stringify({ fieldKey }) });
 export const recomputeConfidence = () => request("/onboarding/confidence/recompute", { method: "POST" });
+export const updateCustomInstructions = (customInstructions: string) =>
+  request("/onboarding/custom-instructions", { method: "PATCH", body: JSON.stringify({ customInstructions }) });
 
 export const uploadDocumentFile = async (file: File) => {
   const form = new FormData();

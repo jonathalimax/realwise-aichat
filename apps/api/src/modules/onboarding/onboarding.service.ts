@@ -3,6 +3,8 @@ import { nicheTemplates } from "@realwise/profile-schema";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 
+const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
+
 const ABSTENTION_MARKERS = [
   "não tenho essa informação",
   "não sei",
@@ -48,6 +50,16 @@ export class OnboardingService {
       },
     });
     return result;
+  }
+
+  async updateCustomInstructions(businessId: string, customInstructions: string) {
+    // Truncate rather than reject — friendlier UX, and the cap is a soft guardrail, not a hard contract.
+    const truncated = customInstructions.slice(0, MAX_CUSTOM_INSTRUCTIONS_LENGTH);
+    return this.prisma.client.businessProfile.upsert({
+      where: { businessId },
+      update: { customInstructions: truncated },
+      create: { businessId, templateVersion: "0.1.0", data: {}, fieldStatus: {}, customInstructions: truncated },
+    });
   }
 
   async approveField(businessId: string, fieldKey: string) {
