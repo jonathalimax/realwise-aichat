@@ -59,7 +59,7 @@ export async function processColdLeadDigest() {
       })
       .join("\n");
 
-    await sendEmail(
+    const sent = await sendEmail(
       business.email!,
       `${coolingLeads.length} lead(s) esfriando — ${business.name}`,
       `<p>Oi, ${escapeHtml(business.name)}!</p>
@@ -67,6 +67,9 @@ export async function processColdLeadDigest() {
        sem agendamento nem resposta direta. Vale dar uma chamada antes que esfriem de vez:</p>
        <ul>${rows}</ul>`,
     );
+
+    // Only stamp leads as notified when the send actually succeeded, so failed sends are retried next run.
+    if (!sent) continue;
 
     await prisma.lead.updateMany({
       where: { id: { in: coolingLeads.map((l) => l.id) } },

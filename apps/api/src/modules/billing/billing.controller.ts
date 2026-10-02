@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Post, Req, UseGuards, Get } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Headers, Post, Req, UseGuards, Get } from "@nestjs/common";
 import type { Request } from "express";
 import { BillingService } from "./billing.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
@@ -28,7 +28,13 @@ export class BillingController {
 
   @Post("webhook")
   async webhook(@Req() req: Request, @Headers("stripe-signature") signature: string) {
-    const event = this.billing.constructWebhookEvent(req.body, signature);
+    let event;
+    try {
+      event = this.billing.constructWebhookEvent(req.body, signature);
+    } catch (err) {
+      // Invalid/missing signature is a bad request, not a server error — don't make Stripe retry it.
+      throw new BadRequestException("Invalid Stripe webhook signature");
+    }
     await this.billing.handleWebhookEvent(event);
     return { received: true };
   }

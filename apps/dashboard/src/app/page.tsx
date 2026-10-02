@@ -159,7 +159,7 @@ export default function HomePage() {
               />
             )}
 
-            {insights.conversionFunnel && (
+            {insights.conversionFunnel ? (
               <InsightCard
                 icon={<TrendingUp className="h-5 w-5" />}
                 headline={`${insights.conversionFunnel.conversations} conversas viraram ${insights.conversionFunnel.appointments} agendamentos esta semana`}
@@ -170,6 +170,12 @@ export default function HomePage() {
                       } da semana anterior (${(insights.conversionFunnel.prevRate * 100).toFixed(0)}%).`
                     : `Taxa de conversão de ${(insights.conversionFunnel.rate * 100).toFixed(0)}% nesta semana.`
                 }
+              />
+            ) : (
+              <InsightCard
+                icon={<TrendingUp className="h-5 w-5" />}
+                headline="Ainda sem dados de conversão"
+                description="Ainda não há agendamentos suficientes para calcular a conversão. Assim que houver mais atividade, mostramos aqui sua taxa de conversão."
               />
             )}
           </div>
