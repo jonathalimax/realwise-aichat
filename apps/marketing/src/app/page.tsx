@@ -239,10 +239,10 @@ export default function MarketingHome() {
             <div className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
               <h3 className="font-serif text-lg">Essencial</h3>
               <div className="mt-2 font-mono text-3xl text-ink">R$297<span className="text-sm font-sans text-muted">/mês</span></div>
-              <div className="text-xs text-muted">+ R$497 de setup</div>
+              <div className="text-xs text-muted">+ R$99 de setup</div>
               <ul className="mt-5 flex flex-col gap-2 text-sm text-ink-soft">
                 <li>— 100 conversas/mês</li>
-                <li>— 15 documentos na base</li>
+                <li>— 10 documentos na base</li>
                 <li>— Agendamento embutido</li>
                 <li>— 1 número de WhatsApp</li>
                 <li>— Analytics básico</li>

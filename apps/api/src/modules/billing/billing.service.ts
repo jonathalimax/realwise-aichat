@@ -32,8 +32,8 @@ export class BillingService {
         { price: plan.stripePriceId, quantity: 1 },
       ],
       subscription_data: { metadata: { businessId, planCode } },
-      success_url: `${process.env.DASHBOARD_URL}/onboarding/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.DASHBOARD_URL}/onboarding/billing`,
+      success_url: `${process.env.DASHBOARD_URL}/billing?checkout=success`,
+      cancel_url: `${process.env.DASHBOARD_URL}/billing`,
     });
 
     return { url: session.url };
