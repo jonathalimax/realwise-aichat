@@ -195,6 +195,13 @@ export default function MarketingHome() {
               <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-accent">Ver página do nicho <span className="transition-transform group-hover:translate-x-1">→</span></span>
             </a>
           </div>
+          <p className="mt-8 text-sm text-ink-soft">
+            Seu negócio não é desses dois?{" "}
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent underline underline-offset-2 hover:text-ink">
+              Fala com a gente no WhatsApp
+            </a>{" "}
+            e vemos como te atender.
+          </p>
         </Reveal>
       </section>
 
