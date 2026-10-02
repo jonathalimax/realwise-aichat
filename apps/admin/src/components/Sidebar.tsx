@@ -7,7 +7,7 @@ import { Menu, LogOut } from "lucide-react";
 import { Sheet, SheetTrigger, SheetContent } from "./ui/sheet";
 import { logout } from "../lib/api";
 
-const ITEMS = [{ href: "/", label: "Tenants" }];
+const ITEMS = [{ href: "/", label: "Clientes" }];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter();

@@ -15,6 +15,8 @@ import { ComplianceModule } from "./modules/compliance/compliance.module";
 import { InternalModule } from "./modules/internal/internal.module";
 import { CalendarModule } from "./modules/calendar/calendar.module";
 import { OwnerAssistantModule } from "./modules/owner-assistant/owner-assistant.module";
+import { AlertsModule } from "./modules/alerts/alerts.module";
+import { UsageModule } from "./modules/usage/usage.module";
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { OwnerAssistantModule } from "./modules/owner-assistant/owner-assistant.
     InternalModule,
     CalendarModule,
     OwnerAssistantModule,
+    AlertsModule,
+    UsageModule,
   ],
 })
 export class AppModule {}

@@ -43,7 +43,7 @@ const STATUS_OPTIONS = [
 ];
 
 const STAT_CARDS = [
-  { key: "tenantCount", label: "Tenants", icon: Users },
+  { key: "tenantCount", label: "Clientes", icon: Users },
   { key: "liveTenantCount", label: "Ativos", icon: Activity },
   { key: "conversationCount", label: "Conversas", icon: MessageSquare },
   { key: "leadCount", label: "Leads", icon: UserCheck },
@@ -69,6 +69,7 @@ export default function TenantsPage() {
   const [filter, setFilter] = useState("");
   const [statuses, setStatuses] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sortByCost, setSortByCost] = useState<"asc" | "desc" | null>(null);
 
   useEffect(() => {
     getTenants().then(setTenants).catch(() => setTenants([]));
@@ -82,12 +83,20 @@ export default function TenantsPage() {
 
   const filteredTenants = useMemo(() => {
     const term = filter.trim().toLowerCase();
-    return tenants.filter((t) => {
+    const filtered = tenants.filter((t) => {
       const matchesTerm = !term || t.name?.toLowerCase().includes(term) || t.slug?.toLowerCase().includes(term);
       const matchesStatus = statuses.length === 0 || statuses.includes(t.status);
       return matchesTerm && matchesStatus;
     });
-  }, [tenants, filter, statuses]);
+    if (!sortByCost) return filtered;
+    return [...filtered].sort((a, b) =>
+      sortByCost === "asc" ? (a.costUsd7d ?? 0) - (b.costUsd7d ?? 0) : (b.costUsd7d ?? 0) - (a.costUsd7d ?? 0),
+    );
+  }, [tenants, filter, statuses, sortByCost]);
+
+  function toggleCostSort() {
+    setSortByCost((prev) => (prev === "desc" ? "asc" : "desc"));
+  }
 
   const allSelected = filteredTenants.length > 0 && filteredTenants.every((t) => selected.has(t.id));
 
@@ -105,7 +114,7 @@ export default function TenantsPage() {
   }
 
   async function suspendSelected() {
-    if (!window.confirm(`Suspender ${selected.size} tenant(s) selecionado(s)?`)) return;
+    if (!window.confirm(`Suspender ${selected.size} cliente(s) selecionado(s)?`)) return;
     const { notFoundIds } = await bulkSuspendTenants([...selected]);
     if (notFoundIds.length > 0) {
       window.alert(`Não encontrados (não suspensos): ${notFoundIds.join(", ")}`);
@@ -141,7 +150,7 @@ export default function TenantsPage() {
             <CardAction>
               <SegmentedControl value={range} onValueChange={setRange} options={RANGE_OPTIONS} />
             </CardAction>
-            <CardDescription>Volume diário de conversas iniciadas em todos os tenants.</CardDescription>
+            <CardDescription>Volume diário de conversas iniciadas em todos os clientes.</CardDescription>
           </CardHeader>
           <CardContent>
             <ActivityChart data={timeseries} />
@@ -160,14 +169,14 @@ export default function TenantsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Tenants</CardTitle>
-          <CardDescription>Todos os negócios cadastrados na plataforma.</CardDescription>
+          <CardTitle>Clientes</CardTitle>
+          <CardDescription>Todos os clientes cadastrados na plataforma.</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
           <DataTableToolbar
             filterValue={filter}
             onFilterChange={setFilter}
-            filterPlaceholder="Filtrar tenants..."
+            filterPlaceholder="Filtrar clientes..."
             selectionCount={selected.size}
             filters={<FilterDropdown label="Status" options={STATUS_OPTIONS} selected={statuses} onChange={setStatuses} />}
             actions={
@@ -189,6 +198,12 @@ export default function TenantsPage() {
                 <TableHead>Status</TableHead>
                 <TableHead>Plano</TableHead>
                 <TableHead>Confiança</TableHead>
+                <TableHead>
+                  <button type="button" onClick={toggleCostSort} className="flex items-center gap-1 hover:text-ink">
+                    Custo (7d)
+                    {sortByCost && <span className="text-[10px]">{sortByCost === "desc" ? "▼" : "▲"}</span>}
+                  </button>
+                </TableHead>
                 <TableHead className="w-8" />
               </TableRow>
             </TableHeader>
@@ -198,7 +213,7 @@ export default function TenantsPage() {
                 return (
                   <TableRow key={t.id} data-state={selected.has(t.id) ? "selected" : undefined}>
                     <TableCell>
-                      <Checkbox checked={selected.has(t.id)} onCheckedChange={() => toggleOne(t.id)} aria-label="Selecionar tenant" />
+                      <Checkbox checked={selected.has(t.id)} onCheckedChange={() => toggleOne(t.id)} aria-label="Selecionar cliente" />
                     </TableCell>
                     <TableCell>
                       <Link href={`/tenants/${t.id}`} className="font-semibold text-ink hover:text-accent">
@@ -214,6 +229,7 @@ export default function TenantsPage() {
                     </TableCell>
                     <TableCell className="text-ink-soft">{t.subscription?.plan?.name ?? "—"}</TableCell>
                     <TableCell className="font-mono">{t.confidenceScore}%</TableCell>
+                    <TableCell className="text-ink-soft">{formatCostUsd(t.costUsd7d ?? 0)}</TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

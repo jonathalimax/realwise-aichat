@@ -110,6 +110,7 @@ model Business {
   unansweredQuestions UnansweredQuestion[]
   consentRecords  ConsentRecord[]
   dataSubjectRequests DataSubjectRequest[]
+  alerts          BusinessAlert[]
 }
 
 model Plan {
@@ -396,6 +397,21 @@ model LlmCallLog {
   cachedPrefixHit  Boolean  @default(false)
   error            String?
   createdAt        DateTime @default(now())
+}
+
+// Generic per-business notification mechanism — not quota-specific in shape, so any future
+// module (billing, compliance, etc.) can raise an alert without a schema change.
+model BusinessAlert {
+  id          String    @id @default(uuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id])
+  type        String
+  severity    String    @default("warning")
+  message     String
+  actionLabel String?
+  actionHref  String?
+  createdAt   DateTime  @default(now())
+  dismissedAt DateTime?
 }
 
 model AdminUser {

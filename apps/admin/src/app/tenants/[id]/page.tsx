@@ -9,6 +9,11 @@ import { Button } from "../../../components/ui/button";
 import { StatCard } from "../../../components/ui/stat-card";
 import { ConfidenceBreakdownChart } from "../../../components/charts/ConfidenceBreakdownChart";
 
+// Light-traffic costs are often sub-cent — fixed .toFixed(2) would show "$0.00" for real non-zero usage.
+function formatCostUsd(value: number): string {
+  return value > 0 && value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
+}
+
 export default function TenantDetailPage() {
   const params = useParams<{ id: string }>();
   const [tenant, setTenant] = useState<any>(null);
@@ -37,13 +42,18 @@ export default function TenantDetailPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <StatCard label="Nicho" value={tenant.niche} />
         <StatCard label="Confiança" value={`${tenant.confidenceScore}%`} />
         <StatCard label="Plano" value={tenant.subscription?.plan?.name ?? "Sem assinatura"} />
         <StatCard
           label="Site sincronizado"
           value={tenant.websiteSyncedAt ? new Date(tenant.websiteSyncedAt).toLocaleDateString("pt-BR") : "—"}
+        />
+        <StatCard
+          label="Custo estimado (7d)"
+          value={formatCostUsd(tenant.costUsd7d ?? 0)}
+          context={`${(tenant.tokensUsed7d ?? 0).toLocaleString("pt-BR")} tokens`}
         />
       </div>
 

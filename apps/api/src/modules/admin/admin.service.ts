@@ -6,11 +6,37 @@ import { estimateCostUsd } from "./model-pricing";
 export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listTenants() {
-    return this.prisma.client.business.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { subscription: { include: { plan: true } } },
+  // Grouped by businessId so callers can attach per-tenant tokens/cost without an N+1 query per tenant.
+  private async usageByBusinessLast7d(): Promise<Map<string, { tokens: number; costUsd: number }>> {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const calls = await this.prisma.client.llmCallLog.findMany({
+      where: { createdAt: { gte: sevenDaysAgo }, businessId: { not: null } },
+      select: { businessId: true, provider: true, model: true, inputTokens: true, outputTokens: true },
     });
+    const usage = new Map<string, { tokens: number; costUsd: number }>();
+    for (const call of calls) {
+      if (!call.businessId) continue;
+      const entry = usage.get(call.businessId) ?? { tokens: 0, costUsd: 0 };
+      entry.tokens += call.inputTokens + call.outputTokens;
+      entry.costUsd += estimateCostUsd(call.provider, call.model, call.inputTokens, call.outputTokens);
+      usage.set(call.businessId, entry);
+    }
+    return usage;
+  }
+
+  async listTenants() {
+    const [tenants, usage] = await Promise.all([
+      this.prisma.client.business.findMany({
+        orderBy: { createdAt: "desc" },
+        include: { subscription: { include: { plan: true } } },
+      }),
+      this.usageByBusinessLast7d(),
+    ]);
+    return tenants.map((t) => ({
+      ...t,
+      tokensUsed7d: usage.get(t.id)?.tokens ?? 0,
+      costUsd7d: usage.get(t.id)?.costUsd ?? 0,
+    }));
   }
 
   async tenantDetail(businessId: string) {
@@ -19,7 +45,8 @@ export class AdminService {
       include: { profile: true, subscription: { include: { plan: true } } },
     });
     if (!business) throw new NotFoundException("Tenant not found");
-    return business;
+    const usage = await this.usageByBusinessLast7d();
+    return { ...business, tokensUsed7d: usage.get(businessId)?.tokens ?? 0, costUsd7d: usage.get(businessId)?.costUsd ?? 0 };
   }
 
   async overrideConfidenceThreshold(businessId: string, _threshold: number) {

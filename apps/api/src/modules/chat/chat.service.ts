@@ -10,11 +10,15 @@ import { CalendarService } from "../calendar/calendar.service";
 import { sendEmail, escapeHtml } from "../../common/email";
 import { FlowService } from "./flow.service";
 import { LeadsService } from "../leads/leads.service";
+import { AlertsService } from "../alerts/alerts.service";
+import { UsageService } from "../usage/usage.service";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 const NO_CONTEXT_FALLBACK = "Não encontrei essa informação na nossa base. Quer que eu te passe pro atendimento?";
 const STREAM_INTERRUPTED_NOTE = "\n\n(conexão interrompida — pergunte novamente se precisar de mais detalhes)";
 const MIN_MEANINGFUL_TEXT_LENGTH = 20;
+
+const QUOTA_EXCEEDED_FALLBACK = "No momento a Clara não está disponível — nossa equipe vai te responder em breve!";
 
 const ESCALATION_KEYWORDS = ["falar com atendente", "falar com uma pessoa", "humano", "atendente"];
 const AFFIRMATIVE_REPLIES = ["sim", "sim por favor", "pode", "pode ser", "claro", "quero", "por favor", "ok", "okay", "isso"];
@@ -43,6 +47,8 @@ export class ChatService {
     private readonly calendar: CalendarService,
     private readonly flow: FlowService,
     private readonly leads: LeadsService,
+    private readonly alerts: AlertsService,
+    private readonly usage: UsageService,
   ) {}
 
   // Fire-and-forget, same pattern as notifyOwner — scoring must never slow down the visitor-facing response.
@@ -57,9 +63,19 @@ export class ChatService {
       orderBy: { startedAt: "desc" },
     });
     if (!conversation) {
+      // Quota is per-conversation/month, so the check belongs here (new-conversation creation),
+      // not per-message — one cheap COUNT query on the hot path, not one per message.
+      const quotaState = await this.checkConversationQuota(businessId);
       try {
         conversation = await this.prisma.client.conversation.create({
-          data: { businessId, visitorToken, leadId, status: "active", resumeToken: randomBytes(16).toString("base64url") },
+          data: {
+            businessId,
+            visitorToken,
+            leadId,
+            status: quotaState.exceeded ? "escalated" : "active",
+            resumeToken: randomBytes(16).toString("base64url"),
+            ...(quotaState.exceeded ? { escalatedAt: new Date() } : {}),
+          },
         });
       } catch (err) {
         // Lost the create race to a concurrent request — the partial unique index rejected us, fall back to the winner's row.
@@ -71,8 +87,66 @@ export class ChatService {
         }
         if (!conversation) throw err;
       }
+
+      if (conversation && quotaState.exceeded) {
+        await this.prisma.client.message.create({
+          data: {
+            conversationId: conversation.id,
+            businessId,
+            role: "assistant",
+            content: QUOTA_EXCEEDED_FALLBACK,
+            answerSource: "escalation",
+          },
+        });
+        this.notifyOwner(
+          businessId,
+          "Limite de conversas do plano atingido",
+          `<p>O limite de conversas do plano mensal foi atingido. Novas conversas estão sendo encaminhadas direto para a sua equipe até o início do próximo ciclo ou upgrade de plano.</p>
+           <p>Veja os detalhes do plano: Configurações &gt; Assinatura.</p>`,
+        );
+      }
     }
     return conversation;
+  }
+
+  // Checks current-month usage against the plan quota and raises/escalates as needed. Returns
+  // whether THIS new conversation should be hard-capped (quota already at/over 100%).
+  private async checkConversationQuota(businessId: string): Promise<{ exceeded: boolean }> {
+    const [used, quota] = await Promise.all([
+      this.usage.countConversationsThisMonth(businessId),
+      this.usage.getConversationQuota(businessId),
+    ]);
+    if (quota <= 0) return { exceeded: false };
+    const percent = (used / quota) * 100;
+
+    if (percent >= 100) {
+      await this.alerts.createAlert(businessId, {
+        type: "quota_exceeded",
+        severity: "critical",
+        message: "Você atingiu 100% das conversas do seu plano este mês — novas conversas estão sendo encaminhadas direto para sua equipe. Faça upgrade para voltar a ser atendido pela Clara.",
+        actionLabel: "Ver planos",
+        actionHref: "/billing",
+      });
+      return { exceeded: true };
+    }
+    if (percent >= 95) {
+      await this.alerts.createAlert(businessId, {
+        type: "quota_warning_95",
+        severity: "warning",
+        message: "Você já usou 95% das conversas do seu plano este mês — faça upgrade agora para não ficar sem atendimento.",
+        actionLabel: "Ver planos",
+        actionHref: "/billing",
+      });
+    } else if (percent >= 80) {
+      await this.alerts.createAlert(businessId, {
+        type: "quota_warning_80",
+        severity: "warning",
+        message: "Você já usou 80% das conversas do seu plano este mês — considere fazer upgrade para não ficar sem atendimento.",
+        actionLabel: "Ver planos",
+        actionHref: "/billing",
+      });
+    }
+    return { exceeded: false };
   }
 
   // Full ordered history plus the flow's last-known position, so the frontend can repaint the
