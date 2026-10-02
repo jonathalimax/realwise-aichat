@@ -31,7 +31,21 @@ interface FlowSnapshot {
   bubbles: FlowBubble[];
   input: string | null;
   params: Record<string, unknown>;
+  listings?: ListingItem[];
 }
+
+export interface ListingItem {
+  title: string;
+  price?: string;
+  description?: string;
+  url?: string;
+  imageUrl?: string;
+}
+
+// Node ids whose placeholder message is genuinely listing-shaped (a set of distinct real items,
+// e.g. properties or vehicles) — only these get the structured JSON listings path; every other
+// node with unresolved placeholders keeps the existing free-prose RAG fallback.
+const LISTING_NODE_IDS = new Set(["resultados"]);
 
 const MAX_FLOW_HISTORY = 25;
 
@@ -110,13 +124,34 @@ export class FlowService {
   // When the scripted message still has unresolved placeholders after substitution (e.g. it
   // depends on real inventory data this product doesn't structurally model), fall back to the
   // existing RAG+LLM pipeline to generate the actual descriptive text for that step — the node's
-  // own bubbles are kept as the tappable options regardless.
-  private async resolveMessage(businessId: string, node: FlowNode, params: Record<string, unknown>): Promise<string> {
+  // own bubbles are kept as the tappable options regardless. Listing-shaped nodes (e.g.
+  // "resultados") instead ask for structured JSON items so the frontend can render real cards.
+  private async resolveMessage(
+    businessId: string,
+    node: FlowNode,
+    params: Record<string, unknown>,
+  ): Promise<{ message: string; listings?: ListingItem[] }> {
     const substituted = this.substitute(node.message, params);
-    if (!PLACEHOLDER_PATTERN.test(substituted)) return substituted;
+    if (!PLACEHOLDER_PATTERN.test(substituted)) return { message: substituted };
 
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
-    if (!business) return substituted.replace(PLACEHOLDER_PATTERN, "");
+    if (!business) return { message: substituted.replace(PLACEHOLDER_PATTERN, "") };
+
+    if (LISTING_NODE_IDS.has(node.id)) {
+      // The literal node message ("Encontrei {n} imóveis para você") is a bad retrieval query —
+      // it's generic UI copy, not a description of an actual listing, so it tends to rank
+      // nav/footer/form chunks above the real listing cards. Build the query from the filters the
+      // visitor actually picked instead, so retrieval is biased toward genuine inventory text.
+      const listingQuery = this.listingQueryFor(business.niche, params);
+      const listingChunks = await retrieveRelevantChunks(this.prisma, businessId, listingQuery);
+      const listingChunkText = listingChunks.map((c) => c.content).join("\n\n").slice(0, 8000);
+      const listings = await this.extractListings(businessId, business.name, listingChunkText);
+      if (listings.length > 0) {
+        return { message: "Encontrei algumas opções que podem te interessar 👇", listings };
+      }
+      // No genuine distinct items found in the retrieved text — fall through to the honest
+      // prose fallback below instead of showing an empty/fabricated card list.
+    }
 
     const chunks = await retrieveRelevantChunks(this.prisma, businessId, node.message);
     const chunkText = chunks.map((c) => c.content).join("\n\n").slice(0, 4000);
@@ -140,10 +175,87 @@ export class FlowService {
         // chip/chat calls — this path was silently timing out and falling through to blank text.
         timeoutMs: 60000,
       });
-      return result.text;
+      return { message: result.text };
     } catch {
-      return substituted.replace(PLACEHOLDER_PATTERN, "");
+      return { message: substituted.replace(PLACEHOLDER_PATTERN, "") };
     }
+  }
+
+  // Turns the flow's accumulated filter params into a retrieval query that actually resembles
+  // real listing text (e.g. "apartamento aluguel centro") instead of the generic node copy.
+  private listingQueryFor(niche: string, params: Record<string, unknown>): string {
+    const words: string[] = [niche === "concessionaria" ? "carro veículo" : "imóvel apartamento casa"];
+    for (const key of ["tipo", "categoria", "marca", "modelo", "regiao", "modo"]) {
+      const value = params[key];
+      if (typeof value === "string" && value !== "any") words.push(value);
+    }
+    return words.join(" ");
+  }
+
+  // Asks the model for strictly-grounded structured listing items instead of prose — same
+  // never-invent discipline as the rest of this file. Returns [] (not a fabricated placeholder)
+  // whenever the retrieved text doesn't contain genuine distinct items.
+  private async extractListings(businessId: string, businessName: string, chunkText: string): Promise<ListingItem[]> {
+    if (!chunkText) return [];
+
+    const systemPrompt = [
+      `Você é a Clara, atendente de IA da ${businessName}.`,
+      "Extraia itens de anúncio (imóveis ou veículos) genuinamente descritos nos trechos de documentos abaixo.",
+      "Responda APENAS com um array JSON (até 6 itens), cada item no formato:",
+      '{ "title": string, "price": string | omitido, "description": string | omitido, "url": string | omitido, "imageUrl": string | omitido }',
+      "Regras: nunca invente um item, preço, url ou imagem que não apareça explicitamente no texto. Se um campo não aparecer no texto para aquele item, omita o campo (não invente um placeholder). 'url' só deve vir de um link real no formato [texto](url) ou de uma URL http(s) explícita no texto; 'imageUrl' só deve vir de uma anotação 'Foto: <url>' explícita no texto. Se nenhum item real e distinto puder ser identificado, responda com um array vazio [].",
+      `Trechos:\n${chunkText}`,
+    ].join("\n");
+
+    try {
+      const result = await generateFromGateway({
+        purpose: "extraction",
+        businessId,
+        systemPrompt,
+        prompt: "Gere o array JSON de itens.",
+        maxTokens: 1200,
+        timeoutMs: 60000,
+      });
+      // The model sometimes wraps the array in a ```json fence despite the instruction not to —
+      // strip that before parsing instead of discarding an otherwise-valid, well-grounded answer.
+      const raw = result.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && typeof (item as any).title === "string")
+        .slice(0, 6)
+        .map((item) => ({
+          title: String((item as any).title),
+          ...(typeof (item as any).price === "string" ? { price: (item as any).price } : {}),
+          ...(typeof (item as any).description === "string" ? { description: (item as any).description } : {}),
+          ...(typeof (item as any).url === "string" ? { url: (item as any).url } : {}),
+          ...(typeof (item as any).imageUrl === "string" ? { imageUrl: (item as any).imageUrl } : {}),
+        }));
+    } catch {
+      return [];
+    }
+  }
+
+  // Cheap keyword heuristic for free-text chat questions that are genuinely listing-shaped (e.g.
+  // "quais imóveis vocês tem", "mostra os carros disponíveis") so the RAG chat path (ChatService)
+  // can also surface structured cards instead of only a prose paragraph — NOT a general NLU
+  // classifier, just enough to avoid running the extra extraction call on every unrelated question.
+  isListingQuery(visitorText: string): boolean {
+    const normalized = normalize(visitorText);
+    const itemWords = ["imovel", "imoveis", "casa", "casas", "apartamento", "apartamentos", "carro", "carros", "veiculo", "veiculos"];
+    const intentWords = ["disponivel", "disponiveis", "tem", "tem disponivel", "mostra", "mostre", "ver", "listar", "quais", "opcoes", "opcao"];
+    const hasItemWord = itemWords.some((w) => normalized.includes(w));
+    const hasIntentWord = intentWords.some((w) => normalized.includes(w));
+    return hasItemWord && hasIntentWord;
+  }
+
+  // Public entry point for ChatService's free-text RAG path — same grounding discipline as the
+  // scripted "resultados" node, driven off the same retrieved chunk text already being used to
+  // build the prose answer.
+  async extractListingsForQuery(businessId: string, chunkText: string): Promise<ListingItem[]> {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) return [];
+    return this.extractListings(businessId, business.name, chunkText);
   }
 
   // Derives region/bairro bubbles from what's actually mentioned in the business's ingested
@@ -341,7 +453,7 @@ export class FlowService {
   private async emit(businessId: string, niche: string, nodeId: string, params: Record<string, unknown>): Promise<FlowSnapshot> {
     const flow = this.flowFor(niche);
     const node = flow.nodes[nodeId] ?? flow.nodes[flow.start];
-    const message = await this.resolveMessage(businessId, node, params);
+    const { message, listings } = await this.resolveMessage(businessId, node, params);
 
     let bubbles: FlowBubble[];
     if (node.id === "busca_bairro") {
@@ -364,7 +476,7 @@ export class FlowService {
       }
     }
 
-    return { nodeId: node.id, message, bubbles, input: node.input ?? null, params };
+    return { nodeId: node.id, message, bubbles, input: node.input ?? null, params, ...(listings ? { listings } : {}) };
   }
 
   async start(businessId: string, conversationId: string) {

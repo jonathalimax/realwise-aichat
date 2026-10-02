@@ -23,20 +23,32 @@ interface FlowBubble {
   params?: Record<string, unknown>;
 }
 
+interface Listing {
+  title: string;
+  price?: string;
+  description?: string;
+  url?: string;
+  imageUrl?: string;
+}
+
 interface Message {
   id: string;
   role: "visitor" | "assistant";
   content: string;
+  listings?: Listing[];
 }
 
 const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|gif|webp)(\?\S*)?$/i;
 const VIDEO_EXTENSIONS = /\.(mp4|webm|mov)(\?\S*)?$/i;
 
+// `white-space: pre-line` so the dense plain-text fallback (no structured listings available)
+// still renders real paragraph breaks between distinct property/vehicle mentions instead of
+// collapsing every "\n" into a single run-on block of prose.
 function MessageContent({ text }: { text: string }) {
   const parts = text.split(URL_PATTERN);
   return (
-    <>
+    <span className="whitespace-pre-line">
       {parts.map((part, i) => {
         if (!URL_PATTERN.test(part)) {
           URL_PATTERN.lastIndex = 0;
@@ -55,7 +67,59 @@ function MessageContent({ text }: { text: string }) {
           </a>
         );
       })}
-    </>
+    </span>
+  );
+}
+
+// Real listing item (property/vehicle) rendered as a card — image with a sensible fallback when
+// no real photo URL was captured, title, price, a short description snippet, and a tappable link
+// to the real listing when one was genuinely found in the source documents.
+function ListingCard({ listing }: { listing: Listing }) {
+  return (
+    <Card className="w-56 shrink-0 overflow-hidden">
+      <div className="flex h-32 w-full items-center justify-center bg-border/40">
+        {listing.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={listing.imageUrl}
+            alt={listing.title}
+            className="h-32 w-full object-cover"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <span className="text-3xl" aria-hidden>
+            🏠
+          </span>
+        )}
+      </div>
+      <CardContent className="p-3">
+        <div className="line-clamp-2 text-sm font-semibold text-ink">{listing.title}</div>
+        {listing.price && <div className="mt-1 text-sm font-semibold text-accent">{listing.price}</div>}
+        {listing.description && <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{listing.description}</p>}
+        {listing.url && (
+          <a
+            href={listing.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 block rounded-full bg-accent px-3 py-1.5 text-center text-xs font-medium text-white"
+          >
+            Ver anúncio
+          </a>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ListingCards({ listings }: { listings: Listing[] }) {
+  return (
+    <div className="-mx-1 flex max-w-[85%] gap-2 overflow-x-auto px-1 pb-1">
+      {listings.map((listing, i) => (
+        <ListingCard key={`${listing.title}-${i}`} listing={listing} />
+      ))}
+    </div>
   );
 }
 
@@ -174,6 +238,9 @@ export function ChatScreen({
         });
         assistantStarted = true;
       });
+      if (result?.listings?.length) {
+        setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, listings: result.listings } : m)));
+      }
       if (result?.escalated && result?.whatsappUrl) {
         window.open(result.whatsappUrl, "_blank");
       } else if (result?.flow?.bubbles) {
@@ -202,7 +269,10 @@ export function ChatScreen({
       if (isBack) {
         setMessages((prev) => prev.slice(0, -2));
       } else {
-        setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: result.message }]);
+        setMessages((prev) => [
+          ...prev,
+          { id: nextMessageId(), role: "assistant", content: result.message, listings: result.listings },
+        ]);
       }
       setBubbles(result.bubbles ?? []);
     } finally {
@@ -256,15 +326,21 @@ export function ChatScreen({
 
       <main className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.map((m) => (
-          <div
-            key={m.id}
-            className={
-              m.role === "visitor"
-                ? "ml-auto max-w-[80%] rounded-2xl rounded-br-sm bg-accent px-4 py-3 text-sm text-white"
-                : "max-w-[85%] rounded-2xl rounded-bl-sm bg-surface px-4 py-3 text-sm text-ink"
-            }
-          >
-            <MessageContent text={m.content} />
+          <div key={m.id} className={m.role === "visitor" ? "ml-auto max-w-[80%]" : "max-w-[85%]"}>
+            <div
+              className={
+                m.role === "visitor"
+                  ? "rounded-2xl rounded-br-sm bg-accent px-4 py-3 text-sm text-white"
+                  : "rounded-2xl rounded-bl-sm bg-surface px-4 py-3 text-sm text-ink"
+              }
+            >
+              <MessageContent text={m.content} />
+            </div>
+            {m.listings && m.listings.length > 0 && (
+              <div className="mt-2">
+                <ListingCards listings={m.listings} />
+              </div>
+            )}
           </div>
         ))}
 

@@ -263,7 +263,7 @@ export class ChatService {
     });
     this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
 
-    return { message: assistantMessage, escalated: false };
+    return { message: assistantMessage, escalated: false, listings: answer.listings };
   }
 
   private async buildChatPrompt(businessId: string, conversationId: string, visitorText: string) {
@@ -290,6 +290,7 @@ export class ChatService {
       ? `\nTrechos relevantes da base de documentos:\n${retrievedChunks.map((c) => `- ${c.content}`).join("\n")}`
       : "";
     const retrievedChunkIds = retrievedChunks.map((c) => c.id);
+    const retrievedChunkText = retrievedChunks.map((c) => c.content).join("\n\n").slice(0, 4000);
     const retrievalTopScore = retrievedChunks.reduce<number | undefined>(
       (best, c) => (c.score !== undefined && (best === undefined || c.score > best) ? c.score : best),
       undefined,
@@ -314,15 +315,29 @@ export class ChatService {
     const systemPrompt = systemPromptParts.join("\n");
 
     const prompt = `${history}\nCliente: ${visitorText}`;
-    return { business, systemPrompt, prompt, hasRetrievedContext: retrievedChunks.length > 0, retrievedChunkIds, retrievalTopScore };
+    return {
+      business,
+      systemPrompt,
+      prompt,
+      hasRetrievedContext: retrievedChunks.length > 0,
+      retrievedChunkIds,
+      retrievalTopScore,
+      retrievedChunkText,
+    };
+  }
+
+  // Free-text questions that are genuinely listing-shaped (e.g. "quais imóveis vocês tem") also
+  // get a best-effort structured `listings` array alongside the prose answer, using the same
+  // retrieved chunk text — same strict grounding discipline as the scripted "resultados" node.
+  private async maybeExtractListings(businessId: string, visitorText: string, chunkText: string) {
+    if (!chunkText || !this.flow.isListingQuery(visitorText)) return undefined;
+    const listings = await this.flow.extractListingsForQuery(businessId, chunkText);
+    return listings.length > 0 ? listings : undefined;
   }
 
   private async generateAnswer(businessId: string, conversationId: string, visitorText: string) {
-    const { systemPrompt, prompt, hasRetrievedContext, retrievedChunkIds, retrievalTopScore } = await this.buildChatPrompt(
-      businessId,
-      conversationId,
-      visitorText,
-    );
+    const { systemPrompt, prompt, hasRetrievedContext, retrievedChunkIds, retrievalTopScore, retrievedChunkText } =
+      await this.buildChatPrompt(businessId, conversationId, visitorText);
     // Zero retrieved chunks means there's nothing to ground the model on — never send an empty-context
     // prompt and hope it abstains on its own, that's how it hallucinates confidently.
     if (!hasRetrievedContext) {
@@ -335,6 +350,7 @@ export class ChatService {
         latencyMs: 0,
         retrievedChunkIds,
         retrievalTopScore,
+        listings: undefined,
       };
     }
     try {
@@ -344,15 +360,18 @@ export class ChatService {
         systemPrompt,
         prompt,
       });
+      const abstained = looksLikeAbstention(result.text);
+      const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText);
       return {
         text: result.text,
-        abstained: looksLikeAbstention(result.text),
+        abstained,
         model: result.model,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         latencyMs: result.latencyMs,
         retrievedChunkIds,
         retrievalTopScore,
+        listings,
       };
     } catch {
       return {
@@ -364,6 +383,7 @@ export class ChatService {
         latencyMs: 0,
         retrievedChunkIds,
         retrievalTopScore,
+        listings: undefined,
       };
     }
   }
@@ -427,11 +447,8 @@ export class ChatService {
       return { message: assistantMessage, escalated: false, flow: flowResult };
     }
 
-    const { systemPrompt, prompt, hasRetrievedContext, retrievedChunkIds, retrievalTopScore } = await this.buildChatPrompt(
-      businessId,
-      conversationId,
-      visitorText,
-    );
+    const { systemPrompt, prompt, hasRetrievedContext, retrievedChunkIds, retrievalTopScore, retrievedChunkText } =
+      await this.buildChatPrompt(businessId, conversationId, visitorText);
 
     if (!hasRetrievedContext) {
       onDelta(NO_CONTEXT_FALLBACK);
@@ -497,7 +514,8 @@ export class ChatService {
     });
     this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
 
-    return { message: assistantMessage, escalated: false };
+    const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText);
+    return { message: assistantMessage, escalated: false, listings };
   }
 
   private readonly ALLOWED_SERVICES = new Set(["Visita ao imóvel", "Test-drive"]);

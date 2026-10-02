@@ -56,7 +56,11 @@ const BLOCK_TAGS = new Set([
 
 // Walks the DOM collecting text with separators between siblings/blocks, since a bare
 // .text() call concatenates adjacent elements (e.g. brand logo links) with no whitespace.
-function extractTextWithSeparators($: cheerio.CheerioAPI, node: any): string {
+// Also surfaces real <a href> and <img src> URLs inline near the text they relate to (as
+// `[texto](url)` / `Foto: url` annotations) so listing links/photos genuinely present in the
+// source HTML survive into the extracted text instead of being silently stripped — without this,
+// the chat/RAG pipeline has no URL to ever show, even when the scraped page has real ones.
+function extractTextWithSeparators($: cheerio.CheerioAPI, node: any, base: URL): string {
   let out = "";
   const children = $(node).contents().toArray();
   for (const child of children) {
@@ -66,10 +70,33 @@ function extractTextWithSeparators($: cheerio.CheerioAPI, node: any): string {
       const tagName = (child as any).name;
       if (tagName === "img") {
         const alt = $(child).attr("alt");
+        const src = $(child).attr("src");
         if (alt) out += ` ${alt} `;
+        if (src && !src.startsWith("data:")) {
+          try {
+            const resolved = new URL(src, base).toString();
+            out += ` Foto: ${resolved} `;
+          } catch {
+            // ignore malformed src
+          }
+        }
         continue;
       }
-      const inner = extractTextWithSeparators($, child);
+      const inner = extractTextWithSeparators($, child, base);
+      if (tagName === "a") {
+        const href = $(child).attr("href");
+        if (href && !href.startsWith("#") && !href.startsWith("mailto:") && !href.startsWith("tel:") && !href.startsWith("javascript:")) {
+          try {
+            const resolved = new URL(href, base);
+            resolved.hash = "";
+            const label = inner.trim();
+            out += label ? ` [${label}](${resolved.toString()}) ` : ` ${resolved.toString()} `;
+            continue;
+          } catch {
+            // fall through to plain inner text below on malformed href
+          }
+        }
+      }
       out += BLOCK_TAGS.has(tagName) ? `\n${inner}\n` : ` ${inner} `;
     }
   }
@@ -97,7 +124,7 @@ function extractPage(html: string, pageUrl: string): { title: string; text: stri
 
   $("script, style, nav, footer, noscript, svg").remove();
   const title = $("title").first().text().trim();
-  const text = extractTextWithSeparators($, $("body").get(0))
+  const text = extractTextWithSeparators($, $("body").get(0), base)
     .replace(/[ \t]+/g, " ")
     .split("\n")
     .map((line) => line.trim())
