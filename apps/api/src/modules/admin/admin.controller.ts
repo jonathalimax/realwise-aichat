@@ -34,6 +34,11 @@ export class AdminController {
     return this.admin.suspendTenant(id);
   }
 
+  @Patch("tenants/bulk-suspend")
+  bulkSuspend(@Body("ids") ids: string[]) {
+    return this.admin.bulkSuspendTenants(ids);
+  }
+
   @Get("metrics")
   metrics() {
     return this.admin.globalMetrics();

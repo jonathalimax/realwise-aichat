@@ -161,6 +161,134 @@ export class FlowService {
     return names.map((name) => ({ label: name, goto: "resultados", params: { regiao: name } }));
   }
 
+  // Generalized version of dynamicRegionBubbles for any other bubble list (brand/model/category)
+  // that should reflect real values mentioned in the business's documents — cached per key on
+  // Business.cachedFlowOptions since extraction is an LLM call.
+  private async extractOptions(businessId: string, cacheKey: string, systemPrompt: string): Promise<string[]> {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) return [];
+
+    const cache = (business.cachedFlowOptions as Record<string, { values: string[]; at: string }> | null) ?? {};
+    const entry = cache[cacheKey];
+    const isFresh = entry && Date.now() - new Date(entry.at).getTime() < 12 * 3600 * 1000;
+    if (isFresh) return entry.values;
+
+    const chunks = await this.prisma.client.knowledgeChunk.findMany({
+      where: { businessId },
+      select: { content: true },
+      take: 40,
+    });
+    const chunkText = chunks.map((c) => c.content).join("\n\n").slice(0, 6000);
+
+    let values: string[] = [];
+    if (chunkText) {
+      try {
+        const result = await generateFromGateway({
+          purpose: "extraction",
+          businessId,
+          systemPrompt: `${systemPrompt}\nTrechos:\n${chunkText}`,
+          prompt: "Gere o array.",
+          maxTokens: 150,
+        });
+        const parsed = JSON.parse(result.text.trim());
+        if (Array.isArray(parsed)) values = parsed.filter((n) => typeof n === "string").slice(0, 8);
+      } catch {
+        values = [];
+      }
+    }
+
+    await this.prisma.client.business.update({
+      where: { id: businessId },
+      data: { cachedFlowOptions: { ...cache, [cacheKey]: { values, at: new Date().toISOString() } } as any },
+    });
+
+    return values;
+  }
+
+  // Dynamic bubbles for car brand / model / category (vehicle or property type) nodes, mirroring
+  // dynamicRegionBubbles but driven by extractOptions since there are several such lists.
+  private async dynamicOptionBubbles(
+    businessId: string,
+    nodeId: string,
+    params: Record<string, unknown>,
+  ): Promise<FlowBubble[] | null> {
+    switch (nodeId) {
+      case "busca_marca":
+      case "busca_marca_mais":
+      case "troca_marca": {
+        const brands = await this.extractOptions(
+          businessId,
+          "marca",
+          "Extraia os nomes de marcas de carros ou motos mencionadas no estoque descrito nos documentos abaixo (ex: Chevrolet, Fiat, Toyota). Responda apenas com um array JSON de até 8 marcas reais mencionadas no texto — nunca invente uma marca que não apareça. Se nenhuma marca for citada, responda com um array vazio [].",
+        );
+        const slice = nodeId === "busca_marca_mais" ? brands.slice(4) : brands.slice(0, 4);
+        const goto = nodeId === "troca_marca" ? "troca_modelo" : "busca_modelo";
+        const paramKey = nodeId === "troca_marca" ? null : "marca";
+        return slice.map((name) => ({
+          label: name,
+          goto,
+          ...(paramKey ? { params: { [paramKey]: name } } : {}),
+        }));
+      }
+      case "busca_modelo":
+      case "troca_modelo": {
+        const marca = (params.marca as string) ?? "any";
+        const models = await this.extractOptions(
+          businessId,
+          `modelo:${marca}`,
+          `Extraia os nomes de modelos da marca "${marca}" mencionados nos documentos abaixo. Responda apenas com um array JSON de até 6 modelos reais mencionados no texto — nunca invente um modelo que não apareça. Se nenhum modelo for citado, responda com um array vazio [].`,
+        );
+        const goto = nodeId === "troca_modelo" ? "troca_ano" : "busca_preco";
+        return models.map((name) => ({
+          label: name,
+          goto,
+          ...(nodeId === "busca_modelo" ? { params: { modelo: name } } : {}),
+        }));
+      }
+      case "busca_categoria": {
+        const categories = await this.extractOptions(
+          businessId,
+          "categoria_veiculo",
+          "Extraia os tipos/categorias de veículos mencionados no estoque descrito nos documentos abaixo (ex: hatch, sedã, SUV, picape, moto, elétrico). Responda apenas com um array JSON de até 8 categorias reais mencionadas no texto — nunca invente uma categoria que não apareça. Se nenhuma for citada, responda com um array vazio [].",
+        );
+        return categories.map((name) => ({ label: name, goto: "busca_marca", params: { categoria: name } }));
+      }
+      case "busca_tipo": {
+        const types = await this.extractOptions(
+          businessId,
+          "categoria_imovel",
+          "Extraia os tipos de imóveis mencionados nos documentos abaixo (ex: apartamento, casa, terreno, comercial, chácara). Responda apenas com um array JSON de até 8 tipos reais mencionados no texto — nunca invente um tipo que não apareça. Se nenhum for citado, responda com um array vazio [].",
+        );
+        return types.map((name) => ({ label: name, goto: "busca_preco", params: { tipo: name } }));
+      }
+      default:
+        return null;
+    }
+  }
+
+  // True for bubbles that are hardcoded values the dynamic list replaces (brand/model/category
+  // names) — false for script nav bubbles ("Tanto faz", "Outra", back-links) that should stay.
+  private isHardcodedOptionBubble(nodeId: string, bubble: FlowBubble): boolean {
+    switch (nodeId) {
+      case "busca_marca":
+        return typeof bubble.params?.marca === "string" && bubble.params.marca !== "any";
+      case "busca_marca_mais":
+        return bubble.goto === "busca_modelo";
+      case "troca_marca":
+        return bubble.goto === "troca_modelo" && bubble.label !== "Outra";
+      case "busca_modelo":
+        return bubble.params?.modelo === undefined;
+      case "troca_modelo":
+        return bubble.label !== "Outro modelo";
+      case "busca_categoria":
+        return typeof bubble.params?.categoria === "string";
+      case "busca_tipo":
+        return typeof bubble.params?.tipo === "string" && bubble.params.tipo !== "any";
+      default:
+        return false;
+    }
+  }
+
   private async currentState(conversationId: string) {
     const conversation = await this.prisma.client.conversation.findUnique({ where: { id: conversationId } });
     if (!conversation) throw new NotFoundException("Conversation not found");
@@ -182,7 +310,15 @@ export class FlowService {
       const regions = await this.dynamicRegionBubbles(businessId);
       bubbles = [...regions, ...locationAgnostic, ...flow.global_bubbles];
     } else {
-      bubbles = [...(node.bubbles ?? []), ...flow.global_bubbles];
+      const dynamicOptions = await this.dynamicOptionBubbles(businessId, node.id, params);
+      if (dynamicOptions) {
+        // Nav/fallback bubbles are whatever's left in the script once the hardcoded option
+        // bubbles are stripped (e.g. "Tanto faz", "Qualquer modelo", "Outra", back-links).
+        const nav = (node.bubbles ?? []).filter((b) => !this.isHardcodedOptionBubble(node.id, b));
+        bubbles = [...dynamicOptions, ...nav, ...flow.global_bubbles];
+      } else {
+        bubbles = [...(node.bubbles ?? []), ...flow.global_bubbles];
+      }
     }
 
     return { nodeId: node.id, message, bubbles, input: node.input ?? null, params };

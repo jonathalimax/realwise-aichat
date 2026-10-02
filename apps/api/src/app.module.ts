@@ -13,6 +13,8 @@ import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { ComplianceModule } from "./modules/compliance/compliance.module";
 import { InternalModule } from "./modules/internal/internal.module";
+import { CalendarModule } from "./modules/calendar/calendar.module";
+import { OwnerAssistantModule } from "./modules/owner-assistant/owner-assistant.module";
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { InternalModule } from "./modules/internal/internal.module";
     AdminModule,
     ComplianceModule,
     InternalModule,
+    CalendarModule,
+    OwnerAssistantModule,
   ],
 })
 export class AppModule {}

@@ -75,3 +75,9 @@ export const uploadDocumentText = (filename: string, content: string) =>
 export const getAppointments = () => request("/bookings/appointments");
 export const updateAppointmentStatus = (id: string, status: string) =>
   request(`/bookings/appointments/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+
+export const getCalendarStatus = (businessId: string) => request(`/calendar/${businessId}/status`);
+
+export const askOwnerAssistant = (message: string, history: { role: "owner" | "assistant"; content: string }[]) =>
+  request("/owner-assistant/ask", { method: "POST", body: JSON.stringify({ message, history }) });
+export const getCalendarAuthUrl = (businessId: string) => request(`/calendar/${businessId}/auth-url`);

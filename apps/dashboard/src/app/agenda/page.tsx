@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getAppointments, updateAppointmentStatus } from "../../lib/api";
+import { getAppointments, updateAppointmentStatus, getMe, getCalendarStatus, getCalendarAuthUrl } from "../../lib/api";
 import { Card, CardContent } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -39,13 +39,32 @@ export default function AgendaPage() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [calendarConnected, setCalendarConnected] = useState(false);
+  const [calendarConfigured, setCalendarConfigured] = useState(true);
 
   async function refresh() {
     setAppointments(await getAppointments());
   }
 
+  async function refreshCalendarStatus() {
+    const business = await getMe();
+    const status = await getCalendarStatus(business.id);
+    setCalendarConnected(Boolean(status.connected));
+  }
+
+  async function connectCalendar() {
+    const business = await getMe();
+    const result = await getCalendarAuthUrl(business.id);
+    if (!result.configured) {
+      setCalendarConfigured(false);
+      return;
+    }
+    window.location.href = result.url;
+  }
+
   useEffect(() => {
     refresh();
+    refreshCalendarStatus();
   }, []);
 
   async function setStatus(id: string, status: string) {
@@ -80,7 +99,21 @@ export default function AgendaPage() {
 
   return (
     <div>
-      <h1 className="mb-5 font-serif text-2xl text-ink">Agenda</h1>
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="font-serif text-2xl text-ink">Agenda</h1>
+        <div className="flex items-center gap-2">
+          {calendarConnected ? (
+            <Badge variant="positive">Google Calendar conectado</Badge>
+          ) : (
+            <Button size="sm" variant="outline" onClick={connectCalendar}>
+              Conectar Google Calendar
+            </Button>
+          )}
+          {!calendarConfigured && (
+            <span className="text-xs text-ink-soft">Integração ainda não configurada pelo time.</span>
+          )}
+        </div>
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
         <Card>

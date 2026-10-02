@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Users, Activity, MessageSquare, UserCheck, CheckCircle2, Clock, Ban, MoreHorizontal } from "lucide-react";
-import { getTenants, getGlobalMetrics, getMetricsTimeseries, getConfidenceDistribution } from "../lib/api";
+import { getTenants, getGlobalMetrics, getMetricsTimeseries, getConfidenceDistribution, bulkSuspendTenants } from "../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from "../components/ui/card";
 import { Badge, statusToBadgeVariant } from "../components/ui/badge";
 import { Checkbox } from "../components/ui/checkbox";
+import { Button } from "../components/ui/button";
 import { DataTableToolbar, FilterDropdown } from "../components/ui/data-table-toolbar";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { StatCard } from "../components/ui/stat-card";
@@ -98,6 +99,13 @@ export default function TenantsPage() {
     });
   }
 
+  async function suspendSelected() {
+    if (!window.confirm(`Suspender ${selected.size} tenant(s) selecionado(s)?`)) return;
+    await bulkSuspendTenants([...selected]);
+    setSelected(new Set());
+    getTenants().then(setTenants).catch(() => setTenants([]));
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -148,6 +156,13 @@ export default function TenantsPage() {
             filterPlaceholder="Filtrar tenants..."
             selectionCount={selected.size}
             filters={<FilterDropdown label="Status" options={STATUS_OPTIONS} selected={statuses} onChange={setStatuses} />}
+            actions={
+              selected.size > 0 && (
+                <Button variant="outline" size="sm" onClick={suspendSelected}>
+                  Suspender selecionados
+                </Button>
+              )
+            }
           />
           <Table>
             <TableHeader>

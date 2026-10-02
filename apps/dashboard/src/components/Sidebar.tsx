@@ -9,6 +9,7 @@ import { logout } from "../lib/api";
 
 const ITEMS = [
   { href: "/", label: "Início" },
+  { href: "/assistant", label: "Assistente" },
   { href: "/profile", label: "Perfil" },
   { href: "/leads", label: "Leads" },
   { href: "/agenda", label: "Agenda" },

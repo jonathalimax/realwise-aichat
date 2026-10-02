@@ -89,6 +89,7 @@ model Business {
   cachedChipsAt   DateTime?
   cachedLocations Json?
   cachedLocationsAt DateTime?
+  cachedFlowOptions Json?
   trialEndsAt     DateTime?
   trialReminderSentAt DateTime?
   status          BusinessStatus @default(onboarding)
@@ -107,6 +108,7 @@ model Business {
   subscription    Subscription?
   bookingSlots    BookingSlot[]
   appointments    Appointment[]
+  calendarIntegration CalendarIntegration?
   unansweredQuestions UnansweredQuestion[]
   consentRecords  ConsentRecord[]
   dataSubjectRequests DataSubjectRequest[]
@@ -330,6 +332,19 @@ model Appointment {
   notes                   String?
   ownerConfirmedAt        DateTime?
   externalCalendarEventId String?
+}
+
+model CalendarIntegration {
+  id          String    @id @default(uuid())
+  businessId  String    @unique
+  business    Business  @relation(fields: [businessId], references: [id])
+  provider    String    @default("google")
+  // TODO: encrypt-at-rest before storing real tokens in production
+  accessToken String
+  refreshToken String
+  calendarId  String
+  connectedAt DateTime  @default(now())
+  syncEnabled Boolean   @default(false)
 }
 
 model WhatsappRoutingNumber {

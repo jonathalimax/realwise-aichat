@@ -17,6 +17,8 @@ async function request(path: string, options?: RequestInit) {
 export const getTenants = () => request("/admin/tenants");
 export const getTenantDetail = (id: string) => request(`/admin/tenants/${id}`);
 export const suspendTenant = (id: string) => request(`/admin/tenants/${id}/suspend`, { method: "POST" });
+export const bulkSuspendTenants = (ids: string[]) =>
+  request("/admin/tenants/bulk-suspend", { method: "PATCH", body: JSON.stringify({ ids }) });
 export const getGlobalMetrics = () => request("/admin/metrics");
 export const getMetricsTimeseries = (days?: number) => request(`/admin/metrics/timeseries${days ? `?days=${days}` : ""}`);
 export const getConfidenceDistribution = () => request("/admin/metrics/confidence-distribution");

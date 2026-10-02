@@ -30,6 +30,10 @@ export class AdminService {
     return this.prisma.client.business.update({ where: { id: businessId }, data: { status: "suspended" } });
   }
 
+  async bulkSuspendTenants(ids: string[]) {
+    return this.prisma.client.business.updateMany({ where: { id: { in: ids } }, data: { status: "suspended" } });
+  }
+
   async globalMetrics() {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
 

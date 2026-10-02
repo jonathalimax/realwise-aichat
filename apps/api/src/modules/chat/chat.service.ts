@@ -5,6 +5,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway, generateFromGatewayStream } from "../../inference/gateway-client";
 import { embedText } from "../../inference/embed-client";
 import { BookingsService } from "../bookings/bookings.service";
+import { CalendarService } from "../calendar/calendar.service";
 import { sendEmail, escapeHtml } from "../../common/email";
 import { FlowService } from "./flow.service";
 
@@ -34,6 +35,7 @@ export class ChatService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bookings: BookingsService,
+    private readonly calendar: CalendarService,
     private readonly flow: FlowService,
   ) {}
 
@@ -438,6 +440,8 @@ export class ChatService {
       new Date(endsAt),
       "chat",
     );
+    // Additive — pushes the appointment to Google Calendar if connected, never blocks booking if it isn't.
+    this.calendar.createEvent(businessId, appointment).catch(() => {});
     await this.prisma.client.message.create({
       data: {
         conversationId,

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { maskBrPhone } from "@realwise/shared";
-import { getBusiness, startConversation, streamMessage, bookAppointment, identifyVisitor, startFlow, advanceFlow } from "../lib/api";
+import { getBusiness, startConversation, streamMessage, bookAppointment, identifyVisitor, startFlow, advanceFlow, getAvailableSlots } from "../lib/api";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
@@ -67,6 +67,8 @@ export function ChatScreen({ slug }: { slug: string }) {
   const [bookingTime, setBookingTime] = useState("");
   const [bookingName, setBookingName] = useState("");
   const [bookingPhone, setBookingPhone] = useState("");
+  const [availableSlots, setAvailableSlots] = useState<{ start: string; end: string }[] | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{ start: string; end: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -106,6 +108,8 @@ export function ChatScreen({ slug }: { slug: string }) {
       setInput("");
       await ensureConversation();
       setShowBooking(true);
+      // null means no calendar connected — the booking card falls back to free-text date/time inputs.
+      getAvailableSlots(business.id).then(setAvailableSlots).catch(() => setAvailableSlots(null));
       return;
     }
 
@@ -163,17 +167,26 @@ export function ChatScreen({ slug }: { slug: string }) {
   }
 
   async function confirmBooking() {
-    if (!conversationId || !bookingDate || !bookingTime || !bookingName || !bookingPhone) return;
+    if (!conversationId || !bookingName || !bookingPhone) return;
+    const usingSlots = Array.isArray(availableSlots) && availableSlots.length > 0;
+    if (usingSlots && !selectedSlot) return;
+    if (!usingSlots && (!bookingDate || !bookingTime)) return;
+
     await identifyVisitor(slug, bookingName, bookingPhone);
-    const startsAt = new Date(`${bookingDate}T${bookingTime}:00`);
-    const endsAt = new Date(startsAt.getTime() + 30 * 60 * 1000);
+    const startsAt = usingSlots ? new Date(selectedSlot!.start) : new Date(`${bookingDate}T${bookingTime}:00`);
+    const endsAt = usingSlots ? new Date(selectedSlot!.end) : new Date(startsAt.getTime() + 30 * 60 * 1000);
     const serviceName = business.niche === "imobiliaria" ? "Visita ao imóvel" : "Test-drive";
     await bookAppointment(business.id, conversationId, serviceName, startsAt.toISOString(), endsAt.toISOString());
     setMessages((prev) => [
       ...prev,
-      { id: nextMessageId(), role: "assistant", content: `Agendado: ${serviceName} em ${startsAt.toLocaleDateString("pt-BR")} às ${bookingTime}. Vamos confirmar com você em breve.` },
+      {
+        id: nextMessageId(),
+        role: "assistant",
+        content: `Agendado: ${serviceName} em ${startsAt.toLocaleDateString("pt-BR")} às ${startsAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. Vamos confirmar com você em breve.`,
+      },
     ]);
     setShowBooking(false);
+    setSelectedSlot(null);
   }
 
   if (!business) {
@@ -225,10 +238,27 @@ export function ChatScreen({ slug }: { slug: string }) {
               <div className="mb-2 text-xs uppercase tracking-wide text-ink-soft">
                 Agendar {business.niche === "imobiliaria" ? "visita" : "test-drive"}
               </div>
-              <div className="flex gap-2">
-                <Input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="flex-1" />
-                <Input type="time" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="flex-1" />
-              </div>
+              {Array.isArray(availableSlots) && availableSlots.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {availableSlots.map((slot) => (
+                    <Button
+                      key={slot.start}
+                      type="button"
+                      size="sm"
+                      variant={selectedSlot?.start === slot.start ? "default" : "outline"}
+                      onClick={() => setSelectedSlot(slot)}
+                    >
+                      {new Date(slot.start).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}{" "}
+                      {new Date(slot.start).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    </Button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="flex-1" />
+                  <Input type="time" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="flex-1" />
+                </div>
+              )}
               <Input
                 value={bookingName}
                 onChange={(e) => setBookingName(e.target.value)}

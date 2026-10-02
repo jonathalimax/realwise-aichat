@@ -6,6 +6,7 @@ import { getLeads, getLeadWhatsappLink } from "../../lib/api";
 import { Card, CardContent } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Checkbox } from "../../components/ui/checkbox";
+import { Button } from "../../components/ui/button";
 import { DataTableToolbar, FilterDropdown } from "../../components/ui/data-table-toolbar";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../../components/ui/dropdown-menu";
 import {
@@ -93,6 +94,30 @@ export default function LeadsPage() {
     });
   }
 
+  function exportSelected() {
+    const rows = filtered.filter((lead) => selected.has(lead.id));
+    const header = ["Nome", "Telefone", "Score", "Temperatura", "Última atividade"];
+    const csvRows = rows.map((lead) =>
+      [
+        lead.name ?? "",
+        lead.phone ?? "",
+        lead.commitmentScore ?? "",
+        BAND_LABELS[lead.scoreBand] ?? "",
+        lead.lastSeenAt ? new Date(lead.lastSeenAt).toLocaleDateString("pt-BR") : "",
+      ]
+        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(","),
+    );
+    const csv = [header.join(","), ...csvRows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `leads-${Date.now()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div>
       <h1 className="mb-5 font-serif text-2xl text-ink">Leads</h1>
@@ -104,6 +129,13 @@ export default function LeadsPage() {
             filterPlaceholder="Filtrar leads..."
             selectionCount={selected.size}
             filters={<FilterDropdown label="Temperatura" options={BAND_OPTIONS} selected={bands} onChange={setBands} />}
+            actions={
+              selected.size > 0 && (
+                <Button variant="outline" size="sm" onClick={exportSelected}>
+                  Exportar selecionados
+                </Button>
+              )
+            }
           />
           <Table>
             <TableHeader>

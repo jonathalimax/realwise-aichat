@@ -7,8 +7,6 @@ import {
   checkSlugAvailable,
   setBusinessSlug,
   getOnboardingProfile,
-  patchProfileField,
-  approveProfileField,
   recomputeConfidence,
   uploadDocumentFile,
   uploadDocumentText,
@@ -78,16 +76,6 @@ export default function OnboardingPage() {
     setDocuments(await getDocuments());
   }
 
-  async function handleFieldChange(fieldKey: string, value: string) {
-    await patchProfileField(fieldKey, value, "interview");
-    setProfile(await getOnboardingProfile());
-  }
-
-  async function handleApprove(fieldKey: string) {
-    await approveProfileField(fieldKey);
-    setProfile(await getOnboardingProfile());
-  }
-
   async function handleRecompute() {
     await recomputeConfidence();
     setBusiness(await getMe());
@@ -108,8 +96,10 @@ export default function OnboardingPage() {
 
   if (!business || !profile) return <p className="text-ink-soft">Carregando…</p>;
 
-  const data = profile.profile?.data ?? {};
   const fieldStatus = profile.profile?.fieldStatus ?? {};
+  const pendingFieldsCount = (profile.template?.fields ?? []).filter(
+    (f: any) => !fieldStatus[f.key]?.approvedByOwner,
+  ).length;
   const publicUrl = `${process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005"}/${business.slug}`;
 
   return (
@@ -218,26 +208,17 @@ export default function OnboardingPage() {
 
       {step === 3 && (
         <div className="flex flex-col gap-3">
-          <h2 className="font-serif text-xl">Revisar e aprovar</h2>
-          {profile.template?.fields.map((f: any) => (
-            <div key={f.key} className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm">
-              <div className="flex-1">
-                <div className="mb-1 text-xs text-ink-soft">{f.label}</div>
-                <Input
-                  defaultValue={data[f.key] ?? ""}
-                  placeholder="— não preenchido —"
-                  onBlur={(e) => handleFieldChange(f.key, e.target.value)}
-                />
-              </div>
-              <Button
-                size="sm"
-                variant={fieldStatus[f.key]?.approvedByOwner ? "default" : "outline"}
-                onClick={() => handleApprove(f.key)}
-              >
-                {fieldStatus[f.key]?.approvedByOwner ? "Aprovado" : "Aprovar"}
-              </Button>
-            </div>
-          ))}
+          <h2 className="font-serif text-xl">Revisão</h2>
+          {pendingFieldsCount > 0 ? (
+            <p className="text-sm text-ink-soft">
+              Seu perfil ainda precisa de{" "}
+              <span className="font-semibold text-ink">{pendingFieldsCount} {pendingFieldsCount === 1 ? "campo" : "campos"}</span>{" "}
+              aprovado{pendingFieldsCount === 1 ? "" : "s"}. Revise e aprove tudo na{" "}
+              <a href="/knowledge" className="text-accent-ink underline">Base de conhecimento</a>.
+            </p>
+          ) : (
+            <p className="text-sm text-positive">Tudo revisado e aprovado 🎉</p>
+          )}
           <div className="mt-2 flex gap-2">
             <Button variant="outline" onClick={() => setStep(2)}>Voltar</Button>
             <Button onClick={() => { handleRecompute(); setStep(4); }}>Continuar</Button>
