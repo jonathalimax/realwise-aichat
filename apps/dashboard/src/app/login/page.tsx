@@ -80,7 +80,7 @@ export default function LoginPage() {
                       type="tel"
                       inputMode="numeric"
                       autoFocus
-                      className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft/60"
+                      className="w-full bg-transparent text-base text-ink outline-none placeholder:text-ink-soft/60 md:text-sm"
                     />
                   </div>
                 </div>

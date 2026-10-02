@@ -3,7 +3,8 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../../lib/utils";
 
 const inputVariants = cva(
-  "w-full border border-border bg-surface text-sm text-ink outline-none transition-colors placeholder:text-ink-soft focus:border-ink/40 disabled:opacity-50",
+  // text-base (16px) on mobile prevents iOS Safari's auto-zoom-on-focus; md:text-sm keeps the tighter desktop look.
+  "w-full border border-border bg-surface text-base text-ink outline-none transition-colors placeholder:text-ink-soft focus:border-ink/40 disabled:opacity-50 md:text-sm",
   {
     variants: {
       variant: {
