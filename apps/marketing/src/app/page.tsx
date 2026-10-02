@@ -40,9 +40,6 @@ export default function MarketingHome() {
             <a href="#faq" className="hover:text-ink">Perguntas</a>
           </nav>
           <div className="flex items-center gap-2">
-            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="hidden text-xs font-semibold text-ink-soft hover:text-ink sm:block">
-              Falar no WhatsApp
-            </a>
             <Pill href={DASHBOARD_LOGIN_URL} className="px-4 py-2 text-xs">Entrar no painel</Pill>
           </div>
         </div>
@@ -62,7 +59,7 @@ export default function MarketingHome() {
         </Reveal>
         <Reveal delay={200}>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Pill href={DASHBOARD_LOGIN_URL} className="px-7 py-3.5 text-[0.95rem]">Criar meu link grátis</Pill>
+            <Pill href={DASHBOARD_LOGIN_URL} className="px-7 py-3.5 text-[0.95rem]">Começar agora</Pill>
             <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-full border border-ink/20 bg-transparent px-7 py-3.5 text-[0.95rem] font-semibold text-ink transition-all duration-200 hover:-translate-y-0.5 hover:bg-surface">
               Falar no WhatsApp antes
             </a>
@@ -103,22 +100,11 @@ export default function MarketingHome() {
 
       {/* PROBLEM */}
       <section className="bg-ink py-16 text-bg">
-        <Reveal className="mx-auto max-w-5xl px-5">
-          <h2 className="text-center font-serif text-2xl md:text-3xl">Toda hora, alguém pergunta a mesma coisa. E ninguém responde.</h2>
-          <div className="mt-10 grid gap-8 sm:grid-cols-3">
-            <div>
-              <div className="font-mono text-4xl text-lime">22h47</div>
-              <p className="mt-2 text-sm text-bg/70">horário típico de quem pergunta preço — quando não tem ninguém pra responder.</p>
-            </div>
-            <div>
-              <div className="font-mono text-4xl text-lime">2h</div>
-              <p className="mt-2 text-sm text-bg/70">tempo médio pra um lead esfriar e ir pro concorrente.</p>
-            </div>
-            <div>
-              <div className="font-mono text-4xl text-lime">R$ 3.500</div>
-              <p className="mt-2 text-sm text-bg/70">custa uma recepcionista por mês — e ela não trabalha domingo às 22h.</p>
-            </div>
-          </div>
+        <Reveal className="mx-auto max-w-3xl px-5 text-center">
+          <h2 className="font-serif text-2xl md:text-3xl">Toda hora, alguém pergunta a mesma coisa. E ninguém responde.</h2>
+          <p className="mt-5 text-bg/70">
+            É sempre fora do horário comercial, no fim de semana, ou bem na hora em que ninguém pode largar o que está fazendo pra responder. O cliente espera, esfria, e vai perguntar pro concorrente — que às vezes responde primeiro só por estar online na hora certa.
+          </p>
         </Reveal>
       </section>
 
@@ -129,20 +115,55 @@ export default function MarketingHome() {
 
           <div className="mt-10 grid gap-5 md:grid-cols-2">
             <div className="rounded-3xl bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
-              <div className="mx-auto mb-6 flex w-full max-w-[260px] flex-col gap-2 rounded-2xl border border-border bg-bg p-4">
-                <div className="max-w-[80%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.76rem]">Oi! Qual horário funciona pra visita?</div>
-                <div className="ml-auto max-w-[80%] rounded-xl rounded-br-sm bg-ink px-3 py-2 text-[0.76rem] text-bg">Sábado de manhã</div>
-                <div className="max-w-[80%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.76rem]">Fechado! Te mando a confirmação.</div>
+              {/* Mirrors the real chat UI in apps/chat: header, bubbles, tappable options, pill input */}
+              <div className="mx-auto mb-6 flex w-full max-w-[260px] flex-col overflow-hidden rounded-2xl border border-border bg-bg">
+                <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ink font-serif text-xs font-bold text-bg">I</div>
+                  <div>
+                    <div className="text-[0.72rem] font-semibold text-ink">Imóveis Costa</div>
+                    <div className="flex items-center gap-1 text-[0.62rem] text-positive">
+                      <span className="h-1 w-1 rounded-full bg-positive" /> Clara · Online agora
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 px-3 py-3">
+                  <div className="max-w-[80%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.72rem]">Oi! Qual horário funciona pra visita?</div>
+                  <div className="ml-auto max-w-[80%] rounded-xl rounded-br-sm bg-accent px-3 py-2 text-[0.72rem] text-white">Sábado de manhã</div>
+                  <div className="max-w-[80%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.72rem]">Fechado! Te mando a confirmação.</div>
+                </div>
+                <div className="flex flex-wrap gap-1.5 px-3 pb-2.5">
+                  <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-[0.62rem] text-ink-soft">Ver outro horário</span>
+                  <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-[0.62rem] text-ink-soft">Confirmar</span>
+                </div>
+                <div className="flex items-center gap-2 border-t border-border px-3 py-2">
+                  <div className="flex-1 rounded-full bg-bg-2 px-3 py-1.5 text-[0.62rem] text-muted">Escreva sua pergunta…</div>
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-[0.6rem] text-bg">➤</div>
+                </div>
               </div>
               <h3 className="font-serif text-lg text-ink">Agenda sozinha</h3>
               <p className="mt-2 text-sm text-ink-soft">O cliente marca o horário direto no chat, sem ida e volta.</p>
             </div>
 
             <div className="rounded-3xl bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
-              <div className="mx-auto mb-6 flex w-full max-w-[260px] flex-col gap-2 rounded-2xl border border-border bg-bg p-4">
-                <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.76rem]">Quero fechar hoje, pode ser?</div>
-                <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.76rem]">Claro! Vou te passar direto pro WhatsApp.</div>
-                <span className="ml-auto rounded-full bg-lime px-2.5 py-1 text-[0.68rem] font-semibold text-lime-ink">🔥 Lead quente</span>
+              <div className="mx-auto mb-6 flex w-full max-w-[260px] flex-col overflow-hidden rounded-2xl border border-border bg-bg">
+                <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ink font-serif text-xs font-bold text-bg">I</div>
+                  <div>
+                    <div className="text-[0.72rem] font-semibold text-ink">Imóveis Costa</div>
+                    <div className="flex items-center gap-1 text-[0.62rem] text-positive">
+                      <span className="h-1 w-1 rounded-full bg-positive" /> Clara · Online agora
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 px-3 py-3">
+                  <div className="ml-auto max-w-[85%] rounded-xl rounded-br-sm bg-accent px-3 py-2 text-[0.72rem] text-white">Quero fechar hoje, pode ser?</div>
+                  <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.72rem]">Claro! Vou te passar direto pro WhatsApp.</div>
+                  <span className="ml-auto rounded-full bg-lime px-2.5 py-1 text-[0.62rem] font-semibold text-lime-ink">🔥 Lead quente</span>
+                </div>
+                <div className="flex items-center gap-2 border-t border-border px-3 py-2">
+                  <div className="flex-1 rounded-full bg-bg-2 px-3 py-1.5 text-[0.62rem] text-muted">Escreva sua pergunta…</div>
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-[0.6rem] text-bg">➤</div>
+                </div>
               </div>
               <h3 className="font-serif text-lg text-ink">Só te chama quando o lead está quente</h3>
               <p className="mt-2 text-sm text-ink-soft">Seu WhatsApp não vira caixa de spam — só recebe quem já está pronto pra decidir.</p>
@@ -333,7 +354,7 @@ export default function MarketingHome() {
         <Reveal>
           <h2 className="font-serif text-3xl text-ink md:text-4xl">Seu cliente já está mandando mensagem. <em className="italic">A pergunta é quem responde.</em></h2>
           <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Pill href={DASHBOARD_LOGIN_URL} className="px-7 py-3.5">Criar meu link grátis</Pill>
+            <Pill href={DASHBOARD_LOGIN_URL} className="px-7 py-3.5">Começar agora</Pill>
             <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-ink-soft hover:text-ink">
               ou falar no WhatsApp antes
             </a>
