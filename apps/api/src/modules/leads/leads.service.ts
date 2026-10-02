@@ -31,6 +31,47 @@ export class LeadsService {
     });
   }
 
+  private readonly PRICE_KEYWORDS = ["preço", "preco", "valor", "quanto custa", "quanto é", "custo"];
+  private readonly AVAILABILITY_KEYWORDS = ["disponível", "disponivel", "disponibilidade", "tem vaga", "tem horário"];
+  private readonly LOCATION_KEYWORDS = ["localização", "localizacao", "endereço", "endereco", "onde fica", "onde é"];
+  private readonly PAYMENT_KEYWORDS = ["pagamento", "financiamento", "parcelado", "parcelas", "entrada", "à vista"];
+  private readonly SPECIFIC_ITEM_KEYWORDS = ["esse", "essa", "aquele", "aquela", "modelo", "unidade", "apartamento", "casa", "carro"];
+
+  // Pulls real conversation/appointment/message signal for a lead straight from the DB so
+  // recomputeScore always reflects current behavior, not whatever the caller happens to pass in.
+  async recomputeScoreForLead(businessId: string, leadId: string) {
+    const lead = await this.prisma.client.lead.findFirst({ where: { id: leadId, businessId } });
+    if (!lead) return null;
+
+    const [conversations, appointments] = await Promise.all([
+      this.prisma.client.conversation.findMany({ where: { leadId }, include: { messages: true } }),
+      this.prisma.client.appointment.findMany({ where: { leadId } }),
+    ]);
+
+    const visitorTexts = conversations.flatMap((c) => c.messages.filter((m) => m.role === "visitor").map((m) => m.content.toLowerCase()));
+    const messageCount = conversations.reduce((sum, c) => sum + c.messages.length, 0);
+    const matchesAny = (keywords: string[]) => visitorTexts.some((t) => keywords.some((kw) => t.includes(kw)));
+    const weeksSinceLastActivity = Math.max(0, Math.floor((Date.now() - lead.lastSeenAt.getTime()) / (7 * 24 * 3600 * 1000)));
+
+    const inputs: LeadSignalInputs = {
+      hasNameAndPhone: Boolean(lead.name),
+      messageCount,
+      askedPrice: matchesAny(this.PRICE_KEYWORDS),
+      askedAvailability: matchesAny(this.AVAILABILITY_KEYWORDS),
+      startedBooking: appointments.length > 0,
+      completedBooking: appointments.some((a) => a.status === "completed" || a.status === "confirmed"),
+      askedLocation: matchesAny(this.LOCATION_KEYWORDS),
+      askedPaymentOrFinancing: matchesAny(this.PAYMENT_KEYWORDS),
+      requestedEscalation: conversations.some((c) => c.escalatedAt !== null),
+      isReturningVisitor: lead.sessionCount > 1,
+      sentDocument: false,
+      askedSpecificItem: matchesAny(this.SPECIFIC_ITEM_KEYWORDS),
+      weeksSinceLastActivity,
+    };
+
+    return this.recomputeScore(businessId, leadId, inputs);
+  }
+
   async markOutcome(businessId: string, leadId: string, outcome: "won" | "lost" | "no_response") {
     const lead = await this.prisma.client.lead.findFirst({ where: { id: leadId, businessId } });
     if (!lead) throw new NotFoundException("Lead not found");

@@ -9,6 +9,7 @@ import { retrieveRelevantChunks } from "./knowledge-retrieval";
 import { CalendarService } from "../calendar/calendar.service";
 import { sendEmail, escapeHtml } from "../../common/email";
 import { FlowService } from "./flow.service";
+import { LeadsService } from "../leads/leads.service";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 const NO_CONTEXT_FALLBACK = "Não encontrei essa informação na nossa base. Quer que eu te passe pro atendimento?";
@@ -41,7 +42,14 @@ export class ChatService {
     private readonly bookings: BookingsService,
     private readonly calendar: CalendarService,
     private readonly flow: FlowService,
+    private readonly leads: LeadsService,
   ) {}
+
+  // Fire-and-forget, same pattern as notifyOwner — scoring must never slow down the visitor-facing response.
+  private recomputeLeadScore(businessId: string, leadId?: string | null) {
+    if (!leadId) return;
+    this.leads.recomputeScoreForLead(businessId, leadId).catch(() => {});
+  }
 
   async getOrCreateConversation(businessId: string, visitorToken: string, leadId?: string) {
     let conversation = await this.prisma.client.conversation.findFirst({
@@ -177,6 +185,7 @@ export class ChatService {
       where: { id: conversationId },
       data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
     });
+    this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
 
     return { message: assistantMessage, escalated: false };
   }
@@ -324,6 +333,7 @@ export class ChatService {
         where: { id: conversationId },
         data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
       });
+      this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
       return { message: assistantMessage, escalated: false };
     }
 
@@ -374,6 +384,7 @@ export class ChatService {
       where: { id: conversationId },
       data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
     });
+    this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
 
     return { message: assistantMessage, escalated: false };
   }
@@ -437,12 +448,15 @@ export class ChatService {
       `<p>Um cliente marcou <strong>${escapeHtml(serviceName)}</strong> para <strong>${escapeHtml(start.toLocaleString("pt-BR"))}</strong>.</p>
        <p>Confira e confirme no painel: Agenda.</p>`,
     );
+    this.recomputeLeadScore(businessId, leadId ?? conversation.leadId);
     return appointment;
   }
 
   async escalate(businessId: string, conversationId: string, topic: string) {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException("Business not found");
+
+    const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
 
     const routingNumber = await this.prisma.client.whatsappRoutingNumber.findFirst({
       where: { businessId, isActive: true },
@@ -469,6 +483,7 @@ export class ChatService {
          <p>Configure um número de roteamento no painel para poder receber esses leads: Configurações.</p>`,
       );
 
+      this.recomputeLeadScore(businessId, conversation?.leadId);
       return { message: assistantMessage, escalated: false, whatsappUrl: null, referenceCode: null };
     }
 
@@ -494,6 +509,7 @@ export class ChatService {
        <p>Veja a conversa e responda no painel: Leads.</p>`,
     );
 
+    this.recomputeLeadScore(businessId, conversation?.leadId);
     return { message: assistantMessage, escalated: true, whatsappUrl: url, referenceCode };
   }
 
