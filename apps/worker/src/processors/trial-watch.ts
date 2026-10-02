@@ -1,11 +1,8 @@
 import { prisma } from "@realwise/db";
+import { hasActivePaidSubscription } from "@realwise/shared";
 import { sendEmail } from "../email";
 
 const REMINDER_WINDOW_DAYS = 2;
-
-function hasActivePaidSubscription(business: { subscription: { status: string } | null }) {
-  return business.subscription?.status === "active";
-}
 
 export async function processTrialWatch() {
   const now = new Date();

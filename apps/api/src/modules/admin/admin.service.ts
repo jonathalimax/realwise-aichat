@@ -31,7 +31,13 @@ export class AdminService {
   }
 
   async bulkSuspendTenants(ids: string[]) {
-    return this.prisma.client.business.updateMany({ where: { id: { in: ids } }, data: { status: "suspended" } });
+    const existing = await this.prisma.client.business.findMany({ where: { id: { in: ids } }, select: { id: true } });
+    const suspendedIds = existing.map((b) => b.id);
+    const notFoundIds = ids.filter((id) => !suspendedIds.includes(id));
+    if (suspendedIds.length > 0) {
+      await this.prisma.client.business.updateMany({ where: { id: { in: suspendedIds } }, data: { status: "suspended" } });
+    }
+    return { suspendedIds, notFoundIds };
   }
 
   async globalMetrics() {

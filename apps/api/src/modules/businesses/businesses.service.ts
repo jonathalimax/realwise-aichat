@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { assertPublicHttpUrl } from "../../common/url-safety";
+import { isEffectivelySuspended } from "@realwise/shared";
 
 @Injectable()
 export class BusinessesService {
@@ -16,15 +17,18 @@ export class BusinessesService {
         logoUrl: true,
         brandColor: true,
         status: true,
+        trialEndsAt: true,
+        subscription: { select: { status: true } },
       },
     });
-    if (!business || business.status !== "live") {
+    if (!business || business.status !== "live" || isEffectivelySuspended(business)) {
       throw new NotFoundException("Business not published");
     }
     // Fire-and-forget: every real page load of the public chat link counts as a link open,
     // feeding the "Aberturas do link 7d" dashboard stat. Never block the chat on this.
     this.prisma.client.analyticsEvent.create({ data: { businessId: business.id, name: "link_opened" } }).catch(() => {});
-    return business;
+    const { trialEndsAt, subscription, ...publicBusiness } = business;
+    return publicBusiness;
   }
 
   async getOwnBusiness(businessId: string) {
@@ -33,6 +37,10 @@ export class BusinessesService {
       include: { subscription: { include: { plan: true } } },
     });
     if (!business) throw new NotFoundException("Business not found");
+    // Belt-and-suspenders: don't wait for the daily trial-watch cron to flip status before gating.
+    if (business.status === "live" && isEffectivelySuspended(business)) {
+      return { ...business, status: "suspended" as const };
+    }
     return business;
   }
 

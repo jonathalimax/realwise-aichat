@@ -101,7 +101,10 @@ export default function TenantsPage() {
 
   async function suspendSelected() {
     if (!window.confirm(`Suspender ${selected.size} tenant(s) selecionado(s)?`)) return;
-    await bulkSuspendTenants([...selected]);
+    const { notFoundIds } = await bulkSuspendTenants([...selected]);
+    if (notFoundIds.length > 0) {
+      window.alert(`Não encontrados (não suspensos): ${notFoundIds.join(", ")}`);
+    }
     setSelected(new Set());
     getTenants().then(setTenants).catch(() => setTenants([]));
   }
