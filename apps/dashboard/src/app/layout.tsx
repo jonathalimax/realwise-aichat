@@ -6,7 +6,7 @@ const sans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-sans", di
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={sans.variable}>
+    <html lang="pt-BR" className={`dark ${sans.variable}`} suppressHydrationWarning>
       <body className="font-sans">
         <AppShell>{children}</AppShell>
       </body>

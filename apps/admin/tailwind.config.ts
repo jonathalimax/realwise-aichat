@@ -1,33 +1,31 @@
 import type { Config } from "tailwindcss";
 import tokens from "../../packages/ui/tokens.json";
 
-const light = tokens.color.light;
-
 export default {
   content: ["./src/**/*.{ts,tsx}"],
-  darkMode: "media",
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
-        bg: light.bg,
-        "bg-2": light.bgCanvasInset,
-        surface: light.surface,
-        ink: light.ink,
-        "ink-soft": light.inkSoft,
-        muted: light.inkMuted,
-        border: light.border,
-        accent: light.accent,
-        "accent-soft": light.accentSoft,
-        "accent-ink": light.accentInk,
-        lime: light.lime,
-        "lime-soft": light.limeSoft,
-        "lime-ink": light.limeInk,
-        positive: light.positive,
-        "positive-soft": light.positiveSoft,
-        negative: light.negative,
-        "negative-soft": light.negativeSoft,
-        warning: light.warning,
-        "warning-soft": light.warningSoft,
+        bg: "rgb(var(--bg) / <alpha-value>)",
+        "bg-2": "rgb(var(--bg-2) / <alpha-value>)",
+        surface: "rgb(var(--surface) / <alpha-value>)",
+        ink: "rgb(var(--ink) / <alpha-value>)",
+        "ink-soft": "rgb(var(--ink-soft) / <alpha-value>)",
+        muted: "rgb(var(--muted) / <alpha-value>)",
+        border: "rgb(var(--border) / <alpha-value>)",
+        accent: "rgb(var(--accent) / <alpha-value>)",
+        "accent-soft": "rgb(var(--accent-soft) / <alpha-value>)",
+        "accent-ink": "rgb(var(--accent-ink) / <alpha-value>)",
+        lime: "rgb(var(--lime) / <alpha-value>)",
+        "lime-soft": "rgb(var(--lime-soft) / <alpha-value>)",
+        "lime-ink": "rgb(var(--lime-ink) / <alpha-value>)",
+        positive: "rgb(var(--positive) / <alpha-value>)",
+        "positive-soft": "rgb(var(--positive-soft) / <alpha-value>)",
+        negative: "rgb(var(--negative) / <alpha-value>)",
+        "negative-soft": "rgb(var(--negative-soft) / <alpha-value>)",
+        warning: "rgb(var(--warning) / <alpha-value>)",
+        "warning-soft": "rgb(var(--warning-soft) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
@@ -35,7 +33,15 @@ export default {
         mono: ["ui-monospace", "SF Mono", "monospace"],
       },
       borderRadius: {
-        card: "16px",
+        card: tokens.radius.card,
+        cardLarge: tokens.radius.cardLarge,
+        pill: tokens.radius.pill,
+        input: tokens.radius.input,
+        chip: tokens.radius.chip,
+      },
+      boxShadow: {
+        card: tokens.elevation.card,
+        popover: tokens.elevation.popover,
       },
     },
   },
