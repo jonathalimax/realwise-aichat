@@ -1,12 +1,17 @@
 import { Controller, Param, Post, UseGuards } from "@nestjs/common";
 import { OnboardingService } from "../onboarding/onboarding.service";
 import { ChatService } from "../chat/chat.service";
+import { FlowService } from "../chat/flow.service";
 import { InternalTokenGuard } from "../../common/guards/internal-token.guard";
 
 @UseGuards(InternalTokenGuard)
 @Controller("internal")
 export class InternalController {
-  constructor(private readonly onboarding: OnboardingService, private readonly chat: ChatService) {}
+  constructor(
+    private readonly onboarding: OnboardingService,
+    private readonly chat: ChatService,
+    private readonly flow: FlowService,
+  ) {}
 
   @Post("businesses/:businessId/confidence/recompute")
   recomputeConfidence(@Param("businessId") businessId: string) {
@@ -16,5 +21,10 @@ export class InternalController {
   @Post("businesses/:businessId/chips/regenerate")
   regenerateChips(@Param("businessId") businessId: string) {
     return this.chat.regenerateChips(businessId);
+  }
+
+  @Post("businesses/:businessId/flow-options/regenerate")
+  regenerateFlowOptions(@Param("businessId") businessId: string) {
+    return this.flow.regenerateFlowOptions(businessId);
   }
 }

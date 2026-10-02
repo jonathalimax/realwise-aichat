@@ -42,6 +42,15 @@ const FLOWS: Record<string, FlowDef> = {
 
 const PLACEHOLDER_PATTERN = /\{[^{}]+\}/g;
 
+// Prompts for the non-parametrized dynamic-bubble keys — shared between on-demand extraction
+// (dynamicOptionBubbles) and proactive regeneration (regenerateFlowOptions) so they stay in sync.
+const BRAND_PROMPT =
+  "Extraia os nomes de marcas de carros ou motos mencionadas no estoque descrito nos documentos abaixo (ex: Chevrolet, Fiat, Toyota). Responda apenas com um array JSON de até 8 marcas reais mencionadas no texto — nunca invente uma marca que não apareça. Se nenhuma marca for citada, responda com um array vazio [].";
+const VEHICLE_CATEGORY_PROMPT =
+  "Extraia os tipos/categorias de veículos mencionados no estoque descrito nos documentos abaixo (ex: hatch, sedã, SUV, picape, moto, elétrico). Responda apenas com um array JSON de até 8 categorias reais mencionadas no texto — nunca invente uma categoria que não apareça. Se nenhuma for citada, responda com um array vazio [].";
+const PROPERTY_TYPE_PROMPT =
+  "Extraia os tipos de imóveis mencionados nos documentos abaixo (ex: apartamento, casa, terreno, comercial, chácara). Responda apenas com um array JSON de até 8 tipos reais mencionados no texto — nunca invente um tipo que não apareça. Se nenhum for citado, responda com um array vazio [].";
+
 @Injectable()
 export class FlowService {
   constructor(private readonly prisma: PrismaService) {}
@@ -111,11 +120,11 @@ export class FlowService {
 
   // Derives region/bairro bubbles from what's actually mentioned in the business's ingested
   // documents instead of a hardcoded list — cached on Business since extraction is an LLM call.
-  private async dynamicRegionBubbles(businessId: string): Promise<FlowBubble[]> {
+  private async dynamicRegionBubbles(businessId: string, force = false): Promise<FlowBubble[]> {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) return [];
 
-    const isFresh = business.cachedLocationsAt && Date.now() - business.cachedLocationsAt.getTime() < 12 * 3600 * 1000;
+    const isFresh = !force && business.cachedLocationsAt && Date.now() - business.cachedLocationsAt.getTime() < 12 * 3600 * 1000;
     if (isFresh && Array.isArray(business.cachedLocations)) {
       return (business.cachedLocations as string[]).map((name) => ({
         label: name,
@@ -164,13 +173,13 @@ export class FlowService {
   // Generalized version of dynamicRegionBubbles for any other bubble list (brand/model/category)
   // that should reflect real values mentioned in the business's documents — cached per key on
   // Business.cachedFlowOptions since extraction is an LLM call.
-  private async extractOptions(businessId: string, cacheKey: string, systemPrompt: string): Promise<string[]> {
+  private async extractOptions(businessId: string, cacheKey: string, systemPrompt: string, force = false): Promise<string[]> {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) return [];
 
     const cache = (business.cachedFlowOptions as Record<string, { values: string[]; at: string }> | null) ?? {};
     const entry = cache[cacheKey];
-    const isFresh = entry && Date.now() - new Date(entry.at).getTime() < 12 * 3600 * 1000;
+    const isFresh = !force && entry && Date.now() - new Date(entry.at).getTime() < 12 * 3600 * 1000;
     if (isFresh) return entry.values;
 
     const chunks = await this.prisma.client.knowledgeChunk.findMany({
@@ -216,11 +225,7 @@ export class FlowService {
       case "busca_marca":
       case "busca_marca_mais":
       case "troca_marca": {
-        const brands = await this.extractOptions(
-          businessId,
-          "marca",
-          "Extraia os nomes de marcas de carros ou motos mencionadas no estoque descrito nos documentos abaixo (ex: Chevrolet, Fiat, Toyota). Responda apenas com um array JSON de até 8 marcas reais mencionadas no texto — nunca invente uma marca que não apareça. Se nenhuma marca for citada, responda com um array vazio [].",
-        );
+        const brands = await this.extractOptions(businessId, "marca", BRAND_PROMPT);
         const slice = nodeId === "busca_marca_mais" ? brands.slice(4) : brands.slice(0, 4);
         const goto = nodeId === "troca_marca" ? "troca_modelo" : "busca_modelo";
         const paramKey = nodeId === "troca_marca" ? null : "marca";
@@ -246,23 +251,33 @@ export class FlowService {
         }));
       }
       case "busca_categoria": {
-        const categories = await this.extractOptions(
-          businessId,
-          "categoria_veiculo",
-          "Extraia os tipos/categorias de veículos mencionados no estoque descrito nos documentos abaixo (ex: hatch, sedã, SUV, picape, moto, elétrico). Responda apenas com um array JSON de até 8 categorias reais mencionadas no texto — nunca invente uma categoria que não apareça. Se nenhuma for citada, responda com um array vazio [].",
-        );
+        const categories = await this.extractOptions(businessId, "categoria_veiculo", VEHICLE_CATEGORY_PROMPT);
         return categories.map((name) => ({ label: name, goto: "busca_marca", params: { categoria: name } }));
       }
       case "busca_tipo": {
-        const types = await this.extractOptions(
-          businessId,
-          "categoria_imovel",
-          "Extraia os tipos de imóveis mencionados nos documentos abaixo (ex: apartamento, casa, terreno, comercial, chácara). Responda apenas com um array JSON de até 8 tipos reais mencionados no texto — nunca invente um tipo que não apareça. Se nenhum for citado, responda com um array vazio [].",
-        );
+        const types = await this.extractOptions(businessId, "categoria_imovel", PROPERTY_TYPE_PROMPT);
         return types.map((name) => ({ label: name, goto: "busca_preco", params: { tipo: name } }));
       }
       default:
         return null;
+    }
+  }
+
+  // Proactively refreshes the dynamic-bubble caches right after documents/website content change,
+  // instead of waiting for a visitor to hit a stale cache entry — called from the worker alongside
+  // the existing chip/confidence regeneration triggers on document-ingestion and website-sync.
+  // `modelo` is skipped here since it's parametrized per brand (no fixed key to precompute); it still
+  // regenerates lazily on-demand the next time a visitor picks a brand.
+  async regenerateFlowOptions(businessId: string): Promise<void> {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) return;
+
+    await this.dynamicRegionBubbles(businessId, true);
+    if (business.niche === "concessionaria") {
+      await this.extractOptions(businessId, "marca", BRAND_PROMPT, true);
+      await this.extractOptions(businessId, "categoria_veiculo", VEHICLE_CATEGORY_PROMPT, true);
+    } else {
+      await this.extractOptions(businessId, "categoria_imovel", PROPERTY_TYPE_PROMPT, true);
     }
   }
 

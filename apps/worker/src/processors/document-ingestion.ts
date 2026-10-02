@@ -49,6 +49,7 @@ export async function processDocumentIngestion(job: Job<DocumentIngestionJobData
     await Promise.all([
       callInternalApi("/confidence/recompute", document.businessId),
       callInternalApi("/chips/regenerate", document.businessId),
+      callInternalApi("/flow-options/regenerate", document.businessId),
     ]);
   } catch (error) {
     await prisma.knowledgeDocument.update({

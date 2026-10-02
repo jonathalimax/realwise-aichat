@@ -9,6 +9,6 @@ import { CalendarModule } from "../calendar/calendar.module";
   imports: [BookingsModule, CalendarModule],
   controllers: [ChatController],
   providers: [ChatService, FlowService],
-  exports: [ChatService],
+  exports: [ChatService, FlowService],
 })
 export class ChatModule {}
