@@ -18,7 +18,8 @@
     "ipaddr.js": "^2.2.0",
     "undici": "^6.21.0",
     "@realwise/db": "workspace:*",
-    "@realwise/profile-schema": "workspace:*"
+    "@realwise/profile-schema": "workspace:*",
+    "@realwise/shared": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

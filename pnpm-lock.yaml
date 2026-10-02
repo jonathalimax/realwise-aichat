@@ -320,6 +320,9 @@ importers:
       '@realwise/profile-schema':
         specifier: workspace:*
         version: link:../../packages/profile-schema
+      '@realwise/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       bullmq:
         specifier: ^5.21.0
         version: 5.81.5

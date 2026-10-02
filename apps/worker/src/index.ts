@@ -4,6 +4,7 @@ import { redisConnection } from "./redis";
 import { processDocumentIngestion } from "./processors/document-ingestion";
 import { processWebsiteSync } from "./processors/website-sync";
 import { processTrialWatch } from "./processors/trial-watch";
+import { processColdLeadDigest } from "./processors/cold-lead-digest";
 
 const documentWorker = new Worker("document-ingestion", processDocumentIngestion, {
   connection: redisConnection,
@@ -46,6 +47,11 @@ const trialWatchWorker = new Worker("trial-watch", processTrialWatch, { connecti
 trialWatchWorker.on("completed", (job) => console.log(`trial-watch ${job.id} completed`));
 trialWatchWorker.on("failed", (job, err) => console.error(`trial-watch ${job?.id} failed`, err));
 
+const coldLeadDigestQueue = new Queue("cold-lead-digest", { connection: redisConnection });
+const coldLeadDigestWorker = new Worker("cold-lead-digest", processColdLeadDigest, { connection: redisConnection });
+coldLeadDigestWorker.on("completed", (job) => console.log(`cold-lead-digest ${job.id} completed`));
+coldLeadDigestWorker.on("failed", (job, err) => console.error(`cold-lead-digest ${job?.id} failed`, err));
+
 async function main() {
   await scheduleQueue.add(
     "weekly-scan",
@@ -57,7 +63,12 @@ async function main() {
     {},
     { repeat: { pattern: "0 9 * * *" }, jobId: "daily-check", removeOnComplete: true, removeOnFail: 10 },
   );
-  console.log("Realwise worker running — listening on queues: document-ingestion, website-sync, website-sync-schedule, trial-watch");
+  await coldLeadDigestQueue.add(
+    "daily-digest",
+    {},
+    { repeat: { pattern: "0 10 * * *" }, jobId: "daily-digest", removeOnComplete: true, removeOnFail: 10 },
+  );
+  console.log("Realwise worker running — listening on queues: document-ingestion, website-sync, website-sync-schedule, trial-watch, cold-lead-digest");
 }
 
 main();

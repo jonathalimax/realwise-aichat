@@ -274,6 +274,7 @@ model Lead {
   ownerNotes        String?
   ownerOutcome       String?
   whatsappContactedAt DateTime?
+  lastDigestNotifiedAt DateTime?
   tags              String[]
   retentionDeleteAt DateTime?
 

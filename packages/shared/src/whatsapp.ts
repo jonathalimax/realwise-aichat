@@ -25,3 +25,9 @@ export function buildCustomerEscalationMessage(businessName: string, topic: stri
 export function buildOwnerOutreachMessage(leadName: string, businessName: string, topic: string): string {
   return `Oi ${leadName}, aqui é da ${businessName}! Vi que você perguntou sobre ${topic} no nosso atendimento. Posso te ajudar a fechar?`;
 }
+
+// Used for the cold-lead digest, where there's no single recorded "topic" to reference.
+export function buildColdLeadReengagementMessage(leadName: string, businessName: string): string {
+  const greeting = leadName ? `Oi ${leadName}` : "Oi";
+  return `${greeting}, aqui é da ${businessName}! Vi que você chegou a falar com a gente — faz sentido continuarmos a conversa?`;
+}
