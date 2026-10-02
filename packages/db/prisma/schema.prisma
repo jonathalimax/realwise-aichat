@@ -198,6 +198,8 @@ model Conversation {
   leadId              String?
   lead                Lead?               @relation(fields: [leadId], references: [id])
   visitorToken        String
+  // Partial unique index on (businessId, visitorToken) WHERE status IN (active, idle) lives in a
+  // hand-written migration — Prisma schema DSL has no partial-unique-index support.
   resumeToken         String?             @unique
   status              ConversationStatus  @default(active)
   channel             String?

@@ -20,6 +20,7 @@ interface ToolCall {
 }
 
 const TOOL_NAMES = ["getLeads", "getAnalytics", "searchKnowledgeBase", "proposeProfileEdit", "generateReport"] as const;
+const NO_KB_MATCH_FALLBACK = "Não encontrei nada na sua base de conhecimento sobre isso.";
 
 // Exactly the 5 tools the product spec allows — nothing else is callable from here.
 const SYSTEM_PROMPT_HEADER = [
@@ -168,11 +169,16 @@ export class OwnerAssistantService {
 
     const { result, pendingProposal } = await this.runTool(businessId, toolCall);
 
+    // Same zero-retrieval hard guard as customer chat — never ground an LLM call on empty KB results.
+    if (toolCall.tool === "searchKnowledgeBase" && Array.isArray(result) && result.length === 0) {
+      return { reply: NO_KB_MATCH_FALLBACK, toolCalls: [toolCall], toolResult: result };
+    }
+
     if (toolCall.tool === "proposeProfileEdit") {
       return {
         reply: pendingProposal
           ? `Proposta: alterar "${pendingProposal.fieldKey}" para "${pendingProposal.proposedValue}". ${pendingProposal.reason}`.trim()
-          : "Não consegui montar a proposta de alteração — faltam dados do campo.",
+          : "Não consegui montar a proposta de alteração — esse campo não existe ou não pode ser editado.",
         toolCalls: [toolCall],
         pendingProposal,
       };

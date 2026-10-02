@@ -49,9 +49,20 @@ export class ChatService {
       orderBy: { startedAt: "desc" },
     });
     if (!conversation) {
-      conversation = await this.prisma.client.conversation.create({
-        data: { businessId, visitorToken, leadId, status: "active", resumeToken: randomBytes(16).toString("base64url") },
-      });
+      try {
+        conversation = await this.prisma.client.conversation.create({
+          data: { businessId, visitorToken, leadId, status: "active", resumeToken: randomBytes(16).toString("base64url") },
+        });
+      } catch (err) {
+        // Lost the create race to a concurrent request — the partial unique index rejected us, fall back to the winner's row.
+        if ((err as { code?: string }).code === "P2002") {
+          conversation = await this.prisma.client.conversation.findFirst({
+            where: { businessId, visitorToken, status: { in: ["active", "idle"] } },
+            orderBy: { startedAt: "desc" },
+          });
+        }
+        if (!conversation) throw err;
+      }
     }
     return conversation;
   }
