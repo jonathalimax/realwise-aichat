@@ -437,7 +437,29 @@ export class ChatService {
       where: { businessId, isActive: true },
       orderBy: { priority: "asc" },
     });
-    if (!routingNumber) throw new NotFoundException("No active WhatsApp routing number configured");
+
+    if (!routingNumber) {
+      // No handoff link can be generated — still answer the visitor and nudge the owner to set one up.
+      const assistantMessage = await this.prisma.client.message.create({
+        data: {
+          conversationId,
+          businessId,
+          role: "assistant",
+          content: "Vou te colocar em contato com o nosso time o quanto antes.",
+          answerSource: "escalation",
+        },
+      });
+
+      this.notifyOwner(
+        businessId,
+        `Lead quente sem número de WhatsApp configurado — ${escapeHtml(business.name)}`,
+        `<p>Um cliente pediu para falar com alguém do time agora, mas <strong>nenhum número de WhatsApp ativo está configurado</strong>.</p>
+         <p><strong>Assunto:</strong> ${escapeHtml(topic)}</p>
+         <p>Configure um número de roteamento no painel para poder receber esses leads: Configurações.</p>`,
+      );
+
+      return { message: assistantMessage, escalated: false, whatsappUrl: null, referenceCode: null };
+    }
 
     const referenceCode = generateReferenceCode();
     const message = buildCustomerEscalationMessage(business.name, topic, referenceCode);

@@ -429,7 +429,8 @@ export class FlowService {
     await this.prisma.client.conversation.update({
       where: { id: conversationId },
       data: {
-        flowNodeId: goto,
+        // Persist the resolved node id, not raw `goto` — emit() may have fallen back to flow.start.
+        flowNodeId: nextSnapshot.nodeId,
         flowParams: mergedParams as any,
         flowHistory: nextHistory as any,
         flowSnapshot: nextSnapshot as any,
