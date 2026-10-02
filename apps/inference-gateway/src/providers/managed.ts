@@ -40,7 +40,11 @@ export class ManagedProvider implements InferenceProvider {
     const data = (await res.json()) as {
       choices: { message: { content: string } }[];
       usage?: { prompt_tokens: number; completion_tokens: number };
+      error?: { message?: string };
     };
+    // ZDR/data_collection routing restrictions surface as an error (no eligible provider) rather than
+    // being silently ignored — catch that explicitly instead of returning a non-compliant answer.
+    if (data.error) throw new Error(`Managed provider rejected request: ${data.error.message ?? "unknown error"}`);
 
     return {
       text: data.choices[0]?.message.content ?? "",
