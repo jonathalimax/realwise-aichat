@@ -39,10 +39,13 @@ export class CalendarController {
     }
   }
 
+  // Wrapped in an object (never a bare null body) so the client can always parse the JSON response,
+  // even when calendar sync isn't connected.
   @Get(":businessId/slots")
   async slots(@Param("businessId") businessId: string, @Query("date") date: string) {
     const from = date ? new Date(date) : new Date();
     const to = new Date(from.getTime() + 14 * 24 * 60 * 60 * 1000);
-    return this.calendar.getAvailableSlots(businessId, { from, to });
+    const slots = await this.calendar.getAvailableSlots(businessId, { from, to });
+    return { slots };
   }
 }

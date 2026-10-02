@@ -92,8 +92,9 @@ export function bookAppointment(businessId: string, conversationId: string, serv
 }
 
 // Returns null when the business hasn't connected Google Calendar, so callers fall back to free-text date/time inputs.
-export function getAvailableSlots(businessId: string, date?: string): Promise<{ start: string; end: string }[] | null> {
-  return request(`/calendar/${businessId}/slots${date ? `?date=${date}` : ""}`);
+export async function getAvailableSlots(businessId: string, date?: string): Promise<{ start: string; end: string }[] | null> {
+  const result = await request(`/calendar/${businessId}/slots${date ? `?date=${date}` : ""}`);
+  return result.slots ?? null;
 }
 
 export function identifyVisitor(businessSlug: string, name: string, phone: string): Promise<{ lead: any }> {
