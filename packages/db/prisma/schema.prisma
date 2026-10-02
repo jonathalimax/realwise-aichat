@@ -326,7 +326,7 @@ model CalendarIntegration {
   businessId  String    @unique
   business    Business  @relation(fields: [businessId], references: [id])
   provider    String    @default("google")
-  // TODO: encrypt-at-rest before storing real tokens in production
+  // Encrypted at rest (AES-256-GCM via apps/api/src/common/crypto.ts) — never stored/logged in plaintext.
   accessToken String
   refreshToken String
   calendarId  String
