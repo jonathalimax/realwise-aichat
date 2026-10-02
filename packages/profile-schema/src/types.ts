@@ -1,9 +1,12 @@
 export type FieldWeight = "required" | "recommended" | "optional";
 
+export type FieldType = "text" | "number" | "phone" | "hours" | "price";
+
 export interface NicheFieldDef {
   key: string;
   label: string;
   weight: FieldWeight;
+  type?: FieldType;
 }
 
 export interface InterviewQuestion {

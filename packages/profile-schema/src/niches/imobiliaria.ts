@@ -10,7 +10,7 @@ export const imobiliariaTemplate: NicheTemplate = {
     { key: "valor_taxa_administracao", label: "Taxa de administração", weight: "required" },
     { key: "politica_pets", label: "Política de animais de estimação", weight: "recommended" },
     { key: "prazo_minimo_contrato", label: "Prazo mínimo de contrato", weight: "recommended" },
-    { key: "horario_visitas", label: "Horário disponível para visitas", weight: "required" },
+    { key: "horario_visitas", label: "Horário disponível para visitas", weight: "required", type: "hours" },
     { key: "prazo_analise_credito", label: "Prazo médio de análise de crédito", weight: "recommended" },
     { key: "reajuste_anual", label: "Política de reajuste anual", weight: "optional" },
     { key: "vistoria_saida", label: "Processo de vistoria de saída", weight: "optional" },

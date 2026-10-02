@@ -19,6 +19,30 @@ function looksLikeAbstention(text: string): boolean {
   return ABSTENTION_MARKERS.some((marker) => normalized.includes(marker));
 }
 
+// Pragmatic per-type sanity check — not a full schema validator, just a net against obvious garbage.
+function validateFieldValue(type: string | undefined, value: unknown): { ok: true } | { ok: false; reason: string } {
+  if (typeof value !== "string") return { ok: false, reason: "value must be a string" };
+  const trimmed = value.trim();
+  if (!type) {
+    return trimmed.length > 0 ? { ok: true } : { ok: false, reason: "value must be non-empty" };
+  }
+  switch (type) {
+    case "number":
+      return !isNaN(Number(trimmed)) && trimmed.length > 0 ? { ok: true } : { ok: false, reason: "value must be a number" };
+    case "price": {
+      const numeric = trimmed.replace(/[^0-9.,-]/g, "").replace(",", ".");
+      const parsed = Number(numeric);
+      return numeric.length > 0 && !isNaN(parsed) && parsed >= 0 ? { ok: true } : { ok: false, reason: "value must be a plausible monetary amount" };
+    }
+    case "phone":
+      return /\d{8,}/.test(trimmed.replace(/\D/g, "")) ? { ok: true } : { ok: false, reason: "value must contain a valid phone number" };
+    case "hours":
+    case "text":
+    default:
+      return trimmed.length > 0 && trimmed.length <= 500 ? { ok: true } : { ok: false, reason: "value must be a non-empty reasonable-length string" };
+  }
+}
+
 @Injectable()
 export class OnboardingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -31,7 +55,18 @@ export class OnboardingService {
     return { profile, template };
   }
 
-  async patchProfileField(businessId: string, fieldKey: string, value: unknown, source: "document" | "interview" | "manual") {
+  async patchProfileField(
+    businessId: string,
+    fieldKey: string,
+    value: unknown,
+    source: "document" | "interview" | "manual",
+  ): Promise<{ ok: true; profile: any } | { ok: false; reason: string }> {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) throw new NotFoundException("Business not found");
+    const fieldDef = nicheTemplates[business.niche]?.fields.find((f) => f.key === fieldKey);
+    const validation = validateFieldValue(fieldDef?.type, value);
+    if (!validation.ok) return { ok: false, reason: validation.reason };
+
     const existing = await this.prisma.client.businessProfile.findUnique({ where: { businessId } });
     const data = (existing?.data as Record<string, unknown>) ?? {};
     const fieldStatus = (existing?.fieldStatus as Record<string, unknown>) ?? {};
@@ -39,7 +74,7 @@ export class OnboardingService {
     data[fieldKey] = value;
     fieldStatus[fieldKey] = { source, approvedByOwner: false, updatedAt: new Date().toISOString() };
 
-    const result = await this.prisma.client.businessProfile.upsert({
+    const profile = await this.prisma.client.businessProfile.upsert({
       where: { businessId },
       update: { data: data as any, fieldStatus: fieldStatus as any },
       create: {
@@ -49,7 +84,7 @@ export class OnboardingService {
         fieldStatus: fieldStatus as any,
       },
     });
-    return result;
+    return { ok: true, profile };
   }
 
   async updateCustomInstructions(businessId: string, customInstructions: string) {
@@ -136,7 +171,9 @@ export class OnboardingService {
     }
 
     if (fieldKey && value) {
-      await this.patchProfileField(businessId, fieldKey, value, "interview");
+      const result = await this.patchProfileField(businessId, fieldKey, value, "interview");
+      // Invalid extraction (e.g. LLM drift) — skip the write rather than corrupt the field, keep the conversation going.
+      if (!result.ok) fieldKey = null;
     }
 
     const { gaps: remaining } = await this.findGaps(businessId);
