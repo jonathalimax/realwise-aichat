@@ -49,6 +49,33 @@ async function safeFetch(rawUrl: string, redirectsLeft = MAX_REDIRECTS): Promise
   return res;
 }
 
+const BLOCK_TAGS = new Set([
+  "div", "p", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6",
+  "section", "article", "header", "footer", "ul", "ol", "table", "br", "hr", "form", "figure",
+]);
+
+// Walks the DOM collecting text with separators between siblings/blocks, since a bare
+// .text() call concatenates adjacent elements (e.g. brand logo links) with no whitespace.
+function extractTextWithSeparators($: cheerio.CheerioAPI, node: any): string {
+  let out = "";
+  const children = $(node).contents().toArray();
+  for (const child of children) {
+    if (child.type === "text") {
+      out += (child as any).data ?? "";
+    } else if (child.type === "tag") {
+      const tagName = (child as any).name;
+      if (tagName === "img") {
+        const alt = $(child).attr("alt");
+        if (alt) out += ` ${alt} `;
+        continue;
+      }
+      const inner = extractTextWithSeparators($, child);
+      out += BLOCK_TAGS.has(tagName) ? `\n${inner}\n` : ` ${inner} `;
+    }
+  }
+  return out;
+}
+
 function extractPage(html: string, pageUrl: string): { title: string; text: string; links: string[] } {
   const $ = cheerio.load(html);
   const base = new URL(pageUrl);
@@ -70,8 +97,7 @@ function extractPage(html: string, pageUrl: string): { title: string; text: stri
 
   $("script, style, nav, footer, noscript, svg").remove();
   const title = $("title").first().text().trim();
-  const text = $("body")
-    .text()
+  const text = extractTextWithSeparators($, $("body").get(0))
     .replace(/[ \t]+/g, " ")
     .split("\n")
     .map((line) => line.trim())
