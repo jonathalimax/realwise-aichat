@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { maskBrPhone } from "@realwise/shared";
 import { getBusiness, startConversation, streamMessage, bookAppointment, identifyVisitor, startFlow, advanceFlow } from "../lib/api";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Card, CardContent } from "./ui/card";
 
 interface FlowBubble {
   label: string;
@@ -217,45 +220,37 @@ export function ChatScreen({ slug }: { slug: string }) {
         )}
 
         {showBooking && (
-          <div className="max-w-[90%] rounded-2xl border border-border bg-surface p-4 text-sm">
-            <div className="mb-2 text-xs uppercase tracking-wide text-ink-soft">
-              Agendar {business.niche === "imobiliaria" ? "visita" : "test-drive"}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={bookingDate}
-                onChange={(e) => setBookingDate(e.target.value)}
-                className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+          <Card className="max-w-[90%]">
+            <CardContent className="p-4">
+              <div className="mb-2 text-xs uppercase tracking-wide text-ink-soft">
+                Agendar {business.niche === "imobiliaria" ? "visita" : "test-drive"}
+              </div>
+              <div className="flex gap-2">
+                <Input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="flex-1" />
+                <Input type="time" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="flex-1" />
+              </div>
+              <Input
+                value={bookingName}
+                onChange={(e) => setBookingName(e.target.value)}
+                placeholder="Seu nome"
+                className="mt-2"
               />
-              <input
-                type="time"
-                value={bookingTime}
-                onChange={(e) => setBookingTime(e.target.value)}
-                className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+              <Input
+                value={bookingPhone}
+                onChange={(e) => setBookingPhone(maskBrPhone(e.target.value))}
+                placeholder="(11) 99999-9999"
+                type="tel"
+                inputMode="numeric"
+                className="mt-2"
               />
-            </div>
-            <input
-              value={bookingName}
-              onChange={(e) => setBookingName(e.target.value)}
-              placeholder="Seu nome"
-              className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-soft"
-            />
-            <input
-              value={bookingPhone}
-              onChange={(e) => setBookingPhone(maskBrPhone(e.target.value))}
-              placeholder="(11) 99999-9999"
-              type="tel"
-              inputMode="numeric"
-              className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-soft"
-            />
-            <p className="mt-2 text-[0.7rem] text-ink-soft">
-              Ao confirmar, você concorda em compartilhar esses dados com {business.name} para este atendimento.
-            </p>
-            <button onClick={confirmBooking} className="mt-2 w-full rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">
-              Confirmar
-            </button>
-          </div>
+              <p className="mt-2 text-[0.7rem] text-ink-soft">
+                Ao confirmar, você concorda em compartilhar esses dados com {business.name} para este atendimento.
+              </p>
+              <Button onClick={confirmBooking} className="mt-2 w-full">
+                Confirmar
+              </Button>
+            </CardContent>
+          </Card>
         )}
         <div ref={bottomRef} />
       </main>
@@ -263,13 +258,15 @@ export function ChatScreen({ slug }: { slug: string }) {
       {bubbles.length > 0 && !showBooking && (
         <div className="flex flex-none flex-wrap gap-2 px-4 pb-2">
           {bubbles.map((bubble, i) => (
-            <button
+            <Button
               key={`${bubble.goto}-${i}`}
+              variant="outline"
+              size="sm"
               onClick={() => handleBubbleTap(bubble)}
-              className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-ink-soft"
+              className="rounded-full bg-surface font-normal"
             >
               {bubble.label}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -281,19 +278,16 @@ export function ChatScreen({ slug }: { slug: string }) {
         }}
         className="flex flex-none items-center gap-2 border-t border-border bg-bg px-4 py-3"
       >
-        <input
+        <Input
+          variant="pill"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Escreva sua pergunta…"
-          className="flex-1 rounded-full border border-border bg-surface px-4 py-2.5 text-sm text-ink outline-none placeholder:text-ink-soft"
+          className="flex-1"
         />
-        <button
-          type="submit"
-          disabled={sending}
-          className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-accent text-white disabled:opacity-50"
-        >
+        <Button type="submit" variant="round" size="icon" disabled={sending} className="rounded-full">
           ➤
-        </button>
+        </Button>
       </form>
     </div>
   );

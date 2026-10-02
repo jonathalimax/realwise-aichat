@@ -1,35 +1,44 @@
 import type { Config } from "tailwindcss";
 import tokens from "../../packages/ui/tokens.json";
 
-const light = tokens.color.light;
-const dark = tokens.color.dark;
-
 export default {
   content: ["./src/**/*.{ts,tsx}"],
-  darkMode: "media",
+  // light-by-default: chat is embedded in a business's brand context; dark infra stays wired for a future toggle
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
-        bg: light.bg,
-        surface: light.surface,
-        ink: light.ink,
-        "ink-soft": light.inkSoft,
-        border: light.border,
-        accent: light.accent,
-        "accent-soft": light.accentSoft,
-        "accent-ink": light.accentInk,
-        lime: light.lime,
-        "lime-soft": light.limeSoft,
-        "lime-ink": light.limeInk,
-        positive: light.positive,
-        negative: light.negative,
+        bg: "rgb(var(--bg) / <alpha-value>)",
+        "bg-2": "rgb(var(--bg-2) / <alpha-value>)",
+        surface: "rgb(var(--surface) / <alpha-value>)",
+        ink: "rgb(var(--ink) / <alpha-value>)",
+        "ink-soft": "rgb(var(--ink-soft) / <alpha-value>)",
+        muted: "rgb(var(--muted) / <alpha-value>)",
+        border: "rgb(var(--border) / <alpha-value>)",
+        accent: "rgb(var(--accent) / <alpha-value>)",
+        "accent-soft": "rgb(var(--accent-soft) / <alpha-value>)",
+        "accent-ink": "rgb(var(--accent-ink) / <alpha-value>)",
+        lime: "rgb(var(--lime) / <alpha-value>)",
+        "lime-soft": "rgb(var(--lime-soft) / <alpha-value>)",
+        "lime-ink": "rgb(var(--lime-ink) / <alpha-value>)",
+        positive: "rgb(var(--positive) / <alpha-value>)",
+        "positive-soft": "rgb(var(--positive-soft) / <alpha-value>)",
+        negative: "rgb(var(--negative) / <alpha-value>)",
+        "negative-soft": "rgb(var(--negative-soft) / <alpha-value>)",
+        warning: "rgb(var(--warning) / <alpha-value>)",
+        "warning-soft": "rgb(var(--warning-soft) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
         serif: ["Iowan Old Style", "Palatino Linotype", "serif"],
       },
       borderRadius: {
-        card: "16px",
+        card: tokens.radius.card,
+        pill: tokens.radius.pill,
+        input: tokens.radius.input,
+      },
+      boxShadow: {
+        card: tokens.elevation.card,
       },
     },
   },
