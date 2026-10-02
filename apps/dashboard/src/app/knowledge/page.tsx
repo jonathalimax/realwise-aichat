@@ -183,13 +183,13 @@ export default function KnowledgePage() {
           <div className="rounded-card border border-border bg-bg-2 p-5 text-center">
             <div className="font-mono text-3xl text-ink">{business.confidenceScore}%</div>
             <div className="text-xs text-ink-soft">
-              {business.confidenceScore >= 70 ? "Pronto para publicar" : "Preencha os campos obrigatórios para chegar a 70%"}
+              {business.confidenceScore >= 70 ? "Pronto para ativar seu link" : "Preencha os campos obrigatórios para chegar a 70%"}
             </div>
           </div>
           <Button variant="outline" size="sm" className="self-start" onClick={handleRecompute}>Recalcular</Button>
 
           {business.status !== "live" && (
-            <Button disabled={business.confidenceScore < 70} onClick={handlePublish}>Publicar</Button>
+            <Button disabled={business.confidenceScore < 70} onClick={handlePublish}>Ativar meu link</Button>
           )}
         </CardContent>
       </Card>

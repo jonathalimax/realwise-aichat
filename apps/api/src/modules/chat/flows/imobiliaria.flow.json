@@ -25,7 +25,7 @@
   "nodes": {
     "start": {
       "id": "start",
-      "message": "Olá! 👋 Sou o assistente da imobiliária. Como posso te ajudar?",
+      "message": "Olá! 👋 Sou a Clara, assistente de IA da imobiliária. Como posso te ajudar?",
       "bubbles": [
         { "label": "🏠 Quero alugar", "goto": "alugar" },
         { "label": "🔑 Quero comprar", "goto": "comprar" },
