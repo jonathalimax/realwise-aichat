@@ -30,7 +30,11 @@ export class BookingsService {
   }
 
   async listAppointments(businessId: string) {
-    return this.prisma.client.appointment.findMany({ where: { businessId }, orderBy: { startsAt: "asc" } });
+    return this.prisma.client.appointment.findMany({
+      where: { businessId },
+      include: { lead: { select: { name: true, phone: true } } },
+      orderBy: { startsAt: "asc" },
+    });
   }
 
   async updateStatus(businessId: string, appointmentId: string, status: "confirmed" | "canceled" | "no_show" | "completed") {
