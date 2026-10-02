@@ -8,7 +8,21 @@ export function ShareLink({ slug }: { slug: string }) {
   const url = `${process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005"}/${slug}`;
 
   async function copy() {
-    await navigator.clipboard.writeText(url).catch(() => {});
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(url).catch(() => {});
+    } else {
+      // navigator.clipboard is unavailable outside secure contexts (e.g. http:// tailnet IPs)
+      const textarea = document.createElement("textarea");
+      textarea.value = url;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand("copy");
+      } catch {}
+      document.body.removeChild(textarea);
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
