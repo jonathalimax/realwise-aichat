@@ -49,7 +49,7 @@ export async function retrieveRelevantChunks(
   const merged: RetrievedChunk[] = [];
   const seen = new Set<string>();
   for (const row of [
-    ...vectorRows.map((r) => ({ id: r.id, content: r.content, score: 1 - r.distance })),
+    ...vectorRows.map((r) => ({ id: r.id, content: r.content, score: Math.max(0, Math.min(1, 1 - r.distance)) })),
     ...fullTextRows.map((r) => ({ id: r.id, content: r.content, score: undefined })),
   ]) {
     if (seen.has(row.content)) continue;

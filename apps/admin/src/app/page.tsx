@@ -30,6 +30,11 @@ const STATUS_LABELS: Record<string, string> = {
   suspended: "Suspenso",
   churned: "Churned",
 };
+// Light-traffic costs are often sub-cent — fixed .toFixed(2) would show "$0.00" for real non-zero usage.
+function formatCostUsd(value: number): string {
+  return value > 0 && value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
+}
+
 const STATUS_OPTIONS = [
   { value: "live", label: "Ativo" },
   { value: "pending_review", label: "Pendente" },
@@ -123,7 +128,7 @@ export default function TenantsPage() {
         ))}
         <StatCard
           label="Custo estimado (7d)"
-          value={metrics ? `$${(metrics.totalCostUsd7d ?? 0).toFixed(2)}` : "—"}
+          value={metrics ? formatCostUsd(metrics.totalCostUsd7d ?? 0) : "—"}
           context="Estimativa com base em preços públicos, não é a fatura real"
           icon={<DollarSign className="h-3.5 w-3.5 text-ink-soft" strokeWidth={1.5} />}
         />

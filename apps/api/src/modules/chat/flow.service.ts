@@ -126,6 +126,7 @@ export class FlowService {
       "O fluxo de conversa pede a seguinte informação para o cliente, mas ela depende de dados reais do negócio que não estão totalmente estruturados:",
       `"${node.message}"`,
       "Responda de forma natural e curta (2-4 frases), usando SOMENTE os trechos de documentos abaixo. Se não houver dados suficientes, diga isso honestamente e sugira falar com um atendente — nunca invente preço, modelo ou disponibilidade.",
+      "Regra especial para quantidades: nunca afirme um número específico de itens/resultados (ex: imóveis, carros, boletos) a menos que você consiga listar essa mesma quantidade de itens distintos, por nome/detalhe, a partir dos trechos abaixo. Se não conseguir confirmar o número exato pelo texto, use uma frase vaga e não numérica (ex: \"Encontrei algumas opções que podem te interessar\", \"Temos várias opções disponíveis\") em vez de inventar um número.",
       chunkText ? `Trechos relevantes:\n${chunkText}` : "Nenhum documento relevante foi encontrado.",
     ].join("\n");
 
