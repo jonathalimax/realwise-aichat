@@ -3,13 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Menu, LogOut } from "lucide-react";
+import { Menu, LogOut, Sparkles } from "lucide-react";
 import { Sheet, SheetTrigger, SheetContent } from "./ui/sheet";
 import { logout } from "../lib/api";
 
 const ITEMS = [
   { href: "/", label: "Início" },
-  { href: "/assistant", label: "Assistente" },
   { href: "/profile", label: "Perfil" },
   { href: "/leads", label: "Leads" },
   { href: "/agenda", label: "Agenda" },
@@ -30,6 +29,13 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex flex-1 flex-col gap-1">
+      <Link
+        href="/assistant"
+        onClick={onNavigate}
+        className="mb-2 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm font-semibold text-accent hover:bg-accent/20"
+      >
+        <Sparkles className="h-4 w-4" /> Assistente
+      </Link>
       {ITEMS.map((item) => (
         <Link
           key={item.href}

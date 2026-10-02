@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { askOwnerAssistant, patchProfileField } from "../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -17,17 +18,37 @@ interface PendingProposal {
   reason: string;
 }
 
-export default function AssistantPage() {
+const EXAMPLE_PROMPTS = [
+  "Quantos leads quentes eu tenho?",
+  "Como estão minhas conversas essa semana?",
+  "Busque na minha base sobre horários de atendimento",
+  "Gere um relatório dos últimos 30 dias",
+];
+
+function AssistantChat() {
+  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [pendingProposal, setPendingProposal] = useState<PendingProposal | null>(null);
   const [proposalDone, setProposalDone] = useState<"confirmed" | "rejected" | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const prefillHandled = useRef(false);
 
-  async function handleSend() {
-    if (!input.trim() || sending) return;
-    const text = input.trim();
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (!q || prefillHandled.current) return;
+    prefillHandled.current = true;
+    setInput(q);
+    // small delay so the owner sees their question before it auto-sends
+    const timer = setTimeout(() => handleSend(q), 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  async function handleSend(override?: string) {
+    const text = (override ?? input).trim();
+    if (!text || sending) return;
     const next: Message[] = [...messages, { role: "owner", content: text }];
     setMessages(next);
     setInput("");
@@ -62,8 +83,25 @@ export default function AssistantPage() {
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div>
         <h1 className="font-serif text-2xl text-ink">Assistente do dono</h1>
-        <p className="text-sm text-ink-soft">Pergunte sobre leads, métricas e a base de conhecimento do seu negócio.</p>
+        <p className="text-sm text-ink-soft">
+          Pergunte qualquer coisa sobre leads, métricas ou sua base de conhecimento — e peça para ajustar informações do
+          perfil, com sua aprovação antes de qualquer mudança.
+        </p>
       </div>
+
+      {messages.length === 0 && (
+        <div className="flex flex-wrap gap-2">
+          {EXAMPLE_PROMPTS.map((prompt) => (
+            <button
+              key={prompt}
+              onClick={() => setInput(prompt)}
+              className="rounded-full border border-border bg-bg-2 px-3 py-1.5 text-xs text-ink-soft hover:bg-surface"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -126,10 +164,18 @@ export default function AssistantPage() {
               placeholder="Digite sua pergunta…"
               disabled={sending}
             />
-            <Button onClick={handleSend} disabled={sending || !input.trim()}>Enviar</Button>
+            <Button onClick={() => handleSend()} disabled={sending || !input.trim()}>Enviar</Button>
           </div>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function AssistantPage() {
+  return (
+    <Suspense fallback={null}>
+      <AssistantChat />
+    </Suspense>
   );
 }
