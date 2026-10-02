@@ -10,8 +10,14 @@ export async function routeGenerate(req: GenerateRequest): Promise<GenerateResul
   let result: GenerateResult;
   let error: string | undefined;
 
+  // When MANAGED_API_KEY is configured, prefer it over self-hosted Ollama: Ollama stays "healthy" (reachable)
+  // even when queued/slow under concurrency, so health alone can't detect capacity problems.
+  const managedConfigured = await managed.isHealthy();
+
   try {
-    if (await selfHosted.isHealthy()) {
+    if (managedConfigured) {
+      result = await managed.generate(req);
+    } else if (await selfHosted.isHealthy()) {
       result = await selfHosted.generate(req);
     } else {
       result = await managed.generate(req);
@@ -19,7 +25,7 @@ export async function routeGenerate(req: GenerateRequest): Promise<GenerateResul
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
     try {
-      result = await managed.generate(req);
+      result = managedConfigured ? await selfHosted.generate(req) : await managed.generate(req);
     } catch (fallbackError) {
       await logCall(req, null, `${error} | fallback failed: ${fallbackError}`);
       throw fallbackError;

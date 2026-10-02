@@ -28,6 +28,9 @@ export class ManagedProvider implements InferenceProvider {
           { role: "user", content: req.prompt },
         ],
         max_tokens: req.maxTokens ?? 512,
+        // Enforce zero data retention on every request — no training/storage of business data by any upstream provider.
+        zdr: true,
+        provider: { data_collection: "deny" },
       }),
       signal: AbortSignal.timeout(20000),
     });
