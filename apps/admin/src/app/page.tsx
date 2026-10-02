@@ -1,16 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, Activity, MessageSquare, UserCheck } from "lucide-react";
+import { Users, Activity, MessageSquare, UserCheck, CheckCircle2, Clock, Ban, MoreHorizontal } from "lucide-react";
 import { getTenants, getGlobalMetrics, getMetricsTimeseries, getConfidenceDistribution } from "../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from "../components/ui/card";
 import { Badge, statusToBadgeVariant } from "../components/ui/badge";
+import { Checkbox } from "../components/ui/checkbox";
+import { DataTableToolbar, FilterDropdown } from "../components/ui/data-table-toolbar";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { StatCard } from "../components/ui/stat-card";
 import { SegmentedControl } from "../components/ui/segmented";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/ui/table";
 import { ActivityChart } from "../components/charts/ActivityChart";
 import { ConfidenceDistributionChart } from "../components/charts/ConfidenceDistributionChart";
+
+const STATUS_ICON: Record<string, typeof CheckCircle2> = {
+  live: CheckCircle2,
+  pending_review: Clock,
+  onboarding: Clock,
+  suspended: Ban,
+  churned: Ban,
+};
+const STATUS_LABELS: Record<string, string> = {
+  live: "Ativo",
+  pending_review: "Pendente",
+  onboarding: "Onboarding",
+  suspended: "Suspenso",
+  churned: "Churned",
+};
+const STATUS_OPTIONS = [
+  { value: "live", label: "Ativo" },
+  { value: "pending_review", label: "Pendente" },
+  { value: "suspended", label: "Suspenso" },
+  { value: "churned", label: "Churned" },
+];
 
 const STAT_CARDS = [
   { key: "tenantCount", label: "Tenants", icon: Users },
@@ -36,6 +60,9 @@ export default function TenantsPage() {
   const [timeseries, setTimeseries] = useState<any[]>([]);
   const [distribution, setDistribution] = useState<any[]>([]);
   const [range, setRange] = useState<"7" | "30" | "90">("30");
+  const [filter, setFilter] = useState("");
+  const [statuses, setStatuses] = useState<string[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     getTenants().then(setTenants).catch(() => setTenants([]));
@@ -46,6 +73,30 @@ export default function TenantsPage() {
   useEffect(() => {
     getMetricsTimeseries(Number(range)).then(setTimeseries).catch(() => setTimeseries([]));
   }, [range]);
+
+  const filteredTenants = useMemo(() => {
+    const term = filter.trim().toLowerCase();
+    return tenants.filter((t) => {
+      const matchesTerm = !term || t.name?.toLowerCase().includes(term) || t.slug?.toLowerCase().includes(term);
+      const matchesStatus = statuses.length === 0 || statuses.includes(t.status);
+      return matchesTerm && matchesStatus;
+    });
+  }, [tenants, filter, statuses]);
+
+  const allSelected = filteredTenants.length > 0 && filteredTenants.every((t) => selected.has(t.id));
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(filteredTenants.map((t) => t.id)));
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -91,32 +142,66 @@ export default function TenantsPage() {
           <CardDescription>Todos os negócios cadastrados na plataforma.</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
+          <DataTableToolbar
+            filterValue={filter}
+            onFilterChange={setFilter}
+            filterPlaceholder="Filtrar tenants..."
+            selectionCount={selected.size}
+            filters={<FilterDropdown label="Status" options={STATUS_OPTIONS} selected={statuses} onChange={setStatuses} />}
+          />
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Selecionar todos" />
+                </TableHead>
                 <TableHead>Negócio</TableHead>
                 <TableHead>Nicho</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Plano</TableHead>
                 <TableHead>Confiança</TableHead>
+                <TableHead className="w-8" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tenants.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell>
-                    <Link href={`/tenants/${t.id}`} className="font-semibold text-ink hover:text-accent">
-                      {t.name || t.slug}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-ink-soft">{t.niche}</TableCell>
-                  <TableCell>
-                    <Badge variant={statusToBadgeVariant(t.status)}>{t.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-ink-soft">{t.subscription?.plan?.name ?? "—"}</TableCell>
-                  <TableCell className="font-mono">{t.confidenceScore}%</TableCell>
-                </TableRow>
-              ))}
+              {filteredTenants.map((t) => {
+                const StatusIcon = STATUS_ICON[t.status] ?? Clock;
+                return (
+                  <TableRow key={t.id} data-state={selected.has(t.id) ? "selected" : undefined}>
+                    <TableCell>
+                      <Checkbox checked={selected.has(t.id)} onCheckedChange={() => toggleOne(t.id)} aria-label="Selecionar tenant" />
+                    </TableCell>
+                    <TableCell>
+                      <Link href={`/tenants/${t.id}`} className="font-semibold text-ink hover:text-accent">
+                        {t.name || t.slug}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-ink-soft">{t.niche}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusToBadgeVariant(t.status)} className="gap-1">
+                        <StatusIcon className="h-3 w-3" />
+                        {STATUS_LABELS[t.status] ?? t.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-ink-soft">{t.subscription?.plan?.name ?? "—"}</TableCell>
+                    <TableCell className="font-mono">{t.confidenceScore}%</TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="rounded-lg p-1.5 text-ink-soft hover:bg-bg-2" aria-label="Ações">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/tenants/${t.id}`}>Ver detalhes</Link>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

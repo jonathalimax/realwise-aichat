@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import {
   getMe,
   getOnboardingProfile,
+  patchProfileField,
+  approveProfileField,
   recomputeConfidence,
   uploadDocumentFile,
   uploadDocumentText,
@@ -14,19 +16,22 @@ import {
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
+import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
 import { InterviewChat } from "../../components/InterviewChat";
 import { ShareLink } from "../../components/ShareLink";
 
 export default function KnowledgePage() {
   const [business, setBusiness] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [documents, setDocuments] = useState<any[]>([]);
   const [unanswered, setUnanswered] = useState<any[]>([]);
   const [pastedText, setPastedText] = useState("");
+  const [correctionTarget, setCorrectionTarget] = useState<string | null>(null);
 
   async function refresh() {
     setBusiness(await getMe());
-    await getOnboardingProfile();
+    setProfile(await getOnboardingProfile());
     setDocuments(await getDocuments());
     getUnanswered().then(setUnanswered).catch(() => setUnanswered([]));
   }
@@ -52,6 +57,16 @@ export default function KnowledgePage() {
   async function handleRecompute() {
     await recomputeConfidence();
     setBusiness(await getMe());
+  }
+
+  async function handleFieldChange(fieldKey: string, value: string) {
+    await patchProfileField(fieldKey, value, "manual");
+    setProfile(await getOnboardingProfile());
+  }
+
+  async function handleApprove(fieldKey: string) {
+    await approveProfileField(fieldKey);
+    setProfile(await getOnboardingProfile());
   }
 
   async function handlePublish() {
@@ -104,13 +119,50 @@ export default function KnowledgePage() {
           <CardDescription>Ela já sabe o que está nos documentos — só vai perguntar o que falta.</CardDescription>
         </CardHeader>
         <CardContent>
-          <InterviewChat onFieldFilled={refresh} />
+          <InterviewChat onFieldFilled={refresh} prefill={correctionTarget ?? undefined} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Informações salvas</CardTitle>
+          <CardDescription>Confira o que a Clara sabe sobre o negócio e corrija se algo estiver errado.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {profile?.template?.fields.map((f: any) => {
+            const value = profile.profile?.data?.[f.key] ?? "";
+            const approved = profile.profile?.fieldStatus?.[f.key]?.approvedByOwner;
+            return (
+              <div key={f.key} className="flex items-center gap-2 rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm">
+                <div className="flex-1">
+                  <div className="mb-1 text-xs text-ink-soft">{f.label}</div>
+                  <Input
+                    defaultValue={value}
+                    placeholder="— não preenchido —"
+                    onBlur={(e) => e.target.value !== value && handleFieldChange(f.key, e.target.value)}
+                  />
+                </div>
+                <Button size="sm" variant={approved ? "default" : "outline"} onClick={() => handleApprove(f.key)}>
+                  {approved ? "Aprovado" : "Aprovar"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setCorrectionTarget(`Quero corrigir o campo "${f.label}".`)}
+                >
+                  Pedir à Clara
+                </Button>
+              </div>
+            );
+          })}
+          {!profile?.template?.fields.length && <p className="text-sm text-ink-soft">Nenhum campo cadastrado ainda.</p>}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
           <CardTitle>Perguntas não respondidas</CardTitle>
+          <CardDescription>Assuntos que clientes perguntaram e a Clara ainda não sabe responder.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {unanswered.map((q) => (

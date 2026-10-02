@@ -10,7 +10,14 @@ interface Message {
   content: string;
 }
 
-export function InterviewChat({ onFieldFilled }: { onFieldFilled?: () => void }) {
+export function InterviewChat({
+  onFieldFilled,
+  prefill,
+}: {
+  onFieldFilled?: () => void;
+  // When this string changes, it's sent as an owner message — used to target a specific field from outside the chat.
+  prefill?: string;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -18,6 +25,7 @@ export function InterviewChat({ onFieldFilled }: { onFieldFilled?: () => void })
   const [remainingGaps, setRemainingGaps] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const started = useRef(false);
+  const lastPrefill = useRef<string | undefined>(undefined);
 
   async function send(history: Message[]) {
     setSending(true);
@@ -39,6 +47,15 @@ export function InterviewChat({ onFieldFilled }: { onFieldFilled?: () => void })
     started.current = true;
     send([]);
   }, []);
+
+  useEffect(() => {
+    if (!prefill || prefill === lastPrefill.current || !started.current) return;
+    lastPrefill.current = prefill;
+    const next: Message[] = [...messages, { role: "owner", content: prefill }];
+    setMessages(next);
+    send(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

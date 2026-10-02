@@ -109,6 +109,7 @@ export class OnboardingService {
       "Quando o dono responder uma pergunta, extraia um valor curto e estruturado para o campo perguntado.",
       "Responda SEMPRE em JSON puro, sem markdown, no formato: {\"reply\": string, \"fieldKey\": string|null, \"value\": string|null}.",
       "fieldKey/value só devem vir preenchidos quando a MENSAGEM MAIS RECENTE do dono responder a um campo — nunca invente valor.",
+      "A pergunta em `reply` deve sempre nomear explicitamente o campo (use o label do campo, ex: \"Qual o horário de funcionamento?\") — nunca use um pronome vago como \"isso\"/\"isto\" sem dizer a que campo se refere.",
       `Campos que faltam (em ordem de prioridade):\n${gapList}`,
       documentContext ? `Conteúdo já extraído dos documentos (use para não perguntar o que já está aqui):\n${documentContext}` : "",
     ].join("\n\n");
@@ -117,11 +118,12 @@ export class OnboardingService {
       ? `${conversation}\nClara:`
       : "Inicie a entrevista perguntando sobre o primeiro campo da lista.";
 
-    let reply = "Me conta um pouco mais sobre isso?";
+    // Named fallback (not a vague "me conta mais sobre isso") in case the LLM call fails/times out.
+    let reply = `Pode me contar sobre "${gaps[0].label}"?`;
     let fieldKey: string | null = null;
     let value: string | null = null;
     try {
-      const result = await generateFromGateway({ purpose: "chat", businessId, systemPrompt, prompt, maxTokens: 300 });
+      const result = await generateFromGateway({ purpose: "chat", businessId, systemPrompt, prompt, maxTokens: 300, timeoutMs: 60000 });
       const parsed = JSON.parse(result.text.trim());
       if (typeof parsed.reply === "string") reply = parsed.reply;
       if (typeof parsed.fieldKey === "string") fieldKey = parsed.fieldKey;
