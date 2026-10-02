@@ -24,6 +24,7 @@ export const concessionariaTemplate: NicheTemplate = {
     { id: "iq6", prompt: "Vocês oferecem garantia estendida? Em quais condições?", fillsField: "garantia_estendida" },
     { id: "iq7", prompt: "Como funciona a política de revisões programadas?", fillsField: "revisoes_programadas" },
     { id: "iq8", prompt: "Tem desconto para pagamento à vista?", fillsField: "desconto_a_vista" },
+    { id: "iq9", prompt: "Vocês oferecem assistência 24h ou guincho para quem compra com vocês?", fillsField: "assistencia_24h" },
   ],
   defaultChips: ["Ver estoque", "Simular financiamento", "Agendar test-drive", "Aceita meu carro na troca?"],
   chipGraph: [
@@ -42,5 +43,8 @@ export const concessionariaTemplate: NicheTemplate = {
     "Aceitam meu carro usado na troca?",
     "Posso agendar um test-drive para amanhã?",
     "Qual a garantia de fábrica desse veículo?",
+    "Vocês têm garantia estendida? Quanto custa?",
+    "Como funcionam as revisões programadas desse carro?",
+    "Se eu quebrar na estrada, vocês têm assistência 24h?",
   ],
 };
