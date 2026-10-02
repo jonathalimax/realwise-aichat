@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { ChatService } from "./chat.service";
 import { FlowService } from "./flow.service";
@@ -52,6 +52,7 @@ export class ChatController {
     @Body("text") text: string,
     @CurrentVisitor() visitor: VisitorContext,
   ) {
+    if (!text?.trim()) throw new BadRequestException("Message text cannot be empty");
     const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
     return this.chat.sendMessage(businessId, conversationId, text, token, visitor.leadId);
   }
@@ -64,6 +65,7 @@ export class ChatController {
     @CurrentVisitor() visitor: VisitorContext,
     @Res() res: Response,
   ) {
+    if (!text?.trim()) throw new BadRequestException("Message text cannot be empty");
     const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
 
     res.writeHead(200, {
