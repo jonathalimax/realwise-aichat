@@ -28,9 +28,9 @@ export default function TenantDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="font-serif text-2xl text-ink">{tenant.name || tenant.slug}</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <h1 className="break-words font-serif text-2xl text-ink">{tenant.name || tenant.slug}</h1>
           <Badge variant={statusToBadgeVariant(tenant.status)}>{tenant.status}</Badge>
         </div>
         <Button
@@ -42,7 +42,7 @@ export default function TenantDetailPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard label="Nicho" value={tenant.niche} />
         <StatCard label="Confiança" value={`${tenant.confidenceScore}%`} />
         <StatCard label="Plano" value={tenant.subscription?.plan?.name ?? "Sem assinatura"} />

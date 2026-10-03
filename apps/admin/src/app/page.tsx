@@ -125,7 +125,7 @@ export default function TenantsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {STAT_CARDS.map(({ key, label, icon: Icon }) => (
           <StatCard
             key={key}
@@ -187,68 +187,125 @@ export default function TenantsPage() {
               )
             }
           />
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8">
-                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Selecionar todos" />
-                </TableHead>
-                <TableHead>Negócio</TableHead>
-                <TableHead>Nicho</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Plano</TableHead>
-                <TableHead>Confiança</TableHead>
-                <TableHead>
-                  <button type="button" onClick={toggleCostSort} className="flex items-center gap-1 hover:text-ink">
-                    Custo (7d)
-                    {sortByCost && <span className="text-[10px]">{sortByCost === "desc" ? "▼" : "▲"}</span>}
-                  </button>
-                </TableHead>
-                <TableHead className="w-8" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTenants.map((t) => {
-                const StatusIcon = STATUS_ICON[t.status] ?? Clock;
-                return (
-                  <TableRow key={t.id} data-state={selected.has(t.id) ? "selected" : undefined}>
-                    <TableCell>
-                      <Checkbox checked={selected.has(t.id)} onCheckedChange={() => toggleOne(t.id)} aria-label="Selecionar cliente" />
-                    </TableCell>
-                    <TableCell>
-                      <Link href={`/tenants/${t.id}`} className="font-semibold text-ink hover:text-accent">
-                        {t.name || t.slug}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-ink-soft">{t.niche}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusToBadgeVariant(t.status)} className="gap-1">
-                        <StatusIcon className="h-3 w-3" />
-                        {STATUS_LABELS[t.status] ?? t.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-ink-soft">{t.subscription?.plan?.name ?? "—"}</TableCell>
-                    <TableCell className="font-mono">{t.confidenceScore}%</TableCell>
-                    <TableCell className="text-ink-soft">{formatCostUsd(t.costUsd7d ?? 0)}</TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="rounded-lg p-1.5 text-ink-soft hover:bg-bg-2" aria-label="Ações">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem asChild>
-                            <Link href={`/tenants/${t.id}`}>Ver detalhes</Link>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <div className="hidden lg:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8">
+                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Selecionar todos" />
+                  </TableHead>
+                  <TableHead>Negócio</TableHead>
+                  <TableHead>Nicho</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Plano</TableHead>
+                  <TableHead>Confiança</TableHead>
+                  <TableHead>
+                    <button type="button" onClick={toggleCostSort} className="flex items-center gap-1 hover:text-ink">
+                      Custo (7d)
+                      {sortByCost && <span className="text-[10px]">{sortByCost === "desc" ? "▼" : "▲"}</span>}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-8" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTenants.map((t) => {
+                  const StatusIcon = STATUS_ICON[t.status] ?? Clock;
+                  return (
+                    <TableRow key={t.id} data-state={selected.has(t.id) ? "selected" : undefined}>
+                      <TableCell>
+                        <Checkbox checked={selected.has(t.id)} onCheckedChange={() => toggleOne(t.id)} aria-label="Selecionar cliente" />
+                      </TableCell>
+                      <TableCell>
+                        <Link href={`/tenants/${t.id}`} className="font-semibold text-ink hover:text-accent">
+                          {t.name || t.slug}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-ink-soft">{t.niche}</TableCell>
+                      <TableCell>
+                        <Badge variant={statusToBadgeVariant(t.status)} className="gap-1">
+                          <StatusIcon className="h-3 w-3" />
+                          {STATUS_LABELS[t.status] ?? t.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-ink-soft">{t.subscription?.plan?.name ?? "—"}</TableCell>
+                      <TableCell className="font-mono">{t.confidenceScore}%</TableCell>
+                      <TableCell className="text-ink-soft">{formatCostUsd(t.costUsd7d ?? 0)}</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="rounded-lg p-1.5 text-ink-soft hover:bg-bg-2" aria-label="Ações">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/tenants/${t.id}`}>Ver detalhes</Link>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex flex-col gap-2 lg:hidden">
+            <div className="mb-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className={sortByCost ? "border-accent text-accent" : undefined}
+                onClick={toggleCostSort}
+              >
+                Custo (7d) {sortByCost && (sortByCost === "desc" ? "▼" : "▲")}
+              </Button>
+            </div>
+            {filteredTenants.map((t) => {
+              const StatusIcon = STATUS_ICON[t.status] ?? Clock;
+              const isSelected = selected.has(t.id);
+              return (
+                <div
+                  key={t.id}
+                  data-state={isSelected ? "selected" : undefined}
+                  className="rounded-lg border border-border bg-bg-2 p-3 data-[state=selected]:border-accent"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="-m-2 flex min-h-11 min-w-11 items-center justify-center p-2">
+                      <Checkbox checked={isSelected} onCheckedChange={() => toggleOne(t.id)} aria-label="Selecionar cliente" />
+                    </span>
+                    <Link href={`/tenants/${t.id}`} className="flex-1 truncate font-semibold text-ink hover:text-accent">
+                      {t.name || t.slug}
+                    </Link>
+                    <Badge variant={statusToBadgeVariant(t.status)} className="gap-1">
+                      <StatusIcon className="h-3 w-3" />
+                      {STATUS_LABELS[t.status] ?? t.status}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <div className="text-ink-soft">Nicho</div>
+                      <div className="text-ink">{t.niche ?? "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-ink-soft">Plano</div>
+                      <div className="text-ink">{t.subscription?.plan?.name ?? "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-ink-soft">Confiança</div>
+                      <div className="font-mono text-ink">{t.confidenceScore}%</div>
+                    </div>
+                    <div>
+                      <div className="text-ink-soft">Custo (7d)</div>
+                      <div className="text-ink">{formatCostUsd(t.costUsd7d ?? 0)}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
     </div>

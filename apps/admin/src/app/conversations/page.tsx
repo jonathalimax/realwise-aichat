@@ -90,41 +90,80 @@ export default function ConversationsPage() {
               <CardTitle>Por cliente</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Respostas</TableHead>
-                    <TableHead>Silêncio</TableHead>
-                    <TableHead>Escalado</TableHead>
-                    <TableHead>Sinalizado</TableHead>
-                    <TableHead>Feedback negativo</TableHead>
-                    <TableHead>Mediana resposta</TableHead>
-                    <TableHead>Custo estimado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.perBusiness.map((b: any) => (
-                    <TableRow key={b.businessId}>
-                      <TableCell>{b.businessName}</TableCell>
-                      <TableCell>{b.total}</TableCell>
-                      <TableCell>{b.abstained}</TableCell>
-                      <TableCell>{b.escalated}</TableCell>
-                      <TableCell>{b.flagged}</TableCell>
-                      <TableCell>{b.negativeFeedback}</TableCell>
-                      <TableCell>{formatMs(b.medianLatencyMs)}</TableCell>
-                      <TableCell>{formatCostUsd(b.costUsd ?? 0)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {data.perBusiness.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center text-ink-soft">
-                        Nenhuma conversa neste período.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+              {data.perBusiness.length === 0 ? (
+                <p className="text-center text-ink-soft">Nenhuma conversa neste período.</p>
+              ) : (
+                <>
+                  <div className="hidden lg:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead>Respostas</TableHead>
+                          <TableHead>Silêncio</TableHead>
+                          <TableHead>Escalado</TableHead>
+                          <TableHead>Sinalizado</TableHead>
+                          <TableHead>Feedback negativo</TableHead>
+                          <TableHead>Mediana resposta</TableHead>
+                          <TableHead>Custo estimado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data.perBusiness.map((b: any) => (
+                          <TableRow key={b.businessId}>
+                            <TableCell>{b.businessName}</TableCell>
+                            <TableCell>{b.total}</TableCell>
+                            <TableCell>{b.abstained}</TableCell>
+                            <TableCell>{b.escalated}</TableCell>
+                            <TableCell>{b.flagged}</TableCell>
+                            <TableCell>{b.negativeFeedback}</TableCell>
+                            <TableCell>{formatMs(b.medianLatencyMs)}</TableCell>
+                            <TableCell>{formatCostUsd(b.costUsd ?? 0)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div className="flex flex-col gap-2 lg:hidden">
+                    {data.perBusiness.map((b: any) => (
+                      <div key={b.businessId} className="rounded-lg border border-border bg-bg-2 p-3">
+                        <div className="font-semibold text-ink">{b.businessName}</div>
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <div className="text-ink-soft">Respostas</div>
+                            <div className="text-ink">{b.total}</div>
+                          </div>
+                          <div>
+                            <div className="text-ink-soft">Silêncio</div>
+                            <div className="text-ink">{b.abstained}</div>
+                          </div>
+                          <div>
+                            <div className="text-ink-soft">Escalado</div>
+                            <div className="text-ink">{b.escalated}</div>
+                          </div>
+                          <div>
+                            <div className="text-ink-soft">Sinalizado</div>
+                            <div className="text-ink">{b.flagged}</div>
+                          </div>
+                          <div>
+                            <div className="text-ink-soft">Feedback negativo</div>
+                            <div className="text-ink">{b.negativeFeedback}</div>
+                          </div>
+                          <div>
+                            <div className="text-ink-soft">Mediana resposta</div>
+                            <div className="text-ink">{formatMs(b.medianLatencyMs)}</div>
+                          </div>
+                          <div>
+                            <div className="text-ink-soft">Custo estimado</div>
+                            <div className="text-ink">{formatCostUsd(b.costUsd ?? 0)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </>
