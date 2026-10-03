@@ -1,9 +1,15 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
 import concessionariaFlow from "./flows/concessionaria.flow.json";
 import imobiliariaFlow from "./flows/imobiliaria.flow.json";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 import { retrieveRelevantChunks } from "./knowledge-retrieval";
+
+// Scripted nodes that are supposed to hand the visitor off to a real human WhatsApp number —
+// their flow-JSON message templates have placeholders ({numero}, {espera}) that nothing ever
+// resolves, since the flow engine has no concept of "this node means: build a real wa.me link."
+const WHATSAPP_HANDOFF_NODE_IDS = new Set(["handoff_whats", "handoff_whatsapp"]);
 
 // LLM-parsed JSON isn't trusted input — only ever accept a genuine http(s) URL for a listing
 // url/imageUrl, never a javascript:/data: scheme a malformed or adversarial model response could emit.
@@ -44,6 +50,7 @@ interface FlowSnapshot {
   input: string | null;
   params: Record<string, unknown>;
   listings?: ListingItem[];
+  whatsappUrl?: string | null;
 }
 
 export interface ListingItem {
@@ -140,10 +147,16 @@ export class FlowService {
   // "resultados") instead ask for structured JSON items so the frontend can render real cards.
   private async resolveMessage(
     businessId: string,
+    conversationId: string,
     node: FlowNode,
     params: Record<string, unknown>,
-  ): Promise<{ message: string; listings?: ListingItem[] }> {
+  ): Promise<{ message: string; listings?: ListingItem[]; whatsappUrl?: string | null }> {
     const substituted = this.substitute(node.message, params);
+
+    if (WHATSAPP_HANDOFF_NODE_IDS.has(node.id)) {
+      return this.resolveWhatsappHandoff(businessId, conversationId, substituted);
+    }
+
     if (!PLACEHOLDER_PATTERN.test(substituted)) return { message: substituted };
 
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
@@ -193,6 +206,42 @@ export class FlowService {
     }
   }
 
+  // The scripted "handoff_whats" node previously just rendered its message template with
+  // unresolved {numero}/{espera} placeholders through the generic RAG fallback, which has no real
+  // phone number to ground on — it either abstained awkwardly or invented one. This builds the
+  // actual wa.me link from the business's configured routing number, marks the conversation as
+  // genuinely escalated (so it shows up in admin's escalation stats, same as chat.service's own
+  // escalate()), and returns whatsappUrl so the frontend can render a real tappable card.
+  private async resolveWhatsappHandoff(
+    businessId: string,
+    conversationId: string,
+    fallbackMessage: string,
+  ): Promise<{ message: string; whatsappUrl: string | null }> {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    const routingNumber = await this.prisma.client.whatsappRoutingNumber.findFirst({
+      where: { businessId, isActive: true },
+      orderBy: { priority: "asc" },
+    });
+
+    if (!routingNumber || !business) {
+      return { message: "No momento não consigo te conectar direto no WhatsApp, mas um atendente vai te procurar em breve.", whatsappUrl: null };
+    }
+
+    const referenceCode = generateReferenceCode();
+    const waMessage = buildCustomerEscalationMessage(business.name, "Atendimento via chat", referenceCode);
+    const whatsappUrl = buildWaMeLink(routingNumber.phone, waMessage);
+
+    await this.prisma.client.conversation.update({
+      where: { id: conversationId },
+      data: { status: "escalated", escalatedAt: new Date(), escalationNumberId: routingNumber.id, referenceCode },
+    });
+    await this.prisma.client.message.create({
+      data: { conversationId, businessId, role: "assistant", content: fallbackMessage.replace(PLACEHOLDER_PATTERN, "").trim(), answerSource: "escalation" },
+    });
+
+    return { message: "Toque no botão abaixo para continuar no WhatsApp com um atendente ✅", whatsappUrl };
+  }
+
   // Turns the flow's accumulated filter params into a retrieval query that actually resembles
   // real listing text (e.g. "apartamento aluguel centro") instead of the generic node copy.
   private listingQueryFor(niche: string, params: Record<string, unknown>): string {
@@ -215,7 +264,7 @@ export class FlowService {
       "Extraia itens de anúncio (imóveis ou veículos) genuinamente descritos nos trechos de documentos abaixo.",
       "Responda APENAS com um array JSON (até 6 itens), cada item no formato:",
       '{ "title": string, "price": string | omitido, "description": string | omitido, "url": string | omitido, "imageUrl": string | omitido }',
-      "Regras: nunca invente um item, preço, url ou imagem que não apareça explicitamente no texto. Se um campo não aparecer no texto para aquele item, omita o campo (não invente um placeholder). 'url' só deve vir de um link real no formato [texto](url) ou de uma URL http(s) explícita no texto; 'imageUrl' só deve vir de uma anotação 'Foto: <url>' explícita no texto. Se nenhum item real e distinto puder ser identificado, responda com um array vazio [].",
+      "Regras: nunca invente um item, preço, url ou imagem que não apareça explicitamente no texto. Se um campo não aparecer no texto para aquele item, omita o campo (não invente um placeholder). 'url' só deve vir de um link real no formato [texto](url) ou de uma URL http(s) explícita no texto; 'imageUrl' só deve vir de uma anotação 'Foto: <url>' que esteja claramente DENTRO do bloco de texto daquele item específico — nunca reutilize uma 'Foto:' distante no texto ou que pareça ser logo/ícone do site (se não houver uma 'Foto:' inequivocamente associada àquele item, omita imageUrl). Se nenhum item real e distinto puder ser identificado, responda com um array vazio [].",
       `Trechos:\n${chunkText}`,
     ].join("\n");
 
@@ -462,10 +511,10 @@ export class FlowService {
     return conversation;
   }
 
-  private async emit(businessId: string, niche: string, nodeId: string, params: Record<string, unknown>): Promise<FlowSnapshot> {
+  private async emit(businessId: string, conversationId: string, niche: string, nodeId: string, params: Record<string, unknown>): Promise<FlowSnapshot> {
     const flow = this.flowFor(niche);
     const node = flow.nodes[nodeId] ?? flow.nodes[flow.start];
-    const { message, listings } = await this.resolveMessage(businessId, node, params);
+    const { message, listings, whatsappUrl } = await this.resolveMessage(businessId, conversationId, node, params);
 
     let bubbles: FlowBubble[];
     if (node.id === "busca_bairro") {
@@ -488,7 +537,15 @@ export class FlowService {
       }
     }
 
-    return { nodeId: node.id, message, bubbles, input: node.input ?? null, params, ...(listings ? { listings } : {}) };
+    return {
+      nodeId: node.id,
+      message,
+      bubbles,
+      input: node.input ?? null,
+      params,
+      ...(listings ? { listings } : {}),
+      ...(whatsappUrl !== undefined ? { whatsappUrl } : {}),
+    };
   }
 
   async start(businessId: string, conversationId: string) {
@@ -500,7 +557,7 @@ export class FlowService {
     const nodeId = conversation.flowNodeId ?? flow.start;
     const params = (conversation.flowParams as Record<string, unknown>) ?? {};
 
-    const snapshot = await this.emit(businessId, business.niche, nodeId, params);
+    const snapshot = await this.emit(businessId, conversationId, business.niche, nodeId, params);
 
     if (!conversation.flowNodeId) {
       await this.prisma.client.conversation.update({
@@ -525,7 +582,7 @@ export class FlowService {
       const previous = history[history.length - 1];
       if (!previous) {
         const flow = this.flowFor(business.niche);
-        const snapshot = await this.emit(businessId, business.niche, flow.start, {});
+        const snapshot = await this.emit(businessId, conversationId, business.niche, flow.start, {});
         await this.prisma.client.conversation.update({
           where: { id: conversationId },
           data: { flowNodeId: flow.start, flowParams: {}, flowHistory: [], flowSnapshot: snapshot as any },
@@ -547,7 +604,7 @@ export class FlowService {
 
     const currentSnapshot = (conversation.flowSnapshot as unknown as FlowSnapshot) ?? null;
     const mergedParams = { ...(conversation.flowParams as Record<string, unknown>), ...bubbleParams };
-    const nextSnapshot = await this.emit(businessId, business.niche, goto, mergedParams);
+    const nextSnapshot = await this.emit(businessId, conversationId, business.niche, goto, mergedParams);
 
     const nextHistory = currentSnapshot ? [...history, currentSnapshot].slice(-MAX_FLOW_HISTORY) : history;
 

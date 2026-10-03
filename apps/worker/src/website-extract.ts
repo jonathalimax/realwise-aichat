@@ -10,6 +10,10 @@ const MAX_DEPTH = 2;
 const MAX_PAGE_CHARS = 20000;
 const CRAWL_DELAY_MS = 250;
 const SKIP_EXTENSIONS = /\.(pdf|jpe?g|png|gif|svg|webp|zip|rar|mp4|mp3|avi|mov|docx?|xlsx?|css|js|ico|woff2?|ttf)$/i;
+// Filename-based fallback for page-chrome images that aren't inside a semantic <header>/<nav>/
+// <footer> (e.g. a logo sitting in a plain <div class="navbar">) — never treat these as a real
+// per-listing photo.
+const CHROME_IMAGE_PATTERN = /(logo|favicon|icon|sprite|avatar|placeholder)/i;
 
 // Validates the resolved address at the moment the socket actually connects, closing the
 // TOCTOU window a separate pre-fetch dns.lookup() would leave open to DNS rebinding.
@@ -72,7 +76,7 @@ function extractTextWithSeparators($: cheerio.CheerioAPI, node: any, base: URL):
         const alt = $(child).attr("alt");
         const src = $(child).attr("src");
         if (alt) out += ` ${alt} `;
-        if (src && !src.startsWith("data:")) {
+        if (src && !src.startsWith("data:") && !CHROME_IMAGE_PATTERN.test(src)) {
           try {
             const resolved = new URL(src, base).toString();
             out += ` Foto: ${resolved} `;
@@ -122,7 +126,10 @@ function extractPage(html: string, pageUrl: string): { title: string; text: stri
     }
   });
 
-  $("script, style, nav, footer, noscript, svg").remove();
+  // header/nav/footer repeat identically on every crawled page — an <img> in there is page chrome
+  // (logo, icons), never a real per-listing photo, and without removing it the structured-listing
+  // extraction LLM can mistake "the nearest Foto: annotation" for that listing's actual photo.
+  $("script, style, nav, header, footer, noscript, svg").remove();
   const title = $("title").first().text().trim();
   const text = extractTextWithSeparators($, $("body").get(0), base)
     .replace(/[ \t]+/g, " ")

@@ -36,6 +36,7 @@ interface Message {
   role: "visitor" | "assistant";
   content: string;
   listings?: Listing[];
+  whatsappUrl?: string | null;
 }
 
 const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
@@ -130,11 +131,41 @@ function ListingCard({ listing }: { listing: Listing }) {
 
 function ListingCards({ listings }: { listings: Listing[] }) {
   return (
-    <div className="-mx-1 flex max-w-[85%] gap-2 overflow-x-auto px-1 pb-1">
+    <div className="-mx-1 flex w-full snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1">
       {listings.map((listing, i) => (
-        <ListingCard key={`${listing.title}-${i}`} listing={listing} />
+        <div key={`${listing.title}-${i}`} className="snap-start">
+          <ListingCard listing={listing} />
+        </div>
       ))}
     </div>
+  );
+}
+
+// Real human handoff — a tappable card rather than auto-opening WhatsApp, so the visitor
+// consciously chooses to leave the chat instead of being redirected without warning.
+function WhatsappHandoffCard({ url }: { url: string }) {
+  const safeUrl = safeHttpUrl(url);
+  if (!safeUrl) return null;
+  return (
+    <Card className="w-64">
+      <CardContent className="flex items-center gap-3 p-3">
+        <span className="text-2xl" aria-hidden>
+          💬
+        </span>
+        <div className="flex-1">
+          <div className="text-sm font-semibold text-ink">Continuar no WhatsApp</div>
+          <div className="text-xs text-ink-soft">Toque para falar com um atendente</div>
+        </div>
+      </CardContent>
+      <a
+        href={safeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block rounded-b-card bg-accent px-3 py-2 text-center text-xs font-medium text-white"
+      >
+        Abrir WhatsApp
+      </a>
+    </Card>
   );
 }
 
@@ -286,7 +317,7 @@ export function ChatScreen({
       } else {
         setMessages((prev) => [
           ...prev,
-          { id: nextMessageId(), role: "assistant", content: result.message, listings: result.listings },
+          { id: nextMessageId(), role: "assistant", content: result.message, listings: result.listings, whatsappUrl: result.whatsappUrl },
         ]);
       }
       setBubbles(result.bubbles ?? []);
@@ -341,7 +372,16 @@ export function ChatScreen({
 
       <main className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.map((m) => (
-          <div key={m.id} className={m.role === "visitor" ? "ml-auto max-w-[80%]" : "max-w-[85%]"}>
+          <div
+            key={m.id}
+            className={
+              m.role === "visitor"
+                ? "ml-auto max-w-[80%]"
+                : m.listings?.length
+                  ? "max-w-full"
+                  : "max-w-[85%]"
+            }
+          >
             <div
               className={
                 m.role === "visitor"
@@ -354,6 +394,11 @@ export function ChatScreen({
             {m.listings && m.listings.length > 0 && (
               <div className="mt-2">
                 <ListingCards listings={m.listings} />
+              </div>
+            )}
+            {m.whatsappUrl && (
+              <div className="mt-2">
+                <WhatsappHandoffCard url={m.whatsappUrl} />
               </div>
             )}
           </div>
