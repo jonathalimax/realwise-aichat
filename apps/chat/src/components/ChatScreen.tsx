@@ -245,6 +245,10 @@ export function ChatScreen({
   // flow/start, streaming the user's message into it, and then having the slower mount effect
   // overwrite conversationId/bubbles/messages state mid-stream.
   const conversationPromiseRef = useRef<Promise<string> | null>(null);
+  // Stays true for the full lifetime of a send (from kickoff to final settle), unlike `sending`
+  // which flips to false as soon as the first streamed delta arrives (for the typing indicator).
+  // Used purely to prevent two concurrent sends on the same conversation.
+  const isStreamingRef = useRef(false);
 
   useEffect(() => {
     getBusiness(slug).then(setBusiness).catch(() => setBusiness(null));
@@ -254,11 +258,17 @@ export function ChatScreen({
   // cookie) and loads its full message history BEFORE anything renders as an empty chat.
   useEffect(() => {
     if (!business) return;
+    let cancelled = false;
     (async () => {
       let convId = resumeConversationId ?? null;
       if (!convId) {
         if (!conversationPromiseRef.current) {
-          conversationPromiseRef.current = startConversation(business.id).then((conversation) => conversation.id);
+          conversationPromiseRef.current = startConversation(business.id)
+            .then((conversation) => conversation.id)
+            .catch((error) => {
+              conversationPromiseRef.current = null;
+              throw error;
+            });
         }
         convId = await conversationPromiseRef.current;
       } else {
@@ -266,9 +276,11 @@ export function ChatScreen({
         // never kicks off a second startConversation() call for this conversation.
         conversationPromiseRef.current = Promise.resolve(convId);
       }
+      if (cancelled) return;
       setConversationId(convId);
       try {
         const history = await getConversationHistory(business.id, convId!, resumeConversationId ? resumeToken : undefined);
+        if (cancelled) return;
         setMessages(history.messages.map((m: any) => ({ id: m.id, role: m.role, content: m.content })));
         if (history.flowSnapshot) {
           setBubbles(history.flowSnapshot.bubbles ?? []);
@@ -278,9 +290,12 @@ export function ChatScreen({
         // History fetch failing must not block the chat — the flow/start effect below still
         // runs and starts a fresh conversation experience.
       } finally {
-        setHistoryLoaded(true);
+        if (!cancelled) setHistoryLoaded(true);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [business, resumeConversationId, resumeToken]);
 
   // Only starts the scripted flow from the beginning for conversations with no stored
@@ -322,7 +337,12 @@ export function ChatScreen({
     // Await the SAME promise the mount effect kicked off (or is about to kick off) instead of
     // racing a second startConversation() call while that effect hasn't resolved yet.
     if (!conversationPromiseRef.current) {
-      conversationPromiseRef.current = startConversation(business.id).then((conversation) => conversation.id);
+      conversationPromiseRef.current = startConversation(business.id)
+        .then((conversation) => conversation.id)
+        .catch((error) => {
+          conversationPromiseRef.current = null;
+          throw error;
+        });
     }
     const id = await conversationPromiseRef.current;
     setConversationId(id);
@@ -330,7 +350,7 @@ export function ChatScreen({
   }
 
   async function handleSend(text: string) {
-    if (sending) return;
+    if (isStreamingRef.current) return;
     if (!text.trim() || !business) return;
     if (text.toLowerCase().includes("agendar")) {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: text }]);
@@ -344,6 +364,7 @@ export function ChatScreen({
 
     setShowBooking(false);
     setSending(true);
+    isStreamingRef.current = true;
     setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: text }]);
     setInput("");
 
@@ -372,11 +393,13 @@ export function ChatScreen({
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "Tive um problema para responder — tenta de novo em instantes." }]);
     } finally {
       setSending(false);
+      isStreamingRef.current = false;
     }
   }
 
   async function handleBubbleTap(bubble: FlowBubble) {
     if (!business) return;
+    if (isStreamingRef.current) return;
     const isBack = bubble.goto === "__back__";
 
     // Back is pure local navigation — it replays an already-seen step, so it must not look like
@@ -384,6 +407,7 @@ export function ChatScreen({
     if (!isBack) {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: bubble.label }]);
       setSending(true);
+      isStreamingRef.current = true;
     }
     try {
       const convId = await ensureConversation();
@@ -400,6 +424,7 @@ export function ChatScreen({
       setBubbles(result.bubbles ?? []);
     } finally {
       setSending(false);
+      isStreamingRef.current = false;
     }
   }
 

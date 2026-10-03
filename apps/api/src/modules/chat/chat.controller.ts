@@ -87,11 +87,16 @@ export class ChatController {
 
     // Heartbeat so the connection never looks idle to any intermediary while retrieval+LLM work.
     const heartbeat = setInterval(() => {
+      if (res.writableEnded || res.destroyed) {
+        clearInterval(heartbeat);
+        return;
+      }
       res.write(":hb\n\n");
     }, 15000);
 
     const controller = new AbortController();
     res.on("close", () => {
+      clearInterval(heartbeat);
       if (!res.writableEnded) controller.abort();
     });
 
@@ -107,7 +112,8 @@ export class ChatController {
       );
       send("done", result);
     } catch (error) {
-      send("error", { message: error instanceof Error ? error.message : "stream_failed" });
+      console.error("[ChatController] streamMessage failed", error);
+      send("error", { message: "stream_failed" });
     } finally {
       clearInterval(heartbeat);
       res.end();

@@ -43,7 +43,11 @@ export async function streamMessage(
   // A genuinely stalled connection (dead proxy, backend hang) must fail visibly into the
   // caller's catch-block error message instead of hanging with a silently-stuck sending state.
   const timeoutController = new AbortController();
-  const timeoutId = setTimeout(() => timeoutController.abort(), 45000);
+  let timeoutId = setTimeout(() => timeoutController.abort(), 45000);
+  const armTimeout = () => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => timeoutController.abort(), 45000);
+  };
   try {
     const res = await fetch(`${API_URL}/chat/${businessId}/conversations/${conversationId}/messages/stream`, {
       method: "POST",
@@ -62,6 +66,7 @@ export async function streamMessage(
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      armTimeout();
       buffer += decoder.decode(value, { stream: true });
       const events = buffer.split("\n\n");
       buffer = events.pop() ?? "";
