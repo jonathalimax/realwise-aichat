@@ -15,9 +15,9 @@ export function StatCard({ label, value, trend, trendLine, context, icon }: Stat
   return (
     <Card>
       <CardHeader className="pb-0">
-        <CardTitle className="flex items-center gap-1.5 font-sans text-xs font-medium uppercase tracking-wide text-ink-soft">
+        <CardTitle className="flex min-w-0 items-center gap-1.5 font-sans text-xs font-medium uppercase tracking-wide text-ink-soft">
           {icon}
-          {label}
+          <span className="truncate">{label}</span>
         </CardTitle>
         {trend !== undefined && (
           <CardAction>
