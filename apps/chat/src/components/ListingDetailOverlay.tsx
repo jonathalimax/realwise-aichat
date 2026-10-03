@@ -98,7 +98,7 @@ export function ListingDetailOverlay({ listing, onClose }: { listing: Listing; o
           <div className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-border" />
           <div className="flex items-center gap-2">
             <div className="flex-1">
-              <div className="truncate text-sm font-semibold text-ink">{listing.title}</div>
+              <div className="break-words text-sm font-semibold text-ink">{listing.title}</div>
               {url && (
                 <a
                   href={url}
@@ -127,10 +127,10 @@ export function ListingDetailOverlay({ listing, onClose }: { listing: Listing; o
               // eslint-disable-next-line @next/next/no-img-element
               <img src={imageUrl} alt={listing.title} className="mb-3 h-48 w-full rounded-card object-cover" />
             )}
-            <div className="text-base font-semibold text-ink">{listing.title}</div>
+            <div className="break-words text-base font-semibold text-ink">{listing.title}</div>
             {listing.price && <div className="mt-1 text-sm font-semibold text-accent">{listing.price}</div>}
             {listing.description && (
-              <p className="mt-2 whitespace-pre-line text-sm text-ink-soft">{listing.description}</p>
+              <p className="mt-2 whitespace-pre-line break-words text-sm text-ink-soft">{listing.description}</p>
             )}
           </div>
 

@@ -101,7 +101,7 @@ function ListingCards({ listings, onOpen }: { listings: Listing[]; onOpen: (list
     <div>
       <div
         onScroll={handleScroll}
-        className="-mx-1 flex w-full scroll-smooth snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1"
+        className="flex w-full scroll-smooth snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1"
       >
         {listings.map((listing, i) => (
           <div key={`${listing.title}-${i}`} className="snap-start">
@@ -232,6 +232,7 @@ export function ChatScreen({
   const [conversationStatus, setConversationStatus] = useState<string | null>(null);
   const [pollCapped, setPollCapped] = useState(false);
   const [pushPrompt, setPushPrompt] = useState<"hidden" | "asking" | "done">("hidden");
+  const [businessNotFound, setBusinessNotFound] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   // Holds the in-flight (or resolved) conversation-creation promise so a message sent before the
   // mount effect's startConversation() resolves awaits that SAME promise instead of racing a
@@ -245,7 +246,12 @@ export function ChatScreen({
   const isStreamingRef = useRef(false);
 
   useEffect(() => {
-    getBusiness(slug).then(setBusiness).catch(() => setBusiness(null));
+    getBusiness(slug)
+      .then(setBusiness)
+      .catch(() => {
+        setBusiness(null);
+        setBusinessNotFound(true);
+      });
   }, [slug]);
 
   // Resolves the conversation eagerly (resume link id, or a fresh/matching one via the visitor
@@ -616,6 +622,13 @@ export function ChatScreen({
   }
 
   if (!business) {
+    if (businessNotFound) {
+      return (
+        <div className="flex h-dvh items-center justify-center px-6 text-center text-ink-soft">
+          Este link não existe ou não está mais disponível.
+        </div>
+      );
+    }
     return <div className="flex h-dvh items-center justify-center text-ink-soft">Carregando…</div>;
   }
 
@@ -623,15 +636,15 @@ export function ChatScreen({
     <div className="flex h-dvh flex-col overflow-hidden bg-bg">
       <header className="flex flex-none items-center gap-3 border-b border-border bg-bg px-4 py-3">
         <BusinessAvatar name={business.name} logoUrl={business.logoUrl} brandColor={business.brandColor} />
-        <div>
-          <div className="text-sm font-semibold text-ink">{business.name}</div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-ink">{business.name}</div>
           <div className="flex items-center gap-1 text-xs text-positive">
             <span className="h-1.5 w-1.5 rounded-full bg-positive" /> Clara · Online agora
           </div>
         </div>
       </header>
 
-      <main className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <main className="flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 py-4">
         {messages.map((m) => (
           <div
             key={m.id}
@@ -649,10 +662,10 @@ export function ChatScreen({
             <div
               className={
                 m.role === "visitor"
-                  ? "rounded-2xl rounded-br-sm bg-accent px-4 py-3 text-sm text-white"
+                  ? "rounded-2xl rounded-br-sm bg-accent px-4 py-3 text-sm text-white break-words"
                   : m.role === "owner"
-                    ? "rounded-2xl rounded-bl-sm border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-ink"
-                    : "rounded-2xl rounded-bl-sm bg-surface px-4 py-3 text-sm text-ink"
+                    ? "rounded-2xl rounded-bl-sm border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-ink break-words"
+                    : "rounded-2xl rounded-bl-sm bg-surface px-4 py-3 text-sm text-ink break-words"
               }
             >
               <MessageContent text={m.content} />
@@ -709,7 +722,7 @@ export function ChatScreen({
                   ))}
                 </div>
               ) : (
-                <div className="flex gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="flex-1" />
                   <Input type="time" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="flex-1" />
                 </div>
@@ -765,7 +778,7 @@ export function ChatScreen({
               variant="outline"
               size="sm"
               onClick={() => handleBubbleTap(bubble)}
-              className="rounded-full bg-surface font-normal"
+              className="h-auto min-h-11 rounded-full bg-surface py-2 font-normal"
             >
               {bubble.label}
             </Button>
@@ -784,7 +797,7 @@ export function ChatScreen({
                 setSuggestions([]);
                 handleSend(label);
               }}
-              className="rounded-full bg-surface font-normal"
+              className="h-auto min-h-11 rounded-full bg-surface py-2 font-normal"
             >
               {label}
             </Button>

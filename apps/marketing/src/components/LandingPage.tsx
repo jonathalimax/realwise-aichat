@@ -106,7 +106,7 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
             </div>
             <div className="flex flex-col gap-2.5 px-4 py-4 text-left">
               {niche.heroMessages.map((m, i) => <ChatBubble key={i} msg={m} />)}
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {niche.heroChips.map((c, i) => (
                   <span key={c} className={i === niche.heroChips.length - 1 ? "rounded-full bg-ink px-2.5 py-1 text-[0.68rem] font-semibold text-bg" : "rounded-full border border-border bg-surface px-2.5 py-1 text-[0.68rem] text-ink-soft"}>
                     {c}
@@ -277,12 +277,14 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
             </div>
             <div className="mt-5 flex flex-col gap-2.5 text-xs">
               {[["Campos obrigatórios", 92], ["Profundidade de documentos", 70], ["Teste de perguntas reais", 81], ["Atualidade", 88]].map(([label, val]) => (
-                <div key={label as string} className="flex items-center gap-2">
-                  <span className="w-40 text-ink-soft">{label}</span>
-                  <div className="h-1.5 flex-1 rounded-full bg-bg-2">
-                    <div className="h-full rounded-full bg-accent" style={{ width: `${val}%` }} />
+                <div key={label as string} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                  <span className="w-full shrink-0 text-ink-soft sm:w-40">{label}</span>
+                  <div className="flex w-full items-center gap-2 sm:w-auto sm:flex-1">
+                    <div className="h-1.5 flex-1 rounded-full bg-bg-2">
+                      <div className="h-full rounded-full bg-accent" style={{ width: `${val}%` }} />
+                    </div>
+                    <span className="w-8 text-right font-mono text-muted">{val}%</span>
                   </div>
-                  <span className="w-8 text-right font-mono text-muted">{val}%</span>
                 </div>
               ))}
             </div>
@@ -348,7 +350,7 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
       <footer className="bg-bg-2 pt-10">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-5 px-5 pb-6 sm:flex-row">
           <span className="font-serif text-lg font-bold">Realwise</span>
-          <nav className="flex gap-6 text-sm text-ink-soft">
+          <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-ink-soft">
             <a href="/" className="hover:text-ink">Início</a>
             <a href="/imobiliarias" className="hover:text-ink">Imobiliárias</a>
             <a href="/concessionarias" className="hover:text-ink">Concessionárias</a>

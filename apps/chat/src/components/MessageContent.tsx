@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { safeHttpUrl } from "./ListingDetailOverlay";
 
-const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|gif|webp)(\?\S*)?$/i;
 const VIDEO_EXTENSIONS = /\.(mp4|webm|mov)(\?\S*)?$/i;
 
@@ -83,7 +82,7 @@ function renderInline(text: string): ReactNode[] {
     const codeMatch = /^`([^`]+)`/.exec(rest);
     if (codeMatch) {
       nodes.push(
-        <code key={key++} className="rounded bg-border/40 px-1 py-0.5 text-[0.8em]">
+        <code key={key++} className="break-all rounded bg-border/40 px-1 py-0.5 text-[0.8em]">
           {codeMatch[1]}
         </code>,
       );
@@ -141,7 +140,7 @@ function renderInline(text: string): ReactNode[] {
           nodes.push(<video key={key++} src={href} controls className="mt-2 max-h-56 w-full rounded-xl" />);
         } else {
           nodes.push(
-            <a key={key++} href={href} target="_blank" rel="noopener noreferrer" className="underline">
+            <a key={key++} href={href} target="_blank" rel="noopener noreferrer" className="underline break-all">
               {raw}
             </a>,
           );

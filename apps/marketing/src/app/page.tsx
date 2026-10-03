@@ -89,7 +89,7 @@ export default function MarketingHome() {
               <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-bg-2 px-3.5 py-2.5 text-[0.82rem]">
                 Temos! Corolla XEi 2023, automático, 18.400 km, R$ 128.900.
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-[0.68rem] text-ink-soft">Simular financiamento</span>
                 <span className="rounded-full bg-ink px-2.5 py-1 text-[0.68rem] font-semibold text-bg">📅 Test-drive</span>
               </div>
@@ -357,7 +357,7 @@ export default function MarketingHome() {
       <footer className="bg-bg-2 pt-10">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-5 px-5 pb-6 sm:flex-row">
           <span className="font-serif text-lg font-bold">Realwise</span>
-          <nav className="flex gap-6 text-sm text-ink-soft">
+          <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-ink-soft">
             <a href="#" className="hover:text-ink">Início</a>
             <a href="#como-funciona" className="hover:text-ink">Como funciona</a>
             <a href="#precos" className="hover:text-ink">Preços</a>
