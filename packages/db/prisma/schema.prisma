@@ -96,6 +96,7 @@ model Business {
   brandColor      String?
   timezone        String         @default("America/Sao_Paulo")
   defaultSlotDurationMinutes Int @default(60)
+  financingRatePercent Float? // monthly percent (e.g. 1.8); null = use the niche default in flow-calculators.ts
   address         String?
   websiteUrl      String?
   websiteContentHash String?

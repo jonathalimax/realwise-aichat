@@ -710,6 +710,18 @@ export class FlowService {
         }
         const downPaymentCents = typeof entrada === "number" && entrada >= 0 ? Math.round(entrada * 100) : 0;
 
+        // Per-business configurable monthly rate, falling back to the niche default when unset
+        // or invalid — never guess with a negative/zero/non-finite rate.
+        const vehicleRateRow = await this.prisma.client.business.findUnique({
+          where: { id: businessId },
+          select: { financingRatePercent: true },
+        });
+        const configuredVehicleRate =
+          typeof vehicleRateRow?.financingRatePercent === "number" && Number.isFinite(vehicleRateRow.financingRatePercent) && vehicleRateRow.financingRatePercent > 0
+            ? vehicleRateRow.financingRatePercent
+            : null;
+        const vehicleMonthlyRatePercent = configuredVehicleRate ?? DEFAULT_VEHICLE_MONTHLY_RATE_PERCENT;
+
         const listingId = this.resolveListingId(params);
         let priceCents: number | null = null;
         if (listingId) {
@@ -722,7 +734,7 @@ export class FlowService {
         }
 
         if (priceCents != null) {
-          const result = calculateVehicleFinancing({ priceCents, downPaymentCents, months });
+          const result = calculateVehicleFinancing({ priceCents, downPaymentCents, months, monthlyRatePercent: vehicleMonthlyRatePercent });
           if (!result) {
             return {
               message: "A entrada informada é maior ou igual ao valor do veículo. Quer simular com outro valor de entrada?",
@@ -730,7 +742,7 @@ export class FlowService {
             };
           }
           return {
-            message: `Simulação: parcela de ~${formatBRL(result.monthlyPaymentCents)} em ${months}x (taxa estimada ${DEFAULT_VEHICLE_MONTHLY_RATE_PERCENT}% a.m.). Total financiado de ${formatBRL(result.principalCents)}, total pago ao final de ~${formatBRL(result.totalPaidCents)}. ${disclaimer}`,
+            message: `Simulação: parcela de ~${formatBRL(result.monthlyPaymentCents)} em ${months}x (taxa estimada ${vehicleMonthlyRatePercent}% a.m.). Total financiado de ${formatBRL(result.principalCents)}, total pago ao final de ~${formatBRL(result.totalPaidCents)}. ${disclaimer}`,
           };
         }
 
@@ -740,10 +752,11 @@ export class FlowService {
             targetMonthlyPaymentCents: Math.round(targetParcela * 100),
             downPaymentCents,
             months,
+            monthlyRatePercent: vehicleMonthlyRatePercent,
           });
           if (affordability) {
             return {
-              message: `Com uma parcela de até ${formatBRL(Math.round(targetParcela * 100))} em ${months}x e entrada de ${formatBRL(downPaymentCents)}, você consegue financiar um veículo de até ~${formatBRL(affordability.maxPriceCents)} (taxa estimada ${DEFAULT_VEHICLE_MONTHLY_RATE_PERCENT}% a.m.). ${disclaimer}`,
+              message: `Com uma parcela de até ${formatBRL(Math.round(targetParcela * 100))} em ${months}x e entrada de ${formatBRL(downPaymentCents)}, você consegue financiar um veículo de até ~${formatBRL(affordability.maxPriceCents)} (taxa estimada ${vehicleMonthlyRatePercent}% a.m.). ${disclaimer}`,
             };
           }
         }
@@ -766,7 +779,20 @@ export class FlowService {
         }
         const entrada = params.entrada;
         const downPaymentPercent = typeof entrada === "number" && entrada >= 0 ? entrada : 0;
-        const result = calculateRealEstateFinancing({ monthlyIncomeCents, downPaymentPercent, years });
+
+        // Per-business configurable monthly rate, falling back to the niche default when unset
+        // or invalid — never guess with a negative/zero/non-finite rate.
+        const realEstateRateRow = await this.prisma.client.business.findUnique({
+          where: { id: businessId },
+          select: { financingRatePercent: true },
+        });
+        const configuredRealEstateRate =
+          typeof realEstateRateRow?.financingRatePercent === "number" && Number.isFinite(realEstateRateRow.financingRatePercent) && realEstateRateRow.financingRatePercent > 0
+            ? realEstateRateRow.financingRatePercent
+            : null;
+        const realEstateMonthlyRatePercent = configuredRealEstateRate ?? DEFAULT_REAL_ESTATE_MONTHLY_RATE_PERCENT;
+
+        const result = calculateRealEstateFinancing({ monthlyIncomeCents, downPaymentPercent, years, monthlyRatePercent: realEstateMonthlyRatePercent });
         if (!result) {
           return {
             message: "Não consegui simular com esses valores — pode tentar outra combinação de entrada e prazo?",
@@ -774,7 +800,7 @@ export class FlowService {
           };
         }
         return {
-          message: `Estimativa: imóvel de até ${formatBRL(result.maxPropertyPriceCents)}, parcela inicial de ~${formatBRL(result.monthlyPaymentCents)} (taxa estimada ${DEFAULT_REAL_ESTATE_MONTHLY_RATE_PERCENT}% a.m., considerando até 30% da renda com a parcela). ${disclaimer}`,
+          message: `Estimativa: imóvel de até ${formatBRL(result.maxPropertyPriceCents)}, parcela inicial de ~${formatBRL(result.monthlyPaymentCents)} (taxa estimada ${realEstateMonthlyRatePercent}% a.m., considerando até 30% da renda com a parcela). ${disclaimer}`,
         };
       }
 

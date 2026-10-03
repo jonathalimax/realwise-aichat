@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getMe, getOnboardingProfile, updateBranding, updateCustomInstructions, updateWebsiteUrl } from "../../lib/api";
+import { getMe, getOnboardingProfile, updateBranding, updateCustomInstructions, updateFinancingRate, updateWebsiteUrl } from "../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
@@ -25,6 +25,9 @@ export default function SettingsPage() {
   const [customInstructions, setCustomInstructions] = useState("");
   const [customInstructionsSaved, setCustomInstructionsSaved] = useState(false);
 
+  const [financingRatePercent, setFinancingRatePercent] = useState("");
+  const [financingRateSaved, setFinancingRateSaved] = useState(false);
+
   useEffect(() => {
     getMe().then((b) => {
       setBrandColor(b.brandColor ?? "#1F5F52");
@@ -33,6 +36,7 @@ export default function SettingsPage() {
       setWebsiteSavedUrl(b.websiteUrl ?? "");
       setWebsiteSyncedAt(b.websiteSyncedAt ?? null);
       setPlanCode(b.subscription?.plan?.code ?? null);
+      setFinancingRatePercent(b.financingRatePercent != null ? String(b.financingRatePercent) : "");
     });
     getOnboardingProfile().then(({ profile }) => {
       setCustomInstructions(profile?.customInstructions ?? "");
@@ -49,6 +53,13 @@ export default function SettingsPage() {
     await updateCustomInstructions(customInstructions);
     setCustomInstructionsSaved(true);
     setTimeout(() => setCustomInstructionsSaved(false), 2000);
+  }
+
+  async function saveFinancingRate() {
+    const trimmed = financingRatePercent.trim();
+    await updateFinancingRate(trimmed === "" ? null : Number(trimmed));
+    setFinancingRateSaved(true);
+    setTimeout(() => setFinancingRateSaved(false), 2000);
   }
 
   async function saveWebsite() {
@@ -114,6 +125,33 @@ export default function SettingsPage() {
           </div>
           <Button className="self-start" onClick={saveCustomInstructions}>
             {customInstructionsSaved ? "Salvo!" : "Salvar"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Taxa de juros mensal (%)</CardTitle>
+          <CardDescription>
+            Usada nas simulações de financiamento do chat. Deixe em branco para usar a taxa padrão da plataforma.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div>
+            <Label>Taxa de juros mensal (%)</Label>
+            <Input
+              type="number"
+              step="0.1"
+              min="0"
+              max="20"
+              value={financingRatePercent}
+              onChange={(e) => setFinancingRatePercent(e.target.value)}
+              placeholder="Padrão da plataforma"
+              className="mt-1"
+            />
+          </div>
+          <Button className="self-start" onClick={saveFinancingRate}>
+            {financingRateSaved ? "Salvo!" : "Salvar"}
           </Button>
         </CardContent>
       </Card>

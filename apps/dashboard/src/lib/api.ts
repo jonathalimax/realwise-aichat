@@ -46,6 +46,9 @@ export const confirmLinkPlaced = () => request("/businesses/me/link-placed", { m
 export const updateWebsiteUrl = (websiteUrl: string) =>
   request("/businesses/me", { method: "PATCH", body: JSON.stringify({ websiteUrl }) });
 
+export const updateFinancingRate = (financingRatePercent: number | null) =>
+  request("/businesses/me", { method: "PATCH", body: JSON.stringify({ financingRatePercent }) });
+
 export const updateBranding = (logoUrl: string, brandColor: string) =>
   request("/businesses/me/branding", { method: "PATCH", body: JSON.stringify({ logoUrl, brandColor }) });
 

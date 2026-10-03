@@ -780,6 +780,25 @@ export class ChatService {
       throw new ForbiddenException("Invalid appointment duration");
     }
 
+    // Best-effort: resolve which listing was actually discussed in this conversation so the
+    // appointment (and its confirmation emails/ICS) can reference the right address/listing
+    // details — the same conservative single-match mechanism used elsewhere for listing cards.
+    // Ambiguous match → null; a resolution failure here must never block the booking itself.
+    let listingId: string | null = null;
+    try {
+      const recentMessages = await this.prisma.client.message.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "desc" },
+        take: 6,
+        select: { content: true },
+      });
+      const haystack = recentMessages.map((m) => m.content).join("\n");
+      const matched = await this.listingsService.findMentionedForChat(businessId, haystack, 1);
+      listingId = matched[0]?.id ?? null;
+    } catch {
+      listingId = null;
+    }
+
     const appointment = await this.bookings.createAppointmentAndNotify(
       businessId,
       leadId,
@@ -789,7 +808,7 @@ export class ChatService {
       new Date(endsAt),
       "chat",
       undefined,
-      null,
+      listingId,
     );
     // Additive — pushes the appointment to Google Calendar if connected, never blocks booking if it isn't.
     this.calendar.createEvent(businessId, appointment).catch(() => {});

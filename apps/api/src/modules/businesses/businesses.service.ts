@@ -46,8 +46,22 @@ export class BusinessesService {
 
   async updateProfile(
     businessId: string,
-    data: { name?: string; ownerName?: string; email?: string; niche?: "imobiliaria" | "concessionaria"; timezone?: string; address?: string; websiteUrl?: string },
+    data: {
+      name?: string;
+      ownerName?: string;
+      email?: string;
+      niche?: "imobiliaria" | "concessionaria";
+      timezone?: string;
+      address?: string;
+      websiteUrl?: string;
+      financingRatePercent?: number | null;
+    },
   ) {
+    if (data.financingRatePercent != null) {
+      if (!Number.isFinite(data.financingRatePercent) || data.financingRatePercent <= 0 || data.financingRatePercent > 20) {
+        throw new BadRequestException("Taxa de juros inválida");
+      }
+    }
     if (data.websiteUrl !== undefined && data.websiteUrl !== "") {
       const business = await this.prisma.client.business.findUnique({
         where: { id: businessId },

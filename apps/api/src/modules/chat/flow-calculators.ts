@@ -7,8 +7,8 @@
 //
 // All rates below are illustrative defaults, not a real credit offer — every caller-facing message
 // built from these results must carry an explicit "taxa estimada, sujeito à aprovação" disclaimer.
-// There is currently no per-business finance-rate config field on Business/BusinessProfile (both
-// checked), so these are sensible hardcoded defaults rather than per-tenant configurable values.
+// Businesses can configure their own monthly rate via `Business.financingRatePercent` — these
+// constants are only the fallback used when that field is null.
 
 export const DEFAULT_VEHICLE_MONTHLY_RATE_PERCENT = 1.8;
 export const DEFAULT_REAL_ESTATE_MONTHLY_RATE_PERCENT = 0.9;
