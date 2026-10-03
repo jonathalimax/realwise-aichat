@@ -21,7 +21,22 @@ const MIN_MEANINGFUL_TEXT_LENGTH = 20;
 
 const QUOTA_EXCEEDED_FALLBACK = "No momento a Clara não está disponível — nossa equipe vai te responder em breve!";
 
-const ESCALATION_KEYWORDS = ["falar com atendente", "falar com uma pessoa", "humano", "atendente"];
+const ESCALATION_KEYWORDS = [
+  "falar com atendente",
+  "falar com um atendente",
+  "falar com uma pessoa",
+  "falar com alguem",
+  "falar com humano",
+  "atendimento humano",
+  "pessoa de verdade",
+  "falar com vendedor",
+  "falar com corretor",
+  "quero um atendente",
+  "me transfere",
+  "transferir para",
+  "humano",
+  "atendente",
+];
 const AFFIRMATIVE_REPLIES = ["sim", "sim por favor", "pode", "pode ser", "claro", "quero", "por favor", "ok", "okay", "isso"];
 const ABSTENTION_MARKERS = [
   "não tenho essa informação",
@@ -38,6 +53,18 @@ const ABSTENTION_MARKERS = [
 function looksLikeAbstention(text: string): boolean {
   const normalized = text.toLowerCase();
   return ABSTENTION_MARKERS.some((marker) => normalized.includes(marker));
+}
+
+// Local duplicate of flow.service.ts's own normalize() — same small accent/punctuation-stripping
+// helper, kept per-module rather than exported across modules, matching this codebase's convention.
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // strip accents (combining marks after NFD decomposition)
+    .replace(/[^a-z0-9\s]/g, " ") // strip emoji/punctuation
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 @Injectable()
@@ -192,13 +219,30 @@ export class ChatService {
   }
 
   private detectsEscalation(text: string): boolean {
-    const normalized = text.toLowerCase();
-    return ESCALATION_KEYWORDS.some((kw) => normalized.includes(kw));
+    const normalized = normalize(text);
+    return ESCALATION_KEYWORDS.some((kw) => normalized.includes(normalize(kw)));
   }
 
   private confirmsEscalation(text: string): boolean {
     const normalized = text.trim().toLowerCase();
     return AFFIRMATIVE_REPLIES.some((kw) => normalized === kw || normalized.startsWith(`${kw} `));
+  }
+
+  // True when the reply currently being persisted is the SECOND consecutive abstention for this
+  // conversation — i.e. Clara just failed to help twice in a row — so the caller can escalate
+  // automatically instead of leaving the visitor stuck on repeated "não tenho essa informação"
+  // replies. Only looks at the most recent prior assistant message; doesn't fire on the first
+  // abstention, and doesn't interfere with the separate offeredHandoff/confirmsEscalation path
+  // (visitor explicitly saying yes to a handoff offer), which fires one turn earlier and already
+  // takes priority in both sendMessage and streamMessage.
+  private async shouldAutoEscalate(conversationId: string): Promise<boolean> {
+    const recent = await this.prisma.client.message.findMany({
+      where: { conversationId, role: "assistant" },
+      orderBy: { createdAt: "desc" },
+      take: 2,
+    });
+    // recent[0] is the reply just persisted (the current abstention); recent[1] is the one before it.
+    return recent.length === 2 && recent[1].answerSource === "abstained";
   }
 
   async sendMessage(businessId: string, conversationId: string, visitorText: string, visitorToken: string, leadId?: string) {
@@ -266,7 +310,14 @@ export class ChatService {
         retrievalTopScore: answer.retrievalTopScore,
       },
     });
-    if (answer.abstained) this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
+    let autoEscalation: { escalated: boolean; whatsappUrl: string | null; referenceCode: string | null } | undefined;
+    if (answer.abstained) {
+      this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
+      if (await this.shouldAutoEscalate(conversationId)) {
+        const escalation = await this.escalate(businessId, conversationId, visitorText);
+        autoEscalation = { escalated: escalation.escalated, whatsappUrl: escalation.whatsappUrl, referenceCode: escalation.referenceCode };
+      }
+    }
 
     await this.prisma.client.conversation.update({
       where: { id: conversationId },
@@ -274,7 +325,7 @@ export class ChatService {
     });
     this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
 
-    return { message: assistantMessage, escalated: false, listings: answer.listings };
+    return { message: assistantMessage, escalated: autoEscalation?.escalated ?? false, listings: answer.listings, ...(autoEscalation ?? {}) };
   }
 
   private async buildChatPrompt(businessId: string, conversationId: string, visitorText: string) {
@@ -472,6 +523,15 @@ export class ChatService {
       });
       this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
       this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
+      if (await this.shouldAutoEscalate(conversationId)) {
+        const escalation = await this.escalate(businessId, conversationId, visitorText);
+        return {
+          message: assistantMessage,
+          escalated: escalation.escalated,
+          whatsappUrl: escalation.whatsappUrl,
+          referenceCode: escalation.referenceCode,
+        };
+      }
       return { message: assistantMessage, escalated: false };
     }
 
@@ -525,10 +585,20 @@ export class ChatService {
       data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
     });
     this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
-    if (abstained) this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
+    let autoEscalation: { escalated: boolean; whatsappUrl: string | null; referenceCode: string | null } | undefined;
+    if (abstained) {
+      this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
+      // Don't re-stream/re-onDelta the escalation copy — the abstention text itself stays the
+      // visible streamed reply; escalate()'s own assistant message follows it in history, and its
+      // escalated/whatsappUrl/referenceCode fields are merged into this turn's final payload only.
+      if (await this.shouldAutoEscalate(conversationId)) {
+        const escalation = await this.escalate(businessId, conversationId, visitorText);
+        autoEscalation = { escalated: escalation.escalated, whatsappUrl: escalation.whatsappUrl, referenceCode: escalation.referenceCode };
+      }
+    }
 
     const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText);
-    return { message: assistantMessage, escalated: false, listings };
+    return { message: assistantMessage, escalated: autoEscalation?.escalated ?? false, listings, ...(autoEscalation ?? {}) };
   }
 
   private readonly ALLOWED_SERVICES = new Set(["Visita ao imóvel", "Test-drive"]);
