@@ -17,6 +17,7 @@ import { CalendarModule } from "./modules/calendar/calendar.module";
 import { OwnerAssistantModule } from "./modules/owner-assistant/owner-assistant.module";
 import { AlertsModule } from "./modules/alerts/alerts.module";
 import { UsageModule } from "./modules/usage/usage.module";
+import { InboxModule } from "./modules/inbox/inbox.module";
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { UsageModule } from "./modules/usage/usage.module";
     OwnerAssistantModule,
     AlertsModule,
     UsageModule,
+    InboxModule,
   ],
 })
 export class AppModule {}
