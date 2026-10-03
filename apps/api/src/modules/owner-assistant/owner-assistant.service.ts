@@ -5,10 +5,15 @@ import { generateFromGateway } from "../../inference/gateway-client";
 import { embedText } from "../../inference/embed-client";
 import { AnalyticsService } from "../analytics/analytics.service";
 import { LeadsService } from "../leads/leads.service";
+import { BusinessesService } from "../businesses/businesses.service";
 
 type OwnerMessage = { role: "owner" | "assistant"; content: string };
 
+// kind distinguishes which real endpoint the dashboard must call once the owner confirms — a
+// profile field write (patchProfileField) vs. the business's slug (setBusinessSlug) are two
+// different backend calls, not just two field names.
 interface PendingProposal {
+  kind: "profileField" | "slug";
   fieldKey: string;
   proposedValue: string;
   reason: string;
@@ -19,7 +24,14 @@ interface ToolCall {
   input: Record<string, unknown>;
 }
 
-const TOOL_NAMES = ["getLeads", "getAnalytics", "searchKnowledgeBase", "proposeProfileEdit", "generateReport"] as const;
+const TOOL_NAMES = [
+  "getLeads",
+  "getAnalytics",
+  "searchKnowledgeBase",
+  "proposeProfileEdit",
+  "proposeSlugChange",
+  "generateReport",
+] as const;
 const NO_KB_MATCH_FALLBACK = "Não encontrei nada na sua base de conhecimento sobre isso.";
 
 // Static knowledge about the RealWise platform itself (not the owner's business) — how the product
@@ -27,7 +39,7 @@ const NO_KB_MATCH_FALLBACK = "Não encontrei nada na sua base de conhecimento so
 // previously unable to answer at all, since it had zero knowledge beyond the 5 tool call results.
 const PLATFORM_FAQ = [
   "Conhecimento sobre a própria RealWise (responda direto, sem precisar de ferramenta, quando a pergunta for sobre o produto/painel em si):",
-  "- Link de atendimento (slug): o dono edita em Perfil > 'Sobre o negócio', campo do link, com um botão 'Verificar' disponibilidade antes de salvar.",
+  "- Link de atendimento (slug): o dono pode editar em Perfil > 'Sobre o negócio', ou pedir diretamente aqui usando a ferramenta proposeSlugChange.",
   "- Números de WhatsApp para escalonamento: em Perfil > 'WhatsApp para escalonamento' — pode adicionar, editar e excluir números.",
   "- Base de conhecimento (documentos, perguntas não respondidas, medidor de prontidão): página 'Base de conhecimento'.",
   "- Cor da marca, logo, instruções de comportamento da Clara: página 'Personalização'.",
@@ -45,9 +57,10 @@ const SYSTEM_PROMPT_HEADER = [
   '- getAnalytics({ metric?: "summary"|"timeseries", days?: number }) — métricas do negócio (conversas, leads, agendamentos).',
   '- searchKnowledgeBase({ query: string }) — busca trechos da base de conhecimento do próprio negócio.',
   '- proposeProfileEdit({ fieldKey: string, proposedValue: string, reason: string }) — NUNCA grava direto; apenas propõe uma mudança de campo do perfil para o dono confirmar.',
+  '- proposeSlugChange({ newSlug: string, reason?: string }) — NUNCA grava direto; propõe um novo link de atendimento (slug) para o dono confirmar. newSlug deve ser minúsculo, só letras/números/hífen.',
   '- generateReport({ period?: "7d"|"30d"|"90d" }) — gera um resumo textual combinando leads e analytics.',
   "Responda SEMPRE em JSON puro, sem markdown, no formato: {\"reply\": string, \"toolCall\": {\"tool\": string, \"input\": object} | null}.",
-  "Use toolCall apenas quando uma das 5 ferramentas acima resolver a pergunta; caso contrário, toolCall deve ser null e reply deve conter a resposta direta.",
+  "Use toolCall apenas quando uma das ferramentas acima resolver a pergunta; caso contrário, toolCall deve ser null e reply deve conter a resposta direta. Um pedido para mudar o link/URL/slug de atendimento SEMPRE usa proposeSlugChange, nunca proposeProfileEdit — slug não é um campo de perfil.",
   "Nunca invente dados — toda informação concreta (números, leads, trechos) deve vir do resultado da ferramenta, não da sua memória.",
   "Se a pergunta não for sobre o negócio do dono nem sobre como a RealWise funciona (ex: dúvida que exige um humano, problema técnico, cobrança indevida), diga isso com clareza e, se um número de suporte estiver disponível no contexto, inclua-o na resposta como um link direto no formato https://wa.me/<numero> para o dono poder tocar.",
   "",
@@ -60,6 +73,7 @@ export class OwnerAssistantService {
     private readonly prisma: PrismaService,
     private readonly analytics: AnalyticsService,
     private readonly leads: LeadsService,
+    private readonly businesses: BusinessesService,
   ) {}
 
   private async getLeadsTool(businessId: string, input: { filter?: string }) {
@@ -113,8 +127,37 @@ export class OwnerAssistantService {
     const allowed = template?.fields.some((f) => f.key === input.fieldKey);
     if (!allowed) return null;
     return {
+      kind: "profileField",
       fieldKey: input.fieldKey,
       proposedValue: String(input.proposedValue),
+      reason: input.reason ?? "",
+    };
+  }
+
+  // Same propose-don't-write pattern as proposeProfileEditTool, but for the business's slug —
+  // normalizes and checks availability up front so the owner isn't asked to confirm something
+  // that would just fail, but the actual write still only happens via the owner's explicit
+  // confirmation hitting the real PATCH /businesses/me/slug endpoint.
+  private async proposeSlugChangeTool(
+    businessId: string,
+    input: { newSlug?: string; reason?: string },
+  ): Promise<PendingProposal | null> {
+    if (!input.newSlug) return null;
+    const normalized = input.newSlug
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (!normalized) return null;
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (business?.slug === normalized) return null;
+    const available = await this.businesses.isSlugAvailable(normalized);
+    if (!available) return null;
+    return {
+      kind: "slug",
+      fieldKey: "slug",
+      proposedValue: normalized,
       reason: input.reason ?? "",
     };
   }
@@ -147,6 +190,10 @@ export class OwnerAssistantService {
         return { result: await this.searchKnowledgeBaseTool(businessId, call.input as any) };
       case "proposeProfileEdit": {
         const proposal = await this.proposeProfileEditTool(businessId, call.input as any);
+        return { result: proposal, pendingProposal: proposal ?? undefined };
+      }
+      case "proposeSlugChange": {
+        const proposal = await this.proposeSlugChangeTool(businessId, call.input as any);
         return { result: proposal, pendingProposal: proposal ?? undefined };
       }
       case "generateReport":
@@ -200,6 +247,16 @@ export class OwnerAssistantService {
         reply: pendingProposal
           ? `Proposta: alterar "${pendingProposal.fieldKey}" para "${pendingProposal.proposedValue}". ${pendingProposal.reason}`.trim()
           : "Não consegui montar a proposta de alteração — esse campo não existe ou não pode ser editado.",
+        toolCalls: [toolCall],
+        pendingProposal,
+      };
+    }
+
+    if (toolCall.tool === "proposeSlugChange") {
+      return {
+        reply: pendingProposal
+          ? `Proposta: mudar seu link de atendimento para "${pendingProposal.proposedValue}". Confirma?`
+          : "Não consegui propor essa mudança — esse link já está em uso, é igual ao atual, ou é inválido. Tenta outro.",
         toolCalls: [toolCall],
         pendingProposal,
       };

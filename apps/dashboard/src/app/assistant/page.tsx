@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { askOwnerAssistant, patchProfileField } from "../../lib/api";
+import { askOwnerAssistant, patchProfileField, setBusinessSlug } from "../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -13,6 +13,7 @@ interface Message {
 }
 
 interface PendingProposal {
+  kind: "profileField" | "slug";
   fieldKey: string;
   proposedValue: string;
   reason: string;
@@ -74,9 +75,18 @@ function AssistantChat() {
 
   async function handleConfirmProposal() {
     if (!pendingProposal) return;
-    await patchProfileField(pendingProposal.fieldKey, pendingProposal.proposedValue, "manual");
-    setProposalDone("confirmed");
-    setPendingProposal(null);
+    try {
+      if (pendingProposal.kind === "slug") {
+        await setBusinessSlug(pendingProposal.proposedValue);
+      } else {
+        await patchProfileField(pendingProposal.fieldKey, pendingProposal.proposedValue, "manual");
+      }
+      setProposalDone("confirmed");
+    } catch {
+      setMessages((prev) => [...prev, { role: "assistant", content: "Não consegui aplicar a mudança — tenta de novo em instantes." }]);
+    } finally {
+      setPendingProposal(null);
+    }
   }
 
   function handleRejectProposal() {
@@ -144,10 +154,14 @@ function AssistantChat() {
 
           {pendingProposal && (
             <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg-2 p-3 text-sm">
-              <div className="font-semibold text-ink">Proposta de alteração de perfil</div>
-              <div className="text-ink-soft">
-                Campo: <span className="text-ink">{pendingProposal.fieldKey}</span>
+              <div className="font-semibold text-ink">
+                {pendingProposal.kind === "slug" ? "Proposta de novo link de atendimento" : "Proposta de alteração de perfil"}
               </div>
+              {pendingProposal.kind !== "slug" && (
+                <div className="text-ink-soft">
+                  Campo: <span className="text-ink">{pendingProposal.fieldKey}</span>
+                </div>
+              )}
               <div className="text-ink-soft">
                 Novo valor: <span className="text-ink">{pendingProposal.proposedValue}</span>
               </div>
