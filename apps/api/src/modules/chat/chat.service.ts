@@ -483,7 +483,7 @@ export class ChatService {
 
     if (this.detectsEscalation(visitorText) || (offeredHandoff && this.confirmsEscalation(visitorText))) {
       const result = await this.escalate(businessId, conversationId, visitorText);
-      onDelta(result.message.content);
+      if (result.message) onDelta(result.message.content);
       return result;
     }
 
@@ -669,6 +669,28 @@ export class ChatService {
     if (!business) throw new NotFoundException("Business not found");
 
     const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
+
+    if (conversation?.status === "escalated") {
+      // Idempotent: a conversation can only be escalated once. Re-escalating would mint a
+      // new referenceCode (invalidating the one already shown to the visitor), overwrite
+      // escalatedAt, and fire a duplicate owner notification email. Reuse the existing
+      // referenceCode/handoff message instead of creating a new one.
+      const existingMessage = await this.prisma.client.message.findFirst({
+        where: { conversationId, businessId, answerSource: "escalation" },
+        orderBy: { createdAt: "asc" },
+      });
+
+      if (!conversation.escalationNumberId || !conversation.referenceCode) {
+        return { message: existingMessage, escalated: false, whatsappUrl: null, referenceCode: conversation.referenceCode ?? null };
+      }
+      const existingRoutingNumber = await this.prisma.client.whatsappRoutingNumber.findUnique({
+        where: { id: conversation.escalationNumberId },
+      });
+      const whatsappUrl = existingRoutingNumber
+        ? buildWaMeLink(existingRoutingNumber.phone, buildCustomerEscalationMessage(business.name, topic, conversation.referenceCode))
+        : null;
+      return { message: existingMessage, escalated: true, whatsappUrl, referenceCode: conversation.referenceCode };
+    }
 
     const routingNumber = await this.prisma.client.whatsappRoutingNumber.findFirst({
       where: { businessId, isActive: true },

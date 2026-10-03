@@ -573,7 +573,11 @@ export class FlowService {
   // it only ever appears when every other option-generation path has failed.
   private ensureNonEmptyBubbles(node: FlowNode, bubbles: FlowBubble[]): FlowBubble[] {
     if (bubbles.length > 0) return bubbles;
-    if (node.bubbles && node.bubbles.length > 0) return node.bubbles;
+    if (node.bubbles && node.bubbles.length > 0) {
+      console.warn(`[flow] ensureNonEmptyBubbles tier 2 fallback fired for node "${node.id}" — extraction returned no bubbles.`);
+      return node.bubbles;
+    }
+    console.warn(`[flow] ensureNonEmptyBubbles tier 3 fallback fired for node "${node.id}" — no bubbles on node either.`);
     return [{ label: "Voltar ao menu", goto: "start" }];
   }
 
