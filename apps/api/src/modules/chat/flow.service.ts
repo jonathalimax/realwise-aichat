@@ -556,12 +556,25 @@ export class FlowService {
     return {
       nodeId: node.id,
       message,
-      bubbles: this.finalizeBubbles(bubbles),
+      bubbles: this.finalizeBubbles(this.ensureNonEmptyBubbles(node, bubbles)),
       input: node.input ?? null,
       params,
       ...(listings ? { listings } : {}),
       ...(whatsappUrl !== undefined ? { whatsappUrl } : {}),
     };
+  }
+
+  // Last-resort guard: if every bubble source above produced nothing (e.g. dynamic extraction
+  // stripped all hardcoded options as "nav" and returned no real options itself — a new business
+  // with no ingested documents yet, or a failed/unparseable LLM extraction call), fall back to the
+  // node's own unfiltered scripted bubbles rather than leaving the visitor with no options at all.
+  // If even those are empty (a flow-authoring gap), fall back to a single safety-net bubble back
+  // to the start of the flow — this is not a reintroduction of the removed persistent nav layer,
+  // it only ever appears when every other option-generation path has failed.
+  private ensureNonEmptyBubbles(node: FlowNode, bubbles: FlowBubble[]): FlowBubble[] {
+    if (bubbles.length > 0) return bubbles;
+    if (node.bubbles && node.bubbles.length > 0) return node.bubbles;
+    return [{ label: "Voltar ao menu", goto: "start" }];
   }
 
   // Human-handoff node ids a bubble can point at — "Falar com corretor"/"Falar com vendedor"
