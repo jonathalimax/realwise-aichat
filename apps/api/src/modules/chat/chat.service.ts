@@ -13,6 +13,7 @@ import { LeadsService } from "../leads/leads.service";
 import { AlertsService } from "../alerts/alerts.service";
 import { UsageService } from "../usage/usage.service";
 import { KnowledgeService } from "../knowledge/knowledge.service";
+import { ListingsService } from "../listings/listings.service";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 const NO_CONTEXT_FALLBACK = "Não encontrei essa informação na nossa base. Quer que eu te passe pro atendimento?";
@@ -78,6 +79,7 @@ export class ChatService {
     private readonly alerts: AlertsService,
     private readonly usage: UsageService,
     private readonly knowledge: KnowledgeService,
+    private readonly listingsService: ListingsService,
   ) {}
 
   // Fire-and-forget, same pattern as notifyOwner — scoring must never slow down the visitor-facing response.
@@ -392,7 +394,19 @@ export class ChatService {
   // get a best-effort structured `listings` array alongside the prose answer, using the same
   // retrieved chunk text — same strict grounding discipline as the scripted "resultados" node.
   private async maybeExtractListings(businessId: string, visitorText: string, chunkText: string) {
-    if (!chunkText || !this.flow.isListingQuery(visitorText)) return undefined;
+    if (!this.flow.isListingQuery(visitorText)) return undefined;
+
+    // Free text has no structured filter params the way the scripted flow does — if the business
+    // has real extracted inventory, ground on that directly (most-recently-updated active
+    // listings) rather than re-extracting from retrieved chunks every time. Only fall back to the
+    // LLM-chunk extraction path for businesses with zero rows (new/never-extracted).
+    const hasListings = await this.listingsService.hasAnyListings(businessId);
+    if (hasListings) {
+      const dbListings = await this.listingsService.queryForChat(businessId, {}, 6);
+      return dbListings.length > 0 ? dbListings : undefined;
+    }
+
+    if (!chunkText) return undefined;
     const listings = await this.flow.extractListingsForQuery(businessId, chunkText);
     return listings.length > 0 ? listings : undefined;
   }

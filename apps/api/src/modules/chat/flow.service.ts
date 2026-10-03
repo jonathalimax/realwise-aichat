@@ -7,6 +7,7 @@ import { LeadsService } from "../leads/leads.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 import { retrieveRelevantChunks } from "./knowledge-retrieval";
 import { safeHttpUrl } from "../../common/safe-http-url";
+import { ListingsService, ChatQueryFilters } from "../listings/listings.service";
 
 // Scripted nodes that are supposed to hand the visitor off to a real human WhatsApp number —
 // their flow-JSON message templates have placeholders ({numero}, {espera}) that nothing ever
@@ -119,6 +120,7 @@ export class FlowService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly leads: LeadsService,
+    private readonly listingsService: ListingsService,
   ) {}
 
   // Fire-and-forget, same pattern as ChatService's own recomputeLeadScore — scoring must never
@@ -166,19 +168,35 @@ export class FlowService {
     if (!business) return { message: substituted.replace(PLACEHOLDER_PATTERN, "") };
 
     if (LISTING_NODE_IDS.has(node.id)) {
-      // The literal node message ("Encontrei {n} imóveis para você") is a bad retrieval query —
-      // it's generic UI copy, not a description of an actual listing, so it tends to rank
-      // nav/footer/form chunks above the real listing cards. Build the query from the filters the
-      // visitor actually picked instead, so retrieval is biased toward genuine inventory text.
-      const listingQuery = this.listingQueryFor(business.niche, params);
-      const listingChunks = await retrieveRelevantChunks(this.prisma, businessId, listingQuery);
-      const listingChunkText = listingChunks.map((c) => c.content).join("\n\n").slice(0, 8000);
-      const listings = await this.extractListings(businessId, business.name, listingChunkText);
-      if (listings.length > 0) {
-        return { message: "Encontrei algumas opções que podem te interessar 👇", listings };
+      // Phase 2: businesses with a real extracted Listing table query that table directly instead
+      // of paying for a fresh LLM extraction on every "resultados" hit. New businesses (or ones
+      // whose first extraction hasn't run yet) have zero rows and fall through unchanged to the
+      // live-LLM extraction path below.
+      const hasListings = await this.listingsService.hasAnyListings(businessId);
+      if (hasListings) {
+        const filters = this.chatFiltersFor(business.niche, params);
+        const dbListings = await this.listingsService.queryForChat(businessId, filters, 6);
+        if (dbListings.length > 0) {
+          return { message: "Encontrei algumas opções que podem te interessar 👇", listings: dbListings };
+        }
+        // Real inventory exists but nothing matches the visitor's filters — never fall back to
+        // live LLM extraction here, that could surface listings that contradict the chosen
+        // filters. Fall through to the honest "sem resultados" prose path below.
+      } else {
+        // The literal node message ("Encontrei {n} imóveis para você") is a bad retrieval query —
+        // it's generic UI copy, not a description of an actual listing, so it tends to rank
+        // nav/footer/form chunks above the real listing cards. Build the query from the filters
+        // the visitor actually picked instead, so retrieval is biased toward genuine inventory text.
+        const listingQuery = this.listingQueryFor(business.niche, params);
+        const listingChunks = await retrieveRelevantChunks(this.prisma, businessId, listingQuery);
+        const listingChunkText = listingChunks.map((c) => c.content).join("\n\n").slice(0, 8000);
+        const listings = await this.extractListings(businessId, business.name, listingChunkText);
+        if (listings.length > 0) {
+          return { message: "Encontrei algumas opções que podem te interessar 👇", listings };
+        }
+        // No genuine distinct items found in the retrieved text — fall through to the honest
+        // prose fallback below instead of showing an empty/fabricated card list.
       }
-      // No genuine distinct items found in the retrieved text — fall through to the honest
-      // prose fallback below instead of showing an empty/fabricated card list.
     }
 
     const chunks = await retrieveRelevantChunks(this.prisma, businessId, node.message);
@@ -254,6 +272,64 @@ export class FlowService {
       if (typeof value === "string" && value !== "any") words.push(value);
     }
     return words.join(" ");
+  }
+
+  // "faixa" bubbles encode a numbered price bucket (or "any"), not a raw price — boundaries come
+  // straight from the bubble labels in the flow JSON (apps/api/src/modules/chat/flows/*.flow.json,
+  // "busca_preco" node) and differ for imobiliaria aluguel vs venda vs concessionaria.
+  private static readonly FAIXA_BUCKETS_ALUGUEL: Array<[number | null, number | null]> = [
+    [null, 150000],
+    [150000, 250000],
+    [250000, 400000],
+    [400000, 600000],
+    [600000, null],
+  ];
+  private static readonly FAIXA_BUCKETS_VENDA: Array<[number | null, number | null]> = [
+    [null, 30000000],
+    [30000000, 50000000],
+    [50000000, 80000000],
+    [80000000, 120000000],
+    [120000000, null],
+  ];
+  private static readonly FAIXA_BUCKETS_VEICULO: Array<[number | null, number | null]> = [
+    [null, 4000000],
+    [4000000, 6000000],
+    [6000000, 8000000],
+    [8000000, 12000000],
+    [12000000, 20000000],
+    [20000000, null],
+  ];
+
+  private faixaToPriceRange(niche: string, transaction: string | undefined, faixa: unknown): { priceMin?: number; priceMax?: number } {
+    const index = typeof faixa === "number" ? faixa : typeof faixa === "string" ? Number(faixa) : NaN;
+    if (!Number.isFinite(index) || index < 1) return {};
+    const buckets =
+      niche === "concessionaria"
+        ? FlowService.FAIXA_BUCKETS_VEICULO
+        : transaction === "venda"
+          ? FlowService.FAIXA_BUCKETS_VENDA
+          : FlowService.FAIXA_BUCKETS_ALUGUEL;
+    const bucket = buckets[index - 1];
+    if (!bucket) return {};
+    const [min, max] = bucket;
+    return { ...(min != null && { priceMin: min }), ...(max != null && { priceMax: max }) };
+  }
+
+  // Maps the flow's accumulated filter params (tipo/modo/faixa/regiao/marca/modelo/ordem) onto
+  // ListingsService.queryForChat's filter shape, used once the business has real extracted rows.
+  private chatFiltersFor(niche: string, params: Record<string, unknown>): ChatQueryFilters {
+    const transaction = typeof params.modo === "string" && params.modo !== "any" ? params.modo : undefined;
+    const { priceMin, priceMax } = this.faixaToPriceRange(niche, transaction, params.faixa);
+    return {
+      ...(typeof params.tipo === "string" && params.tipo !== "any" && { listingType: params.tipo }),
+      ...(transaction && { transaction }),
+      ...(priceMin != null && { priceMin }),
+      ...(priceMax != null && { priceMax }),
+      ...(typeof params.regiao === "string" && params.regiao !== "any" && params.regiao !== "geo" && { neighborhood: params.regiao }),
+      ...(typeof params.marca === "string" && params.marca !== "any" && { brand: params.marca }),
+      ...(typeof params.modelo === "string" && params.modelo !== "any" && { model: params.modelo }),
+      ...(typeof params.ordem === "string" && { ordem: params.ordem }),
+    };
   }
 
   // Asks the model for strictly-grounded structured listing items instead of prose — same
