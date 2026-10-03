@@ -7,6 +7,9 @@ export interface GatewayGenerateParams {
   systemPrompt: string;
   prompt: string;
   maxTokens?: number;
+  // Lower temperature for grounded/RAG calls where faithfulness to the retrieved chunks matters
+  // more than creative phrasing — sent in the request body, unlike timeoutMs below.
+  temperature?: number;
   // Client-side AbortSignal timeout only — never sent in the request body.
   timeoutMs?: number;
 }

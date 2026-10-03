@@ -22,7 +22,7 @@ export class OllamaProvider implements InferenceProvider {
     const res = await fetch(`${OLLAMA_URL}/api/generate`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: false }),
+      body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: false, options: { temperature: req.temperature ?? 0.2 } }),
       signal: AbortSignal.timeout(30000),
     });
 
@@ -50,7 +50,7 @@ export class OllamaProvider implements InferenceProvider {
     const res = await fetch(`${OLLAMA_URL}/api/generate`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: true }),
+      body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: true, options: { temperature: req.temperature ?? 0.2 } }),
       signal,
     });
     if (!res.ok || !res.body) throw new Error(`Ollama request failed: ${res.status}`);

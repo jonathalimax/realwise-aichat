@@ -587,6 +587,7 @@ export class FlowService {
         prompt: "Gere o array JSON de itens.",
         maxTokens: 1200,
         timeoutMs: 60000,
+        temperature: 0.1,
       });
       // The model sometimes wraps the array in a ```json fence despite the instruction not to —
       // strip that before parsing instead of discarding an otherwise-valid, well-grounded answer.

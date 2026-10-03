@@ -6,6 +6,9 @@ export interface GenerateRequest {
   systemPrompt: string;
   prompt: string;
   maxTokens?: number;
+  // Lower temperature for grounded/RAG calls where faithfulness to the retrieved chunks matters
+  // more than creative phrasing — undefined lets each provider fall back to its own default.
+  temperature?: number;
 }
 
 export interface GenerateResult {
