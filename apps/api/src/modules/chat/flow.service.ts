@@ -29,7 +29,15 @@ import {
 // Scripted nodes that are supposed to hand the visitor off to a real human WhatsApp number —
 // their flow-JSON message templates have placeholders ({numero}, {espera}) that nothing ever
 // resolves, since the flow engine has no concept of "this node means: build a real wa.me link."
-const WHATSAPP_HANDOFF_NODE_IDS = new Set(["handoff_whats", "handoff_whatsapp"]);
+const WHATSAPP_HANDOFF_NODE_IDS = new Set(["handoff_whats", "handoff_whatsapp", "handoff"]);
+
+// "callback_ok" — reached after the visitor asks to be called back instead of using WhatsApp —
+// has a {telefone} placeholder that nothing in the flow ever captures (no input node collects a
+// phone number). The real phone is the visitor's own Lead.phone (populated at login), so this
+// gets a dedicated short-circuit in resolveMessage() rather than going through the generic
+// SUBSTITUTABLE_PARAM_KEYS allowlist — we're supplying the real value ourselves, not trusting an
+// untrusted param. See resolveCallbackConfirm below.
+const CALLBACK_CONFIRM_NODE_IDS = new Set(["callback_ok"]);
 
 // Scripted day/time-picking nodes that used to show fixed "Hoje"/"Amanhã"/"{horario_1..3}"
 // placeholder bubbles with no real backend effect — now backed by AvailabilityService.computeSlots
@@ -41,6 +49,14 @@ const BOOKING_TIME_NODE_IDS = new Set(["visita_horario", "agend_horario"]);
 // Terminal confirmation nodes reached right after the visitor taps the final "✅ Confirmar"
 // bubble — these are where a real Appointment should actually be created.
 const BOOKING_CONFIRM_NODE_IDS = new Set(["visita_confirmada", "agend_ok"]);
+
+// The summary/"tudo certo?" node shown just BEFORE the final confirm tap. Its message template
+// has {data}/{hora} placeholders that only resolve correctly when the visitor came through the
+// real slot-picker (slot_start/slot_end in params). A visitor landing here any other way (a
+// stale saved conversation, or a business with no availability configured reaching this node via
+// an old/edited flow path) must never have the LLM fallback invent a fake date/time here — same
+// failure mode BOOKING_CONFIRM_NODE_IDS already guards against on the node right after this one.
+const BOOKING_SUMMARY_NODE_IDS = new Set(["visita_confirmar", "agend_confirmar"]);
 
 // Nodes that capture a visitor's email address right after a booking is confirmed (the
 // "📅 Adicionar ao calendário" bubble routes here instead of straight to the *_ok node) — see
@@ -278,12 +294,25 @@ export class FlowService {
       return this.resolveWhatsappHandoff(businessId, conversationId, substituted);
     }
 
+    if (CALLBACK_CONFIRM_NODE_IDS.has(node.id)) {
+      return this.resolveCallbackConfirm(businessId, conversationId);
+    }
+
     if (BOOKING_CONFIRM_NODE_IDS.has(node.id)) {
       const booking = await this.tryCreateBooking(businessId, conversationId, params);
       // Only short-circuit when the visitor actually came through the real slot-picker (slot_start/
       // slot_end present in params) — otherwise fall through unchanged to the existing RAG-fallback
       // confirmation text below (old saved conversation, or business with no availability configured).
       if (booking) return booking;
+      // No real Appointment was created (either no slot params at all, or no availability
+      // configured for this business) — this must NEVER reach the generic LLM-prose fallback
+      // below, which has fabricated specific fake dates/times and false "agendado" confirmations
+      // on exactly this path in the past. Route to a real human escalation instead.
+      return this.resolveBookingFailureEscalation(businessId, conversationId);
+    }
+
+    if (BOOKING_SUMMARY_NODE_IDS.has(node.id) && !(params.slot_start && params.slot_end)) {
+      return this.resolveBookingFailureEscalation(businessId, conversationId);
     }
 
     // Listing-detail nodes are bound to ONE specific real listing — never let these fall through
@@ -425,6 +454,63 @@ export class FlowService {
     });
 
     return { message: "Toque no botão abaixo para continuar no WhatsApp com um atendente ✅", whatsappUrl };
+  }
+
+  // "callback_ok" — the visitor asked to be called back instead of using WhatsApp. No input node
+  // in the flow ever collects a phone number, so the only real phone available is the visitor's
+  // own Lead.phone (populated at login). Substitutes it directly into {telefone} when known, and
+  // returns an honest phone-free message for anonymous visitors (never a literal "{telefone}").
+  // Also records a real escalation — same shape as resolveWhatsappHandoff — so the business sees
+  // this callback request in the dashboard inbox, just without an escalationNumberId since no
+  // WhatsApp number is involved.
+  private async resolveCallbackConfirm(businessId: string, conversationId: string): Promise<{ message: string }> {
+    const conversation = await this.prisma.client.conversation.findUnique({
+      where: { id: conversationId },
+      include: { lead: true },
+    });
+
+    const phone = conversation?.lead?.phone;
+    const message = phone
+      ? `Combinado! Vamos te contatar em ${phone} 📞`
+      : "Combinado! Um vendedor vai te ligar em breve 📞";
+
+    if (conversation && conversation.status !== "escalated") {
+      const referenceCode = generateReferenceCode();
+      await this.prisma.client.conversation.update({
+        where: { id: conversationId },
+        data: { status: "escalated", escalatedAt: new Date(), referenceCode },
+      });
+      await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: message, answerSource: "escalation" },
+      });
+    }
+
+    return { message };
+  }
+
+  // Booking-confirm nodes (BOOKING_CONFIRM_NODE_IDS) where tryCreateBooking returned null — no
+  // real Appointment exists, whether because no slot params were present or the business has no
+  // availability configured. Must never claim a specific fake date/time or a false "agendado"
+  // success message, so this short-circuits before the generic LLM-prose fallback ever runs,
+  // recording the same real escalation as resolveWhatsappHandoff (minus escalationNumberId, since
+  // this path isn't necessarily routed through WhatsApp).
+  private async resolveBookingFailureEscalation(businessId: string, conversationId: string): Promise<{ message: string }> {
+    const message =
+      "Não consegui confirmar esse horário automaticamente — vou te colocar em contato com um vendedor para agendar manualmente.";
+
+    const conversation = await this.prisma.client.conversation.findUnique({ where: { id: conversationId } });
+    if (conversation && conversation.status !== "escalated") {
+      const referenceCode = generateReferenceCode();
+      await this.prisma.client.conversation.update({
+        where: { id: conversationId },
+        data: { status: "escalated", escalatedAt: new Date(), referenceCode },
+      });
+      await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: message, answerSource: "escalation" },
+      });
+    }
+
+    return { message };
   }
 
   // The flow engine has no per-card bubble mechanism — "resultados" renders multiple real

@@ -1609,17 +1609,17 @@
       "id": "callback",
       "message": "Qual o melhor horário?",
       "bubbles": [
-        { "label": "Agora", "goto": "callback_ok" },
-        { "label": "Manhã", "goto": "callback_ok" },
-        { "label": "Tarde", "goto": "callback_ok" },
-        { "label": "Fim de tarde", "goto": "callback_ok" }
+        { "label": "Agora", "goto": "callback_ok", "params": {"callback_janela": "agora"} },
+        { "label": "Manhã", "goto": "callback_ok", "params": {"callback_janela": "manha"} },
+        { "label": "Tarde", "goto": "callback_ok", "params": {"callback_janela": "tarde"} },
+        { "label": "Fim de tarde", "goto": "callback_ok", "params": {"callback_janela": "fim_tarde"} }
       ]
     },
     "callback_ok": {
       "id": "callback_ok",
       "message": "Combinado! Vamos te contatar em {telefone} 📞",
       "bubbles": [
-        { "label": "Mudar telefone", "goto": "callback" },
+        { "label": "Mudar telefone", "goto": "handoff_whats" },
         { "label": "Voltar ao menu", "goto": "start" }
       ]
     },
