@@ -1,6 +1,24 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { ForbiddenException, Injectable, Logger } from "@nestjs/common";
 import * as webpush from "web-push";
 import { PrismaService } from "../../prisma/prisma.service";
+
+const ALLOWED_PUSH_HOSTS = [
+  "fcm.googleapis.com",
+  "updates.push.services.mozilla.com",
+  "notify.windows.com",
+  "web.push.apple.com",
+];
+
+function isAllowedPushEndpoint(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  return ALLOWED_PUSH_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`));
+}
 
 interface PushSubscriptionKeys {
   endpoint: string;
@@ -58,11 +76,21 @@ export class PushService {
     sub: PushSubscriptionKeys,
     userAgent?: string,
   ) {
-    if (!sub?.endpoint || !sub.endpoint.startsWith("https:") || sub.endpoint.length >= MAX_ENDPOINT_LENGTH) {
+    if (!sub?.endpoint || sub.endpoint.length >= MAX_ENDPOINT_LENGTH || !isAllowedPushEndpoint(sub.endpoint)) {
       throw new Error("Invalid push subscription endpoint");
     }
     if (!sub.keys?.p256dh || !sub.keys?.auth) {
       throw new Error("Invalid push subscription keys");
+    }
+
+    const existing = await this.prisma.client.pushSubscription.findUnique({
+      where: { endpoint: sub.endpoint },
+    });
+    if (existing && existing.conversationId !== conversationId) {
+      // A push endpoint is unique per browser install, not per conversation — a different
+      // conversation claiming the same endpoint would let it hijack another visitor's
+      // subscription (or receive their notifications) rather than register its own.
+      throw new ForbiddenException("This push endpoint is already registered to another conversation");
     }
 
     return this.prisma.client.pushSubscription.upsert({
