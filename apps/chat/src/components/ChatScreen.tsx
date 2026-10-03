@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { maskBrPhone } from "@realwise/shared";
 import {
@@ -16,19 +17,12 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
+import { ListingDetailOverlay, safeHttpUrl, type Listing } from "./ListingDetailOverlay";
 
 interface FlowBubble {
   label: string;
   goto: string;
   params?: Record<string, unknown>;
-}
-
-interface Listing {
-  title: string;
-  price?: string;
-  description?: string;
-  url?: string;
-  imageUrl?: string;
 }
 
 interface Message {
@@ -73,70 +67,92 @@ function MessageContent({ text }: { text: string }) {
 }
 
 // Real listing item (property/vehicle) rendered as a card — image with a sensible fallback when
-// no real photo URL was captured, title, price, a short description snippet, and a tappable link
-// to the real listing when one was genuinely found in the source documents.
-// listing.url/imageUrl come from LLM-parsed JSON, not from code we control — only ever render
-// them if they're a genuine http(s) URL, since a malformed/adversarial model response could
-// otherwise produce a javascript: href or similar.
-function safeHttpUrl(u?: string): string | undefined {
-  if (!u) return undefined;
-  try {
-    const parsed = new URL(u);
-    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function ListingCard({ listing }: { listing: Listing }) {
+// no real photo URL was captured, title, price, a short description snippet, and a tappable
+// surface that opens the listing in-app (ListingDetailOverlay) instead of navigating away.
+function ListingCard({ listing, onOpen }: { listing: Listing; onOpen: (listing: Listing) => void }) {
   const imageUrl = safeHttpUrl(listing.imageUrl);
   const url = safeHttpUrl(listing.url);
   return (
     <Card className="w-56 shrink-0 overflow-hidden">
-      <div className="flex h-32 w-full items-center justify-center bg-border/40">
-        {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={listing.title}
-            className="h-32 w-full object-cover"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-          />
-        ) : (
-          <span className="text-3xl" aria-hidden>
-            🏠
-          </span>
-        )}
-      </div>
-      <CardContent className="p-3">
-        <div className="line-clamp-2 text-sm font-semibold text-ink">{listing.title}</div>
-        {listing.price && <div className="mt-1 text-sm font-semibold text-accent">{listing.price}</div>}
-        {listing.description && <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{listing.description}</p>}
-        {url && (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 block rounded-full bg-accent px-3 py-1.5 text-center text-xs font-medium text-white"
-          >
-            Ver anúncio
-          </a>
-        )}
-      </CardContent>
+      <button
+        type="button"
+        onClick={() => onOpen(listing)}
+        className="block w-full text-left active:scale-[0.98] transition-transform"
+      >
+        <div className="flex h-32 w-full items-center justify-center bg-border/40">
+          {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageUrl}
+              alt={listing.title}
+              className="h-32 w-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          ) : (
+            <span className="text-3xl" aria-hidden>
+              🏠
+            </span>
+          )}
+        </div>
+        <CardContent className="p-3">
+          <div className="line-clamp-2 text-sm font-semibold text-ink">{listing.title}</div>
+          {listing.price && <div className="mt-1 text-sm font-semibold text-accent">{listing.price}</div>}
+          {listing.description && <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{listing.description}</p>}
+          {url && (
+            <span className="mt-2 block rounded-full bg-accent px-3 py-1.5 text-center text-xs font-medium text-white">
+              Ver anúncio
+            </span>
+          )}
+        </CardContent>
+      </button>
     </Card>
   );
 }
 
-function ListingCards({ listings }: { listings: Listing[] }) {
+// Dot/count indicator for 2+ listings — tracks the active card via onScroll reading
+// scrollLeft against a fixed card width (card is w-56 + gap-2) rather than measuring
+// via ResizeObserver, to keep this simple.
+const LISTING_CARD_STEP_PX = 224 + 8; // w-56 (14rem=224px) + gap-2 (8px)
+const MAX_VISIBLE_DOTS = 8;
+
+function ListingCards({ listings, onOpen }: { listings: Listing[]; onOpen: (listing: Listing) => void }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    const index = Math.round(e.currentTarget.scrollLeft / LISTING_CARD_STEP_PX);
+    setActiveIndex(Math.max(0, Math.min(index, listings.length - 1)));
+  }
+
   return (
-    <div className="-mx-1 flex w-full snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1">
-      {listings.map((listing, i) => (
-        <div key={`${listing.title}-${i}`} className="snap-start">
-          <ListingCard listing={listing} />
+    <div>
+      <div
+        onScroll={handleScroll}
+        className="-mx-1 flex w-full scroll-smooth snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1"
+      >
+        {listings.map((listing, i) => (
+          <div key={`${listing.title}-${i}`} className="snap-start">
+            <ListingCard listing={listing} onOpen={onOpen} />
+          </div>
+        ))}
+      </div>
+      {listings.length > 1 && (
+        <div className="mt-1 flex items-center justify-center gap-1">
+          {listings.length <= MAX_VISIBLE_DOTS ? (
+            listings.map((_, i) => (
+              <span
+                key={i}
+                className={`h-1.5 w-1.5 rounded-full ${i === activeIndex ? "bg-accent" : "bg-border"}`}
+              />
+            ))
+          ) : (
+            <span className="text-xs text-ink-soft">
+              {activeIndex + 1}/{listings.length}
+            </span>
+          )}
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -239,6 +255,7 @@ export function ChatScreen({
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [flowRestored, setFlowRestored] = useState(false);
   const [thinkingStage, setThinkingStage] = useState<0 | 1>(0);
+  const [activeListing, setActiveListing] = useState<Listing | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   // Holds the in-flight (or resolved) conversation-creation promise so a message sent before the
   // mount effect's startConversation() resolves awaits that SAME promise instead of racing a
@@ -504,7 +521,7 @@ export function ChatScreen({
             </div>
             {m.listings && m.listings.length > 0 && (
               <div className="mt-2">
-                <ListingCards listings={m.listings} />
+                <ListingCards listings={m.listings} onOpen={setActiveListing} />
               </div>
             )}
             {m.whatsappUrl && (
@@ -619,6 +636,8 @@ export function ChatScreen({
           ➤
         </Button>
       </form>
+
+      {activeListing && <ListingDetailOverlay listing={activeListing} onClose={() => setActiveListing(null)} />}
     </div>
   );
 }
