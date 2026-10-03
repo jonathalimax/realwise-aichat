@@ -278,7 +278,12 @@ export class ListingExtractionService {
           // That run-to-run coverage variance (not the dedupKey issue) was the deeper cause of
           // extraction row counts never fully stabilizing across repeated runs.
           maxTokens: 4000,
-          timeoutMs: 60000,
+          // Capped lower than the chat-path extraction timeouts on purpose: with up to
+          // MAX_WINDOWS_PER_RUN windows processed serially, a 60s-per-window timeout let a single
+          // extraction run monopolize the inference gateway for up to 60 minutes, starving
+          // visitor-facing chat requests on the same gateway. 30s keeps a slow run from blocking
+          // the gateway for anywhere near as long while still giving each window a real chance.
+          timeoutMs: 30000,
         });
         const raw = result.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
         const parsed = JSON.parse(raw);

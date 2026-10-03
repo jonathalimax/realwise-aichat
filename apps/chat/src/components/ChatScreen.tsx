@@ -772,7 +772,7 @@ export function ChatScreen({
 
       {bubbles.length > 0 && !showBooking && (
         <div className="flex flex-none flex-wrap gap-2 px-4 pb-2">
-          {bubbles.map((bubble, i) => (
+          {bubbles.slice(0, 5).map((bubble, i) => (
             <Button
               key={`${bubble.goto}-${i}`}
               variant="outline"
@@ -788,7 +788,7 @@ export function ChatScreen({
 
       {bubbles.length === 0 && suggestions.length > 0 && !showBooking && !sending && (
         <div className="flex flex-none flex-wrap gap-2 px-4 pb-2">
-          {suggestions.map((label, i) => (
+          {suggestions.slice(0, 5).map((label, i) => (
             <Button
               key={`suggestion-${i}`}
               variant="outline"

@@ -667,8 +667,14 @@ export class FlowService {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) return [];
 
-    const isFresh = !force && business.cachedLocationsAt && Date.now() - business.cachedLocationsAt.getTime() < 12 * 3600 * 1000;
-    if (isFresh && Array.isArray(business.cachedLocations)) {
+    const hasEntry = business.cachedLocationsAt != null && Array.isArray(business.cachedLocations);
+    const isFresh = hasEntry && Date.now() - business.cachedLocationsAt!.getTime() < 12 * 3600 * 1000;
+
+    if (!force && hasEntry) {
+      // Stale-while-revalidate: a cache entry exists (even if expired) — return it immediately and,
+      // if it's stale, kick off a fire-and-forget refresh for next time instead of blocking this
+      // visitor-facing request on a live LLM extraction call.
+      if (!isFresh) this.dynamicRegionBubbles(businessId, true).catch(() => {});
       return (business.cachedLocations as string[]).map((name) => ({
         label: name,
         goto: "resultados",
@@ -697,6 +703,11 @@ export class FlowService {
           ].join("\n"),
           prompt: "Gere o array de bairros/regiões.",
           maxTokens: 150,
+          // Only reached on a genuinely cold cache (no entry at all) when this call is blocking the
+          // visitor-facing request — fail fast instead of hanging for the default 25s on a
+          // saturated gateway. Background force-refresh calls aren't on the request path, so they
+          // can afford the default timeout.
+          ...(hasEntry ? {} : { timeoutMs: 8000 }),
         });
         const parsed = JSON.parse(result.text.trim());
         if (Array.isArray(parsed)) names = parsed.filter((n) => typeof n === "string").slice(0, 6);
@@ -722,8 +733,15 @@ export class FlowService {
 
     const cache = (business.cachedFlowOptions as Record<string, { values: string[]; at: string }> | null) ?? {};
     const entry = cache[cacheKey];
-    const isFresh = !force && entry && Date.now() - new Date(entry.at).getTime() < 12 * 3600 * 1000;
-    if (isFresh) return entry.values;
+    const isFresh = Boolean(entry) && Date.now() - new Date(entry!.at).getTime() < 12 * 3600 * 1000;
+
+    if (!force && entry) {
+      // Stale-while-revalidate: an entry exists (even if expired) — return it immediately and, if
+      // it's stale, kick off a fire-and-forget refresh for next time instead of blocking this
+      // visitor-facing request on a live LLM extraction call.
+      if (!isFresh) this.extractOptions(businessId, cacheKey, systemPrompt, true).catch(() => {});
+      return entry.values;
+    }
 
     const chunks = await this.prisma.client.knowledgeChunk.findMany({
       where: { businessId },
@@ -741,6 +759,10 @@ export class FlowService {
           systemPrompt: `${systemPrompt}\nTrechos:\n${chunkText}`,
           prompt: "Gere o array.",
           maxTokens: 150,
+          // Only reached on a genuinely cold cache (no entry at all) when this call is blocking
+          // the visitor-facing request — fail fast instead of hanging on a saturated gateway.
+          // Background force-refresh calls aren't on the request path, so they keep the default.
+          ...(entry ? {} : { timeoutMs: 8000 }),
         });
         const parsed = JSON.parse(result.text.trim());
         if (Array.isArray(parsed)) values = parsed.filter((n) => typeof n === "string").slice(0, 8);
@@ -774,6 +796,7 @@ export class FlowService {
         // troca_marca previously passed no params at all, so the brand tapped here never reached
         // troca_modelo — every trade-in model lookup silently fell back to marca="any" and came
         // back empty. It needs the same "marca" param key as busca_marca.
+        if (slice.length === 0) return null;
         return slice.map((name) => ({
           label: name,
           goto,
@@ -789,6 +812,7 @@ export class FlowService {
           `Extraia os nomes de modelos da marca "${marca}" mencionados nos documentos abaixo. Responda apenas com um array JSON de até 6 modelos reais mencionados no texto — nunca invente um modelo que não apareça. Se nenhum modelo for citado, responda com um array vazio [].`,
         );
         const goto = nodeId === "troca_modelo" ? "troca_ano" : "busca_preco";
+        if (models.length === 0) return null;
         return models.map((name) => ({
           label: name,
           goto,
@@ -797,10 +821,21 @@ export class FlowService {
       }
       case "busca_categoria": {
         const categories = await this.extractOptions(businessId, "categoria_veiculo", VEHICLE_CATEGORY_PROMPT);
+        if (categories.length === 0) return null;
         return categories.map((name) => ({ label: name, goto: "busca_marca", params: { categoria: name } }));
       }
       case "busca_tipo": {
+        // Businesses with a real extracted Listing table build type bubbles from actual inventory
+        // rows instead of paying for an LLM extraction call on every visitor-facing hit — this is
+        // also what keeps this node off the blocking extractOptions() path once inventory exists.
+        const hasListings = await this.listingsService.hasAnyListings(businessId);
+        if (hasListings) {
+          const dbTypes = await this.listingsService.distinctListingTypes(businessId);
+          if (dbTypes.length === 0) return null;
+          return dbTypes.map((name) => ({ label: name, goto: "busca_preco", params: { tipo: name } }));
+        }
         const types = await this.extractOptions(businessId, "categoria_imovel", PROPERTY_TYPE_PROMPT);
+        if (types.length === 0) return null;
         return types.map((name) => ({ label: name, goto: "busca_preco", params: { tipo: name } }));
       }
       default:
@@ -870,6 +905,10 @@ export class FlowService {
     const { message, listings, whatsappUrl } = await this.resolveMessage(businessId, conversationId, node, params);
 
     let bubbles: FlowBubble[];
+    // Number of leading bubbles in `bubbles` that are dynamic/contextual (derived from the
+    // business's real data) rather than the node's own scripted JSON bubbles — used by
+    // finalizeBubbles to decide trim priority (dynamic bubbles are trimmed last).
+    let dynamicCount = 0;
     if (node.id === "busca_bairro") {
       // Only the location-agnostic bubbles from the script ("Perto de mim" / "Tanto faz") plus
       // real region names derived from the business's own documents — no hardcoded zone list.
@@ -878,6 +917,7 @@ export class FlowService {
       );
       const regions = await this.dynamicRegionBubbles(businessId);
       bubbles = [...regions, ...locationAgnostic, ...flow.global_bubbles];
+      dynamicCount = regions.length;
     } else {
       const dynamicOptions = await this.dynamicOptionBubbles(businessId, node.id, params);
       if (dynamicOptions) {
@@ -885,6 +925,7 @@ export class FlowService {
         // bubbles are stripped (e.g. "Tanto faz", "Qualquer modelo", "Outra", back-links).
         const nav = (node.bubbles ?? []).filter((b) => !this.isHardcodedOptionBubble(node.id, b));
         bubbles = [...dynamicOptions, ...nav, ...flow.global_bubbles];
+        dynamicCount = dynamicOptions.length;
       } else {
         bubbles = [...(node.bubbles ?? []), ...flow.global_bubbles];
       }
@@ -893,7 +934,7 @@ export class FlowService {
     return {
       nodeId: node.id,
       message,
-      bubbles: this.finalizeBubbles(this.ensureNonEmptyBubbles(node, bubbles)),
+      bubbles: this.finalizeBubbles(this.ensureNonEmptyBubbles(node, bubbles, niche), dynamicCount),
       input: node.input ?? null,
       params,
       ...(listings ? { listings } : {}),
@@ -905,41 +946,70 @@ export class FlowService {
   // stripped all hardcoded options as "nav" and returned no real options itself — a new business
   // with no ingested documents yet, or a failed/unparseable LLM extraction call), fall back to the
   // node's own unfiltered scripted bubbles rather than leaving the visitor with no options at all.
-  // If even those are empty (a flow-authoring gap), fall back to a single safety-net bubble back
-  // to the start of the flow — this is not a reintroduction of the removed persistent nav layer,
+  // If even those are empty (a flow-authoring gap), fall back to a single safety-net bubble —
+  // niche-aware real question rather than generic nav, since bubbles should read as specific
+  // questions, not navigation — this is not a reintroduction of the removed persistent nav layer,
   // it only ever appears when every other option-generation path has failed.
-  private ensureNonEmptyBubbles(node: FlowNode, bubbles: FlowBubble[]): FlowBubble[] {
+  private ensureNonEmptyBubbles(node: FlowNode, bubbles: FlowBubble[], niche: string): FlowBubble[] {
     if (bubbles.length > 0) return bubbles;
     if (node.bubbles && node.bubbles.length > 0) {
       console.warn(`[flow] ensureNonEmptyBubbles tier 2 fallback fired for node "${node.id}" — extraction returned no bubbles.`);
       return node.bubbles;
     }
     console.warn(`[flow] ensureNonEmptyBubbles tier 3 fallback fired for node "${node.id}" — no bubbles on node either.`);
-    return [{ label: "Voltar ao menu", goto: "start" }];
+    const label = niche === "concessionaria" ? "Quais carros vocês têm disponíveis?" : "Quais imóveis vocês têm disponíveis?";
+    return [{ label, goto: "start" }];
   }
 
   // Human-handoff node ids a bubble can point at — "Falar com corretor"/"Falar com vendedor"
   // bubbles all land the visitor in the same place.
   private static readonly HANDOFF_GOTOS = new Set(["atendente", "handoff"]);
-  private static readonly MAX_BUBBLES = 8;
+  private static readonly MAX_BUBBLES = 5;
 
-  // Caps the total at MAX_BUBBLES, trimming from the node-specific options first (earliest-listed
-  // = highest priority per the flow JSON's own ordering) while always keeping nav bubbles
-  // (goto: start) and any real handoff bubbles the node offers.
-  private finalizeBubbles(bubbles: FlowBubble[]): FlowBubble[] {
+  // Generic nav-ish label patterns, deprioritized in trimming order below — the full relabeling
+  // sweep of the flow JSONs themselves is a separate later task, this only affects which bubbles
+  // survive the cap.
+  private static readonly NAV_LABEL_PATTERN = /^(voltar|menu|tanto faz|ver outras op|outra)/i;
+
+  // Caps the total at MAX_BUBBLES using tiered trimming, trimming from the END of each tier
+  // (preserving each tier's original relative order) before moving on to the next tier:
+  //   Tier 1 (trimmed last)  — dynamic/contextual bubbles (real brand/model/region/type values
+  //                            derived from the business's own data), i.e. the first `dynamicCount`
+  //                            entries in `bubbles`.
+  //   Tier 2                 — the node's own scripted bubbles, in their original JSON order.
+  //   Tier 3 (trimmed first) — navigation-shaped bubbles: goto === "start", goto in HANDOFF_GOTOS/
+  //                            WHATSAPP_HANDOFF_NODE_IDS, or a generic nav-looking label.
+  // Nav bubbles are deliberately NOT protected from trimming — per product direction, bubbles
+  // should read as specific questions, not navigation, so a nav bubble is the first thing cut when
+  // the list is too long, not the last.
+  private finalizeBubbles(bubbles: FlowBubble[], dynamicCount = 0): FlowBubble[] {
     if (bubbles.length <= FlowService.MAX_BUBBLES) return bubbles;
 
-    const NEVER_TRIM_GOTOS = new Set(["start", ...FlowService.HANDOFF_GOTOS]);
-    const keep: FlowBubble[] = [];
-    const trimmable: FlowBubble[] = [];
-    for (const b of bubbles) {
-      if (NEVER_TRIM_GOTOS.has(b.goto)) keep.push(b);
-      else trimmable.push(b);
-    }
-    const slotsLeft = Math.max(0, FlowService.MAX_BUBBLES - keep.length);
-    // Reassemble in original relative order rather than keep-then-trimmable, so nav bubbles don't
-    // all jump to the end of the list.
-    const survivors = new Set([...trimmable.slice(0, slotsLeft), ...keep]);
+    const isNav = (b: FlowBubble) =>
+      b.goto === "start" ||
+      FlowService.HANDOFF_GOTOS.has(b.goto) ||
+      WHATSAPP_HANDOFF_NODE_IDS.has(b.goto) ||
+      FlowService.NAV_LABEL_PATTERN.test(b.label);
+
+    const tier1: FlowBubble[] = [];
+    const tier2: FlowBubble[] = [];
+    const tier3: FlowBubble[] = [];
+    bubbles.forEach((b, i) => {
+      if (i < dynamicCount) tier1.push(b);
+      else if (isNav(b)) tier3.push(b);
+      else tier2.push(b);
+    });
+
+    // Fill the budget tier-by-tier, trimming from the end of whichever tier is cut, lowest
+    // priority (tier3) first.
+    const budget = FlowService.MAX_BUBBLES;
+    const keepTier3 = tier3.slice(0, Math.max(0, budget - tier1.length - tier2.length));
+    const remainingAfterTier3 = Math.max(0, budget - keepTier3.length);
+    const keepTier2 = tier2.slice(0, Math.max(0, remainingAfterTier3 - tier1.length));
+    const remainingAfterTier2 = Math.max(0, budget - keepTier3.length - keepTier2.length);
+    const keepTier1 = tier1.slice(0, remainingAfterTier2);
+
+    const survivors = new Set([...keepTier1, ...keepTier2, ...keepTier3]);
     return bubbles.filter((b) => survivors.has(b));
   }
 

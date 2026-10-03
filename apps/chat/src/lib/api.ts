@@ -1,10 +1,14 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3006";
 
 async function request(path: string, options?: RequestInit) {
+  // A genuinely stalled connection (dead proxy, saturated inference gateway on the backend) must
+  // fail visibly instead of hanging indefinitely — this helper previously had no timeout at all,
+  // unlike streamMessage below which already aborts after 45s.
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     credentials: "include",
     headers: { "content-type": "application/json", ...options?.headers },
+    signal: AbortSignal.timeout(20000),
   });
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   return res.json();

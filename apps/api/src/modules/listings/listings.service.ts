@@ -103,6 +103,18 @@ export class ListingsService {
     return count > 0;
   }
 
+  // Real distinct listingType values for a business's active inventory — used by the chat flow's
+  // "busca_tipo" node to build type bubbles from actual rows instead of an LLM extraction call
+  // when the business already has a populated Listing table.
+  async distinctListingTypes(businessId: string): Promise<string[]> {
+    const rows = await this.prisma.client.listing.findMany({
+      where: { businessId, status: "active", deletedAt: null },
+      distinct: ["listingType"],
+      select: { listingType: true },
+    });
+    return rows.map((r) => r.listingType).filter((t): t is string => typeof t === "string" && t.length > 0);
+  }
+
   async listForOwner(businessId: string, filters?: { status?: string; listingType?: string }) {
     return this.prisma.client.listing.findMany({
       where: {
