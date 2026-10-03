@@ -686,7 +686,7 @@ export function ChatScreen({
         // mobile browsers routinely block this best-effort popup, so the card can't be the only path.
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, whatsappUrl: result.whatsappUrl } : m)));
         window.open(result.whatsappUrl, "_blank");
-      } else if (result?.flow?.bubbles) {
+      } else if (result?.flow?.bubbles?.length) {
         setBubbles(result.flow.bubbles);
         setSuggestions([]);
       }

@@ -92,6 +92,9 @@ interface FlowNode {
   bubbles?: FlowBubble[];
   input?: string;
   on_input?: string;
+  // Optional escape hatch — not populated by any flow JSON yet — lets a node explicitly force
+  // bubbles on ("full") or off ("none") regardless of the mechanical bubblePolicy() classification.
+  bubbleMode?: "full" | "none";
 }
 
 interface FlowDef {
@@ -108,6 +111,10 @@ interface FlowSnapshot {
   params: Record<string, unknown>;
   listings?: ListingItem[];
   whatsappUrl?: string | null;
+  // Bubbles that were resolved for this node but intentionally hidden from the visitor by the
+  // sparse-bubble policy (bubblePolicy() === "none") — kept so matchFreeTextBubble can still match
+  // a visitor's typed text against the node's real options even though they aren't rendered.
+  hiddenBubbles?: FlowBubble[];
 }
 
 export interface ListingItem {
@@ -1590,14 +1597,34 @@ export class FlowService {
       .map((b) => ({ ...b, label: this.substitute(b.label, params) }))
       .filter((b) => !hasPlaceholder(b.label));
 
+    // Sparse-bubbles policy: exempt nodes (resolveMessage's own bubblesOverride, or any node with
+    // real dynamic/business-data-derived options) always keep their bubbles. Everything else is
+    // classified mechanically by bubblePolicy() — suppressed nodes send a visible `bubbles: []`
+    // but stash the would-have-shown bubbles into `hiddenBubbles` so matchFreeTextBubble still
+    // works, and skip ensureNonEmptyBubbles entirely (its safety-net fallback would otherwise
+    // resurrect a bubble on every suppressed node and defeat this whole policy).
+    const exempt = !!bubblesOverride || dynamicCount > 0;
+    const depth = this.depthMap(niche)[node.id] ?? Infinity;
+    const policy = exempt ? "full" : this.bubblePolicy(node, depth);
+
+    let finalBubbles: FlowBubble[];
+    let hiddenBubbles: FlowBubble[] | undefined;
+    if (policy === "none") {
+      finalBubbles = [];
+      hiddenBubbles = resolvedBubbles;
+    } else {
+      finalBubbles = this.finalizeBubbles(this.ensureNonEmptyBubbles(node, resolvedBubbles, niche, params), dynamicCount);
+    }
+
     return {
       nodeId: node.id,
       message,
-      bubbles: this.finalizeBubbles(this.ensureNonEmptyBubbles(node, resolvedBubbles, niche, params), dynamicCount),
+      bubbles: finalBubbles,
       input: node.input ?? null,
       params,
       ...(listings ? { listings } : {}),
       ...(whatsappUrl !== undefined ? { whatsappUrl } : {}),
+      ...(hiddenBubbles ? { hiddenBubbles } : {}),
     };
   }
 
@@ -1630,6 +1657,88 @@ export class FlowService {
   // bubbles all land the visitor in the same place.
   private static readonly HANDOFF_GOTOS = new Set(["atendente", "handoff"]);
   private static readonly MAX_BUBBLES = 5;
+
+  // Sparse-bubbles policy constants — see depthMap()/bubblePolicy() below. Bubbles are prominent
+  // only at the conversation START (category-choice layer) and for genuine discrete-choice nodes;
+  // everything else relies on free-text typing instead.
+  private static readonly START_LAYER_MAX_DEPTH = 1;
+  private static readonly CHOICE_MESSAGE_MAX_WORDS = 7;
+  private static readonly YESNO_LABEL_PATTERN =
+    /^(sim|n[ãa]o|ok|confirmar|confirmo|cancelar|pode ser|claro|aceito|concordo|agora n[ãa]o|depois|talvez)\b/i;
+
+  // Memoized per-niche BFS depth map (flows are loaded once from static JSON — no need to
+  // recompute this on every single emit() call).
+  private depthMapCache = new Map<string, Record<string, number>>();
+
+  // BFS from the flow's `start` node, following every bubble's `goto` plus each node's own
+  // `on_input` as graph edges. Unreachable nodes get `Infinity`.
+  private depthMap(niche: string): Record<string, number> {
+    const cached = this.depthMapCache.get(niche);
+    if (cached) return cached;
+
+    const flow = this.flowFor(niche);
+    const depths: Record<string, number> = {};
+    for (const id of Object.keys(flow.nodes)) depths[id] = Infinity;
+
+    const queue: string[] = [];
+    if (flow.nodes[flow.start]) {
+      depths[flow.start] = 0;
+      queue.push(flow.start);
+    }
+
+    while (queue.length) {
+      const currentId = queue.shift()!;
+      const currentDepth = depths[currentId];
+      const node = flow.nodes[currentId];
+      if (!node) continue;
+
+      const neighbors: string[] = [];
+      for (const bubble of node.bubbles ?? []) neighbors.push(bubble.goto);
+      if (node.on_input) neighbors.push(node.on_input);
+
+      for (const neighborId of neighbors) {
+        if (!(neighborId in depths)) continue; // edge points at an id not defined as a node
+        if (depths[neighborId] > currentDepth + 1) {
+          depths[neighborId] = currentDepth + 1;
+          queue.push(neighborId);
+        }
+      }
+    }
+
+    this.depthMapCache.set(niche, depths);
+    return depths;
+  }
+
+  // Implements the mechanical keep/suppress classification rule — see module doc for the full
+  // 6-condition rationale. Returns "full" to keep the node's bubbles visible, "none" to suppress.
+  private bubblePolicy(node: FlowNode, depth: number): "full" | "none" {
+    if (node.bubbleMode) return node.bubbleMode;
+
+    // 2. Start/category-choice layer.
+    if (depth <= FlowService.START_LAYER_MAX_DEPTH) return "full";
+
+    // 3. Short interrogative message — a genuine quick question.
+    const trimmedMessage = node.message.trim();
+    if (trimmedMessage.endsWith("?")) {
+      const wordCount = trimmedMessage.split(/\s+/).filter(Boolean).length;
+      if (wordCount <= FlowService.CHOICE_MESSAGE_MAX_WORDS) return "full";
+    }
+
+    const bubbles = node.bubbles ?? [];
+
+    // 4. Parameter collector — ≥2 bubbles all sharing the exact same goto.
+    if (bubbles.length >= 2 && bubbles.every((b) => b.goto === bubbles[0].goto)) return "full";
+
+    // 5. Parameter collector — ≥2 bubbles, every bubble carries a `params` object.
+    if (bubbles.length >= 2 && bubbles.every((b) => !!b.params)) return "full";
+
+    // 6. Short yes/no-ish confirmation.
+    if (bubbles.length > 0 && bubbles.length <= 3 && bubbles.some((b) => FlowService.YESNO_LABEL_PATTERN.test(b.label.trim()))) {
+      return "full";
+    }
+
+    return "none";
+  }
 
   // Generic nav-ish label patterns, deprioritized in trimming order below — the full relabeling
   // sweep of the flow JSONs themselves is a separate later task, this only affects which bubbles
@@ -1826,7 +1935,11 @@ export class FlowService {
 
     const conversation = await this.currentState(conversationId);
     const snapshot = (conversation.flowSnapshot as unknown as FlowSnapshot) ?? null;
-    const bubbles = snapshot?.bubbles ?? [];
+    // Union of visibly rendered bubbles and ones suppressed by the sparse-bubbles policy — the
+    // zero-LLM free-text shortcut should still work for a suppressed node's real options even
+    // though they aren't shown as tappable chips. The ambiguity guard below (exactly one match)
+    // already keeps this safe with the larger candidate pool.
+    const bubbles = [...(snapshot?.bubbles ?? []), ...(snapshot?.hiddenBubbles ?? [])];
     if (!bubbles.length) return null;
 
     const matches = bubbles.filter((bubble) => {
