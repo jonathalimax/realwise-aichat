@@ -11,6 +11,20 @@ import { ListingsService, ChatQueryFilters } from "../listings/listings.service"
 import { BookingsService } from "../bookings/bookings.service";
 import { AvailabilityService } from "../bookings/availability.service";
 import { CalendarService } from "../calendar/calendar.service";
+import {
+  calculateVehicleFinancing,
+  calculateVehicleAffordablePrice,
+  calculateRealEstateFinancing,
+  calculateRentalTotalCost,
+  calculateRentalInsurance,
+  formatBRL,
+  DEFAULT_VEHICLE_MONTHLY_RATE_PERCENT,
+  DEFAULT_REAL_ESTATE_MONTHLY_RATE_PERCENT,
+  DEFAULT_ITBI_PERCENT,
+  DEFAULT_NOTARY_PERCENT,
+  DEFAULT_LATE_PAYMENT_FINE_PERCENT,
+  DEFAULT_LATE_PAYMENT_INTEREST_PERCENT,
+} from "./flow-calculators";
 
 // Scripted nodes that are supposed to hand the visitor off to a real human WhatsApp number —
 // their flow-JSON message templates have placeholders ({numero}, {espera}) that nothing ever
@@ -91,6 +105,26 @@ const LISTING_NODE_IDS = new Set(["resultados"]);
 // LLM-prose fallback, which has no real listing to ground on and will invent specifics (e.g. a
 // fabricated "BMW 2018, 30.000km, R$90.000" that doesn't exist in inventory).
 const LISTING_DETAIL_NODE_IDS = new Set(["carro_detalhe", "carro_fotos"]);
+
+// Financing/cost "simulation" nodes that used to fall straight through to the generic LLM-prose
+// fallback below — slow (5-30s, sometimes a 60s timeout) AND prone to inventing numbers with no
+// real grounding. Each id here is handled by resolveCalculatorNode() with a real formula (see
+// flow-calculators.ts) BEFORE the generic fallback ever runs. `troca_estimativa` (trade-in vehicle
+// valuation) is deliberately excluded — a trade-in's value genuinely isn't computable from any
+// data this system has, so it keeps/improves the honest "needs an in-person evaluation" fallback
+// instead of a fake calculation.
+const CALCULATOR_NODE_IDS = new Set([
+  "fin_res",
+  "cp_sim_res",
+  "al_simular_res",
+  "gar_simular",
+  "custo_itbi",
+  "custo_escritura",
+  "custo_resultado",
+  "enc_multa_calc",
+  "atraso_juros",
+  "troca_estimativa",
+]);
 
 const MAX_FLOW_HISTORY = 25;
 
@@ -256,6 +290,12 @@ export class FlowService {
     // to the generic RAG-prose fallback below, which has no real listing to ground on.
     if (LISTING_DETAIL_NODE_IDS.has(node.id)) {
       return this.resolveListingDetail(businessId, node, params);
+    }
+
+    // Financing/cost simulation nodes — real formulas, never the generic LLM-prose fallback (see
+    // CALCULATOR_NODE_IDS comment above).
+    if (CALCULATOR_NODE_IDS.has(node.id)) {
+      return this.resolveCalculatorNode(businessId, node, params);
     }
 
     if (!hasPlaceholder(substituted)) return { message: substituted };
@@ -456,6 +496,220 @@ export class FlowService {
         },
       ],
     };
+  }
+
+  // Monthly-income midpoints (in cents) for the 5 renda buckets cp_sim_renda's bubbles set —
+  // same "bucket, not a raw value" shape as faixa, so this needs its own representative-value
+  // mapping rather than a raw param.
+  private static readonly RENDA_BUCKET_MIDPOINT_CENTS: Record<number, number> = {
+    1: 225000, // "Até R$ 3 mil"
+    2: 450000, // "R$ 3-6 mil"
+    3: 800000, // "R$ 6-10 mil"
+    4: 1500000, // "R$ 10-20 mil"
+    5: 2500000, // "Acima de R$ 20 mil"
+  };
+
+  // Representative monthly-rent value (cents) for a resolved faixa bucket — reuses
+  // faixaToPriceRange (the same mapping ListingsService filtering already relies on) so the
+  // bucket boundaries never drift between filtering and these simulation calculators. Buckets with
+  // only a min or only a max (the open-ended first/last buckets) use that single bound itself as
+  // the representative value rather than guessing a symmetric midpoint.
+  private rentalMidpointCents(faixa: unknown): number | null {
+    const { priceMin, priceMax } = this.faixaToPriceRange("imobiliaria", "aluguel", faixa);
+    if (priceMin != null && priceMax != null) return Math.round((priceMin + priceMax) / 2);
+    if (priceMax != null) return priceMax;
+    if (priceMin != null) return priceMin;
+    return null;
+  }
+
+  // Dispatches every CALCULATOR_NODE_IDS entry to its real formula (flow-calculators.ts) instead
+  // of ever reaching the generic RAG/LLM-prose fallback. Returns an honest "preciso de mais uma
+  // informação" message (never a guess) whenever a required param hasn't been captured yet.
+  private async resolveCalculatorNode(
+    businessId: string,
+    node: FlowNode,
+    params: Record<string, unknown>,
+  ): Promise<{ message: string; bubblesOverride?: FlowBubble[] }> {
+    const disclaimer = "Taxa estimada, sujeito à aprovação.";
+
+    switch (node.id) {
+      case "fin_res": {
+        const askEntrada: FlowBubble[] = [{ label: "⬅ Simular outra entrada", goto: "fin_entrada" }];
+        const askPrazo: FlowBubble[] = [{ label: "⬅ Simular outro prazo", goto: "fin_prazo" }];
+
+        const months = typeof params.meses === "number" ? params.meses : NaN;
+        if (!Number.isFinite(months) || months <= 0) {
+          return {
+            message: "Para simular a parcela, me diga em quantas vezes você quer pagar.",
+            bubblesOverride: askPrazo,
+          };
+        }
+
+        const entrada = params.entrada;
+        if (entrada === "troca") {
+          return {
+            message:
+              "Para simular usando o valor da troca como entrada, preciso primeiro confirmar o valor do seu veículo numa avaliação presencial. Quer simular com outro valor de entrada enquanto isso?",
+            bubblesOverride: askEntrada,
+          };
+        }
+        const downPaymentCents = typeof entrada === "number" && entrada >= 0 ? Math.round(entrada * 100) : 0;
+
+        const listingId = this.resolveListingId(params);
+        let priceCents: number | null = null;
+        if (listingId) {
+          try {
+            const listing = await this.listingsService.getOne(businessId, listingId);
+            priceCents = listing.priceCents ?? null;
+          } catch {
+            priceCents = null;
+          }
+        }
+
+        if (priceCents != null) {
+          const result = calculateVehicleFinancing({ priceCents, downPaymentCents, months });
+          if (!result) {
+            return {
+              message: "A entrada informada é maior ou igual ao valor do veículo. Quer simular com outro valor de entrada?",
+              bubblesOverride: askEntrada,
+            };
+          }
+          return {
+            message: `Simulação: parcela de ~${formatBRL(result.monthlyPaymentCents)} em ${months}x (taxa estimada ${DEFAULT_VEHICLE_MONTHLY_RATE_PERCENT}% a.m.). Total financiado de ${formatBRL(result.principalCents)}, total pago ao final de ~${formatBRL(result.totalPaidCents)}. ${disclaimer}`,
+          };
+        }
+
+        const targetParcela = params.parcela;
+        if (typeof targetParcela === "number" && targetParcela > 0) {
+          const affordability = calculateVehicleAffordablePrice({
+            targetMonthlyPaymentCents: Math.round(targetParcela * 100),
+            downPaymentCents,
+            months,
+          });
+          if (affordability) {
+            return {
+              message: `Com uma parcela de até ${formatBRL(Math.round(targetParcela * 100))} em ${months}x e entrada de ${formatBRL(downPaymentCents)}, você consegue financiar um veículo de até ~${formatBRL(affordability.maxPriceCents)} (taxa estimada ${DEFAULT_VEHICLE_MONTHLY_RATE_PERCENT}% a.m.). ${disclaimer}`,
+            };
+          }
+        }
+
+        return {
+          message: "Para calcular a parcela certa, preciso saber o preço do veículo. Quer ver as opções disponíveis?",
+          bubblesOverride: [{ label: "Ver carros disponíveis", goto: "resultados" }, ...askEntrada],
+        };
+      }
+
+      case "cp_sim_res": {
+        const renda = typeof params.renda === "number" ? params.renda : NaN;
+        const years = typeof params.anos === "number" ? params.anos : NaN;
+        const monthlyIncomeCents = FlowService.RENDA_BUCKET_MIDPOINT_CENTS[renda];
+        if (!monthlyIncomeCents || !Number.isFinite(years) || years <= 0) {
+          return {
+            message: "Para simular, me diga sua renda familiar mensal e em quantos anos quer pagar.",
+            bubblesOverride: [{ label: "⬅ Simular financiamento", goto: "cp_sim_renda" }],
+          };
+        }
+        const entrada = params.entrada;
+        const downPaymentPercent = typeof entrada === "number" && entrada >= 0 ? entrada : 0;
+        const result = calculateRealEstateFinancing({ monthlyIncomeCents, downPaymentPercent, years });
+        if (!result) {
+          return {
+            message: "Não consegui simular com esses valores — pode tentar outra combinação de entrada e prazo?",
+            bubblesOverride: [{ label: "⬅ Simular de novo", goto: "cp_sim_renda" }],
+          };
+        }
+        return {
+          message: `Estimativa: imóvel de até ${formatBRL(result.maxPropertyPriceCents)}, parcela inicial de ~${formatBRL(result.monthlyPaymentCents)} (taxa estimada ${DEFAULT_REAL_ESTATE_MONTHLY_RATE_PERCENT}% a.m., considerando até 30% da renda com a parcela). ${disclaimer}`,
+        };
+      }
+
+      case "al_simular_res": {
+        const monthlyRentCents = this.rentalMidpointCents(params.faixa);
+        if (monthlyRentCents == null) {
+          return {
+            message: "Para simular o custo mensal, me diga a faixa de aluguel que você procura.",
+            bubblesOverride: [{ label: "⬅ Simular valor total", goto: "al_simular" }],
+          };
+        }
+        const result = calculateRentalTotalCost({ monthlyRentCents });
+        if (!result) {
+          return {
+            message: "Para simular o custo mensal, me diga a faixa de aluguel que você procura.",
+            bubblesOverride: [{ label: "⬅ Simular valor total", goto: "al_simular" }],
+          };
+        }
+        return {
+          message: `Custo mensal estimado: ${formatBRL(result.totalMonthlyCostCents)} (aluguel de referência de ${formatBRL(result.monthlyRentCents)} + condomínio/IPTU estimados). O valor exato depende do imóvel escolhido. ${disclaimer}`,
+        };
+      }
+
+      case "gar_simular": {
+        const monthlyRentCents = this.rentalMidpointCents(params.faixa);
+        if (monthlyRentCents == null) {
+          return {
+            message: "Para simular o valor do seguro-fiança, me diga a faixa de aluguel do imóvel.",
+            bubblesOverride: [{ label: "⬅ Informar faixa de aluguel", goto: "al_simular" }],
+          };
+        }
+        const result = calculateRentalInsurance({ monthlyRentCents });
+        if (!result) {
+          return {
+            message: "Para simular o valor do seguro-fiança, me diga a faixa de aluguel do imóvel.",
+            bubblesOverride: [{ label: "⬅ Informar faixa de aluguel", goto: "al_simular" }],
+          };
+        }
+        return {
+          message: `Para um aluguel de referência de ${formatBRL(monthlyRentCents)}, o seguro-fiança fica em torno de ${formatBRL(result.monthlyInstallmentCents)}/mês (~${formatBRL(result.annualPremiumCents)}/ano). ${disclaimer} Sujeito à análise da seguradora.`,
+        };
+      }
+
+      case "custo_itbi":
+        return {
+          message: `O ITBI é um imposto municipal de cerca de ${DEFAULT_ITBI_PERCENT}% sobre o valor do imóvel (valor estimado — a alíquota exata varia por município).`,
+        };
+
+      case "custo_escritura":
+        return {
+          message: `Escritura e registro somam em torno de ${DEFAULT_NOTARY_PERCENT}% do valor do imóvel (valor estimado, varia por cartório); no financiamento, o contrato do banco substitui a escritura.`,
+        };
+
+      case "custo_resultado":
+        // No structured property-price param ever reaches this node (custo_calcular only takes
+        // free text, which isn't captured into flowParams) — honest, not a guess.
+        return {
+          message: "Para calcular o total de ITBI + cartório, preciso do valor do imóvel. Qual é o valor (ou o código do imóvel)?",
+          bubblesOverride: [{ label: "⬅ Informar valor do imóvel", goto: "custo_calcular" }],
+        };
+
+      case "enc_multa_calc":
+        // The actual multa depends on the specific lease contract's remaining term, which this
+        // system has no structured record of — honest handoff instead of a fabricated number.
+        return {
+          message:
+            "A multa por rescisão é proporcional ao tempo restante do seu contrato, então o valor exato depende dos dados do seu contrato específico. Posso te conectar com o atendimento para calcular o valor certo do seu caso?",
+          bubblesOverride: [
+            { label: "Falar com o atendimento", goto: "handoff_whats" },
+            { label: "⬅ Outra dúvida sobre saída", goto: "enc" },
+          ],
+        };
+
+      case "atraso_juros":
+        return {
+          message: `Na prática usual de mercado, a multa por atraso costuma ser de ${DEFAULT_LATE_PAYMENT_FINE_PERCENT}% sobre o valor em atraso, mais juros de ${DEFAULT_LATE_PAYMENT_INTEREST_PERCENT}% ao mês — os percentuais exatos do seu contrato podem ser diferentes. Posso confirmar com o atendimento se precisar do valor exato.`,
+        };
+
+      case "troca_estimativa":
+        // Explicitly NOT computable — a trade-in's value depends on a real, physical evaluation
+        // of the vehicle's condition, which this system has no data to simulate honestly.
+        return {
+          message: "Não temos essa informação por aqui — o valor da sua troca só é confirmado numa avaliação presencial com um vendedor.",
+        };
+
+      default:
+        // Unreachable given CALCULATOR_NODE_IDS, but fail open to the node's own scripted message
+        // rather than throwing if a future id is added to the set without a case here.
+        return { message: node.message };
+    }
   }
 
   // Closes the "scripted booking is cosmetic" gap: visita_confirmada/agend_ok used to always show
