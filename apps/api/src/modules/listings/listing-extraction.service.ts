@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 import { safeHttpUrl } from "../../common/safe-http-url";
@@ -197,7 +197,12 @@ export class ListingExtractionService {
           businessId,
           systemPrompt,
           prompt: `Gere o array JSON de anúncios a partir do trecho abaixo.\n\nTrecho:\n${window}`,
-          maxTokens: 1500,
+          // A 6000-char window can contain several listings with descriptions/images — 1500 was
+          // tight enough to truncate mid-JSON on a real, non-trivial fraction of windows, which
+          // threw in JSON.parse below and silently dropped that window's listings for the run.
+          // That run-to-run coverage variance (not the dedupKey issue) was the deeper cause of
+          // extraction row counts never fully stabilizing across repeated runs.
+          maxTokens: 4000,
           timeoutMs: 60000,
         });
         const raw = result.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
@@ -337,18 +342,41 @@ export class ListingExtractionService {
         const explicitCodeTaken = explicitCode
           ? await this.prisma.client.listing.findUnique({ where: { businessId_referenceCode: { businessId, referenceCode: explicitCode } } })
           : null;
-        const referenceCode = explicitCode && !explicitCodeTaken ? explicitCode : generateReferenceCode(dedupKey);
-        const createdListing = await this.prisma.client.listing.create({
-          data: {
-            businessId,
-            referenceCode,
-            dedupKey,
-            extractedAt: runStartedAt,
-            lastSeenInSourceAt: runStartedAt,
-            ...fullData,
-            title: item.title,
-          },
-        });
+        let referenceCode = explicitCode && !explicitCodeTaken ? explicitCode : generateReferenceCode(dedupKey);
+        // The comment above promises a collision never aborts the run, but the deterministic
+        // fallback code can ALSO collide (e.g. two distinct items hashing close enough, or the
+        // same item reprocessed via an ambiguous-fuzzy-match fallback landing here twice in one
+        // run) — the unique constraint on (businessId, referenceCode) then throws and previously
+        // crashed the whole extraction with no per-item isolation. Retry with a salted code a
+        // few times before giving up on this one item (never on the whole run).
+        let createdListing;
+        for (let attempt = 0; ; attempt++) {
+          try {
+            createdListing = await this.prisma.client.listing.create({
+              data: {
+                businessId,
+                referenceCode,
+                dedupKey,
+                extractedAt: runStartedAt,
+                lastSeenInSourceAt: runStartedAt,
+                ...fullData,
+                title: item.title,
+              },
+            });
+            break;
+          } catch (err) {
+            const isUniqueViolation = (err as { code?: string })?.code === "P2002";
+            if (!isUniqueViolation || attempt >= 4) {
+              this.logger.warn(
+                `extractForBusiness ${businessId}: giving up creating "${item.title}" after ${attempt + 1} referenceCode collision(s)`,
+              );
+              createdListing = null;
+              break;
+            }
+            referenceCode = `${generateReferenceCode(dedupKey)}${randomUUID().slice(0, 4).toUpperCase()}`;
+          }
+        }
+        if (!createdListing) continue;
         await this.createImages(createdListing.id, item.images);
         created++;
       }
