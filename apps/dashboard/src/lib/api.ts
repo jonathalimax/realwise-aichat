@@ -86,3 +86,10 @@ export const getCalendarStatus = (businessId: string) => request(`/calendar/${bu
 export const askOwnerAssistant = (message: string, history: { role: "owner" | "assistant"; content: string }[]) =>
   request("/owner-assistant/ask", { method: "POST", body: JSON.stringify({ message, history }) });
 export const getCalendarAuthUrl = (businessId: string) => request(`/calendar/${businessId}/auth-url`);
+
+export const getInboxConversations = (filter?: "all" | "escalated") =>
+  request(`/inbox/conversations${filter ? `?filter=${filter}` : ""}`);
+export const getInboxThread = (id: string) => request(`/inbox/conversations/${id}`);
+export const sendInboxMessage = (id: string, text: string) =>
+  request(`/inbox/conversations/${id}/messages`, { method: "POST", body: JSON.stringify({ text }) });
+export const markInboxRead = (id: string) => request(`/inbox/conversations/${id}/read`, { method: "POST" });

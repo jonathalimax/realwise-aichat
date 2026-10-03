@@ -11,6 +11,7 @@ const ITEMS = [
   { href: "/", label: "Início" },
   { href: "/profile", label: "Perfil" },
   { href: "/leads", label: "Leads" },
+  { href: "/inbox", label: "Conversas" },
   { href: "/agenda", label: "Agenda" },
   { href: "/knowledge", label: "Base de conhecimento" },
   { href: "/analytics", label: "Análises" },
