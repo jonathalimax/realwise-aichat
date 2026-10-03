@@ -752,6 +752,7 @@ export class ChatService {
     let fullText = "";
     let gatewayResult;
     let streamFailed = false;
+    let streamFailedWithNoMeaningfulText = false;
     try {
       gatewayResult = await generateFromGatewayStream(
         { purpose: "chat", businessId, systemPrompt, prompt, temperature: 0.1 },
@@ -769,6 +770,11 @@ export class ChatService {
         onDelta(STREAM_INTERRUPTED_NOTE);
         fullText += STREAM_INTERRUPTED_NOTE;
       } else {
+        // ABSTENTION_FALLBACK's own text is itself >= MIN_MEANINGFUL_TEXT_LENGTH, so re-measuring
+        // fullText.length below (as the non-failure path does) would wrongly read this as real
+        // meaningful content and persist answerSource:"rag" instead of "abstained" — track the
+        // reason explicitly instead of re-deriving it from the replacement text's own length.
+        streamFailedWithNoMeaningfulText = true;
         fullText = ABSTENTION_FALLBACK;
         onDelta(ABSTENTION_FALLBACK);
       }
@@ -782,7 +788,7 @@ export class ChatService {
     // question surfaces in "Perguntas não respondidas" and can trigger auto-escalation on a
     // repeat. Not buffering/rewriting the stream to keep this fix scoped and low-risk.
     const abstained = streamFailed
-      ? fullText.trim().length < MIN_MEANINGFUL_TEXT_LENGTH
+      ? streamFailedWithNoMeaningfulText
       : looksLikeAbstention(fullText) ||
         hasUngroundedEntityClaim(fullText, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings));
     const assistantMessage = await this.prisma.client.message.create({
