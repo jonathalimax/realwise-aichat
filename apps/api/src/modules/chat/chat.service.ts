@@ -109,6 +109,15 @@ function normalize(text: string): string {
     .trim();
 }
 
+// A bare greeting carries no real informational content to ground an answer on, so it always
+// retrieves weak/irrelevant chunks and falls into the strict grounding gate's abstention response
+// ("Essa eu não tenho aqui...") — a confusing reply to someone who just said hi. Short-circuit
+// these before chunk retrieval ever runs, same spirit as the existing NO_CONTEXT_FALLBACK guard.
+const GREETING_PATTERN = /^(oi|ola|ol[aá]|e ai|eae|boa noite|bom dia|boa tarde|hey|hi|hello)[\s!.?]*$/;
+function isBareGreeting(visitorText: string): boolean {
+  return GREETING_PATTERN.test(normalize(visitorText));
+}
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -569,6 +578,21 @@ export class ChatService {
     if (!business) throw new NotFoundException("Business not found");
     const niche = business.niche;
 
+    if (isBareGreeting(visitorText)) {
+      return {
+        text: `Olá! 👋 Sou a assistente da ${business.name}. Como posso te ajudar?`,
+        abstained: false,
+        model: undefined,
+        inputTokens: 0,
+        outputTokens: 0,
+        latencyMs: 0,
+        retrievedChunkIds: [],
+        retrievalTopScore: undefined,
+        listings: undefined,
+        suggestions: undefined,
+      };
+    }
+
     // Zero retrieved chunks means there's nothing to ground the model on — never send an empty-context
     // prompt and hope it abstains on its own, that's how it hallucinates confidently. This check
     // runs before anything else, unchanged.
@@ -713,6 +737,19 @@ export class ChatService {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException("Business not found");
     const niche = business.niche;
+
+    if (isBareGreeting(visitorText)) {
+      const greeting = `Olá! 👋 Sou a assistente da ${business.name}. Como posso te ajudar?`;
+      onDelta(greeting);
+      const assistantMessage = await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: greeting, answerSource: "rag" },
+      });
+      await this.prisma.client.conversation.update({
+        where: { id: conversationId },
+        data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
+      });
+      return { message: assistantMessage, escalated: false };
+    }
 
     // Zero retrieved chunks means there's nothing to ground the model on — this check runs before
     // everything else, unchanged.
