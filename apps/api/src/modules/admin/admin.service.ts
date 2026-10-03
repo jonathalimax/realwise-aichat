@@ -220,6 +220,21 @@ export class AdminService {
       : [];
     const nameById = new Map(businesses.map((b) => [b.id, b.name]));
 
+    // Same LlmCallLog-based estimate used elsewhere in this service, scoped to this same window
+    // so the cost column lines up with the conversation stats shown alongside it, not a fixed 7d.
+    const costByBusiness = new Map<string, number>();
+    if (businessIds.length) {
+      const calls = await this.prisma.client.llmCallLog.findMany({
+        where: { createdAt: { gte: since }, businessId: { in: businessIds } },
+        select: { businessId: true, provider: true, model: true, inputTokens: true, outputTokens: true },
+      });
+      for (const call of calls) {
+        if (!call.businessId) continue;
+        const prev = costByBusiness.get(call.businessId) ?? 0;
+        costByBusiness.set(call.businessId, prev + estimateCostUsd(call.provider, call.model, call.inputTokens, call.outputTokens));
+      }
+    }
+
     return {
       totalMessages: messages.length,
       bySource,
@@ -237,6 +252,7 @@ export class AdminService {
           flagged: e.flagged,
           negativeFeedback: e.negativeFeedback,
           medianLatencyMs: median(e.latencies),
+          costUsd: costByBusiness.get(businessId) ?? 0,
         }))
         .sort((a, b) => b.total - a.total),
     };

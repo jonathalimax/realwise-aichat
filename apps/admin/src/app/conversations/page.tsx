@@ -22,6 +22,11 @@ function pct(n: number) {
   return `${(n * 100).toFixed(1)}%`;
 }
 
+// Light-traffic costs are often sub-cent — fixed .toFixed(2) would show "$0.00" for real non-zero usage.
+function formatCostUsd(value: number): string {
+  return value > 0 && value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
+}
+
 export default function ConversationsPage() {
   const [range, setRange] = useState<(typeof RANGE_OPTIONS)[number]["value"]>("7");
   const [data, setData] = useState<any>(null);
@@ -95,6 +100,7 @@ export default function ConversationsPage() {
                     <TableHead>Sinalizado</TableHead>
                     <TableHead>Feedback negativo</TableHead>
                     <TableHead>Mediana resposta</TableHead>
+                    <TableHead>Custo estimado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -107,11 +113,12 @@ export default function ConversationsPage() {
                       <TableCell>{b.flagged}</TableCell>
                       <TableCell>{b.negativeFeedback}</TableCell>
                       <TableCell>{formatMs(b.medianLatencyMs)}</TableCell>
+                      <TableCell>{formatCostUsd(b.costUsd ?? 0)}</TableCell>
                     </TableRow>
                   ))}
                   {data.perBusiness.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-ink-soft">
+                      <TableCell colSpan={8} className="text-center text-ink-soft">
                         Nenhuma conversa neste período.
                       </TableCell>
                     </TableRow>
