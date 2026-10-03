@@ -6,23 +6,12 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { LeadsService } from "../leads/leads.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 import { retrieveRelevantChunks } from "./knowledge-retrieval";
+import { safeHttpUrl } from "../../common/safe-http-url";
 
 // Scripted nodes that are supposed to hand the visitor off to a real human WhatsApp number —
 // their flow-JSON message templates have placeholders ({numero}, {espera}) that nothing ever
 // resolves, since the flow engine has no concept of "this node means: build a real wa.me link."
 const WHATSAPP_HANDOFF_NODE_IDS = new Set(["handoff_whats", "handoff_whatsapp"]);
-
-// LLM-parsed JSON isn't trusted input — only ever accept a genuine http(s) URL for a listing
-// url/imageUrl, never a javascript:/data: scheme a malformed or adversarial model response could emit.
-function safeHttpUrl(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 interface FlowBubble {
   label: string;
