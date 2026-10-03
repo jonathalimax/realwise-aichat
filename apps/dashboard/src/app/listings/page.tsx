@@ -94,7 +94,7 @@ export default function ListingsPage() {
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-serif text-2xl text-ink">Anúncios</h1>
         <Button variant="outline" size="sm" disabled={extracting || !isStudio} onClick={handleReextract}>
           {extracting ? "Extraindo… isso pode levar alguns minutos" : "Reextrair anúncios"}

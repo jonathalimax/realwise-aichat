@@ -96,7 +96,7 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-serif text-2xl text-ink">Perfil do negócio</h1>
         <Badge variant={business.confidenceScore >= 70 ? "positive" : "warning"}>
           Prontidão: {business.confidenceScore}%
@@ -148,7 +148,7 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">
-            <Input value={waLabel} onChange={(e) => setWaLabel(e.target.value)} placeholder="Label" className="w-32" />
+            <Input value={waLabel} onChange={(e) => setWaLabel(e.target.value)} placeholder="Label" className="w-full sm:w-32" />
             <Input
               value={waPhone}
               onChange={(e) => setWaPhone(maskBrPhone(e.target.value))}
@@ -162,7 +162,7 @@ export default function ProfilePage() {
           {whatsappNumbers.map((n) =>
             editingId === n.id ? (
               <div key={n.id} className="flex flex-wrap gap-2 rounded-lg border border-border bg-bg-2 px-3 py-2">
-                <Input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} className="w-32" />
+                <Input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} className="w-full sm:w-32" />
                 <Input
                   value={editPhone}
                   onChange={(e) => setEditPhone(maskBrPhone(e.target.value))}
@@ -173,8 +173,8 @@ export default function ProfilePage() {
                 <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancelar</Button>
               </div>
             ) : (
-              <div key={n.id} className="flex items-center justify-between rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm">
-                <span>{n.label}: {n.phone}</span>
+              <div key={n.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm">
+                <span className="min-w-0 break-all">{n.label}: {n.phone}</span>
                 <div className="flex gap-1">
                   <Button size="sm" variant="ghost" onClick={() => startEdit(n)}>Editar</Button>
                   <Button size="sm" variant="ghost" onClick={() => handleRemoveWhatsapp(n.id)}>Excluir</Button>

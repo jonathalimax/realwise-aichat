@@ -15,12 +15,12 @@ export function StatCard({ label, value, trend, trendLine, context, icon }: Stat
   return (
     <Card>
       <CardHeader className="pb-0">
-        <CardTitle className="flex min-w-0 items-center gap-1.5 font-sans text-xs font-medium uppercase tracking-wide text-ink-soft">
-          {icon}
-          <span className="truncate">{label}</span>
+        <CardTitle className="whitespace-normal leading-tight flex min-w-0 items-center gap-1.5 font-sans text-xs font-medium uppercase tracking-wide text-ink-soft">
+          {icon && <span className="shrink-0">{icon}</span>}
+          <span className="min-w-0">{label}</span>
         </CardTitle>
         {trend !== undefined && (
-          <CardAction>
+          <CardAction className="col-start-2 row-start-1 justify-self-end">
             <TrendBadge delta={trend} />
           </CardAction>
         )}

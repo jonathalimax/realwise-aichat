@@ -6,7 +6,7 @@ export function Segmented({ className, ...props }: HTMLAttributes<HTMLDivElement
   return (
     <div
       role="group"
-      className={cn("inline-flex gap-0.5 rounded-pill border border-border bg-bg-2 p-0.5", className)}
+      className={cn("inline-flex max-w-full flex-wrap gap-0.5 rounded-pill border border-border bg-bg-2 p-0.5", className)}
       {...props}
     />
   );

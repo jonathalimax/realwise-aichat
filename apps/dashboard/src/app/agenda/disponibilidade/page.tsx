@@ -104,13 +104,13 @@ export default function DisponibilidadePage() {
   return (
     <div>
       <div className="mb-5 flex items-center gap-3">
-        <Link href="/agenda" className="text-ink-soft hover:text-ink">
+        <Link href="/agenda" className="shrink-0 text-ink-soft hover:text-ink">
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="font-serif text-2xl text-ink">Configurar disponibilidade</h1>
+        <h1 className="min-w-0 font-serif text-2xl text-ink">Configurar disponibilidade</h1>
       </div>
 
-      <div className="mb-5 flex gap-2">
+      <div className="mb-5 flex flex-wrap gap-2">
         {APPOINTMENT_TYPES.map((t) => (
           <button
             key={t.value}
@@ -174,7 +174,7 @@ export default function DisponibilidadePage() {
                 placeholder="Minutos"
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <label className="text-xs font-semibold text-ink-soft">Capacidade por horário</label>
               <Input
                 type="number"
@@ -195,9 +195,9 @@ export default function DisponibilidadePage() {
               {recurringRules.map((r) => (
                 <div
                   key={r.id}
-                  className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+                  className="flex items-start justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                     <span className="font-medium text-ink">{weekdayLabel(r.weekday)}</span>
                     <span className="text-ink-soft">
                       {r.startTime}–{r.endTime} · {r.slotDurationMinutes}min · cap. {r.capacity}
@@ -208,7 +208,11 @@ export default function DisponibilidadePage() {
                       </Badge>
                     )}
                   </div>
-                  <button onClick={() => removeRule(r.id)} className="text-ink-soft hover:text-negative">
+                  <button
+                    onClick={() => removeRule(r.id)}
+                    aria-label="Remover"
+                    className="-m-2 flex min-h-11 min-w-11 shrink-0 items-center justify-center p-2 text-ink-soft hover:text-negative"
+                  >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -243,7 +247,11 @@ export default function DisponibilidadePage() {
                     <span className="text-ink">
                       {r.exceptionDate ? new Date(r.exceptionDate).toLocaleDateString("pt-BR") : "—"}
                     </span>
-                    <button onClick={() => removeRule(r.id)} className="text-ink-soft hover:text-negative">
+                    <button
+                      onClick={() => removeRule(r.id)}
+                      aria-label="Remover"
+                      className="-m-2 flex min-h-11 min-w-11 items-center justify-center p-2 text-ink-soft hover:text-negative"
+                    >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>

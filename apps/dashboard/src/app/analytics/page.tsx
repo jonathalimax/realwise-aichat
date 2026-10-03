@@ -26,22 +26,35 @@ export default function AnalyticsPage() {
               Ainda sem dados suficientes.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Pergunta</TableHead>
-                  <TableHead className="text-right">Ocorrências</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <div className="hidden lg:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Pergunta</TableHead>
+                      <TableHead className="text-right">Ocorrências</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {questions.map((q) => (
+                      <TableRow key={q.id}>
+                        <TableCell>{q.questionText}</TableCell>
+                        <TableCell className="text-right font-mono tabular-nums">{q.occurrenceCount}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="flex flex-col gap-2 lg:hidden">
                 {questions.map((q) => (
-                  <TableRow key={q.id}>
-                    <TableCell>{q.questionText}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{q.occurrenceCount}</TableCell>
-                  </TableRow>
+                  <div key={q.id} className="rounded-lg border border-border bg-bg-2 p-3">
+                    <div className="text-sm text-ink">{q.questionText}</div>
+                    <div className="mt-2 text-xs text-ink-soft">Ocorrências: {q.occurrenceCount}</div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

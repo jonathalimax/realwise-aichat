@@ -6,11 +6,19 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 }
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-start gap-1 p-6 pb-2", className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        "grid grid-cols-1 items-start gap-1 p-4 pb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:p-6 sm:pb-2",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn("truncate font-serif text-base text-ink", className)} {...props} />;
+  return <h3 className={cn("min-w-0 break-words font-serif text-base text-ink", className)} {...props} />;
 }
 
 export function CardDescription({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
@@ -18,13 +26,21 @@ export function CardDescription({ className, ...props }: HTMLAttributes<HTMLPara
 }
 
 export function CardAction({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("col-start-2 row-start-1 justify-self-end", className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        "col-start-1 row-start-2 justify-self-start sm:col-start-2 sm:row-start-1 sm:justify-self-end",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("p-6 pt-0", className)} {...props} />;
+  return <div className={cn("p-4 pt-0 sm:p-6 sm:pt-0", className)} {...props} />;
 }
 
 export function CardFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex items-center p-6 pt-0", className)} {...props} />;
+  return <div className={cn("flex items-center p-4 pt-0 sm:p-6 sm:pt-0", className)} {...props} />;
 }

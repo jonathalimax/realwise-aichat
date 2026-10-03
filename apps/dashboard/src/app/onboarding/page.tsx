@@ -341,8 +341,8 @@ export default function OnboardingPage() {
                 </div>
                 <span className="text-sm font-semibold text-ink">Número de escalonamento</span>
               </div>
-              <div className="flex gap-2">
-                <Input value={waLabel} onChange={(e) => setWaLabel(e.target.value)} placeholder="Label" className="w-32" />
+              <div className="flex flex-wrap gap-2">
+                <Input value={waLabel} onChange={(e) => setWaLabel(e.target.value)} placeholder="Label" className="w-full sm:w-32" />
                 <Input value={waPhone} onChange={(e) => setWaPhone(e.target.value)} placeholder="(11) 99999-9999" className="flex-1" />
                 <Button variant="outline" size="sm" onClick={handleAddWhatsapp}>Adicionar</Button>
               </div>
