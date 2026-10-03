@@ -8,6 +8,10 @@ import { ChatService } from "../chat/chat.service";
 // case a push notification would just be redundant noise.
 const VISITOR_LIVE_WINDOW_MS = 45_000;
 
+function isVisitorLive(seenAt: Date | null) {
+  return !!seenAt && Date.now() - seenAt.getTime() < VISITOR_LIVE_WINDOW_MS;
+}
+
 @Injectable()
 export class InboxService {
   constructor(
@@ -21,7 +25,7 @@ export class InboxService {
       where: { businessId, ...(filter === "escalated" ? { status: "escalated" } : {}) },
       orderBy: { lastMessageAt: "desc" },
       take: 100,
-      include: { lead: { select: { name: true, phone: true, commitmentScore: true, scoreBand: true } } },
+      include: { lead: { select: { id: true, name: true, phone: true, commitmentScore: true, scoreBand: true } } },
     });
 
     if (conversations.length === 0) return [];
@@ -49,6 +53,10 @@ export class InboxService {
       lead: c.lead,
       unread: c.lastMessageAt > (c.lastReadByOwnerAt ?? c.startedAt),
       preview: previewByConversation.get(c.id) ?? "",
+      lastVisitorSeenAt: c.lastVisitorSeenAt,
+      visitorOnline: isVisitorLive(c.lastVisitorSeenAt),
+      escalationReason: c.flowNodeId === "callback_ok" ? "callback" : null,
+      needsLiveAttention: c.status === "escalated" && isVisitorLive(c.lastVisitorSeenAt),
     }));
   }
 
@@ -66,6 +74,8 @@ export class InboxService {
       status: conversation.status,
       resumeToken: conversation.resumeToken,
       referenceCode: conversation.referenceCode,
+      visitorOnline: isVisitorLive(conversation.lastVisitorSeenAt),
+      escalationReason: conversation.flowNodeId === "callback_ok" ? "callback" : null,
       messages,
     };
   }
@@ -111,8 +121,7 @@ export class InboxService {
 
     // Visitor is actively polling the chat (within VISITOR_LIVE_WINDOW_MS) — they'll see this
     // reply within a few seconds via the existing poll loop, so a push would just be redundant.
-    const visitorIsLive =
-      conversation.lastVisitorSeenAt && Date.now() - conversation.lastVisitorSeenAt.getTime() < VISITOR_LIVE_WINDOW_MS;
+    const visitorIsLive = isVisitorLive(conversation.lastVisitorSeenAt);
     if (!visitorIsLive) {
       const url = this.chat.buildResumeLink(conversation.business, conversation);
       this.push

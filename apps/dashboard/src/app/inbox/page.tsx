@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getInboxConversations, getInboxThread, sendInboxMessage, markInboxRead } from "../../lib/api";
+import {
+  getInboxConversations,
+  getInboxThread,
+  sendInboxMessage,
+  markInboxRead,
+  getLeadWhatsappLink,
+} from "../../lib/api";
 import { Card, CardContent } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Textarea } from "../../components/ui/textarea";
 import { SegmentedControl } from "../../components/ui/segmented";
+import { playAlertSound } from "../../lib/alert-sound";
+
+const MUTE_STORAGE_KEY = "inbox-alert-muted";
+const POLL_INTERVAL_MS = 15000;
 
 const STATUS_LABEL: Record<string, string> = {
   active: "Ativa",
@@ -30,19 +40,81 @@ export default function InboxPage() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [muted, setMuted] = useState(false);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const liveAttentionSeenRef = useRef<Set<string>>(new Set());
+  const hasLoadedOnceRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      setMuted(localStorage.getItem(MUTE_STORAGE_KEY) === "1");
+    } catch {
+      // localStorage can be unavailable (e.g. private mode) — default to unmuted.
+    }
+  }, []);
+
+  function toggleMuted() {
+    const next = !muted;
+    setMuted(next);
+    try {
+      localStorage.setItem(MUTE_STORAGE_KEY, next ? "1" : "0");
+    } catch {
+      // Ignore storage failures.
+    }
+    if (!next) {
+      // Unmuting is also the user gesture that unlocks audio autoplay for this session.
+      try {
+        playAlertSound();
+      } catch {
+        // Ignore audio failures.
+      }
+    }
+  }
+
+  function notifyNewLiveAttention(list: any[]) {
+    const currentIds = new Set(list.filter((c) => c.needsLiveAttention).map((c) => c.id));
+    if (hasLoadedOnceRef.current) {
+      let hasNew = false;
+      for (const id of currentIds) {
+        if (!liveAttentionSeenRef.current.has(id)) hasNew = true;
+      }
+      if (hasNew && !muted) {
+        try {
+          playAlertSound();
+        } catch {
+          // Don't let a sound failure break the page.
+        }
+      }
+    }
+    liveAttentionSeenRef.current = currentIds;
+    hasLoadedOnceRef.current = true;
+  }
 
   async function refresh() {
     setLoading(true);
     try {
-      setConversations(await getInboxConversations(filter));
+      const data = await getInboxConversations(filter);
+      setConversations(data);
+      notifyNewLiveAttention(data);
     } finally {
       setLoading(false);
     }
   }
 
+  async function poll() {
+    try {
+      const data = await getInboxConversations(filter);
+      setConversations(data);
+      notifyNewLiveAttention(data);
+    } catch {
+      // Silent refresh — don't disrupt the UI on transient poll failures.
+    }
+  }
+
   useEffect(() => {
     refresh();
+    const intervalId = setInterval(poll, POLL_INTERVAL_MS);
+    return () => clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
@@ -94,6 +166,27 @@ export default function InboxPage() {
   }
 
   const canReply = thread?.status === "escalated";
+  const selectedConversation = conversations.find((c) => c.id === selectedId);
+  const selectedLeadId = selectedConversation?.lead?.id as string | undefined;
+
+  async function handleOpenWhatsapp() {
+    if (!selectedLeadId) return;
+    try {
+      const { url } = await getLeadWhatsappLink(selectedLeadId, "Retorno de contato solicitado no chat");
+      window.open(url, "_blank", "noopener");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao abrir o WhatsApp.");
+    }
+  }
+
+  function presenceLabel(c: any) {
+    if (c.visitorOnline) return { dotClass: "bg-emerald-500", label: "Online agora" };
+    if (c.lastVisitorSeenAt) return { dotClass: "bg-ink-soft/40", label: `visto ${relativeTime(c.lastVisitorSeenAt)}` };
+    return { dotClass: "bg-ink-soft/40", label: "sem atividade" };
+  }
+
+  const liveAttentionConversations = conversations.filter((c) => c.needsLiveAttention);
+  const otherConversations = conversations.filter((c) => !c.needsLiveAttention);
 
   return (
     <div>
@@ -108,6 +201,9 @@ export default function InboxPage() {
               { label: "Todas", value: "all" },
             ]}
           />
+          <Button size="sm" variant="outline" onClick={toggleMuted}>
+            {muted ? "Som desativado" : "Som ativado"}
+          </Button>
           <Button size="sm" variant="outline" onClick={refresh}>
             Atualizar
           </Button>
@@ -115,28 +211,75 @@ export default function InboxPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
-        <div className="flex flex-col gap-2">
-          {conversations.map((c) => (
-            <Card
-              key={c.id}
-              className={`cursor-pointer transition-colors ${selectedId === c.id ? "border-accent" : ""}`}
-              onClick={() => selectConversation(c.id)}
-            >
-              <CardContent className="flex flex-col gap-1 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    {c.unread && <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />}
-                    <span className="text-sm font-semibold text-ink">{c.lead?.name || "Visitante"}</span>
-                  </div>
-                  <span className="text-xs text-ink-soft">{relativeTime(c.lastMessageAt)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-xs text-ink-soft">{c.preview}</p>
-                  <Badge variant={STATUS_VARIANT[c.status]}>{STATUS_LABEL[c.status]}</Badge>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="flex flex-col gap-3">
+          {liveAttentionConversations.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h2 className="text-xs font-semibold uppercase text-accent-ink">Precisam de você agora</h2>
+              {liveAttentionConversations.map((c) => {
+                const presence = presenceLabel(c);
+                return (
+                  <Card
+                    key={c.id}
+                    className={`cursor-pointer border-l-4 border-l-accent transition-colors ${
+                      selectedId === c.id ? "border-accent" : ""
+                    }`}
+                    onClick={() => selectConversation(c.id)}
+                  >
+                    <CardContent className="flex flex-col gap-1 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          {c.unread && <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />}
+                          <span className="text-sm font-semibold text-ink">{c.lead?.name || "Visitante"}</span>
+                        </div>
+                        <span className="text-xs text-ink-soft">{relativeTime(c.lastMessageAt)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+                        <span className={`h-1.5 w-1.5 rounded-full ${presence.dotClass}`} aria-hidden />
+                        <span>{presence.label}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-xs text-ink-soft">{c.preview}</p>
+                        <Badge variant="negative">
+                          {c.escalationReason === "callback" ? "Pediu ligação" : "Aguardando você"}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2">
+            {otherConversations.map((c) => {
+              const presence = presenceLabel(c);
+              return (
+                <Card
+                  key={c.id}
+                  className={`cursor-pointer transition-colors ${selectedId === c.id ? "border-accent" : ""}`}
+                  onClick={() => selectConversation(c.id)}
+                >
+                  <CardContent className="flex flex-col gap-1 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        {c.unread && <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />}
+                        <span className="text-sm font-semibold text-ink">{c.lead?.name || "Visitante"}</span>
+                      </div>
+                      <span className="text-xs text-ink-soft">{relativeTime(c.lastMessageAt)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+                      <span className={`h-1.5 w-1.5 rounded-full ${presence.dotClass}`} aria-hidden />
+                      <span>{presence.label}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-xs text-ink-soft">{c.preview}</p>
+                      <Badge variant={STATUS_VARIANT[c.status]}>{STATUS_LABEL[c.status]}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
           {!loading && conversations.length === 0 && (
             <p className="text-sm text-ink-soft">
               {filter === "escalated" ? "Nenhuma conversa precisa de resposta agora." : "Nenhuma conversa ainda."}
@@ -182,6 +325,11 @@ export default function InboxPage() {
                 <div className="mt-3 border-t border-border pt-3">
                   {canReply ? (
                     <div className="flex flex-col gap-2">
+                      {thread.visitorOnline === false && (
+                        <p className="text-xs text-ink-soft">
+                          O visitante saiu do chat — use WhatsApp ou telefone para continuar.
+                        </p>
+                      )}
                       <Textarea
                         value={text}
                         onChange={(e) => setText(e.target.value)}
@@ -190,16 +338,26 @@ export default function InboxPage() {
                         rows={2}
                         disabled={sending}
                       />
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" onClick={handleOpenWhatsapp} disabled={!selectedLeadId}>
+                          Abrir WhatsApp
+                        </Button>
                         <Button size="sm" onClick={handleSend} disabled={sending || !text.trim()}>
                           Enviar
                         </Button>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-ink-soft">
-                      Só é possível responder conversas escaladas para atendimento humano.
-                    </p>
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs text-ink-soft">
+                        Só é possível responder conversas escaladas para atendimento humano.
+                      </p>
+                      <div className="flex justify-end">
+                        <Button size="sm" variant="outline" onClick={handleOpenWhatsapp} disabled={!selectedLeadId}>
+                          Abrir WhatsApp
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
               </>
