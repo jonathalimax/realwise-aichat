@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
+import { safeHttpUrl } from "../../common/safe-http-url";
 
 export interface ListingItem {
   title: string;
@@ -205,12 +206,92 @@ export class ListingsService {
       take: limit,
     });
 
-    return rows.map((row) => ({
+    return rows.map((row) => this.mapRowToListingItem(row));
+  }
+
+  // Shared by queryForChat and findMentionedForChat. `url`/image `url` are LLM/owner-settable
+  // fields, not system-controlled — run both through safeHttpUrl before ever including them in a
+  // chat response, closing a gap where an owner-settable `url` write wasn't previously validated.
+  private mapRowToListingItem(row: {
+    title: string;
+    priceText?: string | null;
+    description?: string | null;
+    url?: string | null;
+    images: { url: string }[];
+  }): ListingItem {
+    const url = safeHttpUrl(row.url ?? undefined);
+    const imageUrl = safeHttpUrl(row.images[0]?.url);
+    return {
       title: row.title,
       ...(row.priceText ? { price: row.priceText } : {}),
       ...(row.description ? { description: row.description } : {}),
-      ...(row.url ? { url: row.url } : {}),
-      ...(row.images[0]?.url ? { imageUrl: row.images[0].url } : {}),
-    }));
+      ...(url ? { url } : {}),
+      ...(imageUrl ? { imageUrl } : {}),
+    };
+  }
+
+  // Common Portuguese stopwords dropped when extracting "significant" title tokens below — short/
+  // generic words like these would otherwise match almost any haystack and defeat the whole point
+  // of requiring all significant tokens to be present.
+  private static readonly TITLE_STOPWORDS = new Set([
+    "para", "com", "sem", "uma", "umas", "uns", "este", "esta", "esse", "essa", "pelo", "pela",
+    "casa", "apto", "apartamento", "imovel", "imóvel", "veiculo", "veículo", "carro",
+  ]);
+
+  private static normalizeForMatch(text: string): string {
+    return text
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // Used by maybeExtractListings's fallback path: general RAG prose about a specific listing (no
+  // explicit "quais imóveis" query intent) still gets its real link/photo attached when the
+  // visitor message + the generated answer together clearly identify exactly one listing. Matching
+  // is deliberately conservative — ambiguous matches (more than `limit` candidates) return []
+  // rather than guessing, since attaching the wrong listing's link/photo would be worse than
+  // attaching none.
+  async findMentionedForChat(businessId: string, haystack: string, limit = 1): Promise<ListingItem[]> {
+    const normalizedHaystack = ListingsService.normalizeForMatch(haystack);
+    if (!normalizedHaystack) return [];
+
+    const rows = await this.prisma.client.listing.findMany({
+      where: { businessId, status: "active", deletedAt: null },
+      include: { images: { orderBy: { ordinal: "asc" }, take: 1 } },
+    });
+
+    const matches = rows.filter((row) => {
+      if (row.referenceCode && normalizedHaystack.includes(ListingsService.normalizeForMatch(row.referenceCode))) {
+        return true;
+      }
+
+      const titleTokens = ListingsService.normalizeForMatch(row.title)
+        .split(" ")
+        .filter((token) => token.length >= 4 && !ListingsService.TITLE_STOPWORDS.has(token));
+      if (titleTokens.length > 0 && titleTokens.every((token) => normalizedHaystack.includes(token))) {
+        return true;
+      }
+
+      if (row.neighborhood && row.listingType) {
+        const normalizedNeighborhood = ListingsService.normalizeForMatch(row.neighborhood);
+        const normalizedListingType = ListingsService.normalizeForMatch(row.listingType);
+        if (
+          normalizedNeighborhood &&
+          normalizedListingType &&
+          normalizedHaystack.includes(normalizedNeighborhood) &&
+          normalizedHaystack.includes(normalizedListingType)
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    if (matches.length === 0 || matches.length > limit) return [];
+    return matches.slice(0, limit).map((row) => this.mapRowToListingItem(row));
   }
 }

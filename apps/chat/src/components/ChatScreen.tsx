@@ -18,6 +18,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
 import { ListingDetailOverlay, safeHttpUrl, type Listing } from "./ListingDetailOverlay";
+import { MessageContent } from "./MessageContent";
 
 interface FlowBubble {
   label: string;
@@ -34,39 +35,6 @@ interface Message {
   // Set only for messages that originated from a server fetch (history load or poll tick) —
   // used to dedup against locally-created optimistic bubbles, which never get this field.
   serverId?: string;
-}
-
-const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
-const IMAGE_EXTENSIONS = /\.(jpe?g|png|gif|webp)(\?\S*)?$/i;
-const VIDEO_EXTENSIONS = /\.(mp4|webm|mov)(\?\S*)?$/i;
-
-// `white-space: pre-line` so the dense plain-text fallback (no structured listings available)
-// still renders real paragraph breaks between distinct property/vehicle mentions instead of
-// collapsing every "\n" into a single run-on block of prose.
-function MessageContent({ text }: { text: string }) {
-  const parts = text.split(URL_PATTERN);
-  return (
-    <span className="whitespace-pre-line">
-      {parts.map((part, i) => {
-        if (!URL_PATTERN.test(part)) {
-          URL_PATTERN.lastIndex = 0;
-          return <span key={i}>{part}</span>;
-        }
-        URL_PATTERN.lastIndex = 0;
-        if (IMAGE_EXTENSIONS.test(part)) {
-          return <img key={i} src={part} alt="" className="mt-2 max-h-56 w-full rounded-xl object-cover" />;
-        }
-        if (VIDEO_EXTENSIONS.test(part)) {
-          return <video key={i} src={part} controls className="mt-2 max-h-56 w-full rounded-xl" />;
-        }
-        return (
-          <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="underline">
-            {part}
-          </a>
-        );
-      })}
-    </span>
-  );
 }
 
 // Real listing item (property/vehicle) rendered as a card — image with a sensible fallback when

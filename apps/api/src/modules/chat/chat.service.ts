@@ -407,6 +407,8 @@ export class ChatService {
       "Nunca afirme que um modelo, marca, veículo, imóvel ou item específico existe, está disponível ou em estoque, a menos que esse nome literal apareça nos trechos de documentos abaixo. Se o cliente perguntar por algo que não aparece nos trechos, diga que não tem essa informação específica e ofereça passar para um atendente humano — nunca recorra a conhecimento geral do mundo sobre marcas/modelos para completar a resposta.",
       "Só responda com uma informação específica (preço, prazo, política, garantia, etc.) se ela estiver EXPLICITAMENTE presente nos trechos abaixo. Se os trechos não cobrirem especificamente o que foi perguntado, diga que não tem essa informação, mesmo que os trechos contenham outras informações do negócio.",
       "Se o cliente pedir uma lista (ex: imóveis disponíveis), liste os itens concretos encontrados nos trechos de documentos abaixo, não apenas um resumo genérico.",
+      "Formate a resposta usando apenas markdown simples: **negrito** com asteriscos duplos e listas com \"- \" no início da linha, no máximo 1 nível de indentação. Nunca use tabelas, nunca use títulos com #, e nunca use HTML bruto.",
+      "Nunca inclua links, URLs ou endereços de imagem na resposta, mesmo que apareçam nos trechos de documentos — o sistema anexa automaticamente o link e a foto do item em separado.",
       `Dados cadastrais do negócio (descrevem o negócio em geral, mas NÃO autorizam afirmar que um item/modelo específico está disponível): ${profileSummary}`,
       documentContext || "\nNenhum trecho relevante foi encontrado na base de documentos para esta pergunta.",
     ];
@@ -438,22 +440,28 @@ export class ChatService {
   // Free-text questions that are genuinely listing-shaped (e.g. "quais imóveis vocês tem") also
   // get a best-effort structured `listings` array alongside the prose answer, using the same
   // retrieved chunk text — same strict grounding discipline as the scripted "resultados" node.
-  private async maybeExtractListings(businessId: string, visitorText: string, chunkText: string) {
-    if (!this.flow.isListingQuery(visitorText, chunkText)) return undefined;
+  private async maybeExtractListings(businessId: string, visitorText: string, chunkText: string, answerText: string) {
+    if (this.flow.isListingQuery(visitorText, chunkText)) {
+      // Free text has no structured filter params the way the scripted flow does — if the business
+      // has real extracted inventory, ground on that directly (most-recently-updated active
+      // listings) rather than re-extracting from retrieved chunks every time. Only fall back to the
+      // LLM-chunk extraction path for businesses with zero rows (new/never-extracted).
+      const hasListings = await this.listingsService.hasAnyListings(businessId);
+      if (hasListings) {
+        const dbListings = await this.listingsService.queryForChat(businessId, {}, 6);
+        return dbListings.length > 0 ? dbListings : undefined;
+      }
 
-    // Free text has no structured filter params the way the scripted flow does — if the business
-    // has real extracted inventory, ground on that directly (most-recently-updated active
-    // listings) rather than re-extracting from retrieved chunks every time. Only fall back to the
-    // LLM-chunk extraction path for businesses with zero rows (new/never-extracted).
-    const hasListings = await this.listingsService.hasAnyListings(businessId);
-    if (hasListings) {
-      const dbListings = await this.listingsService.queryForChat(businessId, {}, 6);
-      return dbListings.length > 0 ? dbListings : undefined;
+      if (!chunkText) return undefined;
+      const listings = await this.flow.extractListingsForQuery(businessId, chunkText);
+      return listings.length > 0 ? listings : undefined;
     }
 
-    if (!chunkText) return undefined;
-    const listings = await this.flow.extractListingsForQuery(businessId, chunkText);
-    return listings.length > 0 ? listings : undefined;
+    // Not a listing-shaped query, but the answer (general RAG prose) may still be about a
+    // specific listing — surface its real link/photo if (and only if) exactly one listing is
+    // unambiguously identified by the visitor message + generated answer together.
+    const mentioned = await this.listingsService.findMentionedForChat(businessId, `${visitorText}\n${answerText}`, 1);
+    return mentioned.length > 0 ? mentioned : undefined;
   }
 
   private async generateAnswer(businessId: string, conversationId: string, visitorText: string) {
@@ -489,7 +497,7 @@ export class ChatService {
         looksLikeAbstention(result.text) ||
         hasUngroundedEntityClaim(result.text, retrievedChunkText, groundingAllowlistText);
       const text = abstained && !looksLikeAbstention(result.text) ? ABSTENTION_FALLBACK : result.text;
-      const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText);
+      const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText, text);
       return {
         text,
         abstained,
@@ -669,7 +677,7 @@ export class ChatService {
       }
     }
 
-    const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText);
+    const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText, fullText);
     return { message: assistantMessage, escalated: autoEscalation?.escalated ?? false, listings, ...(autoEscalation ?? {}) };
   }
 
