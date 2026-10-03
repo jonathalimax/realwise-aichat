@@ -148,7 +148,11 @@ export function ListingDetailOverlay({ listing, onClose }: { listing: Listing; o
                 <iframe
                   src={url}
                   className="h-full w-full min-h-[70dvh]"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                  // No allow-same-origin: this frames an arbitrary third-party business site, not
+                  // our own content — allow-scripts + allow-same-origin together would let a
+                  // malicious page in the frame access its own origin as if unsandboxed, which is
+                  // a known sandbox-escape combo. The page still renders/functions without it.
+                  sandbox="allow-scripts allow-forms allow-popups"
                   referrerPolicy="no-referrer-when-downgrade"
                   loading="lazy"
                   onLoad={() => setIframeLoaded(true)}
