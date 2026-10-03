@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
-import { sendEmail, escapeHtml } from "../../common/email";
+import { sendEmail } from "../../common/email";
+import { buildIcs } from "../../common/ics";
+import { formatListingAddress, renderOwnerEmail, renderVisitorEmail } from "./booking-notifications";
 import type { AppointmentType } from "@realwise/db";
 
 @Injectable()
@@ -61,20 +63,87 @@ export class BookingsService {
     endsAt: Date,
     createdVia: "chat" | "dashboard",
     appointmentType?: AppointmentType,
+    listingId?: string | null,
   ) {
-    const appointment = await this.createAppointment(businessId, leadId, conversationId, serviceName, startsAt, endsAt, createdVia, appointmentType);
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    const listing = listingId
+      ? await this.prisma.client.listing.findFirst({ where: { id: listingId, businessId, deletedAt: null } })
+      : null;
+    const locationAddress = formatListingAddress(listing) ?? business?.address ?? undefined;
 
-    const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { email: true } });
-    if (business?.email) {
-      await sendEmail(
-        business.email,
-        `Novo agendamento: ${escapeHtml(serviceName)}`,
-        `<p>Um cliente marcou <strong>${escapeHtml(serviceName)}</strong> para <strong>${escapeHtml(startsAt.toLocaleString("pt-BR"))}</strong>.</p>
-         <p>Confira e confirme no painel: Agenda.</p>`,
-      ).catch(() => {});
-    }
+    const appointment = await this.prisma.client.appointment.create({
+      data: {
+        businessId,
+        leadId,
+        conversationId,
+        serviceName,
+        startsAt,
+        endsAt,
+        createdVia,
+        status: "pending",
+        ...(appointmentType ? { appointmentType } : {}),
+        ...(listingId ? { listingId } : {}),
+        ...(locationAddress ? { locationAddress } : {}),
+      },
+    });
+
+    await this.sendBookingEmails(appointment.id).catch(() => {});
 
     return appointment;
+  }
+
+  // Sends the owner + (if captured) visitor confirmation emails for an already-created
+  // appointment, each real .ics-attached — each send is independently caught so one failure
+  // never blocks the other or (via the caller) the appointment creation itself. `sendVisitorOnly`
+  // lets FlowService's late visitor-email-capture path re-trigger just the visitor side without
+  // re-notifying the owner a second time.
+  async sendBookingEmails(appointmentId: string, opts?: { sendVisitorOnly?: boolean }): Promise<void> {
+    const appointment = await this.prisma.client.appointment.findUnique({
+      where: { id: appointmentId },
+      include: { business: true, lead: true, listing: true },
+    });
+    if (!appointment) return;
+
+    const { business, lead, listing } = appointment;
+    const address = appointment.locationAddress ?? formatListingAddress(listing) ?? business.address ?? undefined;
+
+    const ics = buildIcs({
+      uid: appointment.id,
+      summary: appointment.serviceName,
+      description: listing?.description ?? appointment.serviceName,
+      location: address,
+      startsAt: appointment.startsAt,
+      endsAt: appointment.endsAt,
+      url: listing?.url ?? undefined,
+    });
+    const attachment = {
+      filename: "agendamento.ics",
+      content: Buffer.from(ics, "utf8").toString("base64"),
+      contentType: "text/calendar; method=REQUEST",
+    };
+
+    if (!opts?.sendVisitorOnly && business.email) {
+      const { subject, html } = renderOwnerEmail({
+        business,
+        lead,
+        serviceName: appointment.serviceName,
+        startsAt: appointment.startsAt,
+        listing,
+        address,
+      });
+      await sendEmail(business.email, subject, html, [attachment]).catch(() => {});
+    }
+
+    if (lead?.email) {
+      const { subject, html } = renderVisitorEmail({
+        business,
+        serviceName: appointment.serviceName,
+        startsAt: appointment.startsAt,
+        listing,
+        address,
+      });
+      await sendEmail(lead.email, subject, html, [attachment]).catch(() => {});
+    }
   }
 
   async listAppointments(businessId: string) {

@@ -288,6 +288,7 @@ model Lead {
   businessId        String
   business          Business        @relation(fields: [businessId], references: [id])
   name              String?
+  email             String?
   phone             String
   phoneNormalized   String
   firstSeenAt       DateTime        @default(now())

@@ -343,7 +343,10 @@ export class ChatService {
     }
 
     // Free text typed at a flow node with `on_input` (e.g. a CPF field) advances the scripted
-    // flow to its target node instead of going to the LLM.
+    // flow to its target node instead of going to the LLM. Checked first for the email-capture
+    // nodes (visita_email/agend_email), which also use on_input — a harmless no-op everywhere else.
+    await this.flow.tryCaptureVisitorEmail(businessId, conversationId, visitorText);
+
     const onInputTarget = await this.flow.onInputTarget(businessId, conversationId);
     if (onInputTarget) {
       const flowResult = await this.flow.advance(businessId, conversationId, onInputTarget);
@@ -609,6 +612,9 @@ export class ChatService {
       return result;
     }
 
+    // Email-capture check first, same as sendMessage — harmless no-op outside visita_email/agend_email.
+    await this.flow.tryCaptureVisitorEmail(businessId, conversationId, visitorText);
+
     const onInputTarget = await this.flow.onInputTarget(businessId, conversationId);
     if (onInputTarget) {
       const flowResult = await this.flow.advance(businessId, conversationId, onInputTarget);
@@ -771,6 +777,8 @@ export class ChatService {
       new Date(startsAt),
       new Date(endsAt),
       "chat",
+      undefined,
+      null,
     );
     // Additive — pushes the appointment to Google Calendar if connected, never blocks booking if it isn't.
     this.calendar.createEvent(businessId, appointment).catch(() => {});

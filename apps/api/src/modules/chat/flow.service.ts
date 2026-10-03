@@ -28,6 +28,13 @@ const BOOKING_TIME_NODE_IDS = new Set(["visita_horario", "agend_horario"]);
 // bubble — these are where a real Appointment should actually be created.
 const BOOKING_CONFIRM_NODE_IDS = new Set(["visita_confirmada", "agend_ok"]);
 
+// Nodes that capture a visitor's email address right after a booking is confirmed (the
+// "📅 Adicionar ao calendário" bubble routes here instead of straight to the *_ok node) — see
+// tryCaptureVisitorEmail below.
+const EMAIL_CAPTURE_NODE_IDS = new Set(["visita_email", "agend_email"]);
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 // Only "visita_local" (in-person) exists as a modeled AppointmentType today (see AppointmentType
 // enum in packages/db/prisma/schema.prisma) — both the imobiliaria property visit and the
 // concessionaria test-drive/showroom-visit flows are in-person, so both map to it.
@@ -334,6 +341,20 @@ export class FlowService {
     }
 
     const serviceName = business.niche === "concessionaria" ? "Test-drive" : "Visita ao imóvel";
+
+    // Best-effort: resolve which listing was actually discussed in this conversation so the
+    // appointment (and its confirmation emails/ICS) can reference the right address/listing
+    // details — the same conservative single-match mechanism used elsewhere for listing cards.
+    const recentMessages = await this.prisma.client.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+      select: { content: true },
+    });
+    const haystack = recentMessages.map((m) => m.content).join("\n");
+    const matched = await this.listingsService.findMentionedForChat(businessId, haystack, 1);
+    const listingId = matched[0]?.id ?? null;
+
     const appointment = await this.bookings.createAppointmentAndNotify(
       businessId,
       conversation.leadId ?? undefined,
@@ -343,6 +364,7 @@ export class FlowService {
       endsAt,
       "chat",
       BOOKING_APPOINTMENT_TYPE,
+      listingId,
     );
     this.calendar.createEvent(businessId, appointment).catch(() => {});
 
@@ -969,6 +991,38 @@ export class FlowService {
 
     this.recomputeLeadScore(businessId, conversation.leadId);
     return nextSnapshot;
+  }
+
+  // Called right before ChatService's normal on_input/free-text advance logic runs, whenever the
+  // visitor is currently sitting at an EMAIL_CAPTURE_NODE_IDS node (reached via the "📅 Adicionar
+  // ao calendário" bubble in visita_confirmada/agend_ok). If the typed text is a plausible email,
+  // stores it on the lead and re-sends just the visitor's booking confirmation email (with the
+  // .ics attached) for whichever appointment was created in this conversation in the last hour.
+  // Returns false (without storing anything) for non-matching node ids or invalid-looking text —
+  // the caller's existing on_input advance then proceeds unchanged either way.
+  async tryCaptureVisitorEmail(businessId: string, conversationId: string, visitorText: string): Promise<boolean> {
+    const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
+    if (!conversation?.flowNodeId || !EMAIL_CAPTURE_NODE_IDS.has(conversation.flowNodeId)) return false;
+
+    const trimmed = visitorText.trim();
+    if (trimmed.length > 254 || !EMAIL_PATTERN.test(trimmed)) return false;
+
+    if (conversation.leadId) {
+      await this.prisma.client.lead.update({ where: { id: conversation.leadId }, data: { email: trimmed } });
+    }
+
+    // Appointment has no createdAt column to filter "created in the last hour" by — the most
+    // recently booked appointment for this conversation is, in practice, the pending one with the
+    // latest startsAt (visitors don't rebook into an earlier slot after confirming a later one).
+    const appointment = await this.prisma.client.appointment.findFirst({
+      where: { conversationId, status: "pending" },
+      orderBy: { startsAt: "desc" },
+    });
+    if (appointment) {
+      await this.bookings.sendBookingEmails(appointment.id, { sendVisitorOnly: true }).catch(() => {});
+    }
+
+    return true;
   }
 
   // Free-text input at a node with `on_input` routes to that target node instead of going to the

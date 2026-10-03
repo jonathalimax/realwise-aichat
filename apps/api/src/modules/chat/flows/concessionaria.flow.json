@@ -1275,12 +1275,21 @@
       "id": "agend_ok",
       "message": "Agendado! 🎉 O vendedor {vendedor} vai te receber.",
       "bubbles": [
-        { "label": "📅 Adicionar ao calendário", "goto": "agend_ok2" },
+        { "label": "📅 Adicionar ao calendário", "goto": "agend_email" },
         { "label": "📍 Como chegar", "goto": "info_endereco" },
         { "label": "Agendar outro horário", "goto": "agend_inicio" },
         { "label": "Remarcar", "goto": "agend_dia" },
         { "label": "Cancelar", "goto": "agend_cancelar" },
         { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "agend_email": {
+      "id": "agend_email",
+      "message": "Quer receber o convite no seu e-mail? Digite seu e-mail 📧",
+      "input": "e-mail",
+      "on_input": "agend_ok2",
+      "bubbles": [
+        { "label": "Não, obrigado", "goto": "agend_ok2" }
       ]
     },
     "agend_ok2": {

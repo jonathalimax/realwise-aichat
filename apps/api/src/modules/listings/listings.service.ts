@@ -4,6 +4,8 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { safeHttpUrl } from "../../common/safe-http-url";
 
 export interface ListingItem {
+  // Optional — the LLM-extraction path produces listing items with no backing DB row.
+  id?: string;
   title: string;
   price?: string;
   description?: string;
@@ -214,6 +216,7 @@ export class ListingsService {
   // fields, not system-controlled — run both through safeHttpUrl before ever including them in a
   // chat response, closing a gap where an owner-settable `url` write wasn't previously validated.
   private mapRowToListingItem(row: {
+    id: string;
     title: string;
     priceText?: string | null;
     description?: string | null;
@@ -224,6 +227,7 @@ export class ListingsService {
     const url = safeHttpUrl(row.url ?? undefined);
     const imageUrl = safeHttpUrl(row.images[0]?.url);
     return {
+      id: row.id,
       title: row.title,
       ...(row.priceText ? { price: row.priceText } : {}),
       ...(row.description ? { description: row.description } : {}),

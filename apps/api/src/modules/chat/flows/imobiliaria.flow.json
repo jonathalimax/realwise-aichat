@@ -837,12 +837,21 @@
       "id": "visita_confirmada",
       "message": "Visita agendada! 🎉 O corretor {corretor} vai te encontrar no local.",
       "bubbles": [
-        { "label": "📅 Adicionar ao calendário", "goto": "visita_confirmada_ok" },
+        { "label": "📅 Adicionar ao calendário", "goto": "visita_email" },
         { "label": "📍 Ver endereço no mapa", "goto": "visita_confirmada_ok" },
         { "label": "Agendar outra visita", "goto": "visita_inicio" },
         { "label": "Remarcar", "goto": "visita_dia" },
         { "label": "Cancelar visita", "goto": "visita_cancelar" },
         { "label": "Voltar ao menu", "goto": "start" }
+      ]
+    },
+    "visita_email": {
+      "id": "visita_email",
+      "message": "Quer receber o convite no seu e-mail? Digite seu e-mail 📧",
+      "input": "e-mail",
+      "on_input": "visita_confirmada_ok",
+      "bubbles": [
+        { "label": "Não, obrigado", "goto": "visita_confirmada_ok" }
       ]
     },
     "visita_confirmada_ok": {
