@@ -264,6 +264,7 @@ export class ListingExtractionService {
     const runStartedAt = new Date();
     const extracted: ExtractedListing[] = [];
     const systemPrompt = SYSTEM_PROMPT_TEMPLATE(business.name);
+    let failedWindows = 0;
 
     for (const window of windowsToProcess) {
       try {
@@ -321,6 +322,7 @@ export class ListingExtractionService {
           });
         }
       } catch (error) {
+        failedWindows++;
         this.logger.warn(`extractForBusiness ${businessId}: window extraction failed — ${error instanceof Error ? error.message : String(error)}`);
       }
     }
@@ -530,17 +532,22 @@ export class ListingExtractionService {
       }
     }
 
-    // SAFETY GUARD: if this run extracted ZERO items total AND the business previously had ≥1
-    // active listing, skip the sweep entirely — more likely a crawl/model failure than genuinely
-    // zero inventory, and we must never let a failed run silently wipe a working inventory.
+    // SAFETY GUARD: skip the "anything not re-seen this run is gone" sweep whenever this run's
+    // own coverage was too unreliable to trust as a negative signal — either it extracted nothing
+    // at all, or a large share of its windows errored out (e.g. the inference gateway was
+    // saturated/timing out, as happened live: 2 of ~30+ windows succeeded, which still "extracted"
+    // a couple of items and so slipped past a zero-extracted-only guard, retiring 27 real listings
+    // down to 2). A partial-failure run must never be trusted to prove absence.
     let retired = 0;
-    if (extracted.length === 0) {
+    const failureRate = windowsToProcess.length > 0 ? failedWindows / windowsToProcess.length : 0;
+    const runCoverageUnreliable = extracted.length === 0 || failureRate > 0.2;
+    if (runCoverageUnreliable) {
       const existingActiveCount = await this.prisma.client.listing.count({
         where: { businessId, status: "active" },
       });
       if (existingActiveCount > 0) {
         this.logger.warn(
-          `extractForBusiness ${businessId}: extracted 0 items but ${existingActiveCount} active listing(s) exist — skipping inactive sweep to avoid wiping inventory on a failed run`,
+          `extractForBusiness ${businessId}: unreliable run (${failedWindows}/${windowsToProcess.length} windows failed, ${extracted.length} items extracted) with ${existingActiveCount} active listing(s) existing — skipping inactive sweep to avoid wiping inventory on a failed run`,
         );
         return { created, updated, retired: 0 };
       }
