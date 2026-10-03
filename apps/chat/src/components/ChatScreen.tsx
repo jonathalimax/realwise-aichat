@@ -215,6 +215,7 @@ export function ChatScreen({
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [bubbles, setBubbles] = useState<FlowBubble[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
@@ -280,6 +281,7 @@ export function ChatScreen({
         setConversationStatus(history.conversation?.status ?? null);
         if (history.flowSnapshot) {
           setBubbles(history.flowSnapshot.bubbles ?? []);
+          setSuggestions([]);
           setFlowRestored(true);
         }
       } catch {
@@ -302,6 +304,7 @@ export function ChatScreen({
       .then((result) => {
         setMessages((prev) => (prev.length === 0 ? [{ id: nextMessageId(), role: "assistant", content: result.message }] : prev));
         setBubbles(result.bubbles ?? []);
+        setSuggestions([]);
       })
       .catch(() => {});
   }, [business, conversationId, historyLoaded, flowRestored]);
@@ -505,6 +508,7 @@ export function ChatScreen({
   async function handleSend(text: string) {
     if (isStreamingRef.current) return;
     if (!text.trim() || !business) return;
+    setSuggestions([]);
     if (text.toLowerCase().includes("agendar")) {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: text }]);
       setInput("");
@@ -542,6 +546,7 @@ export function ChatScreen({
       if (result?.listings?.length) {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, listings: result.listings } : m)));
       }
+      setSuggestions(result?.suggestions ?? []);
       if (result?.escalated) {
         setConversationStatus("escalated");
       }
@@ -552,6 +557,7 @@ export function ChatScreen({
         window.open(result.whatsappUrl, "_blank");
       } else if (result?.flow?.bubbles) {
         setBubbles(result.flow.bubbles);
+        setSuggestions([]);
       }
     } catch {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "Tive um problema para responder — tenta de novo em instantes." }]);
@@ -567,6 +573,7 @@ export function ChatScreen({
 
     setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: bubble.label }]);
     setSending(true);
+    setSuggestions([]);
     isStreamingRef.current = true;
     try {
       const convId = await ensureConversation();
@@ -761,6 +768,25 @@ export function ChatScreen({
               className="rounded-full bg-surface font-normal"
             >
               {bubble.label}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {bubbles.length === 0 && suggestions.length > 0 && !showBooking && !sending && (
+        <div className="flex flex-none flex-wrap gap-2 px-4 pb-2">
+          {suggestions.map((label, i) => (
+            <Button
+              key={`suggestion-${i}`}
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSuggestions([]);
+                handleSend(label);
+              }}
+              className="rounded-full bg-surface font-normal"
+            >
+              {label}
             </Button>
           ))}
         </div>

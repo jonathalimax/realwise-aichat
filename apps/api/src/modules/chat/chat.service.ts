@@ -13,7 +13,8 @@ import { LeadsService } from "../leads/leads.service";
 import { AlertsService } from "../alerts/alerts.service";
 import { UsageService } from "../usage/usage.service";
 import { KnowledgeService } from "../knowledge/knowledge.service";
-import { ListingsService } from "../listings/listings.service";
+import { ListingsService, type ListingItem } from "../listings/listings.service";
+import { listingSuggestions } from "./listing-suggestions";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 const NO_CONTEXT_FALLBACK = "Não encontrei essa informação na nossa base. Quer que eu te passe pro atendimento?";
@@ -394,7 +395,13 @@ export class ChatService {
     });
     this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
 
-    return { message: assistantMessage, escalated: autoEscalation?.escalated ?? false, listings: answer.listings, ...(autoEscalation ?? {}) };
+    return {
+      message: assistantMessage,
+      escalated: autoEscalation?.escalated ?? false,
+      listings: answer.listings,
+      suggestions: answer.suggestions,
+      ...(autoEscalation ?? {}),
+    };
   }
 
   private async buildChatPrompt(businessId: string, conversationId: string, visitorText: string) {
@@ -452,6 +459,7 @@ export class ChatService {
     const prompt = `${history}\nCliente: ${visitorText}`;
     return {
       business,
+      niche: business.niche,
       systemPrompt,
       prompt,
       hasRetrievedContext: retrievedChunks.length > 0,
@@ -462,6 +470,15 @@ export class ChatService {
       // mentionable (retrieved chunks, profile summary, business name/niche) in one string.
       groundingAllowlistText: `${profileSummary} ${business.name} ${business.niche}`,
     };
+  }
+
+  // When exactly one listing is attached to this turn's answer, surface 2-4 contextual follow-up
+  // question suggestions (plain strings, tapped via the same free-text send path) — varies by
+  // niche and listing.transaction. More than one (or zero) listings is ambiguous, so no
+  // suggestions are offered in that case.
+  private buildSuggestions(niche: string, listings: ListingItem[] | undefined): string[] | undefined {
+    if (!listings || listings.length !== 1) return undefined;
+    return listingSuggestions(niche, listings[0].transaction);
   }
 
   // Free-text questions that are genuinely listing-shaped (e.g. "quais imóveis vocês tem") also
@@ -492,7 +509,7 @@ export class ChatService {
   }
 
   private async generateAnswer(businessId: string, conversationId: string, visitorText: string) {
-    const { systemPrompt, prompt, hasRetrievedContext, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
+    const { niche, systemPrompt, prompt, hasRetrievedContext, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
       await this.buildChatPrompt(businessId, conversationId, visitorText);
     // Zero retrieved chunks means there's nothing to ground the model on — never send an empty-context
     // prompt and hope it abstains on its own, that's how it hallucinates confidently.
@@ -507,6 +524,7 @@ export class ChatService {
         retrievedChunkIds,
         retrievalTopScore,
         listings: undefined,
+        suggestions: undefined,
       };
     }
     try {
@@ -525,6 +543,7 @@ export class ChatService {
         hasUngroundedEntityClaim(result.text, retrievedChunkText, groundingAllowlistText);
       const text = abstained && !looksLikeAbstention(result.text) ? ABSTENTION_FALLBACK : result.text;
       const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText, text);
+      const suggestions = abstained ? undefined : this.buildSuggestions(niche, listings);
       return {
         text,
         abstained,
@@ -535,6 +554,7 @@ export class ChatService {
         retrievedChunkIds,
         retrievalTopScore,
         listings,
+        suggestions,
       };
     } catch {
       return {
@@ -547,6 +567,7 @@ export class ChatService {
         retrievedChunkIds,
         retrievalTopScore,
         listings: undefined,
+        suggestions: undefined,
       };
     }
   }
@@ -610,7 +631,7 @@ export class ChatService {
       return { message: assistantMessage, escalated: false, flow: flowResult };
     }
 
-    const { systemPrompt, prompt, hasRetrievedContext, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
+    const { niche, systemPrompt, prompt, hasRetrievedContext, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
       await this.buildChatPrompt(businessId, conversationId, visitorText);
 
     if (!hasRetrievedContext) {
@@ -705,7 +726,8 @@ export class ChatService {
     }
 
     const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText, fullText);
-    return { message: assistantMessage, escalated: autoEscalation?.escalated ?? false, listings, ...(autoEscalation ?? {}) };
+    const suggestions = abstained ? undefined : this.buildSuggestions(niche, listings);
+    return { message: assistantMessage, escalated: autoEscalation?.escalated ?? false, listings, suggestions, ...(autoEscalation ?? {}) };
   }
 
   private readonly ALLOWED_SERVICES = new Set(["Visita ao imóvel", "Test-drive"]);

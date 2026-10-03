@@ -9,6 +9,7 @@ export interface ListingItem {
   description?: string;
   url?: string;
   imageUrl?: string;
+  transaction?: string;
 }
 
 export interface ChatQueryFilters {
@@ -217,6 +218,7 @@ export class ListingsService {
     priceText?: string | null;
     description?: string | null;
     url?: string | null;
+    transaction?: string | null;
     images: { url: string }[];
   }): ListingItem {
     const url = safeHttpUrl(row.url ?? undefined);
@@ -227,6 +229,7 @@ export class ListingsService {
       ...(row.description ? { description: row.description } : {}),
       ...(url ? { url } : {}),
       ...(imageUrl ? { imageUrl } : {}),
+      ...(row.transaction ? { transaction: row.transaction } : {}),
     };
   }
 
