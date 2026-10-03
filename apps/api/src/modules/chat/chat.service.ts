@@ -206,7 +206,7 @@ export class ChatService {
     });
 
     return {
-      conversation: { id: conversation.id, visitorToken: conversation.visitorToken },
+      conversation: { id: conversation.id, visitorToken: conversation.visitorToken, status: conversation.status },
       messages,
       flowSnapshot: conversation.flowSnapshot ?? null,
       resumedViaToken: ownsViaResumeToken && !ownsViaVisitor,

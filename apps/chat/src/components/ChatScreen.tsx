@@ -27,10 +27,13 @@ interface FlowBubble {
 
 interface Message {
   id: string;
-  role: "visitor" | "assistant";
+  role: "visitor" | "assistant" | "owner";
   content: string;
   listings?: Listing[];
   whatsappUrl?: string | null;
+  // Set only for messages that originated from a server fetch (history load or poll tick) —
+  // used to dedup against locally-created optimistic bubbles, which never get this field.
+  serverId?: string;
 }
 
 const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
@@ -256,6 +259,8 @@ export function ChatScreen({
   const [flowRestored, setFlowRestored] = useState(false);
   const [thinkingStage, setThinkingStage] = useState<0 | 1>(0);
   const [activeListing, setActiveListing] = useState<Listing | null>(null);
+  const [conversationStatus, setConversationStatus] = useState<string | null>(null);
+  const [pollCapped, setPollCapped] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   // Holds the in-flight (or resolved) conversation-creation promise so a message sent before the
   // mount effect's startConversation() resolves awaits that SAME promise instead of racing a
@@ -299,7 +304,10 @@ export function ChatScreen({
       try {
         const history = await getConversationHistory(business.id, convId!, resumeConversationId ? resumeToken : undefined);
         if (cancelled) return;
-        setMessages(history.messages.map((m: any) => ({ id: m.id, role: m.role, content: m.content })));
+        setMessages(
+          history.messages.map((m: any) => ({ id: m.id, serverId: m.id, role: m.role, content: m.content })),
+        );
+        setConversationStatus(history.conversation?.status ?? null);
         if (history.flowSnapshot) {
           setBubbles(history.flowSnapshot.bubbles ?? []);
           setFlowRestored(true);
@@ -361,6 +369,89 @@ export function ChatScreen({
     return () => window.visualViewport?.removeEventListener("resize", onResize);
   }, []);
 
+  // Near-live delivery of owner replies: polls history only while the conversation is escalated
+  // (that's the only window where a human might actually be typing), the tab is visible, and no
+  // send/stream is currently in flight. Caps continuous foreground polling at ~15min to avoid
+  // hammering an abandoned-but-open tab forever; past the cap, a manual "Atualizar" affordance
+  // replaces the interval.
+  useEffect(() => {
+    if (!business || !conversationId || conversationStatus !== "escalated" || pollCapped) return;
+
+    const POLL_INTERVAL_MS = 8000;
+    const POLL_CAP_MS = 15 * 60 * 1000;
+    const startedAt = Date.now();
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    async function poll() {
+      if (document.visibilityState !== "visible") return;
+      if (isStreamingRef.current) return;
+      if (Date.now() - startedAt >= POLL_CAP_MS) {
+        setPollCapped(true);
+        return;
+      }
+      try {
+        const history = await getConversationHistory(business.id, conversationId!, resumeConversationId ? resumeToken : undefined);
+        if (history.conversation?.status) setConversationStatus(history.conversation.status);
+        setMessages((prev) => {
+          const knownServerIds = new Set(prev.map((m) => m.serverId).filter(Boolean));
+          const newOnes = (history.messages ?? [])
+            .filter((m: any) => !knownServerIds.has(m.id))
+            .map((m: any) => ({ id: m.id, serverId: m.id, role: m.role, content: m.content }));
+          if (newOnes.length === 0) return prev;
+          return [...prev, ...newOnes];
+        });
+      } catch {
+        // A single failed poll tick is silently ignored — the next tick retries.
+      }
+    }
+
+    function start() {
+      if (intervalId) return;
+      intervalId = setInterval(poll, POLL_INTERVAL_MS);
+    }
+    function stop() {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    }
+
+    if (document.visibilityState === "visible") start();
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        poll();
+        start();
+      } else {
+        stop();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [business, conversationId, conversationStatus, pollCapped, resumeConversationId, resumeToken]);
+
+  async function handleManualRefresh() {
+    if (!business || !conversationId) return;
+    try {
+      const history = await getConversationHistory(business.id, conversationId, resumeConversationId ? resumeToken : undefined);
+      if (history.conversation?.status) setConversationStatus(history.conversation.status);
+      setMessages((prev) => {
+        const knownServerIds = new Set(prev.map((m) => m.serverId).filter(Boolean));
+        const newOnes = (history.messages ?? [])
+          .filter((m: any) => !knownServerIds.has(m.id))
+          .map((m: any) => ({ id: m.id, serverId: m.id, role: m.role, content: m.content }));
+        if (newOnes.length === 0) return prev;
+        return [...prev, ...newOnes];
+      });
+    } catch {
+      // Manual refresh failing silently is fine — the button stays available to retry.
+    }
+  }
+
   async function ensureConversation() {
     if (conversationId) return conversationId;
     if (!business) return null;
@@ -418,6 +509,9 @@ export function ChatScreen({
       });
       if (result?.listings?.length) {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, listings: result.listings } : m)));
+      }
+      if (result?.escalated) {
+        setConversationStatus("escalated");
       }
       if (result?.escalated && result?.whatsappUrl) {
         // Attach whatsappUrl to the message so WhatsappHandoffCard always renders a tappable card —
@@ -510,11 +604,16 @@ export function ChatScreen({
                   : "max-w-[85%]"
             }
           >
+            {m.role === "owner" && (
+              <div className="mb-1 text-xs font-semibold text-accent">{business.name}</div>
+            )}
             <div
               className={
                 m.role === "visitor"
                   ? "rounded-2xl rounded-br-sm bg-accent px-4 py-3 text-sm text-white"
-                  : "rounded-2xl rounded-bl-sm bg-surface px-4 py-3 text-sm text-ink"
+                  : m.role === "owner"
+                    ? "rounded-2xl rounded-bl-sm border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-ink"
+                    : "rounded-2xl rounded-bl-sm bg-surface px-4 py-3 text-sm text-ink"
               }
             >
               <MessageContent text={m.content} />
@@ -598,6 +697,13 @@ export function ChatScreen({
               </Button>
             </CardContent>
           </Card>
+        )}
+        {pollCapped && conversationStatus === "escalated" && (
+          <div className="flex justify-center">
+            <Button type="button" variant="outline" size="sm" onClick={handleManualRefresh}>
+              Atualizar
+            </Button>
+          </div>
         )}
         <div ref={bottomRef} />
       </main>
