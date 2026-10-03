@@ -290,35 +290,11 @@ export default function MarketingHome() {
         </Reveal>
       </section>
 
-      {/* TRUST + GETTING STARTED */}
+      {/* GETTING STARTED */}
       <section id="como-funciona" className="bg-bg-2 py-20">
-        <Reveal className="mx-auto grid max-w-5xl items-center gap-10 px-5 md:grid-cols-2">
-          <div>
-            <h2 className="font-serif text-3xl text-ink md:text-4xl">Ela nunca <em className="italic">chuta</em> uma resposta pro seu cliente</h2>
-            <p className="mt-4 text-ink-soft">Antes de publicar, você vê em porcentagem o quanto ela está pronta — e exatamente o que falta pra garantir que todo cliente saia com uma resposta certa.</p>
-          </div>
-          <div className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
-            <div className="flex items-center gap-5">
-              <div className="font-mono text-4xl text-ink">82%</div>
-              <div className="text-xs text-muted">Pronto pra publicar</div>
-            </div>
-            <div className="mt-5 flex flex-col gap-2.5 text-xs">
-              {[["Campos obrigatórios", 92], ["Profundidade de documentos", 70], ["Teste de perguntas reais", 81], ["Atualidade", 88]].map(([label, val]) => (
-                <div key={label as string} className="flex items-center gap-2">
-                  <span className="w-40 text-ink-soft">{label}</span>
-                  <div className="h-1.5 flex-1 rounded-full bg-bg-2">
-                    <div className="h-full rounded-full bg-accent" style={{ width: `${val}%` }} />
-                  </div>
-                  <span className="w-8 text-right font-mono text-muted">{val}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Reveal>
-
-        <Reveal delay={100} className="mx-auto mt-16 max-w-5xl px-5 text-center">
-          <h3 className="font-serif text-xl text-ink">Pra ter isso rodando, são 4 passos</h3>
-          <div className="mt-8 grid gap-4 text-left sm:grid-cols-2 lg:grid-cols-4">
+        <Reveal className="mx-auto max-w-5xl px-5 text-center">
+          <h2 className="font-serif text-3xl text-ink md:text-4xl">Pra ter isso rodando, são 4 passos</h2>
+          <div className="mt-10 grid gap-4 text-left sm:grid-cols-2 lg:grid-cols-4">
             {[
               { t: "Adicione seu site e documentos", d: "Tabela de preços, horários, políticas — o que estiver à mão." },
               { t: "Tudo fica privado", d: "Seus documentos ficam na nossa infraestrutura, só pra você — nunca usamos pra treinar modelos de IA." },
