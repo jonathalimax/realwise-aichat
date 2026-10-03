@@ -66,6 +66,7 @@ export default function LeadsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("commitmentScore");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [expandedScoreId, setExpandedScoreId] = useState<string | null>(null);
 
   useEffect(() => {
     getLeads().then(setLeads).catch(() => setLeads([]));
@@ -168,67 +169,140 @@ export default function LeadsPage() {
               )
             }
           />
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8">
-                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Selecionar todos" />
-                </TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Telefone</TableHead>
-                <TableHead>Temperatura</TableHead>
-                <SortableTableHead sorted={sortKey === "commitmentScore" && sortDir} onClick={() => toggleSort("commitmentScore")}>
-                  Score
-                </SortableTableHead>
-                <SortableTableHead sorted={sortKey === "lastSeenAt" && sortDir} onClick={() => toggleSort("lastSeenAt")}>
-                  Última atividade
-                </SortableTableHead>
-                <TableHead className="w-8" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((lead) => {
-                const BandIcon = BAND_ICON[lead.scoreBand] ?? Snowflake;
-                return (
-                  <TableRow key={lead.id} data-state={selected.has(lead.id) ? "selected" : undefined}>
-                    <TableCell>
-                      <Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggleOne(lead.id)} aria-label="Selecionar lead" />
-                    </TableCell>
-                    <TableCell>{lead.name ?? "—"}</TableCell>
-                    <TableCell className="font-mono">{lead.phone}</TableCell>
-                    <TableCell>
-                      <Tooltip content={<ScoreExplanation lead={lead} />}>
+          {filtered.length === 0 ? (
+            <p className="rounded-lg border border-border bg-bg-2 px-4 py-3 text-sm text-ink-soft">Nenhum lead encontrado.</p>
+          ) : (
+            <>
+              <div className="hidden lg:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-8">
+                        <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Selecionar todos" />
+                      </TableHead>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Telefone</TableHead>
+                      <TableHead>Temperatura</TableHead>
+                      <SortableTableHead sorted={sortKey === "commitmentScore" && sortDir} onClick={() => toggleSort("commitmentScore")}>
+                        Score
+                      </SortableTableHead>
+                      <SortableTableHead sorted={sortKey === "lastSeenAt" && sortDir} onClick={() => toggleSort("lastSeenAt")}>
+                        Última atividade
+                      </SortableTableHead>
+                      <TableHead className="w-8" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((lead) => {
+                      const BandIcon = BAND_ICON[lead.scoreBand] ?? Snowflake;
+                      return (
+                        <TableRow key={lead.id} data-state={selected.has(lead.id) ? "selected" : undefined}>
+                          <TableCell>
+                            <Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggleOne(lead.id)} aria-label="Selecionar lead" />
+                          </TableCell>
+                          <TableCell>{lead.name ?? "—"}</TableCell>
+                          <TableCell className="font-mono">{lead.phone}</TableCell>
+                          <TableCell>
+                            <Tooltip content={<ScoreExplanation lead={lead} />}>
+                              <Badge variant={BAND_VARIANT[lead.scoreBand]} className="gap-1">
+                                <BandIcon className="h-3 w-3" />
+                                {BAND_LABELS[lead.scoreBand]}
+                              </Badge>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell className="font-mono">
+                            <Tooltip content={<ScoreExplanation lead={lead} />}>
+                              <span>{lead.commitmentScore}</span>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell className="text-ink-soft">
+                            {lead.lastSeenAt ? new Date(lead.lastSeenAt).toLocaleDateString("pt-BR") : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="rounded-lg p-1.5 text-ink-soft hover:bg-bg-2" aria-label="Ações">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={() => callOnWhatsapp(lead.id)}>Abrir no WhatsApp</DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="flex flex-col gap-2 lg:hidden">
+                <div className="mb-1 flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={sortKey === "commitmentScore" ? "border-accent text-accent" : undefined}
+                    onClick={() => toggleSort("commitmentScore")}
+                  >
+                    Score {sortKey === "commitmentScore" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={sortKey === "lastSeenAt" ? "border-accent text-accent" : undefined}
+                    onClick={() => toggleSort("lastSeenAt")}
+                  >
+                    Última atividade {sortKey === "lastSeenAt" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                  </Button>
+                </div>
+                {filtered.map((lead) => {
+                  const BandIcon = BAND_ICON[lead.scoreBand] ?? Snowflake;
+                  const isSelected = selected.has(lead.id);
+                  const isExpanded = expandedScoreId === lead.id;
+                  return (
+                    <div
+                      key={lead.id}
+                      data-state={isSelected ? "selected" : undefined}
+                      className="rounded-lg border border-border bg-bg-2 p-3 data-[state=selected]:border-accent"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="-m-2 flex min-h-11 min-w-11 items-center justify-center p-2">
+                          <Checkbox checked={isSelected} onCheckedChange={() => toggleOne(lead.id)} aria-label="Selecionar lead" />
+                        </span>
+                        <span className="flex-1 text-sm font-medium text-ink">{lead.name ?? "—"}</span>
                         <Badge variant={BAND_VARIANT[lead.scoreBand]} className="gap-1">
                           <BandIcon className="h-3 w-3" />
                           {BAND_LABELS[lead.scoreBand]}
                         </Badge>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell className="font-mono">
-                      <Tooltip content={<ScoreExplanation lead={lead} />}>
-                        <span>{lead.commitmentScore}</span>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell className="text-ink-soft">
-                      {lead.lastSeenAt ? new Date(lead.lastSeenAt).toLocaleDateString("pt-BR") : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="rounded-lg p-1.5 text-ink-soft hover:bg-bg-2" aria-label="Ações">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onSelect={() => callOnWhatsapp(lead.id)}>Abrir no WhatsApp</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-sm">
+                        <span className="font-mono text-ink">{lead.phone}</span>
+                        <button
+                          type="button"
+                          className="font-mono text-ink underline-offset-2 hover:underline"
+                          onClick={() => setExpandedScoreId(isExpanded ? null : lead.id)}
+                        >
+                          Score {lead.commitmentScore}
+                        </button>
+                      </div>
+                      {isExpanded && (
+                        <div className="mt-2 rounded-lg border border-border bg-bg px-3 py-2 text-xs">
+                          <ScoreExplanation lead={lead} />
+                        </div>
+                      )}
+                      <div className="mt-2 text-xs text-ink-soft">
+                        Última atividade: {lead.lastSeenAt ? new Date(lead.lastSeenAt).toLocaleDateString("pt-BR") : "—"}
+                      </div>
+                      <Button className="mt-3 min-h-11 w-full" onClick={() => callOnWhatsapp(lead.id)}>
+                        Abrir no WhatsApp
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -74,13 +74,15 @@ export function DataTableToolbar({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          value={filterValue}
-          onChange={(e) => onFilterChange(e.target.value)}
-          placeholder={filterPlaceholder}
-          className="h-8 w-56"
-        />
+      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        <div className="w-full sm:w-auto">
+          <Input
+            value={filterValue}
+            onChange={(e) => onFilterChange(e.target.value)}
+            placeholder={filterPlaceholder}
+            className="h-8 w-full sm:w-56"
+          />
+        </div>
         {filters}
         {typeof selectionCount === "number" && selectionCount > 0 && (
           <span className="text-xs text-ink-soft">{selectionCount} selecionado(s)</span>
