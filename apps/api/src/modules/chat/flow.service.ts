@@ -111,7 +111,7 @@ const PLACEHOLDER_PATTERN = /\{[^{}]+\}/g;
 // Prompts for the non-parametrized dynamic-bubble keys — shared between on-demand extraction
 // (dynamicOptionBubbles) and proactive regeneration (regenerateFlowOptions) so they stay in sync.
 const BRAND_PROMPT =
-  "Extraia os nomes de marcas de carros ou motos mencionadas no estoque descrito nos documentos abaixo (ex: Chevrolet, Fiat, Toyota). Responda apenas com um array JSON de até 8 marcas reais mencionadas no texto — nunca invente uma marca que não apareça. Se nenhuma marca for citada, responda com um array vazio [].";
+  "Extraia os nomes de MARCAS (fabricantes) de carros ou motos mencionadas no estoque descrito nos documentos abaixo — ex: Chevrolet, Fiat, Toyota, Hyundai são marcas. NUNCA inclua um nome de MODELO como se fosse marca (ex: Onix, Creta, HB20, Civic, Corolla, Strada, Compass são modelos, não marcas — se o texto só citar o modelo sem deixar claro o fabricante, não inclua nada para aquele item). Responda apenas com um array JSON de até 8 marcas reais mencionadas no texto — nunca invente uma marca que não apareça. Se nenhuma marca for citada, responda com um array vazio [].";
 const VEHICLE_CATEGORY_PROMPT =
   "Extraia os tipos/categorias de veículos mencionados no estoque descrito nos documentos abaixo (ex: hatch, sedã, SUV, picape, moto, elétrico). Responda apenas com um array JSON de até 8 categorias reais mencionadas no texto — nunca invente uma categoria que não apareça. Se nenhuma for citada, responda com um array vazio [].";
 const PROPERTY_TYPE_PROMPT =
