@@ -26,7 +26,7 @@
         { "label": "🔑 Quero comprar", "goto": "comprar" },
         { "label": "📄 Já sou inquilino", "goto": "inquilino_id" },
         { "label": "💼 Quero anunciar meu imóvel", "goto": "proprietario" },
-        { "label": "ℹ️ Outras dúvidas", "goto": "outras" }
+        { "label": "Qual o horário de atendimento?", "goto": "outras" }
       ]
     },
     "retorno": {
@@ -35,8 +35,7 @@
       "bubbles": [
         { "label": "▶️ Continuar de onde parei", "goto": "resultados" },
         { "label": "❤️ Ver imóveis salvos", "goto": "salvos" },
-        { "label": "📅 Minhas visitas", "goto": "minhas_visitas" },
-        { "label": "🔄 Começar de novo", "goto": "start" }
+        { "label": "📅 Minhas visitas", "goto": "minhas_visitas" }
       ]
     },
     "alugar": {
@@ -163,16 +162,15 @@
         { "label": "Vagas", "goto": "busca_vagas" },
         { "label": "Itens indispensáveis", "goto": "busca_extras" },
         { "label": "Região", "goto": "busca_bairro" },
-        { "label": "🔄 Nova busca do zero", "goto": "busca_tipo" }
+        { "label": "Quais outros imóveis vocês têm?", "goto": "busca_tipo" }
       ]
     },
     "alerta_criado": {
       "id": "alerta_criado",
       "message": "Pronto! 🔔 Vou te avisar quando surgir um imóvel com esse perfil.",
       "bubbles": [
-        { "label": "Continuar vendo imóveis", "goto": "resultados" },
-        { "label": "Gerenciar meus alertas", "goto": "alertas" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Quais outros imóveis vocês têm?", "goto": "resultados" },
+        { "label": "Gerenciar meus alertas", "goto": "alertas" }
       ]
     },
     "alertas": {
@@ -181,16 +179,14 @@
       "bubbles": [
         { "label": "Criar novo alerta", "goto": "busca_tipo" },
         { "label": "Pausar alertas", "goto": "alerta_pausado" },
-        { "label": "Excluir alerta", "goto": "alerta_pausado" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Excluir alerta", "goto": "alerta_pausado" }
       ]
     },
     "alerta_pausado": {
       "id": "alerta_pausado",
       "message": "Feito! Você pode reativar quando quiser.",
       "bubbles": [
-        { "label": "Ver imóveis agora", "goto": "busca_tipo" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Ver imóveis agora", "goto": "busca_tipo" }
       ]
     },
     "imovel_detalhe": {
@@ -216,8 +212,7 @@
       "bubbles": [
         { "label": "🎥 Tem vídeo ou tour 360°?", "goto": "imovel_tour" },
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" }
       ]
     },
     "imovel_tour": {
@@ -226,8 +221,7 @@
       "bubbles": [
         { "label": "Prefiro ver pessoalmente", "goto": "visita_dia" },
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" }
       ]
     },
     "imovel_mapa": {
@@ -236,8 +230,7 @@
       "bubbles": [
         { "label": "O que tem por perto?", "goto": "imovel_proximidades" },
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" }
       ]
     },
     "imovel_proximidades": {
@@ -245,8 +238,7 @@
       "message": "Perto do imóvel: {mercados}, {escolas}, {transporte}.",
       "bubbles": [
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" }
       ]
     },
     "imovel_valores": {
@@ -257,8 +249,7 @@
         { "label": "Aceita proposta?", "goto": "imovel_proposta_info" },
         { "label": "Simular financiamento", "goto": "cp_sim_renda" },
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" }
       ]
     },
     "imovel_caracteristicas": {
@@ -269,8 +260,7 @@
         { "label": "É mobiliado?", "goto": "imovel_mobilia" },
         { "label": "Qual andar / tem elevador?", "goto": "imovel_andar" },
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" }
       ]
     },
     "imovel_pet": {
@@ -278,8 +268,7 @@
       "message": "{pet_info}",
       "bubbles": [
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" }
       ]
     },
     "imovel_mobilia": {
@@ -287,8 +276,7 @@
       "message": "{mobilia_info}",
       "bubbles": [
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" }
       ]
     },
     "imovel_andar": {
@@ -296,8 +284,7 @@
       "message": "{andar_info}",
       "bubbles": [
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" }
       ]
     },
     "imovel_condominio": {
@@ -305,8 +292,7 @@
       "message": "O condomínio tem: {lazer}. Taxa de {cond}/mês.",
       "bubbles": [
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" }
       ]
     },
     "imovel_proposta_info": {
@@ -315,8 +301,7 @@
       "bubbles": [
         { "label": "Fazer proposta", "goto": "cp_proposta_forma" },
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "✅ Quero este imóvel", "goto": "imovel_quero" }
       ]
     },
     "imovel_salvo": {
@@ -324,16 +309,14 @@
       "message": "Salvo ❤️ Você encontra em 'Imóveis salvos'.",
       "bubbles": [
         { "label": "Ver imóveis salvos", "goto": "salvos" },
-        { "label": "Continuar vendo", "goto": "resultados" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "Quais outros imóveis vocês têm?", "goto": "resultados" }
       ]
     },
     "imovel_compartilhar": {
       "id": "imovel_compartilhar",
       "message": "Link copiado! Envie para quem quiser.",
       "bubbles": [
-        { "label": "Continuar vendo", "goto": "resultados" },
-        { "label": "⬅ Voltar ao imóvel", "goto": "imovel_detalhe" }
+        { "label": "Quais outros imóveis vocês têm?", "goto": "resultados" }
       ]
     },
     "imovel_quero": {
@@ -351,8 +334,7 @@
       "bubbles": [
         { "label": "🔍 Ver detalhes", "goto": "imovel_detalhe" },
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
-        { "label": "Fazer nova busca", "goto": "busca_tipo" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Fazer nova busca", "goto": "busca_tipo" }
       ]
     },
     "imovel_codigo": {
@@ -392,7 +374,7 @@
       "bubbles": [
         { "label": "O fiador precisa ser da cidade?", "goto": "gar_fiador_cidade" },
         { "label": "Documentos do fiador", "goto": "gar_fiador_docs" },
-        { "label": "Ver outra garantia", "goto": "al_garantias" },
+        { "label": "Quais outras garantias vocês aceitam?", "goto": "al_garantias" },
         { "label": "Quais documentos preciso?", "goto": "al_docs" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
@@ -401,7 +383,7 @@
       "id": "gar_fiador_cidade",
       "message": "{regra_cidade_fiador}",
       "bubbles": [
-        { "label": "Ver outra garantia", "goto": "al_garantias" },
+        { "label": "Quais outras garantias vocês aceitam?", "goto": "al_garantias" },
         { "label": "Quais documentos preciso?", "goto": "al_docs" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
@@ -410,7 +392,7 @@
       "id": "gar_fiador_docs",
       "message": "Do fiador precisamos de: {docs_fiador}.",
       "bubbles": [
-        { "label": "Ver outra garantia", "goto": "al_garantias" },
+        { "label": "Quais outras garantias vocês aceitam?", "goto": "al_garantias" },
         { "label": "Quais documentos preciso?", "goto": "al_docs" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
@@ -421,7 +403,7 @@
       "bubbles": [
         { "label": "Simular valor do seguro", "goto": "gar_simular" },
         { "label": "Pode parcelar?", "goto": "gar_parcelar" },
-        { "label": "Ver outra garantia", "goto": "al_garantias" },
+        { "label": "Quais outras garantias vocês aceitam?", "goto": "al_garantias" },
         { "label": "Quais documentos preciso?", "goto": "al_docs" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
@@ -430,7 +412,7 @@
       "id": "gar_simular",
       "message": "Para um aluguel de {valor}, o seguro fica em torno de {estimativa}.",
       "bubbles": [
-        { "label": "Ver outra garantia", "goto": "al_garantias" },
+        { "label": "Quais outras garantias vocês aceitam?", "goto": "al_garantias" },
         { "label": "Quais documentos preciso?", "goto": "al_docs" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
@@ -439,7 +421,7 @@
       "id": "gar_parcelar",
       "message": "{regra_parcelamento}",
       "bubbles": [
-        { "label": "Ver outra garantia", "goto": "al_garantias" },
+        { "label": "Quais outras garantias vocês aceitam?", "goto": "al_garantias" },
         { "label": "Quais documentos preciso?", "goto": "al_docs" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
@@ -450,7 +432,7 @@
       "bubbles": [
         { "label": "Pode parcelar a caução?", "goto": "gar_parcelar" },
         { "label": "Quando recebo de volta?", "goto": "enc_caucao" },
-        { "label": "Ver outra garantia", "goto": "al_garantias" },
+        { "label": "Quais outras garantias vocês aceitam?", "goto": "al_garantias" },
         { "label": "Quais documentos preciso?", "goto": "al_docs" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
@@ -459,7 +441,7 @@
       "id": "gar_titulo",
       "message": "Você compra um título de capitalização ({regra_titulo}) e resgata no fim.",
       "bubbles": [
-        { "label": "Ver outra garantia", "goto": "al_garantias" },
+        { "label": "Quais outras garantias vocês aceitam?", "goto": "al_garantias" },
         { "label": "Quais documentos preciso?", "goto": "al_docs" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
@@ -581,8 +563,7 @@
       "id": "docs_lgpd",
       "message": "Sim. Seus dados são usados só para a análise, conforme a LGPD.",
       "bubbles": [
-        { "label": "Enviar documentos", "goto": "docs_envio" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Enviar documentos", "goto": "docs_envio" }
       ]
     },
     "docs_recebidos": {
@@ -590,8 +571,7 @@
       "message": "Recebi seus documentos ✅ A análise leva {prazo}.",
       "bubbles": [
         { "label": "Acompanhar minha análise", "goto": "al_analise_status" },
-        { "label": "Enviar mais documentos", "goto": "docs_envio" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Enviar mais documentos", "goto": "docs_envio" }
       ]
     },
     "al_analise_prazo": {
@@ -599,8 +579,7 @@
       "message": "A análise costuma levar {prazo} após recebermos todos os documentos.",
       "bubbles": [
         { "label": "Acompanhar minha análise", "goto": "al_analise_status" },
-        { "label": "Enviar documentos", "goto": "docs_envio" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Enviar documentos", "goto": "docs_envio" }
       ]
     },
     "al_analise_status": {
@@ -662,24 +641,21 @@
       "id": "pet_grande",
       "message": "Alguns imóveis têm restrição de porte. Filtramos só os que aceitam.",
       "bubbles": [
-        { "label": "Ver imóveis que aceitam pet", "goto": "busca_tipo", "params": {"extra": "pet"} },
-        { "label": "Voltar", "goto": "al_pet" }
+        { "label": "Ver imóveis que aceitam pet", "goto": "busca_tipo", "params": {"extra": "pet"} }
       ]
     },
     "pet_varios": {
       "id": "pet_varios",
       "message": "Depende do imóvel; o anúncio informa o limite.",
       "bubbles": [
-        { "label": "Ver imóveis que aceitam pet", "goto": "busca_tipo", "params": {"extra": "pet"} },
-        { "label": "Voltar", "goto": "al_pet" }
+        { "label": "Ver imóveis que aceitam pet", "goto": "busca_tipo", "params": {"extra": "pet"} }
       ]
     },
     "pet_condominio": {
       "id": "pet_condominio",
       "message": "A convenção pode ter regras de circulação, mas não pode proibir pets de forma genérica.",
       "bubbles": [
-        { "label": "Ver imóveis que aceitam pet", "goto": "busca_tipo", "params": {"extra": "pet"} },
-        { "label": "Voltar", "goto": "al_pet" }
+        { "label": "Ver imóveis que aceitam pet", "goto": "busca_tipo", "params": {"extra": "pet"} }
       ]
     },
     "al_custos": {
@@ -708,24 +684,21 @@
       "message": "Custo mensal estimado: {total}. Na entrada, considere também {entrada}.",
       "bubbles": [
         { "label": "Ver imóveis nessa faixa", "goto": "busca_tipo", "params": {"modo": "aluguel"} },
-        { "label": "Ver garantias", "goto": "al_garantias" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Ver garantias", "goto": "al_garantias" }
       ]
     },
     "al_taxa_contrato": {
       "id": "al_taxa_contrato",
       "message": "{regra_taxa_contrato}",
       "bubbles": [
-        { "label": "Simular valor total", "goto": "al_simular" },
-        { "label": "Voltar", "goto": "al_custos" }
+        { "label": "Simular valor total", "goto": "al_simular" }
       ]
     },
     "al_iptu": {
       "id": "al_iptu",
       "message": "Em geral o IPTU é repassado ao inquilino; o anúncio mostra o valor.",
       "bubbles": [
-        { "label": "Simular valor total", "goto": "al_simular" },
-        { "label": "Voltar", "goto": "al_custos" }
+        { "label": "Simular valor total", "goto": "al_simular" }
       ]
     },
     "al_contrato": {
@@ -745,7 +718,7 @@
       "id": "ct_prazo",
       "message": "Residencial costuma ser de 30 meses; comercial é negociável.",
       "bubbles": [
-        { "label": "Outra dúvida sobre contrato", "goto": "al_contrato" },
+        { "label": "Tem multa se eu sair antes do prazo?", "goto": "al_contrato" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
     },
@@ -753,7 +726,7 @@
       "id": "ct_chaves",
       "message": "Após aprovação, assinatura e pagamento inicial — em média {prazo_chaves}.",
       "bubbles": [
-        { "label": "Outra dúvida sobre contrato", "goto": "al_contrato" },
+        { "label": "Tem multa se eu sair antes do prazo?", "goto": "al_contrato" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
     },
@@ -761,7 +734,7 @@
       "id": "ct_reforma",
       "message": "Pequenas mudanças com autorização por escrito; na saída, o imóvel volta como recebeu.",
       "bubbles": [
-        { "label": "Outra dúvida sobre contrato", "goto": "al_contrato" },
+        { "label": "Tem multa se eu sair antes do prazo?", "goto": "al_contrato" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
     },
@@ -769,7 +742,7 @@
       "id": "ct_vistoria",
       "message": "Fazemos uma vistoria com fotos na entrada, e ela é comparada na saída.",
       "bubbles": [
-        { "label": "Outra dúvida sobre contrato", "goto": "al_contrato" },
+        { "label": "Tem multa se eu sair antes do prazo?", "goto": "al_contrato" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
     },
@@ -777,7 +750,7 @@
       "id": "ct_digital",
       "message": "Sim, você assina tudo pelo celular ✍️",
       "bubbles": [
-        { "label": "Outra dúvida sobre contrato", "goto": "al_contrato" },
+        { "label": "Tem multa se eu sair antes do prazo?", "goto": "al_contrato" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "aluguel"} }
       ]
     },
@@ -841,8 +814,7 @@
         { "label": "📍 Ver endereço no mapa", "goto": "visita_confirmada_ok" },
         { "label": "Agendar outra visita", "goto": "visita_inicio" },
         { "label": "Remarcar", "goto": "visita_dia" },
-        { "label": "Cancelar visita", "goto": "visita_cancelar" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Cancelar visita", "goto": "visita_cancelar" }
       ]
     },
     "visita_email": {
@@ -859,8 +831,7 @@
       "message": "Feito ✅ Te mando um lembrete antes da visita.",
       "bubbles": [
         { "label": "Agendar outra visita", "goto": "visita_inicio" },
-        { "label": "Ver imóveis parecidos", "goto": "resultados", "params": {"similar": true} },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Ver imóveis parecidos", "goto": "resultados", "params": {"similar": true} }
       ]
     },
     "minhas_visitas": {
@@ -869,8 +840,7 @@
       "bubbles": [
         { "label": "Remarcar", "goto": "visita_dia" },
         { "label": "Cancelar visita", "goto": "visita_cancelar" },
-        { "label": "Agendar nova visita", "goto": "visita_inicio" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Agendar nova visita", "goto": "visita_inicio" }
       ]
     },
     "visita_cancelar": {
@@ -887,8 +857,7 @@
       "message": "Visita cancelada. Quer ver outras opções?",
       "bubbles": [
         { "label": "Ver imóveis parecidos", "goto": "resultados", "params": {"similar": true} },
-        { "label": "Nova busca", "goto": "busca_tipo" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Quais outros imóveis vocês têm?", "goto": "busca_tipo" }
       ]
     },
     "visita_lembrete": {
@@ -966,7 +935,7 @@
       "message": "Em geral a entrada é de 20% a 30%; em programas habitacionais pode ser menor.",
       "bubbles": [
         { "label": "Simular financiamento", "goto": "cp_sim_renda" },
-        { "label": "Outra dúvida sobre financiamento", "goto": "cp_fin" },
+        { "label": "Quanto tempo leva a aprovação do financiamento?", "goto": "cp_fin" },
         { "label": "Ver imóveis à venda", "goto": "busca_tipo", "params": {"modo": "venda"} }
       ]
     },
@@ -976,7 +945,7 @@
       "bubbles": [
         { "label": "Falar com correspondente bancário", "goto": "handoff", "params": {"setor": "credito"} },
         { "label": "Simular financiamento", "goto": "cp_sim_renda" },
-        { "label": "Outra dúvida sobre financiamento", "goto": "cp_fin" },
+        { "label": "Quanto tempo leva a aprovação do financiamento?", "goto": "cp_fin" },
         { "label": "Ver imóveis à venda", "goto": "busca_tipo", "params": {"modo": "venda"} }
       ]
     },
@@ -987,7 +956,7 @@
         { "label": "Ver se me enquadro", "goto": "cp_sim_renda" },
         { "label": "Ver imóveis do programa", "goto": "busca_tipo", "params": {"modo": "venda", "programa": "mcmv"} },
         { "label": "Simular financiamento", "goto": "cp_sim_renda" },
-        { "label": "Outra dúvida sobre financiamento", "goto": "cp_fin" },
+        { "label": "Quanto tempo leva a aprovação do financiamento?", "goto": "cp_fin" },
         { "label": "Ver imóveis à venda", "goto": "busca_tipo", "params": {"modo": "venda"} }
       ]
     },
@@ -996,7 +965,7 @@
       "message": "Sim, comprovando renda por extratos e/ou IR.",
       "bubbles": [
         { "label": "Simular financiamento", "goto": "cp_sim_renda" },
-        { "label": "Outra dúvida sobre financiamento", "goto": "cp_fin" },
+        { "label": "Quanto tempo leva a aprovação do financiamento?", "goto": "cp_fin" },
         { "label": "Ver imóveis à venda", "goto": "busca_tipo", "params": {"modo": "venda"} }
       ]
     },
@@ -1005,7 +974,7 @@
       "message": "Restrições dificultam a aprovação; vale regularizar antes. Podemos orientar.",
       "bubbles": [
         { "label": "Simular financiamento", "goto": "cp_sim_renda" },
-        { "label": "Outra dúvida sobre financiamento", "goto": "cp_fin" },
+        { "label": "Quanto tempo leva a aprovação do financiamento?", "goto": "cp_fin" },
         { "label": "Ver imóveis à venda", "goto": "busca_tipo", "params": {"modo": "venda"} }
       ]
     },
@@ -1014,7 +983,7 @@
       "message": "Da documentação à assinatura, costuma levar {prazo_fin}.",
       "bubbles": [
         { "label": "Simular financiamento", "goto": "cp_sim_renda" },
-        { "label": "Outra dúvida sobre financiamento", "goto": "cp_fin" },
+        { "label": "Quanto tempo leva a aprovação do financiamento?", "goto": "cp_fin" },
         { "label": "Ver imóveis à venda", "goto": "busca_tipo", "params": {"modo": "venda"} }
       ]
     },
@@ -1057,8 +1026,7 @@
       "bubbles": [
         { "label": "Ver imóveis nessa faixa", "goto": "resultados", "params": {"modo": "venda"} },
         { "label": "Simular de novo", "goto": "cp_sim_renda" },
-        { "label": "Falar com correspondente bancário", "goto": "handoff", "params": {"setor": "credito"} },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Falar com correspondente bancário", "goto": "handoff", "params": {"setor": "credito"} }
       ]
     },
     "cp_fgts": {
@@ -1075,8 +1043,7 @@
       "id": "fgts_quem",
       "message": "Em geral: 3 anos de carteira assinada e não ter outro imóvel na mesma cidade.",
       "bubbles": [
-        { "label": "Simular com FGTS", "goto": "cp_sim_renda" },
-        { "label": "Voltar", "goto": "cp_fgts" }
+        { "label": "Simular com FGTS", "goto": "cp_sim_renda" }
       ]
     },
     "fgts_uso": {
@@ -1084,8 +1051,7 @@
       "message": "Sim, dentro das regras do programa. O correspondente confirma no seu caso.",
       "bubbles": [
         { "label": "Simular com FGTS", "goto": "cp_sim_renda" },
-        { "label": "Falar com correspondente", "goto": "handoff", "params": {"setor": "credito"} },
-        { "label": "Voltar", "goto": "cp_fgts" }
+        { "label": "Falar com correspondente", "goto": "handoff", "params": {"setor": "credito"} }
       ]
     },
     "cp_custos": {
@@ -1103,7 +1069,7 @@
       "id": "custo_itbi",
       "message": "O ITBI é um imposto municipal de {aliquota_itbi} sobre o valor do imóvel.",
       "bubbles": [
-        { "label": "Ver outro custo", "goto": "cp_custos" },
+        { "label": "Quais outros custos existem?", "goto": "cp_custos" },
         { "label": "Calcular para um imóvel", "goto": "custo_calcular" }
       ]
     },
@@ -1111,7 +1077,7 @@
       "id": "custo_escritura",
       "message": "Escritura e registro somam em torno de {pct_cartorio} do valor; no financiamento, o contrato do banco substitui a escritura.",
       "bubbles": [
-        { "label": "Ver outro custo", "goto": "cp_custos" },
+        { "label": "Quais outros custos existem?", "goto": "cp_custos" },
         { "label": "Calcular para um imóvel", "goto": "custo_calcular" }
       ]
     },
@@ -1119,7 +1085,7 @@
       "id": "custo_avaliacao",
       "message": "O banco cobra uma taxa de avaliação de cerca de {taxa_avaliacao}.",
       "bubbles": [
-        { "label": "Ver outro custo", "goto": "cp_custos" },
+        { "label": "Quais outros custos existem?", "goto": "cp_custos" },
         { "label": "Calcular para um imóvel", "goto": "custo_calcular" }
       ]
     },
@@ -1127,8 +1093,7 @@
       "id": "custo_calcular",
       "message": "Me diga o valor do imóvel ou o código.",
       "bubbles": [
-        { "label": "Usar imóvel que estou vendo", "goto": "custo_resultado" },
-        { "label": "Voltar", "goto": "cp_custos" }
+        { "label": "Usar imóvel que estou vendo", "goto": "custo_resultado" }
       ],
       "input": "valor ou código"
     },
@@ -1137,8 +1102,7 @@
       "message": "Custos estimados: ITBI {itbi} + cartório {cartorio} = {total}.",
       "bubbles": [
         { "label": "Simular financiamento", "goto": "cp_sim_renda" },
-        { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "venda"} },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "venda"} }
       ]
     },
     "cp_permuta": {
@@ -1175,7 +1139,7 @@
       "message": "Entrada + parcelas mensais à construtora até a entrega, depois financiamento do saldo.",
       "bubbles": [
         { "label": "Ver lançamentos", "goto": "busca_tipo", "params": {"modo": "venda", "planta": true} },
-        { "label": "Outra dúvida", "goto": "cp_planta" }
+        { "label": "Qual o prazo de entrega do lançamento?", "goto": "cp_planta" }
       ]
     },
     "planta_prazo": {
@@ -1183,7 +1147,7 @@
       "message": "Cada empreendimento tem seu prazo; o anúncio informa a data prevista.",
       "bubbles": [
         { "label": "Ver lançamentos", "goto": "busca_tipo", "params": {"modo": "venda", "planta": true} },
-        { "label": "Outra dúvida", "goto": "cp_planta" }
+        { "label": "Qual o prazo de entrega do lançamento?", "goto": "cp_planta" }
       ]
     },
     "planta_incc": {
@@ -1191,7 +1155,7 @@
       "message": "As parcelas são corrigidas pelo INCC (custo da construção) até a entrega.",
       "bubbles": [
         { "label": "Ver lançamentos", "goto": "busca_tipo", "params": {"modo": "venda", "planta": true} },
-        { "label": "Outra dúvida", "goto": "cp_planta" }
+        { "label": "Qual o prazo de entrega do lançamento?", "goto": "cp_planta" }
       ]
     },
     "planta_seguro": {
@@ -1199,7 +1163,7 @@
       "message": "Verifique o registro de incorporação e o histórico da construtora — te ajudamos nisso.",
       "bubbles": [
         { "label": "Ver lançamentos", "goto": "busca_tipo", "params": {"modo": "venda", "planta": true} },
-        { "label": "Outra dúvida", "goto": "cp_planta" }
+        { "label": "Qual o prazo de entrega do lançamento?", "goto": "cp_planta" }
       ]
     },
     "cp_doc": {
@@ -1216,7 +1180,7 @@
       "id": "doc_matricula",
       "message": "É o 'RG' do imóvel no cartório, com dono, ônus e histórico.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "cp_doc" },
+        { "label": "Quais certidões vocês verificam antes da venda?", "goto": "cp_doc" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "venda"} }
       ]
     },
@@ -1224,7 +1188,7 @@
       "id": "doc_certidoes",
       "message": "Certidões do imóvel e dos vendedores: ônus reais, débitos, ações judiciais.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "cp_doc" },
+        { "label": "Quais certidões vocês verificam antes da venda?", "goto": "cp_doc" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "venda"} }
       ]
     },
@@ -1232,7 +1196,7 @@
       "id": "doc_dividas",
       "message": "Checamos IPTU e condomínio antes de fechar; nada passa para você sem estar claro.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "cp_doc" },
+        { "label": "Quais certidões vocês verificam antes da venda?", "goto": "cp_doc" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "venda"} }
       ]
     },
@@ -1240,7 +1204,7 @@
       "id": "doc_habite",
       "message": "É o documento da prefeitura que libera o imóvel para morar; o banco exige para financiar.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "cp_doc" },
+        { "label": "Quais certidões vocês verificam antes da venda?", "goto": "cp_doc" },
         { "label": "Ver imóveis", "goto": "busca_tipo", "params": {"modo": "venda"} }
       ]
     },
@@ -1286,8 +1250,7 @@
       "message": "Parabéns! 🎉 O corretor vai te ligar para os próximos passos.",
       "bubbles": [
         { "label": "Quais os próximos passos?", "goto": "cp_doc" },
-        { "label": "Simular financiamento", "goto": "cp_sim_renda" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Simular financiamento", "goto": "cp_sim_renda" }
       ]
     },
     "inquilino_id": {
@@ -1295,8 +1258,7 @@
       "message": "Para acessar seu contrato, informe seu CPF.",
       "bubbles": [
         { "label": "Não lembro o CPF cadastrado", "goto": "handoff" },
-        { "label": "Sou o fiador", "goto": "fiador_area" },
-        { "label": "Voltar", "goto": "start" }
+        { "label": "Sou o fiador", "goto": "fiador_area" }
       ],
       "input": "CPF",
       "on_input": "inquilino"
@@ -1334,7 +1296,7 @@
         { "label": "Copiar código de barras", "goto": "boleto_copiado" },
         { "label": "Pagar via Pix", "goto": "boleto_pix" },
         { "label": "Valor diferente do esperado?", "goto": "boleto_valor" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "boleto_copiado": {
@@ -1342,7 +1304,7 @@
       "message": "Código copiado ✅",
       "bubbles": [
         { "label": "Pagar via Pix", "goto": "boleto_pix" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "boleto_pix": {
@@ -1350,7 +1312,7 @@
       "message": "Aqui está o Pix copia e cola 👇",
       "bubbles": [
         { "label": "Enviar comprovante", "goto": "boleto_comprovante" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "boleto_valor": {
@@ -1359,7 +1321,7 @@
       "bubbles": [
         { "label": "Inclui reajuste?", "goto": "reaj" },
         { "label": "Contestar valor", "goto": "handoff" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "boleto_venc": {
@@ -1367,7 +1329,7 @@
       "message": "{regra_vencimento}",
       "bubbles": [
         { "label": "Solicitar mudança", "goto": "handoff" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "boleto_pago": {
@@ -1375,7 +1337,7 @@
       "message": "Pagamentos levam até 3 dias úteis para baixar. Quer enviar o comprovante?",
       "bubbles": [
         { "label": "Enviar comprovante", "goto": "boleto_comprovante" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "boleto_comprovante": {
@@ -1383,7 +1345,7 @@
       "message": "Envie a foto ou PDF do comprovante 📎",
       "bubbles": [
         { "label": "Enviar depois", "goto": "fim" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ],
       "input": "arquivo"
     },
@@ -1410,7 +1372,7 @@
       "message": "Acordo registrado ✅ Enviamos os boletos.",
       "bubbles": [
         { "label": "Ver boletos", "goto": "boleto_ok" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "atraso_juros": {
@@ -1418,7 +1380,7 @@
       "message": "Multa de {multa}% + juros de {juros}% ao mês, conforme contrato.",
       "bubbles": [
         { "label": "Parcelar o débito", "goto": "atraso_parcelar" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "manut": {
@@ -1452,8 +1414,7 @@
       "id": "manut_gas",
       "message": "⚠️ Feche o registro, abra as janelas, não acione interruptores e ligue para a distribuidora de gás. Vou acionar a equipe.",
       "bubbles": [
-        { "label": "Já fiz isso", "goto": "handoff", "params": {"prioridade": "urgente"} },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Já fiz isso", "goto": "handoff", "params": {"prioridade": "urgente"} }
       ]
     },
     "manut_quem": {
@@ -1461,24 +1422,21 @@
       "message": "Problemas estruturais são do proprietário; desgaste do uso, do inquilino. Vamos registrar e avaliar.",
       "bubbles": [
         { "label": "Abrir chamado", "goto": "manut_descrever" },
-        { "label": "Quem paga nesse caso?", "goto": "manut_quem_paga" },
-        { "label": "Voltar", "goto": "manut" }
+        { "label": "Quem paga nesse caso?", "goto": "manut_quem_paga" }
       ]
     },
     "manut_quem_paga": {
       "id": "manut_quem_paga",
       "message": "Pela Lei do Inquilinato: estrutura e defeitos antigos → proprietário; pequenos reparos de uso → inquilino.",
       "bubbles": [
-        { "label": "Abrir chamado", "goto": "manut_descrever" },
-        { "label": "Voltar", "goto": "manut" }
+        { "label": "Abrir chamado", "goto": "manut_descrever" }
       ]
     },
     "manut_descrever": {
       "id": "manut_descrever",
       "message": "Descreva o problema e, se puder, envie fotos ou vídeo 📸",
       "bubbles": [
-        { "label": "Enviar sem foto", "goto": "manut_disponibilidade" },
-        { "label": "Voltar", "goto": "manut" }
+        { "label": "Enviar sem foto", "goto": "manut_disponibilidade" }
       ],
       "input": "texto/arquivo"
     },
@@ -1498,7 +1456,7 @@
       "bubbles": [
         { "label": "Acompanhar chamado", "goto": "manut_status" },
         { "label": "Abrir outro chamado", "goto": "manut" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "manut_status": {
@@ -1508,7 +1466,7 @@
         { "label": "Adicionar informação", "goto": "manut_descrever" },
         { "label": "O problema foi resolvido", "goto": "fim" },
         { "label": "Ainda não resolveu", "goto": "handoff" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "reaj": {
@@ -1525,24 +1483,24 @@
       "id": "reaj_data",
       "message": "Seu reajuste é em {mes}, a cada 12 meses.",
       "bubbles": [
-        { "label": "Outra dúvida sobre reajuste", "goto": "reaj" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Posso negociar o reajuste?", "goto": "reaj" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "reaj_indice": {
       "id": "reaj_indice",
       "message": "O reajuste é anual pelo índice do contrato (geralmente IGP-M ou IPCA).",
       "bubbles": [
-        { "label": "Outra dúvida sobre reajuste", "goto": "reaj" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Posso negociar o reajuste?", "goto": "reaj" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "reaj_valor": {
       "id": "reaj_valor",
       "message": "Com o índice acumulado de {indice}, o novo valor fica {novo_valor}.",
       "bubbles": [
-        { "label": "Outra dúvida sobre reajuste", "goto": "reaj" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Posso negociar o reajuste?", "goto": "reaj" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "reaj_negociar": {
@@ -1559,7 +1517,7 @@
       "id": "reaj_pedido",
       "message": "Pedido enviado ao proprietário 📨 Respondo em até {prazo}.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "inq_contrato": {
@@ -1578,8 +1536,8 @@
       "id": "contrato_copia",
       "message": "Aqui está seu contrato 📄",
       "bubbles": [
-        { "label": "Outra dúvida sobre contrato", "goto": "inq_contrato" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Posso incluir outra pessoa no contrato?", "goto": "inq_contrato" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "contrato_fim": {
@@ -1588,8 +1546,8 @@
       "bubbles": [
         { "label": "Quero renovar", "goto": "renov" },
         { "label": "Quero sair", "goto": "enc" },
-        { "label": "Outra dúvida sobre contrato", "goto": "inq_contrato" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Posso incluir outra pessoa no contrato?", "goto": "inq_contrato" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "contrato_garantia": {
@@ -1597,8 +1555,8 @@
       "message": "Dá para trocar a garantia com aprovação do proprietário.",
       "bubbles": [
         { "label": "Ver garantias", "goto": "al_garantias" },
-        { "label": "Outra dúvida sobre contrato", "goto": "inq_contrato" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Posso incluir outra pessoa no contrato?", "goto": "inq_contrato" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "contrato_morador": {
@@ -1606,24 +1564,24 @@
       "message": "Incluir ou retirar titular exige aditivo e análise.",
       "bubbles": [
         { "label": "Solicitar aditivo", "goto": "handoff" },
-        { "label": "Outra dúvida sobre contrato", "goto": "inq_contrato" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Posso incluir outra pessoa no contrato?", "goto": "inq_contrato" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "contrato_subloc": {
       "id": "contrato_subloc",
       "message": "Sublocação só com autorização por escrito do proprietário.",
       "bubbles": [
-        { "label": "Outra dúvida sobre contrato", "goto": "inq_contrato" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Posso incluir outra pessoa no contrato?", "goto": "inq_contrato" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "contrato_vistoria": {
       "id": "contrato_vistoria",
       "message": "Aqui está o laudo de entrada com fotos 📸",
       "bubbles": [
-        { "label": "Outra dúvida sobre contrato", "goto": "inq_contrato" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Posso incluir outra pessoa no contrato?", "goto": "inq_contrato" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "renov": {
@@ -1640,7 +1598,7 @@
       "id": "renov_ok",
       "message": "Ótimo! Enviaremos o aditivo para assinatura digital ✍️",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "enc": {
@@ -1660,16 +1618,16 @@
       "message": "A multa é proporcional ao tempo restante. Em transferência de emprego há isenção com aviso de 30 dias.",
       "bubbles": [
         { "label": "Calcular minha multa", "goto": "enc_multa_calc" },
-        { "label": "Outra dúvida sobre saída", "goto": "enc" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Com quanto tempo de antecedência devo avisar que vou sair?", "goto": "enc" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "enc_multa_calc": {
       "id": "enc_multa_calc",
       "message": "Pelo seu contrato, a multa hoje seria {multa}.",
       "bubbles": [
-        { "label": "Outra dúvida sobre saída", "goto": "enc" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Com quanto tempo de antecedência devo avisar que vou sair?", "goto": "enc" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "enc_aviso": {
@@ -1677,8 +1635,8 @@
       "message": "O aviso prévio é de 30 dias, por escrito.",
       "bubbles": [
         { "label": "Dar aviso agora", "goto": "enc_aviso_ok" },
-        { "label": "Outra dúvida sobre saída", "goto": "enc" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Com quanto tempo de antecedência devo avisar que vou sair?", "goto": "enc" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "enc_aviso_ok": {
@@ -1686,8 +1644,8 @@
       "message": "Aviso registrado em {data} ✅ Sua saída prevista é {data_saida}.",
       "bubbles": [
         { "label": "Agendar vistoria", "goto": "enc_vistoria" },
-        { "label": "Outra dúvida sobre saída", "goto": "enc" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Com quanto tempo de antecedência devo avisar que vou sair?", "goto": "enc" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "enc_vistoria": {
@@ -1696,8 +1654,8 @@
       "bubbles": [
         { "label": "Ver laudo de entrada", "goto": "contrato_vistoria" },
         { "label": "Agendar vistoria", "goto": "enc_chaves" },
-        { "label": "Outra dúvida sobre saída", "goto": "enc" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Com quanto tempo de antecedência devo avisar que vou sair?", "goto": "enc" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "enc_chaves": {
@@ -1713,23 +1671,23 @@
       "id": "enc_chaves_ok",
       "message": "Agendado ✅ Lembre de quitar contas de água, luz e gás.",
       "bubbles": [
-        { "label": "Outra dúvida sobre saída", "goto": "enc" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Com quanto tempo de antecedência devo avisar que vou sair?", "goto": "enc" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "enc_caucao": {
       "id": "enc_caucao",
       "message": "A caução é devolvida corrigida em até {prazo} após a vistoria aprovada.",
       "bubbles": [
-        { "label": "Outra dúvida sobre saída", "goto": "enc" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Com quanto tempo de antecedência devo avisar que vou sair?", "goto": "enc" },
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "inq_ir": {
       "id": "inq_ir",
       "message": "Aqui está seu informe de pagamentos de aluguel {ano} 🧾",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "inq_cond": {
@@ -1745,24 +1703,21 @@
       "id": "cond_valor",
       "message": "O condomínio deste mês é {valor}.",
       "bubbles": [
-        { "label": "Voltar", "goto": "inq_cond" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "cond_extra": {
       "id": "cond_extra",
       "message": "Taxas extraordinárias (obras, melhorias) são do proprietário; ordinárias, do inquilino.",
       "bubbles": [
-        { "label": "Voltar", "goto": "inq_cond" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "cond_iptu": {
       "id": "cond_iptu",
       "message": "{iptu_info}",
       "bubbles": [
-        { "label": "Voltar", "goto": "inq_cond" },
-        { "label": "Outra dúvida", "goto": "inquilino" }
+        { "label": "Como peço a 2ª via do boleto?", "goto": "inquilino" }
       ]
     },
     "fiador_area": {
@@ -1826,16 +1781,14 @@
       "message": "Com base em imóveis parecidos na região, a estimativa é de {faixa}.",
       "bubbles": [
         { "label": "Agendar avaliação presencial", "goto": "prop_av_quando" },
-        { "label": "Anunciar agora", "goto": "prop_anunciar" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Anunciar agora", "goto": "prop_anunciar" }
       ]
     },
     "prop_av_ok": {
       "id": "prop_av_ok",
       "message": "Avaliação agendada ✅ Um corretor vai confirmar com você.",
       "bubbles": [
-        { "label": "O que preparar para a visita?", "goto": "prop_docs" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "O que preparar para a visita?", "goto": "prop_docs" }
       ]
     },
     "prop_alugar": {
@@ -1855,7 +1808,7 @@
       "id": "prop_taxa_adm",
       "message": "Nossa taxa é de {taxa_adm}% do aluguel, e o 1º aluguel é a taxa de intermediação.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_alugar" },
+        { "label": "Quanto tempo leva para alugar meu imóvel?", "goto": "prop_alugar" },
         { "label": "Anunciar agora", "goto": "prop_anunciar", "params": {"objetivo": "aluguel"} }
       ]
     },
@@ -1863,7 +1816,7 @@
       "id": "prop_incluso",
       "message": "Anúncio, fotos, análise de crédito, contrato, vistorias, cobrança e repasse.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_alugar" },
+        { "label": "Quanto tempo leva para alugar meu imóvel?", "goto": "prop_alugar" },
         { "label": "Anunciar agora", "goto": "prop_anunciar", "params": {"objetivo": "aluguel"} }
       ]
     },
@@ -1871,7 +1824,7 @@
       "id": "prop_garantia",
       "message": "{regra_garantia_aluguel}",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_alugar" },
+        { "label": "Quanto tempo leva para alugar meu imóvel?", "goto": "prop_alugar" },
         { "label": "Anunciar agora", "goto": "prop_anunciar", "params": {"objetivo": "aluguel"} }
       ]
     },
@@ -1879,7 +1832,7 @@
       "id": "prop_inquilino",
       "message": "Análise de crédito, renda, referências e garantia aprovada.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_alugar" },
+        { "label": "Quanto tempo leva para alugar meu imóvel?", "goto": "prop_alugar" },
         { "label": "Anunciar agora", "goto": "prop_anunciar", "params": {"objetivo": "aluguel"} }
       ]
     },
@@ -1887,7 +1840,7 @@
       "id": "prop_repasse_info",
       "message": "O repasse cai até {dia_repasse} dias após o pagamento do inquilino.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_alugar" },
+        { "label": "Quanto tempo leva para alugar meu imóvel?", "goto": "prop_alugar" },
         { "label": "Anunciar agora", "goto": "prop_anunciar", "params": {"objetivo": "aluguel"} }
       ]
     },
@@ -1895,7 +1848,7 @@
       "id": "prop_tempo",
       "message": "Na sua região, imóveis parecidos alugam em média em {tempo}.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_alugar" },
+        { "label": "Quanto tempo leva para alugar meu imóvel?", "goto": "prop_alugar" },
         { "label": "Anunciar agora", "goto": "prop_anunciar", "params": {"objetivo": "aluguel"} }
       ]
     },
@@ -1916,7 +1869,7 @@
       "id": "pv_comissao",
       "message": "A comissão é de {comissao}% sobre o valor de venda, paga só se vender.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_vender" },
+        { "label": "Como vocês divulgam o imóvel à venda?", "goto": "prop_vender" },
         { "label": "Anunciar agora", "goto": "prop_anunciar", "params": {"objetivo": "venda"} }
       ]
     },
@@ -1924,7 +1877,7 @@
       "id": "pv_exclusividade",
       "message": "{regra_exclusividade}",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_vender" },
+        { "label": "Como vocês divulgam o imóvel à venda?", "goto": "prop_vender" },
         { "label": "Anunciar agora", "goto": "prop_anunciar", "params": {"objetivo": "venda"} }
       ]
     },
@@ -1932,7 +1885,7 @@
       "id": "pv_divulgacao",
       "message": "Site, portais (Zap, VivaReal, OLX), redes sociais e nossa base de compradores.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_vender" },
+        { "label": "Como vocês divulgam o imóvel à venda?", "goto": "prop_vender" },
         { "label": "Anunciar agora", "goto": "prop_anunciar", "params": {"objetivo": "venda"} }
       ]
     },
@@ -1940,7 +1893,7 @@
       "id": "pv_fotos",
       "message": "Sim! Fotos profissionais {e_tour} sem custo.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_vender" },
+        { "label": "Como vocês divulgam o imóvel à venda?", "goto": "prop_vender" },
         { "label": "Anunciar agora", "goto": "prop_anunciar", "params": {"objetivo": "venda"} }
       ]
     },
@@ -1948,7 +1901,7 @@
       "id": "pv_financiado",
       "message": "Sim, o saldo é quitado com o dinheiro da venda. Cuidamos do processo.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_vender" },
+        { "label": "Como vocês divulgam o imóvel à venda?", "goto": "prop_vender" },
         { "label": "Anunciar agora", "goto": "prop_anunciar", "params": {"objetivo": "venda"} }
       ]
     },
@@ -1957,8 +1910,7 @@
       "message": "Separe: matrícula atualizada, IPTU, RG/CPF dos proprietários e, se houver, contas do condomínio.",
       "bubbles": [
         { "label": "Como tiro a matrícula?", "goto": "prop_matricula" },
-        { "label": "Anunciar agora", "goto": "prop_anunciar" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Anunciar agora", "goto": "prop_anunciar" }
       ]
     },
     "prop_matricula": {
@@ -1982,7 +1934,6 @@
       "id": "prop_cliente_id",
       "message": "Informe seu CPF para acessar sua área de proprietário.",
       "bubbles": [
-        { "label": "Voltar", "goto": "proprietario" }
       ],
       "input": "CPF",
       "on_input": "prop_cliente"
@@ -2007,21 +1958,21 @@
       "message": "Aqui está seu extrato do mês 📄",
       "bubbles": [
         { "label": "Ver meses anteriores", "goto": "pc_extrato" },
-        { "label": "Outra dúvida", "goto": "prop_cliente" }
+        { "label": "Quando cai o próximo repasse?", "goto": "prop_cliente" }
       ]
     },
     "pc_repasse_atraso": {
       "id": "pc_repasse_atraso",
       "message": "O inquilino pagou em {data_pag}; o repasse cai em {data_repasse}.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_cliente" }
+        { "label": "Quando cai o próximo repasse?", "goto": "prop_cliente" }
       ]
     },
     "pc_ir": {
       "id": "pc_ir",
       "message": "Aqui está seu informe de rendimentos {ano} 🧾",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_cliente" }
+        { "label": "Quando cai o próximo repasse?", "goto": "prop_cliente" }
       ]
     },
     "pc_status": {
@@ -2029,7 +1980,7 @@
       "message": "Seu imóvel está: {status} ({visitas} visitas este mês).",
       "bubbles": [
         { "label": "Reduzir o valor anunciado", "goto": "handoff" },
-        { "label": "Outra dúvida", "goto": "prop_cliente" }
+        { "label": "Quando cai o próximo repasse?", "goto": "prop_cliente" }
       ]
     },
     "pc_inadimplencia": {
@@ -2037,14 +1988,14 @@
       "message": "O inquilino está com {dias} dias de atraso. Já iniciamos a cobrança.",
       "bubbles": [
         { "label": "Quais os próximos passos?", "goto": "pc_cobranca" },
-        { "label": "Outra dúvida", "goto": "prop_cliente" }
+        { "label": "Quando cai o próximo repasse?", "goto": "prop_cliente" }
       ]
     },
     "pc_cobranca": {
       "id": "pc_cobranca",
       "message": "Cobrança amigável, acionamento da garantia e, se necessário, ação de despejo.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_cliente" }
+        { "label": "Quando cai o próximo repasse?", "goto": "prop_cliente" }
       ]
     },
     "pc_manut": {
@@ -2053,28 +2004,27 @@
       "bubbles": [
         { "label": "Aprovar orçamento", "goto": "pc_manut_ok" },
         { "label": "Pedir outro orçamento", "goto": "pc_manut_ok" },
-        { "label": "Outra dúvida", "goto": "prop_cliente" }
+        { "label": "Quando cai o próximo repasse?", "goto": "prop_cliente" }
       ]
     },
     "pc_manut_ok": {
       "id": "pc_manut_ok",
       "message": "Registrado ✅",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_cliente" }
+        { "label": "Quando cai o próximo repasse?", "goto": "prop_cliente" }
       ]
     },
     "pc_reajuste": {
       "id": "pc_reajuste",
       "message": "O próximo reajuste é em {mes}, estimado em {pct}.",
       "bubbles": [
-        { "label": "Outra dúvida", "goto": "prop_cliente" }
+        { "label": "Quando cai o próximo repasse?", "goto": "prop_cliente" }
       ]
     },
     "pc_dados": {
       "id": "pc_dados",
       "message": "Por segurança, alterações bancárias são feitas com um atendente.",
       "bubbles": [
-        { "label": "Voltar", "goto": "prop_cliente" }
       ]
     },
     "pc_retirar": {
@@ -2105,15 +2055,13 @@
       "bubbles": [
         { "label": "Enquanto isso, ver imóveis", "goto": "busca_tipo" },
         { "label": "Prefiro que me liguem", "goto": "callback" },
-        { "label": "Prefiro WhatsApp", "goto": "handoff_whats" },
-        { "label": "Desistir e voltar ao menu", "goto": "start" }
+        { "label": "Prefiro WhatsApp", "goto": "handoff_whats" }
       ]
     },
     "handoff_whats": {
       "id": "handoff_whats",
       "message": "Te chamamos no WhatsApp {numero} em instantes ✅",
       "bubbles": [
-        { "label": "Voltar ao menu", "goto": "start" },
         { "label": "Prefiro que me liguem", "goto": "callback" }
       ]
     },
@@ -2131,15 +2079,13 @@
       "id": "callback_ok",
       "message": "Combinado! Vamos ligar para {telefone} 📞",
       "bubbles": [
-        { "label": "Mudar telefone", "goto": "callback" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Mudar telefone", "goto": "callback" }
       ]
     },
     "fora_horario": {
       "id": "fora_horario",
       "message": "Nosso horário é {horario}. Posso te ajudar por aqui ou deixar um recado.",
       "bubbles": [
-        { "label": "Continuar com o assistente", "goto": "start" },
         { "label": "Deixar recado", "goto": "recado" },
         { "label": "Me liguem amanhã", "goto": "callback" }
       ]
@@ -2148,8 +2094,7 @@
       "id": "recado",
       "message": "Escreva seu recado que respondemos no próximo horário de atendimento.",
       "bubbles": [
-        { "label": "Me liguem amanhã", "goto": "callback" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Me liguem amanhã", "goto": "callback" }
       ],
       "input": "texto"
     },
@@ -2170,48 +2115,42 @@
       "id": "info_endereco",
       "message": "Estamos em {endereco} 📍 — o endereço já está completo acima.",
       "bubbles": [
-        { "label": "Outra informação", "goto": "outras" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Como falo com um corretor?", "goto": "outras" }
       ]
     },
     "info_horario": {
       "id": "info_horario",
       "message": "Atendemos {horario}. O assistente funciona 24h 🤖",
       "bubbles": [
-        { "label": "Outra informação", "goto": "outras" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Como falo com um corretor?", "goto": "outras" }
       ]
     },
     "info_contato": {
       "id": "info_contato",
       "message": "Telefone {telefone} · WhatsApp {whatsapp}",
       "bubbles": [
-        { "label": "Outra informação", "goto": "outras" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Como falo com um corretor?", "goto": "outras" }
       ]
     },
     "info_redes": {
       "id": "info_redes",
       "message": "Site: {site} · Instagram: {instagram}",
       "bubbles": [
-        { "label": "Outra informação", "goto": "outras" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Como falo com um corretor?", "goto": "outras" }
       ]
     },
     "info_trabalhe": {
       "id": "info_trabalhe",
       "message": "Envie seu currículo e CRECI para {email_rh}.",
       "bubbles": [
-        { "label": "Outra informação", "goto": "outras" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Como falo com um corretor?", "goto": "outras" }
       ]
     },
     "info_parcerias": {
       "id": "info_parcerias",
       "message": "Fale com nosso time comercial.",
       "bubbles": [
-        { "label": "Outra informação", "goto": "outras" },
-        { "label": "Voltar ao menu", "goto": "start" }
+        { "label": "Como falo com um corretor?", "goto": "outras" }
       ]
     },
     "nao_entendi": {
@@ -2228,7 +2167,7 @@
       "id": "fim",
       "message": "Posso te ajudar com mais alguma coisa?",
       "bubbles": [
-        { "label": "Sim, outra dúvida", "goto": "start" },
+        { "label": "Tenho uma pergunta sobre outro imóvel", "goto": "start" },
         { "label": "Não, obrigado", "goto": "avaliacao" }
       ]
     },
@@ -2258,7 +2197,6 @@
       "id": "obrigado",
       "message": "Obrigado! 💙 Estou por aqui sempre que precisar.",
       "bubbles": [
-        { "label": "🔄 Recomeçar", "goto": "start" },
         { "label": "🏠 Ver imóveis", "goto": "busca_tipo" }
       ]
     }
