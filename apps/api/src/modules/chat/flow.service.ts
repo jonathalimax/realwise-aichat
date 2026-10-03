@@ -564,45 +564,29 @@ export class FlowService {
     };
   }
 
-  // Human-handoff node ids a bubble can point at — "Falar com corretor"/"Falar com vendedor" and
-  // the global "💬 Atendente" bubble all land the visitor in the same place, so showing both is
-  // just visual noise, not a real second option.
+  // Human-handoff node ids a bubble can point at — "Falar com corretor"/"Falar com vendedor"
+  // bubbles all land the visitor in the same place.
   private static readonly HANDOFF_GOTOS = new Set(["atendente", "handoff"]);
   private static readonly MAX_BUBBLES = 8;
 
-  // Two independent trims, applied in this order: (1) drop the global "Atendente" bubble when the
-  // node already offers its own handoff option (e.g. "Falar com corretor") — same destination,
-  // redundant choice; (2) cap the total at MAX_BUBBLES, trimming from the node-specific options
-  // first (earliest-listed = highest priority per the flow JSON's own ordering) while always
-  // keeping nav bubbles (voltar/menu inicial) and whichever single handoff bubble survived step 1.
+  // Caps the total at MAX_BUBBLES, trimming from the node-specific options first (earliest-listed
+  // = highest priority per the flow JSON's own ordering) while always keeping nav bubbles
+  // (goto: start) and any real handoff bubbles the node offers.
   private finalizeBubbles(bubbles: FlowBubble[]): FlowBubble[] {
-    const hasNodeHandoff = bubbles.some((b) => b.goto === "handoff");
-    let deduped = bubbles;
-    if (hasNodeHandoff) {
-      let droppedGlobalAtendente = false;
-      deduped = bubbles.filter((b) => {
-        if (!droppedGlobalAtendente && b.goto === "atendente") {
-          droppedGlobalAtendente = true;
-          return false;
-        }
-        return true;
-      });
-    }
+    if (bubbles.length <= FlowService.MAX_BUBBLES) return bubbles;
 
-    if (deduped.length <= FlowService.MAX_BUBBLES) return deduped;
-
-    const NAV_GOTOS = new Set(["__back__", "start"]);
+    const NEVER_TRIM_GOTOS = new Set(["start", ...FlowService.HANDOFF_GOTOS]);
     const keep: FlowBubble[] = [];
     const trimmable: FlowBubble[] = [];
-    for (const b of deduped) {
-      if (NAV_GOTOS.has(b.goto) || FlowService.HANDOFF_GOTOS.has(b.goto)) keep.push(b);
+    for (const b of bubbles) {
+      if (NEVER_TRIM_GOTOS.has(b.goto)) keep.push(b);
       else trimmable.push(b);
     }
     const slotsLeft = Math.max(0, FlowService.MAX_BUBBLES - keep.length);
     // Reassemble in original relative order rather than keep-then-trimmable, so nav bubbles don't
     // all jump to the end of the list.
     const survivors = new Set([...trimmable.slice(0, slotsLeft), ...keep]);
-    return deduped.filter((b) => survivors.has(b));
+    return bubbles.filter((b) => survivors.has(b));
   }
 
   async start(businessId: string, conversationId: string) {
@@ -632,32 +616,6 @@ export class FlowService {
 
     const conversation = await this.currentState(conversationId);
     const history = (conversation.flowHistory as unknown as FlowSnapshot[]) ?? [];
-
-    // Back is pure local navigation: replay the exact snapshot that was already shown instead of
-    // re-resolving the node, so it never triggers an LLM/RAG call or reads as "messaging Clara".
-    if (goto === "__back__") {
-      const previous = history[history.length - 1];
-      if (!previous) {
-        const flow = this.flowFor(business.niche);
-        const snapshot = await this.emit(businessId, conversationId, business.niche, flow.start, {});
-        await this.prisma.client.conversation.update({
-          where: { id: conversationId },
-          data: { flowNodeId: flow.start, flowParams: {}, flowHistory: [], flowSnapshot: snapshot as any },
-        });
-        return snapshot;
-      }
-
-      await this.prisma.client.conversation.update({
-        where: { id: conversationId },
-        data: {
-          flowNodeId: previous.nodeId,
-          flowParams: previous.params as any,
-          flowHistory: history.slice(0, -1) as any,
-          flowSnapshot: previous as any,
-        },
-      });
-      return previous;
-    }
 
     const currentSnapshot = (conversation.flowSnapshot as unknown as FlowSnapshot) ?? null;
     const mergedParams = { ...(conversation.flowParams as Record<string, unknown>), ...bubbleParams };
@@ -707,7 +665,7 @@ export class FlowService {
 
     const conversation = await this.currentState(conversationId);
     const snapshot = (conversation.flowSnapshot as unknown as FlowSnapshot) ?? null;
-    const bubbles = (snapshot?.bubbles ?? []).filter((b) => b.goto !== "__back__");
+    const bubbles = snapshot?.bubbles ?? [];
     if (!bubbles.length) return null;
 
     const matches = bubbles.filter((bubble) => {
