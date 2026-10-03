@@ -239,6 +239,21 @@ function clearStoredConversation(slug: string) {
   }
 }
 
+// Shared by the polling effect and the manual-refresh handler. Dedupes server-fetched messages
+// against what's already rendered — by `serverId` when the local copy has one (history-restored
+// or already-merged-from-a-previous-poll messages), and by (role, trimmed content) for locally
+// streamed/optimistic bubbles that never get a serverId, so a server echo of a just-streamed turn
+// doesn't get appended as a visible duplicate.
+function mergeServerMessages(prev: Message[], serverMessages: any[]): Message[] {
+  const knownServerIds = new Set(prev.map((m) => m.serverId).filter(Boolean));
+  const knownByContent = new Set(prev.map((m) => `${m.role}:${m.content.trim()}`));
+  const newOnes = (serverMessages ?? [])
+    .filter((m: any) => !knownServerIds.has(m.id) && !knownByContent.has(`${m.role}:${String(m.content ?? "").trim()}`))
+    .map((m: any) => ({ id: m.id, serverId: m.id, role: m.role, content: m.content }));
+  if (newOnes.length === 0) return prev;
+  return [...prev, ...newOnes];
+}
+
 export function ChatScreen({
   slug,
   resumeConversationId,
@@ -279,8 +294,13 @@ export function ChatScreen({
   const conversationPromiseRef = useRef<Promise<string> | null>(null);
   // Stays true for the full lifetime of a send (from kickoff to final settle), unlike `sending`
   // which flips to false as soon as the first streamed delta arrives (for the typing indicator).
-  // Used purely to prevent two concurrent sends on the same conversation.
+  // Used purely to prevent two concurrent sends on the same conversation — the ref (not the
+  // mirrored `busy` state below) is the real concurrency guard, so it's read/written synchronously
+  // without waiting on a render.
   const isStreamingRef = useRef(false);
+  // Mirrors isStreamingRef into state purely so the submit button can be disabled for the full
+  // duration of a send — `sending` alone isn't enough since it flips false on the first delta.
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     getBusiness(slug)
@@ -449,14 +469,7 @@ export function ChatScreen({
       try {
         const history = await getConversationHistory(business.id, conversationId!, resumeConversationId ? resumeToken : undefined);
         if (history.conversation?.status) setConversationStatus(history.conversation.status);
-        setMessages((prev) => {
-          const knownServerIds = new Set(prev.map((m) => m.serverId).filter(Boolean));
-          const newOnes = (history.messages ?? [])
-            .filter((m: any) => !knownServerIds.has(m.id))
-            .map((m: any) => ({ id: m.id, serverId: m.id, role: m.role, content: m.content }));
-          if (newOnes.length === 0) return prev;
-          return [...prev, ...newOnes];
-        });
+        setMessages((prev) => mergeServerMessages(prev, history.messages ?? []));
       } catch {
         // A single failed poll tick is silently ignored — the next tick retries.
       }
@@ -558,14 +571,7 @@ export function ChatScreen({
     try {
       const history = await getConversationHistory(business.id, conversationId, resumeConversationId ? resumeToken : undefined);
       if (history.conversation?.status) setConversationStatus(history.conversation.status);
-      setMessages((prev) => {
-        const knownServerIds = new Set(prev.map((m) => m.serverId).filter(Boolean));
-        const newOnes = (history.messages ?? [])
-          .filter((m: any) => !knownServerIds.has(m.id))
-          .map((m: any) => ({ id: m.id, serverId: m.id, role: m.role, content: m.content }));
-        if (newOnes.length === 0) return prev;
-        return [...prev, ...newOnes];
-      });
+      setMessages((prev) => mergeServerMessages(prev, history.messages ?? []));
     } catch {
       // Manual refresh failing silently is fine — the button stays available to retry.
     }
@@ -593,6 +599,9 @@ export function ChatScreen({
   }
 
   async function handleSend(text: string) {
+    // Guard on the ref (synchronous, no render lag) so a mid-stream double-send is rejected
+    // without a race — the typed text is deliberately NOT cleared here so a rejected send doesn't
+    // silently lose what the visitor typed.
     if (isStreamingRef.current) return;
     if (!text.trim() || !business) return;
     setSuggestions([]);
@@ -600,6 +609,8 @@ export function ChatScreen({
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: text }]);
       setInput("");
       setSending(true);
+      setBusy(true);
+      isStreamingRef.current = true;
       try {
         await ensureConversation();
         setShowBooking(true);
@@ -607,29 +618,62 @@ export function ChatScreen({
         await getAvailableSlots(business.id).then(setAvailableSlots).catch(() => setAvailableSlots(null));
       } finally {
         setSending(false);
+        setBusy(false);
+        isStreamingRef.current = false;
       }
       return;
     }
 
     setShowBooking(false);
     setSending(true);
+    setBusy(true);
     isStreamingRef.current = true;
     setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: text }]);
     setInput("");
 
     const assistantId = nextMessageId();
-    let assistantStarted = false;
+    // Accumulates streamed text outside the setState updater purely so the zero-delta fallback
+    // below can check "did anything actually stream" without relying on a mutated flag read from
+    // inside a setState updater (which can double-invoke under React 18 strict mode).
+    let streamed = "";
     try {
       const convId = await ensureConversation();
       if (!convId) throw new Error("conversation_unavailable");
       const result = await streamMessage(business.id, convId, text, (delta) => {
         setSending(false);
-        setMessages((prev) => {
-          if (!assistantStarted) return [...prev, { id: assistantId, role: "assistant", content: delta }];
-          return prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + delta } : m));
-        });
-        assistantStarted = true;
+        streamed += delta;
+        setMessages((prev) =>
+          prev.some((m) => m.id === assistantId)
+            ? prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + delta } : m))
+            : [...prev, { id: assistantId, role: "assistant", content: delta }],
+        );
       });
+
+      // The backend can resolve a turn (e.g. abstention/escalation canned copy) without ever
+      // emitting a `delta` event — nothing got rendered above in that case. Build the bubble from
+      // the final `done` payload instead of leaving the visitor staring at silence until a
+      // refresh re-fetches persisted history. Done BEFORE the listings/whatsappUrl attachment
+      // below so those attach to a bubble that now actually exists.
+      if (!streamed) {
+        const finalText =
+          result?.message?.content ?? result?.message ?? result?.content ?? result?.text ?? undefined;
+        setMessages((prev) =>
+          prev.some((m) => m.id === assistantId)
+            ? prev
+            : [
+                ...prev,
+                {
+                  id: assistantId,
+                  role: "assistant",
+                  content:
+                    typeof finalText === "string" && finalText.trim().length > 0
+                      ? finalText
+                      : "Tive um problema para responder — tenta de novo em instantes.",
+                },
+              ],
+        );
+      }
+
       if (result?.listings?.length) {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, listings: result.listings } : m)));
       }
@@ -650,6 +694,7 @@ export function ChatScreen({
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "Tive um problema para responder — tenta de novo em instantes." }]);
     } finally {
       setSending(false);
+      setBusy(false);
       isStreamingRef.current = false;
     }
   }
@@ -660,6 +705,7 @@ export function ChatScreen({
 
     setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: bubble.label }]);
     setSending(true);
+    setBusy(true);
     setSuggestions([]);
     isStreamingRef.current = true;
     try {
@@ -675,6 +721,7 @@ export function ChatScreen({
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "Tive um problema para responder — tenta de novo em instantes." }]);
     } finally {
       setSending(false);
+      setBusy(false);
       isStreamingRef.current = false;
     }
   }
@@ -900,7 +947,7 @@ export function ChatScreen({
           placeholder="Escreva sua pergunta…"
           className="flex-1"
         />
-        <Button type="submit" variant="round" size="icon" disabled={sending} className="rounded-full">
+        <Button type="submit" variant="round" size="icon" disabled={sending || busy} className="rounded-full">
           ➤
         </Button>
       </form>
