@@ -68,6 +68,10 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
     "'url' só deve vir de um link real no formato [texto](url) ou de uma URL http(s) explícita no texto daquele item.",
     "Se nenhum item real e distinto puder ser identificado no trecho, responda com um array vazio [].",
     "IMPORTANTE: use EXATAMENTE os nomes de campos em inglês especificados acima (title, price, addressLine, etc) — nunca traduza as chaves do JSON para português.",
+    "O VALOR de 'listingType' deve usar obrigatoriamente um destes termos em português, conforme o tipo de anúncio:",
+    "Imóveis: apartamento, casa, casa_condominio, studio, terreno, comercial, rural.",
+    "Veículos: hatch, seda, suv, picape, 7lugares, premium, eletrico, moto.",
+    "Nunca use termos em inglês (ex: 'house', 'apartment', 'land') nem valores fora dessa lista para 'listingType' — escolha o termo da lista que melhor descreve o item.",
   ].join("\n");
 
 function windowText(text: string, size: number): string[] {
