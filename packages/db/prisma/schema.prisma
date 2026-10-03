@@ -223,6 +223,8 @@ model Conversation {
   escalatedAt         DateTime?
   escalationNumberId  String?
   referenceCode       String?
+  lastReadByOwnerAt   DateTime?
+  lastOwnerReplyAt    DateTime?
   totalInputTokens    Int                 @default(0)
   totalOutputTokens   Int                 @default(0)
   fixedFlowTurns      Int                 @default(0)
