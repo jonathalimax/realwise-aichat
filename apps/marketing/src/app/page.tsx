@@ -49,7 +49,7 @@ export default function MarketingHome() {
       <section className="mx-auto max-w-6xl px-5 pb-20 pt-16 text-center md:pb-28 md:pt-24">
         <Reveal>
           <h1 className="mx-auto max-w-2xl font-serif text-5xl leading-[1.1] text-ink md:text-7xl">
-            Seu cliente pergunta. <em className="italic">Ela responde na hora.</em>
+            Seu cliente pergunta. <em className="italic">A Clara responde na hora.</em>
           </h1>
         </Reveal>
         <Reveal delay={100}>
