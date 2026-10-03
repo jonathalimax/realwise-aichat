@@ -75,7 +75,28 @@ app.post<{ Body: GenerateRequest }>("/generate/stream", async (request, reply) =
     } else {
       // ManagedProvider has no token-level streaming — send the full text as one delta so the
       // frontend still gets a "done" with real usage/latency instead of a fake incremental stream.
-      const result = await managed.generate(request.body);
+      let result;
+      try {
+        result = await managed.generate(request.body);
+      } catch (managedError) {
+        // Mirror routeGenerate()'s fallback in router.ts — a managed-provider failure (rate limit,
+        // transient outage, momentary credit dip) must not take down every streamed chat reply when
+        // self-hosted Ollama is available as a backstop.
+        if (await selfHosted.isHealthy()) {
+          const gen = selfHosted.generateStream(request.body, controller.signal);
+          let next = await gen.next();
+          while (!next.done) {
+            send("delta", { text: next.value });
+            next = await gen.next();
+          }
+          result = next.value;
+          await logCall(request.body, result, `managed failed: ${managedError instanceof Error ? managedError.message : String(managedError)}`);
+          send("done", result);
+          reply.raw.end();
+          return;
+        }
+        throw managedError;
+      }
       send("delta", { text: result.text });
       await logCall(request.body, result);
       send("done", result);
