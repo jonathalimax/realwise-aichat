@@ -22,6 +22,9 @@ export const bulkSuspendTenants = (ids: string[]) =>
 export const getGlobalMetrics = () => request("/admin/metrics");
 export const getMetricsTimeseries = (days?: number) => request(`/admin/metrics/timeseries${days ? `?days=${days}` : ""}`);
 export const getConfidenceDistribution = () => request("/admin/metrics/confidence-distribution");
+export const getPlatformConfig = () => request("/admin/platform-config");
+export const updatePlatformConfig = (supportWhatsappNumber: string) =>
+  request("/admin/platform-config", { method: "PATCH", body: JSON.stringify({ supportWhatsappNumber }) });
 export const verifyAdminFirebaseToken = (idToken: string) =>
   request("/auth/admin/verify", { method: "POST", body: JSON.stringify({ idToken }) });
 export const logout = () => request("/auth/admin/logout", { method: "POST" });

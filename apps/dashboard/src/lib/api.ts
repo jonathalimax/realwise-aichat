@@ -52,6 +52,8 @@ export const updateBranding = (logoUrl: string, brandColor: string) =>
 export const getWhatsappNumbers = () => request("/businesses/me/whatsapp-numbers");
 export const addWhatsappNumber = (label: string, phone: string) =>
   request("/businesses/me/whatsapp-numbers", { method: "POST", body: JSON.stringify({ label, phone }) });
+export const updateWhatsappNumber = (id: string, label: string, phone: string) =>
+  request(`/businesses/me/whatsapp-numbers/${id}`, { method: "PATCH", body: JSON.stringify({ label, phone }) });
 export const removeWhatsappNumber = (id: string) => request(`/businesses/me/whatsapp-numbers/${id}`, { method: "DELETE" });
 
 export const getOnboardingProfile = () => request("/onboarding/profile");

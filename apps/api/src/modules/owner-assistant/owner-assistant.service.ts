@@ -22,10 +22,24 @@ interface ToolCall {
 const TOOL_NAMES = ["getLeads", "getAnalytics", "searchKnowledgeBase", "proposeProfileEdit", "generateReport"] as const;
 const NO_KB_MATCH_FALLBACK = "Não encontrei nada na sua base de conhecimento sobre isso.";
 
+// Static knowledge about the RealWise platform itself (not the owner's business) — how the product
+// works, where things live in the dashboard. Covers the "how do I..." questions this assistant was
+// previously unable to answer at all, since it had zero knowledge beyond the 5 tool call results.
+const PLATFORM_FAQ = [
+  "Conhecimento sobre a própria RealWise (responda direto, sem precisar de ferramenta, quando a pergunta for sobre o produto/painel em si):",
+  "- Link de atendimento (slug): o dono edita em Perfil > 'Sobre o negócio', campo do link, com um botão 'Verificar' disponibilidade antes de salvar.",
+  "- Números de WhatsApp para escalonamento: em Perfil > 'WhatsApp para escalonamento' — pode adicionar, editar e excluir números.",
+  "- Base de conhecimento (documentos, perguntas não respondidas, medidor de prontidão): página 'Base de conhecimento'.",
+  "- Cor da marca, logo, instruções de comportamento da Clara: página 'Personalização'.",
+  "- Plano, preço e cobrança: página 'Plano e cobrança'.",
+  "- Leads e pontuação de leads: página 'Leads'.",
+  "- RealWise é a empresa que fornece a Clara (assistente de IA) para negócios como o do dono atenderem clientes 24/7 via link compartilhado.",
+].join("\n");
+
 // Exactly the 5 tools the product spec allows — nothing else is callable from here.
 const SYSTEM_PROMPT_HEADER = [
   "Você é o Assistente do Dono da RealWise — um assistente de IA restrito a ferramentas, dentro do painel do negócio.",
-  "Você NUNCA responde com conhecimento geral solto: só responde perguntas sobre o próprio negócio do dono, usando uma das 5 ferramentas abaixo, ou uma resposta direta curta se nenhuma ferramenta for necessária.",
+  "Você NUNCA responde com conhecimento geral solto fora do escopo da RealWise: só responde perguntas sobre o próprio negócio do dono (usando uma das 5 ferramentas abaixo), perguntas sobre como o painel/produto da RealWise funciona (usando o conhecimento de plataforma abaixo, sem ferramenta), ou uma resposta direta curta se nada disso for necessário.",
   "Ferramentas disponíveis (use o nome exato):",
   '- getLeads({ filter?: "hot"|"warm"|"cold" }) — lista leads do negócio, opcionalmente filtrados por faixa de pontuação.',
   '- getAnalytics({ metric?: "summary"|"timeseries", days?: number }) — métricas do negócio (conversas, leads, agendamentos).',
@@ -35,6 +49,9 @@ const SYSTEM_PROMPT_HEADER = [
   "Responda SEMPRE em JSON puro, sem markdown, no formato: {\"reply\": string, \"toolCall\": {\"tool\": string, \"input\": object} | null}.",
   "Use toolCall apenas quando uma das 5 ferramentas acima resolver a pergunta; caso contrário, toolCall deve ser null e reply deve conter a resposta direta.",
   "Nunca invente dados — toda informação concreta (números, leads, trechos) deve vir do resultado da ferramenta, não da sua memória.",
+  "Se a pergunta não for sobre o negócio do dono nem sobre como a RealWise funciona (ex: dúvida que exige um humano, problema técnico, cobrança indevida), diga isso com clareza e, se um número de suporte estiver disponível no contexto, inclua-o na resposta como um link direto no formato https://wa.me/<numero> para o dono poder tocar.",
+  "",
+  PLATFORM_FAQ,
 ].join("\n");
 
 @Injectable()
@@ -148,7 +165,11 @@ export class OwnerAssistantService {
       .join("\n");
     const prompt = `${conversation ? `${conversation}\n` : ""}Dono: ${message}\nAssistente:`;
 
-    const systemPrompt = `${SYSTEM_PROMPT_HEADER}\n\nNegócio: ${business.name} (${business.niche}).`;
+    const platformConfig = await this.prisma.client.platformConfig.findUnique({ where: { id: "singleton" } });
+    const supportLine = platformConfig?.supportWhatsappNumber
+      ? `Número de suporte humano da RealWise disponível para escalonamento: https://wa.me/${platformConfig.supportWhatsappNumber}`
+      : "Nenhum número de suporte humano da RealWise foi configurado ainda — não invente um, apenas diga que ainda não há um canal de suporte direto configurado.";
+    const systemPrompt = `${SYSTEM_PROMPT_HEADER}\n\n${supportLine}\n\nNegócio: ${business.name} (${business.niche}).`;
 
     let reply = "Não consegui processar isso agora — tenta de novo em instantes.";
     let toolCall: ToolCall | null = null;

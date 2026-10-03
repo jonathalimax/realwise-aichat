@@ -104,11 +104,28 @@ export class BusinessesService {
     return this.prisma.client.whatsappRoutingNumber.findMany({ where: { businessId }, orderBy: { priority: "asc" } });
   }
 
+  // Only digits (with an optional leading +) — rejects stray formatting characters like a bare
+  // "(1" slipping through if the client-side mask ever fails to normalize the input.
+  private assertValidPhone(phone: string) {
+    const digitsOnly = phone.replace(/^\+/, "");
+    if (!/^\d{10,15}$/.test(digitsOnly)) {
+      throw new BadRequestException("Número inválido — use apenas dígitos (DDD + número).");
+    }
+  }
+
   async addWhatsappNumber(businessId: string, label: string, phone: string) {
+    this.assertValidPhone(phone);
     const count = await this.prisma.client.whatsappRoutingNumber.count({ where: { businessId } });
     return this.prisma.client.whatsappRoutingNumber.create({
       data: { businessId, label, phone, priority: count },
     });
+  }
+
+  async updateWhatsappNumber(businessId: string, numberId: string, label: string, phone: string) {
+    this.assertValidPhone(phone);
+    const number = await this.prisma.client.whatsappRoutingNumber.findFirst({ where: { id: numberId, businessId } });
+    if (!number) throw new NotFoundException("Number not found");
+    return this.prisma.client.whatsappRoutingNumber.update({ where: { id: numberId }, data: { label, phone } });
   }
 
   async removeWhatsappNumber(businessId: string, numberId: string) {

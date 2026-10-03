@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { estimateCostUsd } from "./model-pricing";
 
@@ -166,5 +166,26 @@ export class AdminService {
       else buckets[4].count++;
     }
     return buckets;
+  }
+
+  async getPlatformConfig() {
+    return this.prisma.client.platformConfig.upsert({
+      where: { id: "singleton" },
+      update: {},
+      create: { id: "singleton" },
+    });
+  }
+
+  async updatePlatformConfig(supportWhatsappNumber: string) {
+    const digits = (supportWhatsappNumber ?? "").replace(/\D/g, "");
+    if (digits.length > 0 && digits.length < 10) {
+      throw new BadRequestException("Número inválido — use apenas dígitos (DDD + número).");
+    }
+    const value = digits.length > 0 ? digits : null;
+    return this.prisma.client.platformConfig.upsert({
+      where: { id: "singleton" },
+      update: { supportWhatsappNumber: value },
+      create: { id: "singleton", supportWhatsappNumber: value },
+    });
   }
 }

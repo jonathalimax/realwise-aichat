@@ -53,4 +53,14 @@ export class AdminController {
   confidenceDistribution() {
     return this.admin.confidenceDistribution();
   }
+
+  @Get("platform-config")
+  getPlatformConfig() {
+    return this.admin.getPlatformConfig();
+  }
+
+  @Patch("platform-config")
+  updatePlatformConfig(@Body("supportWhatsappNumber") supportWhatsappNumber: string) {
+    return this.admin.updatePlatformConfig(supportWhatsappNumber);
+  }
 }

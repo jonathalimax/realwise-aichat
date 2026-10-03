@@ -58,6 +58,17 @@ export class BusinessesController {
   }
 
   @UseGuards(BusinessSessionGuard)
+  @Patch("me/whatsapp-numbers/:id")
+  updateWhatsappNumber(
+    @CurrentBusiness() session: BusinessSessionClaims,
+    @Param("id") id: string,
+    @Body("label") label: string,
+    @Body("phone") phone: string,
+  ) {
+    return this.businesses.updateWhatsappNumber(session.businessId, id, label, phone);
+  }
+
+  @UseGuards(BusinessSessionGuard)
   @Delete("me/whatsapp-numbers/:id")
   removeWhatsappNumber(@CurrentBusiness() session: BusinessSessionClaims, @Param("id") id: string) {
     return this.businesses.removeWhatsappNumber(session.businessId, id);

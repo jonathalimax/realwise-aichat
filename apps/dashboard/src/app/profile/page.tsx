@@ -7,6 +7,8 @@ import {
   checkSlugAvailable,
   setBusinessSlug,
   addWhatsappNumber,
+  updateWhatsappNumber,
+  removeWhatsappNumber,
   getWhatsappNumbers,
 } from "../../lib/api";
 import { maskBrPhone } from "@realwise/shared";
@@ -22,6 +24,10 @@ export default function ProfilePage() {
   const [whatsappNumbers, setWhatsappNumbers] = useState<any[]>([]);
   const [waLabel, setWaLabel] = useState("Principal");
   const [waPhone, setWaPhone] = useState("");
+  const [waError, setWaError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const [savedInfo, setSavedInfo] = useState(false);
 
   async function refresh() {
@@ -47,11 +53,43 @@ export default function ProfilePage() {
     refresh();
   }
 
+  function onlyDigits(phone: string) {
+    return phone.replace(/\D/g, "");
+  }
+
   async function handleAddWhatsapp() {
-    if (!waPhone) return;
-    await addWhatsappNumber(waLabel, waPhone);
+    const digits = onlyDigits(waPhone);
+    if (digits.length < 10) {
+      setWaError("Informe um número válido, com DDD (apenas números).");
+      return;
+    }
+    setWaError("");
+    await addWhatsappNumber(waLabel, digits);
     setWhatsappNumbers(await getWhatsappNumbers());
     setWaPhone("");
+  }
+
+  function startEdit(n: any) {
+    setEditingId(n.id);
+    setEditLabel(n.label);
+    setEditPhone(maskBrPhone(n.phone));
+  }
+
+  async function saveEdit(id: string) {
+    const digits = onlyDigits(editPhone);
+    if (digits.length < 10) {
+      setWaError("Informe um número válido, com DDD (apenas números).");
+      return;
+    }
+    setWaError("");
+    await updateWhatsappNumber(id, editLabel, digits);
+    setEditingId(null);
+    setWhatsappNumbers(await getWhatsappNumbers());
+  }
+
+  async function handleRemoveWhatsapp(id: string) {
+    await removeWhatsappNumber(id);
+    setWhatsappNumbers(await getWhatsappNumbers());
   }
 
   if (!business) return <p className="text-ink-soft">Carregando…</p>;
@@ -120,9 +158,30 @@ export default function ProfilePage() {
             />
             <Button variant="outline" size="sm" onClick={handleAddWhatsapp}>Adicionar</Button>
           </div>
-          {whatsappNumbers.map((n) => (
-            <div key={n.id} className="rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm">{n.label}: {n.phone}</div>
-          ))}
+          {waError && <p className="text-xs text-negative">{waError}</p>}
+          {whatsappNumbers.map((n) =>
+            editingId === n.id ? (
+              <div key={n.id} className="flex flex-wrap gap-2 rounded-lg border border-border bg-bg-2 px-3 py-2">
+                <Input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} className="w-32" />
+                <Input
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(maskBrPhone(e.target.value))}
+                  inputMode="numeric"
+                  className="flex-1"
+                />
+                <Button size="sm" onClick={() => saveEdit(n.id)}>Salvar</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancelar</Button>
+              </div>
+            ) : (
+              <div key={n.id} className="flex items-center justify-between rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm">
+                <span>{n.label}: {n.phone}</span>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => startEdit(n)}>Editar</Button>
+                  <Button size="sm" variant="ghost" onClick={() => handleRemoveWhatsapp(n.id)}>Excluir</Button>
+                </div>
+              </div>
+            ),
+          )}
         </CardContent>
       </Card>
     </div>

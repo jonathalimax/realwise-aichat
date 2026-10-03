@@ -421,3 +421,10 @@ model AdminUser {
   role        String
   lastLoginAt DateTime?
 }
+
+// Single row (id always "singleton") holding platform-wide settings configured from the admin UI —
+// e.g. the founder's own support WhatsApp number the owner-assistant escalates to.
+model PlatformConfig {
+  id                    String  @id @default("singleton")
+  supportWhatsappNumber String?
+}
