@@ -18,7 +18,14 @@ export function generateReferenceCode(): string {
   return code;
 }
 
-export function buildCustomerEscalationMessage(businessName: string, topic: string, referenceCode: string): string {
+export function buildCustomerEscalationMessage(
+  businessName: string,
+  topic: string | null | undefined,
+  referenceCode: string,
+): string {
+  if (!topic || !topic.trim()) {
+    return `Oi! Vim pelo atendimento online da ${businessName}. Código: ${referenceCode}`;
+  }
   return `Oi! Vim pelo atendimento online da ${businessName}. Estava vendo sobre ${topic}. Código: ${referenceCode}`;
 }
 

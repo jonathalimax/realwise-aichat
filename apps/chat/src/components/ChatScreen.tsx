@@ -374,7 +374,11 @@ export function ChatScreen({
         setMessages(restoredMessages);
         setConversationStatus(history.conversation?.status ?? null);
         if (history.flowSnapshot) {
-          setBubbles(history.flowSnapshot.bubbles ?? []);
+          // Never repaint stale bubbles on refresh after escalation — a human took over, so the
+          // old scripted-flow bubbles no longer apply.
+          if (history.conversation?.status !== "escalated") {
+            setBubbles(history.flowSnapshot.bubbles ?? []);
+          }
           setSuggestions([]);
           setFlowRestored(true);
         }
@@ -605,6 +609,7 @@ export function ChatScreen({
     if (isStreamingRef.current) return;
     if (!text.trim() || !business) return;
     setSuggestions([]);
+    setBubbles([]);
     if (text.toLowerCase().includes("agendar")) {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: text }]);
       setInput("");
@@ -683,10 +688,11 @@ export function ChatScreen({
       }
       if (result?.escalated && result?.whatsappUrl) {
         // Attach whatsappUrl to the message so WhatsappHandoffCard always renders a tappable card —
-        // mobile browsers routinely block this best-effort popup, so the card can't be the only path.
+        // the visitor must explicitly tap "Abrir WhatsApp" on that card to leave the chat; this is
+        // the only place WhatsApp opens, never automatically.
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, whatsappUrl: result.whatsappUrl } : m)));
-        window.open(result.whatsappUrl, "_blank");
-      } else if (result?.flow?.bubbles?.length) {
+      }
+      if (!result?.escalated && result?.flow?.bubbles?.length) {
         setBubbles(result.flow.bubbles);
         setSuggestions([]);
       }

@@ -958,9 +958,49 @@ export class ChatService {
     return appointment;
   }
 
+  // The visitor text passed in as `topic` is frequently just a bare confirmation ("Sim") made
+  // after a prior message offered a handoff, or itself an escalation-request phrase ("quero
+  // falar com alguém") — neither is a usable "Assunto" for the owner email or the WhatsApp
+  // deep-link prefill. Falls back to the most recent earlier visitor message that actually says
+  // something substantive, so a real topic surfaces whenever one exists in the conversation.
+  private async resolveEscalationTopic(conversationId: string, candidate: string): Promise<string | null> {
+    const isSubstantive = (text: string): boolean => {
+      const trimmed = text.trim();
+      if (trimmed.length < 8) return false;
+      const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+      if (this.confirmsEscalation(trimmed) && wordCount <= 4) return false;
+      if (this.detectsEscalation(trimmed)) return false;
+      return true;
+    };
+
+    if (isSubstantive(candidate)) {
+      return candidate.trim().slice(0, 80);
+    }
+
+    const recentVisitorMessages = await this.prisma.client.message.findMany({
+      where: { conversationId, role: "visitor" },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    });
+
+    const rejectedCandidate = candidate.trim();
+    for (const msg of recentVisitorMessages) {
+      const text = String(msg.content ?? "");
+      const trimmed = text.trim();
+      if (trimmed === rejectedCandidate) continue;
+      if (isSubstantive(trimmed)) {
+        return trimmed.slice(0, 80);
+      }
+    }
+
+    return null;
+  }
+
   async escalate(businessId: string, conversationId: string, topic: string) {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException("Business not found");
+
+    const resolvedTopic = await this.resolveEscalationTopic(conversationId, topic);
 
     const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
 
@@ -981,7 +1021,7 @@ export class ChatService {
         where: { id: conversation.escalationNumberId },
       });
       const whatsappUrl = existingRoutingNumber
-        ? buildWaMeLink(existingRoutingNumber.phone, buildCustomerEscalationMessage(business.name, topic, conversation.referenceCode))
+        ? buildWaMeLink(existingRoutingNumber.phone, buildCustomerEscalationMessage(business.name, resolvedTopic, conversation.referenceCode))
         : null;
       return { message: existingMessage, escalated: true, whatsappUrl, referenceCode: conversation.referenceCode };
     }
@@ -1007,7 +1047,7 @@ export class ChatService {
         businessId,
         `Lead quente sem número de WhatsApp configurado — ${escapeHtml(business.name)}`,
         `<p>Um cliente pediu para falar com alguém do time agora, mas <strong>nenhum número de WhatsApp ativo está configurado</strong>.</p>
-         <p><strong>Assunto:</strong> ${escapeHtml(topic)}</p>
+         <p><strong>Assunto:</strong> ${escapeHtml(resolvedTopic ?? "Atendimento via chat")}</p>
          <p>Configure um número de roteamento no painel para poder receber esses leads: Configurações.</p>`,
       );
 
@@ -1016,7 +1056,7 @@ export class ChatService {
     }
 
     const referenceCode = generateReferenceCode();
-    const message = buildCustomerEscalationMessage(business.name, topic, referenceCode);
+    const message = buildCustomerEscalationMessage(business.name, resolvedTopic, referenceCode);
     const url = buildWaMeLink(routingNumber.phone, message);
 
     await this.prisma.client.conversation.update({
@@ -1041,7 +1081,7 @@ export class ChatService {
       businessId,
       `Lead quente — ${escapeHtml(business.name)}`,
       `<p>Um cliente pediu para falar com alguém do time agora.</p>
-       <p><strong>Assunto:</strong> ${escapeHtml(topic)}</p>
+       <p><strong>Assunto:</strong> ${escapeHtml(resolvedTopic ?? "Atendimento via chat")}</p>
        <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
        <p>Veja a conversa e responda no painel: Conversas.</p>`,
     );
