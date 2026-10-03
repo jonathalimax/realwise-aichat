@@ -24,6 +24,27 @@ export class AdminController {
     return this.admin.tenantDetail(id);
   }
 
+  @Get("tenants/:id/knowledge")
+  tenantKnowledge(@Param("id") id: string) {
+    return this.admin.tenantKnowledge(id);
+  }
+
+  @Get("tenants/:id/documents/:documentId/markdown")
+  tenantDocumentMarkdown(@Param("id") id: string, @Param("documentId") documentId: string) {
+    return this.admin.tenantDocumentMarkdown(id, documentId);
+  }
+
+  @Get("tenants/:id/listings")
+  tenantListings(@Param("id") id: string, @Query("limit") limit?: string, @Query("offset") offset?: string) {
+    const parsedLimit = Number(limit);
+    const parsedOffset = Number(offset);
+    return this.admin.tenantListings(
+      id,
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 200) : 50,
+      Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0,
+    );
+  }
+
   @Patch("tenants/:id/confidence-threshold")
   overrideThreshold(@Param("id") id: string, @Body("threshold") threshold: number) {
     return this.admin.overrideConfidenceThreshold(id, threshold);

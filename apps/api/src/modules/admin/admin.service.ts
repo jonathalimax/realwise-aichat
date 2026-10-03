@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { nicheTemplates, questionForField } from "@realwise/profile-schema";
 import { PrismaService } from "../../prisma/prisma.service";
 import { estimateCostUsd } from "./model-pricing";
 
@@ -47,6 +48,131 @@ export class AdminService {
     if (!business) throw new NotFoundException("Tenant not found");
     const usage = await this.usageByBusinessLast7d();
     return { ...business, tokensUsed7d: usage.get(businessId)?.tokens ?? 0, costUsd7d: usage.get(businessId)?.costUsd ?? 0 };
+  }
+
+  async tenantKnowledge(businessId: string) {
+    const business = await this.prisma.client.business.findUnique({
+      where: { id: businessId },
+      select: { niche: true },
+    });
+    if (!business) throw new NotFoundException("Tenant not found");
+
+    const [profile, documents, markdownLengths, chunkTotal, listingCount, chunkSample] = await Promise.all([
+      this.prisma.client.businessProfile.findUnique({ where: { businessId } }),
+      this.prisma.client.knowledgeDocument.findMany({
+        where: { businessId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          filename: true,
+          mimeType: true,
+          sizeBytes: true,
+          source: true,
+          status: true,
+          ocrUsed: true,
+          pageCount: true,
+          processingError: true,
+          createdAt: true,
+          retentionDeleteAt: true,
+          _count: { select: { chunks: true, listings: true } },
+        },
+      }),
+      this.prisma.client.knowledgeDocument.findMany({
+        where: { businessId },
+        select: { id: true, extractedMarkdown: true },
+      }),
+      this.prisma.client.knowledgeChunk.count({ where: { businessId } }),
+      this.prisma.client.listing.count({ where: { businessId, deletedAt: null } }),
+      this.prisma.client.knowledgeChunk.findMany({
+        where: { businessId },
+        orderBy: [{ documentId: "asc" }, { ordinal: "asc" }],
+        take: 5,
+        select: { id: true, documentId: true, ordinal: true, tokenCount: true, sectionPath: true, content: true },
+      }),
+    ]);
+
+    const markdownLengthById = new Map(markdownLengths.map((d) => [d.id, d.extractedMarkdown?.length ?? 0]));
+
+    const documentsWithMeta = documents.map((doc) => {
+      const { _count, ...rest } = doc;
+      return {
+        ...rest,
+        markdownLength: markdownLengthById.get(doc.id) ?? 0,
+        chunkCount: _count.chunks,
+        listingCount: _count.listings,
+      };
+    });
+
+    const chunkSampleTrimmed = chunkSample.map((c) => ({
+      ...c,
+      content: c.content.length > 400 ? `${c.content.slice(0, 400)}…` : c.content,
+    }));
+
+    const template = nicheTemplates[business.niche];
+    const templateFields = template?.fields ?? [];
+    const data = (profile?.data as Record<string, unknown>) ?? {};
+    const fieldStatus = (profile?.fieldStatus as Record<string, any>) ?? {};
+
+    const fields = templateFields.map((field) => ({
+      key: field.key,
+      label: field.label,
+      weight: field.weight,
+      question: template ? questionForField(template, field.key) : undefined,
+      value: data[field.key] ?? null,
+      source: fieldStatus[field.key]?.source ?? null,
+      approvedByOwner: fieldStatus[field.key]?.approvedByOwner ?? false,
+      updatedAt: fieldStatus[field.key]?.updatedAt ?? null,
+    }));
+
+    const templateKeys = new Set(templateFields.map((f) => f.key));
+    const orphanData = Object.fromEntries(Object.entries(data).filter(([key]) => !templateKeys.has(key)));
+
+    return {
+      profile: profile
+        ? {
+            templateVersion: profile.templateVersion,
+            cachedSummary: profile.cachedSummary,
+            cachedSummaryTokens: profile.cachedSummaryTokens,
+            customInstructions: profile.customInstructions,
+            approvedAt: profile.approvedAt,
+            updatedAt: profile.updatedAt,
+            fields,
+            orphanData,
+          }
+        : null,
+      documents: documentsWithMeta,
+      chunkTotal,
+      chunkSample: chunkSampleTrimmed,
+      listingCount,
+    };
+  }
+
+  async tenantDocumentMarkdown(businessId: string, documentId: string) {
+    const document = await this.prisma.client.knowledgeDocument.findFirst({
+      where: { id: documentId, businessId },
+      select: { id: true, filename: true, extractedMarkdown: true },
+    });
+    if (!document) throw new NotFoundException("Document not found");
+    return document;
+  }
+
+  async tenantListings(businessId: string, limit = 50, offset = 0) {
+    const clampedLimit = Math.min(Math.max(limit, 1), 200);
+    const clampedOffset = Math.max(offset, 0);
+
+    const [listings, total, deletedCount] = await Promise.all([
+      this.prisma.client.listing.findMany({
+        where: { businessId, deletedAt: null },
+        orderBy: { updatedAt: "desc" },
+        take: clampedLimit,
+        skip: clampedOffset,
+        include: { _count: { select: { images: true } } },
+      }),
+      this.prisma.client.listing.count({ where: { businessId, deletedAt: null } }),
+      this.prisma.client.listing.count({ where: { businessId, deletedAt: { not: null } } }),
+    ]);
+
+    return { listings, total, deletedCount };
   }
 
   async overrideConfidenceThreshold(businessId: string, _threshold: number) {

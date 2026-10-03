@@ -16,6 +16,11 @@ async function request(path: string, options?: RequestInit) {
 
 export const getTenants = () => request("/admin/tenants");
 export const getTenantDetail = (id: string) => request(`/admin/tenants/${id}`);
+export const getTenantKnowledge = (id: string) => request(`/admin/tenants/${id}/knowledge`);
+export const getTenantDocumentMarkdown = (id: string, documentId: string) =>
+  request(`/admin/tenants/${id}/documents/${documentId}/markdown`);
+export const getTenantListings = (id: string, limit?: number, offset?: number) =>
+  request(`/admin/tenants/${id}/listings?limit=${limit ?? 50}&offset=${offset ?? 0}`);
 export const suspendTenant = (id: string) => request(`/admin/tenants/${id}/suspend`, { method: "POST" });
 export const bulkSuspendTenants = (ids: string[]) =>
   request("/admin/tenants/bulk-suspend", { method: "PATCH", body: JSON.stringify({ ids }) });
