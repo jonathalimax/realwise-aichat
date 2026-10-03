@@ -93,3 +93,18 @@ export const getInboxThread = (id: string) => request(`/inbox/conversations/${id
 export const sendInboxMessage = (id: string, text: string) =>
   request(`/inbox/conversations/${id}/messages`, { method: "POST", body: JSON.stringify({ text }) });
 export const markInboxRead = (id: string) => request(`/inbox/conversations/${id}/read`, { method: "POST" });
+
+export const getListings = (filters?: { status?: string; listingType?: string }) => {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.listingType) params.set("listingType", filters.listingType);
+  const qs = params.toString();
+  return request(`/listings${qs ? `?${qs}` : ""}`);
+};
+export const getListing = (id: string) => request(`/listings/${id}`);
+export const updateListing = (id: string, data: Record<string, unknown>) =>
+  request(`/listings/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const createListing = (data: Record<string, unknown>) =>
+  request("/listings", { method: "POST", body: JSON.stringify(data) });
+export const deleteListing = (id: string) => request(`/listings/${id}`, { method: "DELETE" });
+export const reextractListings = () => request("/listings/extract", { method: "POST" });

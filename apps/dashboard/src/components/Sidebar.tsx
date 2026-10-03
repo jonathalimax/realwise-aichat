@@ -14,6 +14,7 @@ const ITEMS = [
   { href: "/inbox", label: "Conversas" },
   { href: "/agenda", label: "Agenda" },
   { href: "/knowledge", label: "Base de conhecimento" },
+  { href: "/listings", label: "Anúncios" },
   { href: "/analytics", label: "Análises" },
   { href: "/billing", label: "Plano e cobrança" },
   { href: "/settings", label: "Personalização" },
