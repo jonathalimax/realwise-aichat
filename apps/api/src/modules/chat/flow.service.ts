@@ -3,6 +3,7 @@ import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } 
 import concessionariaFlow from "./flows/concessionaria.flow.json";
 import imobiliariaFlow from "./flows/imobiliaria.flow.json";
 import { PrismaService } from "../../prisma/prisma.service";
+import { LeadsService } from "../leads/leads.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 import { retrieveRelevantChunks } from "./knowledge-retrieval";
 
@@ -126,7 +127,20 @@ const PROPERTY_TYPE_PROMPT =
 
 @Injectable()
 export class FlowService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leads: LeadsService,
+  ) {}
+
+  // Fire-and-forget, same pattern as ChatService's own recomputeLeadScore — scoring must never
+  // slow down the visitor-facing flow response. Previously nothing in the scripted bubble-flow
+  // path ever touched lead scoring at all (only free-text chat messages did), so a visitor who
+  // only ever tapped bubbles — including through escalation/deep-interest nodes — never moved
+  // their Lead's score no matter how committed their taps looked.
+  private recomputeLeadScore(businessId: string, leadId?: string | null) {
+    if (!leadId) return;
+    this.leads.recomputeScoreForLead(businessId, leadId).catch(() => {});
+  }
 
   private flowFor(niche: string): FlowDef {
     return FLOWS[niche] ?? FLOWS.imobiliaria;
@@ -622,6 +636,7 @@ export class FlowService {
       },
     });
 
+    this.recomputeLeadScore(businessId, conversation.leadId);
     return nextSnapshot;
   }
 
