@@ -131,8 +131,9 @@ export class ChatController {
     @Param("conversationId") conversationId: string,
     @Body("goto") goto: string,
     @Body("params") params: Record<string, unknown>,
+    @Body("label") label: string | undefined,
   ) {
-    return this.flow.advance(businessId, conversationId, goto, params ?? {});
+    return this.flow.advance(businessId, conversationId, goto, params ?? {}, label);
   }
 
   @Post(":businessId/conversations/:conversationId/book")

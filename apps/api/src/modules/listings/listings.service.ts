@@ -249,6 +249,30 @@ export class ListingsService {
     };
   }
 
+  // Used by FlowService's "carro_fotos" node: returns one ListingItem per real photo of a specific
+  // listing (same title/price on every card) so the frontend's existing ListingCards/
+  // ListingDetailOverlay contract renders them as a swipeable gallery — no new frontend contract
+  // needed. Returns [] (not a fabricated placeholder) when the listing has no real photos.
+  async getImagesForChat(businessId: string, listingId: string): Promise<ListingItem[]> {
+    const listing = await this.prisma.client.listing.findFirst({
+      where: { id: listingId, businessId, deletedAt: null },
+      include: { images: { orderBy: { ordinal: "asc" } } },
+    });
+    if (!listing) return [];
+
+    const url = safeHttpUrl(listing.url ?? undefined);
+    return listing.images
+      .map((image) => safeHttpUrl(image.url))
+      .filter((imageUrl): imageUrl is string => Boolean(imageUrl))
+      .map((imageUrl) => ({
+        id: listing.id,
+        title: listing.title,
+        ...(listing.priceText ? { price: listing.priceText } : {}),
+        ...(url ? { url } : {}),
+        imageUrl,
+      }));
+  }
+
   // Common Portuguese stopwords dropped when extracting "significant" title tokens below — short/
   // generic words like these would otherwise match almost any haystack and defeat the whole point
   // of requiring all significant tokens to be present.

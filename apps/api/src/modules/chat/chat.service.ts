@@ -139,7 +139,10 @@ export class ChatService {
 
   async getOrCreateConversation(businessId: string, visitorToken: string, leadId?: string) {
     let conversation = await this.prisma.client.conversation.findFirst({
-      where: { businessId, visitorToken, status: { in: ["active", "idle"] } },
+      // "escalated" is included so an escalated conversation isn't orphaned from cookie/
+      // localStorage-based resumption — the visitor should keep landing back in the same
+      // (already-escalated) conversation instead of silently getting a brand-new one.
+      where: { businessId, visitorToken, status: { in: ["active", "idle", "escalated"] } },
       orderBy: { startedAt: "desc" },
     });
     if (!conversation) {
@@ -274,7 +277,15 @@ export class ChatService {
     });
 
     return {
-      conversation: { id: conversation.id, visitorToken: conversation.visitorToken, status: conversation.status },
+      // resumeToken is included so the client can persist a same-device localStorage pointer
+      // (id + resumeToken) that works even if the visitor cookie doesn't round-trip (cross-origin
+      // chat/API hosts, or a conversation excluded by a narrower cookie-adjacent status filter).
+      conversation: {
+        id: conversation.id,
+        visitorToken: conversation.visitorToken,
+        status: conversation.status,
+        resumeToken: conversation.resumeToken,
+      },
       messages,
       flowSnapshot: conversation.flowSnapshot ?? null,
       resumedViaToken: ownsViaResumeToken && !ownsViaVisitor,
@@ -349,7 +360,7 @@ export class ChatService {
 
     const onInputTarget = await this.flow.onInputTarget(businessId, conversationId);
     if (onInputTarget) {
-      const flowResult = await this.flow.advance(businessId, conversationId, onInputTarget);
+      const flowResult = await this.flow.advance(businessId, conversationId, onInputTarget, {}, undefined, false);
       const assistantMessage = await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
       });
@@ -360,7 +371,7 @@ export class ChatService {
     // of tapping "🏠 Quero alugar") advances the flow the same way the bubble tap would, at zero LLM cost.
     const bubbleMatch = await this.flow.matchFreeTextBubble(businessId, conversationId, visitorText);
     if (bubbleMatch) {
-      const flowResult = await this.flow.advance(businessId, conversationId, bubbleMatch.goto, bubbleMatch.params);
+      const flowResult = await this.flow.advance(businessId, conversationId, bubbleMatch.goto, bubbleMatch.params, undefined, false);
       const assistantMessage = await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
       });
@@ -617,7 +628,7 @@ export class ChatService {
 
     const onInputTarget = await this.flow.onInputTarget(businessId, conversationId);
     if (onInputTarget) {
-      const flowResult = await this.flow.advance(businessId, conversationId, onInputTarget);
+      const flowResult = await this.flow.advance(businessId, conversationId, onInputTarget, {}, undefined, false);
       const assistantMessage = await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
       });
@@ -629,7 +640,7 @@ export class ChatService {
     // behave identically and streaming never pays for an LLM call it doesn't need.
     const bubbleMatch = await this.flow.matchFreeTextBubble(businessId, conversationId, visitorText);
     if (bubbleMatch) {
-      const flowResult = await this.flow.advance(businessId, conversationId, bubbleMatch.goto, bubbleMatch.params);
+      const flowResult = await this.flow.advance(businessId, conversationId, bubbleMatch.goto, bubbleMatch.params, undefined, false);
       const assistantMessage = await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
       });

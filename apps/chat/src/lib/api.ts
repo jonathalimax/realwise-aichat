@@ -10,7 +10,13 @@ async function request(path: string, options?: RequestInit) {
     headers: { "content-type": "application/json", ...options?.headers },
     signal: AbortSignal.timeout(20000),
   });
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  if (!res.ok) {
+    // Attach the real HTTP status so callers (e.g. ChatScreen's localStorage self-heal) can
+    // distinguish "stale/foreign conversation id" (403/404) from a transient network failure.
+    const error = new Error(`Request failed: ${res.status}`) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
+  }
   return res.json();
 }
 
@@ -98,10 +104,16 @@ export function startFlow(businessId: string, conversationId: string) {
   return request(`/chat/${businessId}/conversations/${conversationId}/flow/start`, { method: "POST" });
 }
 
-export function advanceFlow(businessId: string, conversationId: string, goto: string, params?: Record<string, unknown>) {
+export function advanceFlow(
+  businessId: string,
+  conversationId: string,
+  goto: string,
+  params?: Record<string, unknown>,
+  label?: string,
+) {
   return request(`/chat/${businessId}/conversations/${conversationId}/flow/advance`, {
     method: "POST",
-    body: JSON.stringify({ goto, params }),
+    body: JSON.stringify({ goto, params, label }),
   });
 }
 

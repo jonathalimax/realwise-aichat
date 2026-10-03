@@ -71,6 +71,9 @@ interface FlowSnapshot {
 }
 
 export interface ListingItem {
+  // Optional — matches ListingsService's own ListingItem shape (id is present for real DB-backed
+  // rows, absent for the live-LLM-extraction fallback path, which has no backing Listing row).
+  id?: string;
   title: string;
   price?: string;
   description?: string;
@@ -82,6 +85,12 @@ export interface ListingItem {
 // e.g. properties or vehicles) — only these get the structured JSON listings path; every other
 // node with unresolved placeholders keeps the existing free-prose RAG fallback.
 const LISTING_NODE_IDS = new Set(["resultados"]);
+
+// Per-vehicle detail nodes whose message template is genuinely bound to ONE specific real
+// listing (brand/model/year/mileage/price) — these must never fall through to the generic
+// LLM-prose fallback, which has no real listing to ground on and will invent specifics (e.g. a
+// fabricated "BMW 2018, 30.000km, R$90.000" that doesn't exist in inventory).
+const LISTING_DETAIL_NODE_IDS = new Set(["carro_detalhe", "carro_fotos"]);
 
 const MAX_FLOW_HISTORY = 25;
 
@@ -184,7 +193,7 @@ export class FlowService {
     conversationId: string,
     node: FlowNode,
     params: Record<string, unknown>,
-  ): Promise<{ message: string; listings?: ListingItem[]; whatsappUrl?: string | null }> {
+  ): Promise<{ message: string; listings?: ListingItem[]; whatsappUrl?: string | null; bubblesOverride?: FlowBubble[] }> {
     const substituted = this.substitute(node.message, params);
 
     if (WHATSAPP_HANDOFF_NODE_IDS.has(node.id)) {
@@ -197,6 +206,12 @@ export class FlowService {
       // slot_end present in params) — otherwise fall through unchanged to the existing RAG-fallback
       // confirmation text below (old saved conversation, or business with no availability configured).
       if (booking) return booking;
+    }
+
+    // Listing-detail nodes are bound to ONE specific real listing — never let these fall through
+    // to the generic RAG-prose fallback below, which has no real listing to ground on.
+    if (LISTING_DETAIL_NODE_IDS.has(node.id)) {
+      return this.resolveListingDetail(businessId, node, params);
     }
 
     if (!PLACEHOLDER_PATTERN.test(substituted)) return { message: substituted };
@@ -214,11 +229,22 @@ export class FlowService {
         const filters = this.chatFiltersFor(business.niche, params);
         const dbListings = await this.listingsService.queryForChat(businessId, filters, 6);
         if (dbListings.length > 0) {
+          // Mutates the same `params` object the caller holds a reference to (advance() stores
+          // THIS object as the conversation's flowParams) so a later bubble tap into
+          // carro_detalhe/carro_fotos with no listing-specific context can still resolve to the
+          // single listing just shown — see resolveListingId below.
+          params.last_listing_ids = dbListings.map((l) => l.id).filter((id): id is string => Boolean(id));
           return { message: "Encontrei algumas opções que podem te interessar 👇", listings: dbListings };
         }
-        // Real inventory exists but nothing matches the visitor's filters — never fall back to
-        // live LLM extraction here, that could surface listings that contradict the chosen
-        // filters. Fall through to the honest "sem resultados" prose path below.
+        // Real inventory exists but nothing matches the visitor's chosen filters — route
+        // explicitly to the flow's own "sem_resultados" node (real bubbles that actually narrow
+        // the search) instead of falling through to the generic LLM-prose fallback below, which
+        // has no grounded way to explain an empty result honestly.
+        const flow = this.flowFor(business.niche);
+        const semResultados = flow.nodes.sem_resultados;
+        if (semResultados) {
+          return { message: semResultados.message, bubblesOverride: semResultados.bubbles ?? [] };
+        }
       } else {
         // The literal node message ("Encontrei {n} imóveis para você") is a bad retrieval query —
         // it's generic UI copy, not a description of an actual listing, so it tends to rank
@@ -231,8 +257,24 @@ export class FlowService {
         if (listings.length > 0) {
           return { message: "Encontrei algumas opções que podem te interessar 👇", listings };
         }
-        // No genuine distinct items found in the retrieved text — fall through to the honest
-        // prose fallback below instead of showing an empty/fabricated card list.
+        // Nothing to ground on at all — no Listing rows AND nothing genuinely listing-shaped in
+        // the ingested documents either. The generic RAG-prose fallback below has, in practice,
+        // invented specific vehicles/properties on exactly this "truly empty" case despite its own
+        // grounding instructions — so this is an honest dead end, not a prompt to improve: offer a
+        // real human handoff instead of ever reaching that fallback.
+        return {
+          message:
+            business.niche === "concessionaria"
+              ? "Ainda não tenho o estoque carregado aqui — quer falar com um vendedor para ver as opções disponíveis?"
+              : "Ainda não tenho os imóveis carregados aqui — quer falar com um corretor para ver as opções disponíveis?",
+          bubblesOverride: [
+            {
+              label: business.niche === "concessionaria" ? "Falar com um vendedor" : "Falar com um corretor",
+              goto: "handoff_whats",
+            },
+            { label: "⬅ Voltar ao menu", goto: "start" },
+          ],
+        };
       }
     }
 
@@ -298,6 +340,77 @@ export class FlowService {
     });
 
     return { message: "Toque no botão abaixo para continuar no WhatsApp com um atendente ✅", whatsappUrl };
+  }
+
+  // The flow engine has no per-card bubble mechanism — "resultados" renders multiple real
+  // listings as cards (frontend-only, via ListingCards/ListingDetailOverlay), but the single
+  // scripted "🔍 Ver detalhes" bubble has no way to carry which card the visitor actually meant.
+  // Resolves, in priority order: an explicit `listing_id` param (future per-card bubble
+  // attachment), or the single listing from the last "resultados" hit when exactly one was shown
+  // (`last_listing_ids`, set in resolveMessage's LISTING_NODE_IDS branch). Ambiguous (0 or 2+
+  // candidates) returns null rather than guessing — same discipline as
+  // ListingsService.findMentionedForChat.
+  private resolveListingId(params: Record<string, unknown>): string | null {
+    if (typeof params.listing_id === "string" && params.listing_id) return params.listing_id;
+    const lastIds = params.last_listing_ids;
+    if (Array.isArray(lastIds) && lastIds.length === 1 && typeof lastIds[0] === "string") return lastIds[0];
+    return null;
+  }
+
+  // carro_detalhe/carro_fotos: binds the node to one real Listing row instead of ever falling
+  // through to the generic RAG-prose fallback. Returns a clarifying message (never a guess) when
+  // no specific listing can be resolved, and an honest "not available anymore" message when the
+  // resolved listing_id no longer exists (deleted/sold between the card being shown and tapped).
+  private async resolveListingDetail(
+    businessId: string,
+    node: FlowNode,
+    params: Record<string, unknown>,
+  ): Promise<{ message: string; listings?: ListingItem[]; bubblesOverride?: FlowBubble[] }> {
+    const backToResults: FlowBubble[] = [{ label: "⬅ Voltar aos resultados", goto: "resultados" }];
+    const listingId = this.resolveListingId(params);
+    if (!listingId) {
+      return { message: "Qual carro você quer ver? Toque em 🔍 Ver detalhes em um dos carros que te mostrei 👇", bubblesOverride: backToResults };
+    }
+
+    let listing;
+    try {
+      listing = await this.listingsService.getOne(businessId, listingId);
+    } catch {
+      return { message: "Esse carro não está mais disponível. Vamos ver outras opções?", bubblesOverride: backToResults };
+    }
+
+    if (node.id === "carro_fotos") {
+      const images = await this.listingsService.getImagesForChat(businessId, listingId);
+      if (images.length === 0) {
+        return { message: "Ainda não tenho fotos cadastradas para esse carro — mas posso te passar os outros detalhes que tenho 👇" };
+      }
+      return { message: "Aqui estão as fotos 📸", listings: images };
+    }
+
+    // carro_detalhe: build the message from real columns only — fields the business never filled
+    // in simply don't appear, rather than rendering a placeholder.
+    const parts: string[] = [];
+    const brandModel = [listing.brand, listing.model].filter(Boolean).join(" ");
+    if (brandModel) parts.push(brandModel);
+    if (listing.year) parts.push(String(listing.year));
+    if (listing.mileageKm != null) parts.push(`${listing.mileageKm.toLocaleString("pt-BR")} km`);
+    if (listing.priceText) parts.push(listing.priceText);
+
+    const message = `${parts.length > 0 ? parts.join(" — ") : listing.title}. O que você quer ver?`;
+    const image = listing.images[0]?.url ? safeHttpUrl(listing.images[0].url) : undefined;
+    const url = safeHttpUrl(listing.url ?? undefined);
+    return {
+      message,
+      listings: [
+        {
+          id: listing.id,
+          title: listing.title,
+          ...(listing.priceText ? { price: listing.priceText } : {}),
+          ...(url ? { url } : {}),
+          ...(image ? { imageUrl: image } : {}),
+        },
+      ],
+    };
   }
 
   // Closes the "scripted booking is cosmetic" gap: visita_confirmada/agend_ok used to always show
@@ -902,14 +1015,19 @@ export class FlowService {
   private async emit(businessId: string, conversationId: string, niche: string, nodeId: string, params: Record<string, unknown>): Promise<FlowSnapshot> {
     const flow = this.flowFor(niche);
     const node = flow.nodes[nodeId] ?? flow.nodes[flow.start];
-    const { message, listings, whatsappUrl } = await this.resolveMessage(businessId, conversationId, node, params);
+    const { message, listings, whatsappUrl, bubblesOverride } = await this.resolveMessage(businessId, conversationId, node, params);
 
     let bubbles: FlowBubble[];
     // Number of leading bubbles in `bubbles` that are dynamic/contextual (derived from the
     // business's real data) rather than the node's own scripted JSON bubbles — used by
     // finalizeBubbles to decide trim priority (dynamic bubbles are trimmed last).
     let dynamicCount = 0;
-    if (node.id === "busca_bairro") {
+    if (bubblesOverride) {
+      // resolveMessage decided the node's own scripted bubbles don't apply right now (e.g. a
+      // clarifying "which car?" message, or an explicit redirect to "sem_resultados"'s own
+      // bubbles) — use exactly what it returned instead of the node's JSON bubbles.
+      bubbles = bubblesOverride;
+    } else if (node.id === "busca_bairro") {
       // Only the location-agnostic bubbles from the script ("Perto de mim" / "Tanto faz") plus
       // real region names derived from the business's own documents — no hardcoded zone list.
       const locationAgnostic = (node.bubbles ?? []).filter(
@@ -1029,12 +1147,31 @@ export class FlowService {
         where: { id: conversationId },
         data: { flowNodeId: flow.start, flowHistory: [], flowSnapshot: snapshot as any },
       });
+      // Only persisted on the FIRST start() for a conversation (guarded by the same
+      // !conversation.flowNodeId check as the flowNodeId/flowHistory bootstrap above) — a
+      // conversation that's already started never re-runs this branch, so there's no risk of
+      // double-writing this opening message on a repeated start() call for the same conversation.
+      await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: snapshot.message, answerSource: "fixed_flow" },
+      });
     }
 
     return snapshot;
   }
 
-  async advance(businessId: string, conversationId: string, goto: string, bubbleParams: Record<string, unknown> = {}) {
+  async advance(
+    businessId: string,
+    conversationId: string,
+    goto: string,
+    bubbleParams: Record<string, unknown> = {},
+    bubbleLabel?: string,
+    // ChatService's own on_input/matchFreeTextBubble redirects already persist both the
+    // visitor's real typed text (before calling advance()) and their own "assistant" Message row
+    // right after — passing false there avoids writing a duplicate assistant row for the same
+    // turn. The real bubble-tap path (ChatController -> advance()) has nothing else persisting
+    // either side, so it keeps the default of true.
+    persistAssistantMessage = true,
+  ) {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException("Business not found");
 
@@ -1043,6 +1180,18 @@ export class FlowService {
 
     const currentSnapshot = (conversation.flowSnapshot as unknown as FlowSnapshot) ?? null;
     const mergedParams = { ...(conversation.flowParams as Record<string, unknown>), ...bubbleParams };
+
+    // Persist the visitor's bubble-tap BEFORE advancing, same ordering as a real typed message —
+    // best-effort only (a scripted bubble tap should never fail because of a logging write).
+    // `bubbleLabel` is only sent by an actual bubble tap, not matchFreeTextBubble's free-text
+    // shortcut or tryCaptureVisitorEmail's on_input redirect, which already persist (or don't
+    // need to persist) the visitor's real typed text through the normal chat message path.
+    if (bubbleLabel) {
+      this.prisma.client.message
+        .create({ data: { conversationId, businessId, role: "visitor", content: bubbleLabel } })
+        .catch(() => {});
+    }
+
     const nextSnapshot = await this.emit(businessId, conversationId, business.niche, goto, mergedParams);
 
     const nextHistory = currentSnapshot ? [...history, currentSnapshot].slice(-MAX_FLOW_HISTORY) : history;
@@ -1058,6 +1207,15 @@ export class FlowService {
         fixedFlowTurns: { increment: 1 },
       },
     });
+
+    // Best-effort, mirrors the visitor-side write above — a conversation driven entirely by
+    // bubble taps previously never created any Message rows at all (only resolveWhatsappHandoff
+    // did), so history/refresh for a pure-bubble conversation came back completely empty.
+    if (persistAssistantMessage) {
+      this.prisma.client.message
+        .create({ data: { conversationId, businessId, role: "assistant", content: nextSnapshot.message, answerSource: "fixed_flow" } })
+        .catch(() => {});
+    }
 
     this.recomputeLeadScore(businessId, conversation.leadId);
     return nextSnapshot;

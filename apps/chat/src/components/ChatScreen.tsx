@@ -202,6 +202,43 @@ function nextMessageId() {
   return `m${messageIdCounter}`;
 }
 
+// The cookie the API also relies on to resume a conversation can fail cross-origin (chat on one
+// origin/port, API on another) and is excluded for escalated conversations by the status filter
+// getOrCreateConversation used to apply — localStorage is a same-origin, same-device fallback
+// pointer so a refresh doesn't lose the conversation even when the cookie doesn't round-trip.
+// Wrapped in try/catch everywhere since localStorage can throw in some embedded/private contexts.
+function conversationStorageKey(slug: string) {
+  return `rw_conv_${slug}`;
+}
+
+function readStoredConversation(slug: string): { id: string; resumeToken?: string } | null {
+  try {
+    const raw = localStorage.getItem(conversationStorageKey(slug));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.id === "string" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeConversation(slug: string, id: string, resumeToken?: string) {
+  try {
+    localStorage.setItem(conversationStorageKey(slug), JSON.stringify({ id, resumeToken }));
+  } catch {
+    // Ignore — localStorage can throw (private mode, embedded contexts); the cookie-based path
+    // still works without this.
+  }
+}
+
+function clearStoredConversation(slug: string) {
+  try {
+    localStorage.removeItem(conversationStorageKey(slug));
+  } catch {
+    // Ignore, same as above.
+  }
+}
+
 export function ChatScreen({
   slug,
   resumeConversationId,
@@ -260,11 +297,24 @@ export function ChatScreen({
     if (!business) return;
     let cancelled = false;
     (async () => {
+      // Resolution priority: an explicit resume link (?c=&t=) > a previously-stored localStorage
+      // pointer for this business (self-healing fallback for the cookie, which can fail
+      // cross-origin or get excluded once a conversation escalates) > starting a brand-new one.
       let convId = resumeConversationId ?? null;
+      let effectiveResumeToken = resumeConversationId ? resumeToken : undefined;
+      const stored = !convId ? readStoredConversation(slug) : null;
+      if (!convId && stored) {
+        convId = stored.id;
+        effectiveResumeToken = stored.resumeToken;
+      }
+
       if (!convId) {
         if (!conversationPromiseRef.current) {
           conversationPromiseRef.current = startConversation(business.id)
-            .then((conversation) => conversation.id)
+            .then((conversation) => {
+              storeConversation(slug, conversation.id, conversation.resumeToken);
+              return conversation.id;
+            })
             .catch((error) => {
               conversationPromiseRef.current = null;
               throw error;
@@ -272,25 +322,53 @@ export function ChatScreen({
         }
         convId = await conversationPromiseRef.current;
       } else {
-        // Resume-link path: pin the ref to the already-known id so ensureConversation() below
-        // never kicks off a second startConversation() call for this conversation.
+        // Resume-link/localStorage path: pin the ref to the already-known id so
+        // ensureConversation() below never kicks off a second startConversation() call.
         conversationPromiseRef.current = Promise.resolve(convId);
       }
       if (cancelled) return;
       setConversationId(convId);
       try {
-        const history = await getConversationHistory(business.id, convId!, resumeConversationId ? resumeToken : undefined);
+        const history = await getConversationHistory(business.id, convId!, effectiveResumeToken);
         if (cancelled) return;
-        setMessages(
-          history.messages.map((m: any) => ({ id: m.id, serverId: m.id, role: m.role, content: m.content })),
-        );
+        const restoredMessages: Message[] = history.messages.map((m: any) => ({
+          id: m.id,
+          serverId: m.id,
+          role: m.role,
+          content: m.content,
+        }));
+        // Older conversations that predate server-side message persistence for the scripted
+        // bubble flow (or any conversation that only ever got this far via taps) have an empty
+        // `messages` history even though a real flowSnapshot exists — repaint that snapshot's
+        // message/listings as the trailing assistant turn so refresh still shows something real
+        // instead of a blank thread.
+        if (restoredMessages.length === 0 && history.flowSnapshot?.message) {
+          restoredMessages.push({
+            id: nextMessageId(),
+            role: "assistant",
+            content: history.flowSnapshot.message,
+            listings: history.flowSnapshot.listings,
+            whatsappUrl: history.flowSnapshot.whatsappUrl,
+          });
+        }
+        setMessages(restoredMessages);
         setConversationStatus(history.conversation?.status ?? null);
         if (history.flowSnapshot) {
           setBubbles(history.flowSnapshot.bubbles ?? []);
           setSuggestions([]);
           setFlowRestored(true);
         }
-      } catch {
+        // Keep the localStorage pointer fresh/stored only once the conversation is confirmed to
+        // still be resolvable — never store an id that just failed to resolve below.
+        storeConversation(slug, convId!, history.conversation?.resumeToken ?? effectiveResumeToken);
+      } catch (error) {
+        // A stale/foreign id (403/404) must not get retried forever — clear the bad pointer so
+        // the next load starts a genuinely fresh conversation instead of repeating the same
+        // failure. Any other error (network blip, timeout) leaves the pointer alone.
+        const status = (error as { status?: number })?.status;
+        if (stored && (status === 403 || status === 404)) {
+          clearStoredConversation(slug);
+        }
         // History fetch failing must not block the chat — the flow/start effect below still
         // runs and starts a fresh conversation experience.
       } finally {
@@ -300,7 +378,7 @@ export function ChatScreen({
     return () => {
       cancelled = true;
     };
-  }, [business, resumeConversationId, resumeToken]);
+  }, [business, resumeConversationId, resumeToken, slug]);
 
   // Only starts the scripted flow from the beginning for conversations with no stored
   // flowSnapshot — a resumed conversation already restored its bubbles above.
@@ -500,7 +578,10 @@ export function ChatScreen({
     // racing a second startConversation() call while that effect hasn't resolved yet.
     if (!conversationPromiseRef.current) {
       conversationPromiseRef.current = startConversation(business.id)
-        .then((conversation) => conversation.id)
+        .then((conversation) => {
+          storeConversation(slug, conversation.id, conversation.resumeToken);
+          return conversation.id;
+        })
         .catch((error) => {
           conversationPromiseRef.current = null;
           throw error;
@@ -584,7 +665,7 @@ export function ChatScreen({
     try {
       const convId = await ensureConversation();
       if (!convId) throw new Error("conversation_unavailable");
-      const result = await advanceFlow(business.id, convId, bubble.goto, bubble.params);
+      const result = await advanceFlow(business.id, convId, bubble.goto, bubble.params, bubble.label);
       setMessages((prev) => [
         ...prev,
         { id: nextMessageId(), role: "assistant", content: result.message, listings: result.listings, whatsappUrl: result.whatsappUrl },
