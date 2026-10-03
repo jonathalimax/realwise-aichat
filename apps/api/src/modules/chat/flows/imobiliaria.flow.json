@@ -1095,7 +1095,7 @@
     },
     "cp_custos": {
       "id": "cp_custos",
-      "message": "Além do valor do imóvel, considere:",
+      "message": "Além do valor do imóvel, considere: ITBI, Escritura, Registro e taxa de Avaliação do banco. Qual quer entender melhor?",
       "bubbles": [
         { "label": "ITBI", "goto": "custo_itbi" },
         { "label": "Escritura", "goto": "custo_escritura" },
@@ -1210,7 +1210,7 @@
     },
     "cp_doc": {
       "id": "cp_doc",
-      "message": "Toda venda passa por checagem jurídica. O que quer saber?",
+      "message": "Toda venda passa por checagem jurídica: matrícula, certidões do imóvel e dos vendedores, dívidas e habite-se. O que quer saber?",
       "bubbles": [
         { "label": "O que é a matrícula?", "goto": "doc_matricula" },
         { "label": "Quais certidões vocês verificam?", "goto": "doc_certidoes" },
