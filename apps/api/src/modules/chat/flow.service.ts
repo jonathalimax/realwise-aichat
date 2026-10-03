@@ -141,6 +141,38 @@ const FLOWS: Record<string, FlowDef> = {
 
 const PLACEHOLDER_PATTERN = /\{[^{}]+\}/g;
 
+// PLACEHOLDER_PATTERN carries the `g` flag (needed for .replace() to replace every occurrence in
+// one pass) — calling .test()/.exec() on a shared global-flagged RegExp mutates its `lastIndex`
+// across calls, so repeated `PLACEHOLDER_PATTERN.test(...)` calls interleaved across different
+// strings (e.g. filtering a list of bubble labels one by one) silently alternate between
+// true/false regardless of the actual string content. Always check for a placeholder's presence
+// through this helper instead of calling `.test()` on the shared pattern directly.
+function hasPlaceholder(text: string): boolean {
+  return /\{[^{}]+\}/.test(text);
+}
+
+// Keys `substitute()` is allowed to read from the flat `conversation.flowParams` bag when filling
+// `{key}` message placeholders. `advance()` merges ALL bubble params into this SAME flat bag —
+// including routing/filter codes like `meses` (financing term), `faixa` (price bucket), `entrada`
+// (down-payment %), `marca`/`modelo`/`tipo`/`regiao`/`modo`/`categoria`/`ordem`, etc — which exist
+// only to drive chatFiltersFor/faixaToPriceRange/listingQueryFor logic, never to be displayed
+// verbatim. Without this allowlist, an unrelated node's `{meses}`/`{faixa}`/`{entrada}` placeholder
+// could silently resolve to a leftover routing-code value from a completely different flow branch
+// (e.g. "garantia estendida de até 48 meses" picking up a financing-term `meses` answer). Only
+// genuine display-value keys that resolveMessage/tryCreateBooking/resolveListingId ever set into
+// this bag belong here. An unknown key is fail-safe: the placeholder is left unresolved, which
+// correctly routes the message through the existing LLM-fallback/honest-fallback paths below
+// rather than silently substituting the wrong value (fail open).
+const SUBSTITUTABLE_PARAM_KEYS = new Set([
+  "slot_start",
+  "slot_end",
+  "booking_date",
+  "booking_periodo",
+  "listing_id",
+  "last_listing_ids",
+  "telefone",
+]);
+
 // Prompts for the non-parametrized dynamic-bubble keys — shared between on-demand extraction
 // (dynamicOptionBubbles) and proactive regeneration (regenerateFlowOptions) so they stay in sync.
 const BRAND_PROMPT =
@@ -178,9 +210,21 @@ export class FlowService {
   private substitute(template: string, params: Record<string, unknown>): string {
     return template.replace(PLACEHOLDER_PATTERN, (match) => {
       const key = match.slice(1, -1);
+      if (!SUBSTITUTABLE_PARAM_KEYS.has(key)) return match;
       const value = params[key];
       return value === undefined || value === null ? match : String(value);
     });
+  }
+
+  // When a scripted/RAG-fallback message text still has an unresolved `{placeholder}` right before
+  // being shown to the visitor (e.g. the LLM-fallback call itself failed, or a placeholder survived
+  // all the way to the final non-LLM text), drop the whole sentence containing it rather than
+  // leaving a visibly broken fragment like "por ." or "considere também 20.". Splits on sentence
+  // boundaries (. ! ?), drops any sentence that still contains `{`, and rejoins.
+  private dropSentencesWithPlaceholders(text: string): string {
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    const clean = sentences.filter((s) => !s.includes("{")).join(" ").trim();
+    return clean;
   }
 
   // When the scripted message still has unresolved placeholders after substitution (e.g. it
@@ -214,10 +258,10 @@ export class FlowService {
       return this.resolveListingDetail(businessId, node, params);
     }
 
-    if (!PLACEHOLDER_PATTERN.test(substituted)) return { message: substituted };
+    if (!hasPlaceholder(substituted)) return { message: substituted };
 
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
-    if (!business) return { message: substituted.replace(PLACEHOLDER_PATTERN, "") };
+    if (!business) return { message: this.dropSentencesWithPlaceholders(substituted) };
 
     if (LISTING_NODE_IDS.has(node.id)) {
       // Phase 2: businesses with a real extracted Listing table query that table directly instead
@@ -302,7 +346,8 @@ export class FlowService {
       });
       return { message: result.text };
     } catch {
-      return { message: substituted.replace(PLACEHOLDER_PATTERN, "") };
+      const stripped = this.dropSentencesWithPlaceholders(substituted);
+      return { message: stripped || "No momento não tenho essa informação, mas posso te conectar com um atendente." };
     }
   }
 
@@ -1049,10 +1094,20 @@ export class FlowService {
       }
     }
 
+    // Resolve any `{placeholder}` in each bubble's own label the same way message text is
+    // substituted (e.g. {horario_1}, {modelo_1}), then drop any bubble whose label still contains
+    // an unresolved placeholder — the dynamic-extraction/slot-generation path that was supposed to
+    // replace these scripted bubbles returned null/empty, so showing the raw JSON label would leak
+    // a literal "{horario_1}"/"{modelo_1}" to the visitor. ensureNonEmptyBubbles's tier-3 safety
+    // net fills in if this empties out every bubble for the node.
+    const resolvedBubbles = bubbles
+      .map((b) => ({ ...b, label: this.substitute(b.label, params) }))
+      .filter((b) => !hasPlaceholder(b.label));
+
     return {
       nodeId: node.id,
       message,
-      bubbles: this.finalizeBubbles(this.ensureNonEmptyBubbles(node, bubbles, niche), dynamicCount),
+      bubbles: this.finalizeBubbles(this.ensureNonEmptyBubbles(node, resolvedBubbles, niche, params), dynamicCount),
       input: node.input ?? null,
       params,
       ...(listings ? { listings } : {}),
@@ -1068,11 +1123,17 @@ export class FlowService {
   // niche-aware real question rather than generic nav, since bubbles should read as specific
   // questions, not navigation — this is not a reintroduction of the removed persistent nav layer,
   // it only ever appears when every other option-generation path has failed.
-  private ensureNonEmptyBubbles(node: FlowNode, bubbles: FlowBubble[], niche: string): FlowBubble[] {
+  private ensureNonEmptyBubbles(node: FlowNode, bubbles: FlowBubble[], niche: string, params: Record<string, unknown> = {}): FlowBubble[] {
     if (bubbles.length > 0) return bubbles;
-    if (node.bubbles && node.bubbles.length > 0) {
+    // Same substitute-then-drop-unresolved treatment as the primary bubble list above — the
+    // node's own raw scripted bubbles can still carry an unresolved {placeholder} label (e.g.
+    // {horario_1}, {modelo_1}) when this tier fires.
+    const scriptedBubbles = (node.bubbles ?? [])
+      .map((b) => ({ ...b, label: this.substitute(b.label, params) }))
+      .filter((b) => !hasPlaceholder(b.label));
+    if (scriptedBubbles.length > 0) {
       console.warn(`[flow] ensureNonEmptyBubbles tier 2 fallback fired for node "${node.id}" — extraction returned no bubbles.`);
-      return node.bubbles;
+      return scriptedBubbles;
     }
     console.warn(`[flow] ensureNonEmptyBubbles tier 3 fallback fired for node "${node.id}" — no bubbles on node either.`);
     const label = niche === "concessionaria" ? "Quais carros vocês têm disponíveis?" : "Quais imóveis vocês têm disponíveis?";
