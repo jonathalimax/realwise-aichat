@@ -69,6 +69,14 @@ enum DataSubjectRequestType {
   portability
 }
 
+enum ListingStatus {
+  active
+  reserved
+  sold
+  rented
+  inactive
+}
+
 model Business {
   id              String         @id @default(uuid())
   name            String
@@ -111,6 +119,7 @@ model Business {
   consentRecords  ConsentRecord[]
   dataSubjectRequests DataSubjectRequest[]
   alerts          BusinessAlert[]
+  listings        Listing[]
 }
 
 model Plan {
@@ -164,6 +173,7 @@ model KnowledgeDocument {
   retentionDeleteAt DateTime?
 
   chunks            KnowledgeChunk[]
+  listings          Listing[]
 }
 
 model KnowledgeChunk {
@@ -427,4 +437,77 @@ model AdminUser {
 model PlatformConfig {
   id                    String  @id @default("singleton")
   supportWhatsappNumber String?
+}
+
+model Listing {
+  id            String        @id @default(uuid())
+  businessId    String
+  business      Business      @relation(fields: [businessId], references: [id])
+
+  referenceCode String
+
+  title         String
+  description   String?
+
+  priceText     String?
+  priceCents    Int?
+  pricePeriod   String?
+
+  addressLine   String?
+  neighborhood  String?
+  city          String?
+  state         String?
+  postalCode    String?
+  latitude      Float?
+  longitude     Float?
+
+  listingType   String?
+  transaction   String?
+  bedrooms      Int?
+  parkingSpots  Int?
+  areaM2        Int?
+  brand         String?
+  model         String?
+  year          Int?
+  mileageKm     Int?
+
+  status        ListingStatus @default(active)
+
+  url           String?
+
+  sourceDocumentId String?
+  sourceDocument   KnowledgeDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  sourceUrl        String?
+  dedupKey         String
+  extractedAt      DateTime?
+  lastSeenInSourceAt DateTime?
+
+  overriddenFields Json     @default("{}")
+  manuallyCreated  Boolean  @default(false)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  images        ListingImage[]
+
+  @@unique([businessId, dedupKey])
+  @@unique([businessId, referenceCode])
+  @@index([businessId, status])
+  @@index([businessId, status, listingType, transaction])
+  @@index([businessId, status, priceCents])
+  @@index([businessId, status, neighborhood])
+}
+
+model ListingImage {
+  id         String   @id @default(uuid())
+  listingId  String
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  url        String
+  ordinal    Int      @default(0)
+  caption    String?
+  createdAt  DateTime @default(now())
+
+  @@unique([listingId, url])
+  @@index([listingId, ordinal])
 }
