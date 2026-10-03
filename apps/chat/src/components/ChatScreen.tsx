@@ -385,6 +385,9 @@ export function ChatScreen({
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, listings: result.listings } : m)));
       }
       if (result?.escalated && result?.whatsappUrl) {
+        // Attach whatsappUrl to the message so WhatsappHandoffCard always renders a tappable card —
+        // mobile browsers routinely block this best-effort popup, so the card can't be the only path.
+        setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, whatsappUrl: result.whatsappUrl } : m)));
         window.open(result.whatsappUrl, "_blank");
       } else if (result?.flow?.bubbles) {
         setBubbles(result.flow.bubbles);
@@ -400,27 +403,18 @@ export function ChatScreen({
   async function handleBubbleTap(bubble: FlowBubble) {
     if (!business) return;
     if (isStreamingRef.current) return;
-    const isBack = bubble.goto === "__back__";
 
-    // Back is pure local navigation — it replays an already-seen step, so it must not look like
-    // the visitor sent a new message or that Clara is generating a reply.
-    if (!isBack) {
-      setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: bubble.label }]);
-      setSending(true);
-      isStreamingRef.current = true;
-    }
+    setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: bubble.label }]);
+    setSending(true);
+    isStreamingRef.current = true;
     try {
       const convId = await ensureConversation();
       if (!convId) throw new Error("conversation_unavailable");
       const result = await advanceFlow(business.id, convId, bubble.goto, bubble.params);
-      if (isBack) {
-        setMessages((prev) => prev.slice(0, -2));
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { id: nextMessageId(), role: "assistant", content: result.message, listings: result.listings, whatsappUrl: result.whatsappUrl },
-        ]);
-      }
+      setMessages((prev) => [
+        ...prev,
+        { id: nextMessageId(), role: "assistant", content: result.message, listings: result.listings, whatsappUrl: result.whatsappUrl },
+      ]);
       setBubbles(result.bubbles ?? []);
     } finally {
       setSending(false);
