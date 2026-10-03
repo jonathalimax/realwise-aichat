@@ -740,7 +740,7 @@ export class ChatService {
       `<p>Um cliente pediu para falar com alguém do time agora.</p>
        <p><strong>Assunto:</strong> ${escapeHtml(topic)}</p>
        <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
-       <p>Veja a conversa e responda no painel: Leads.</p>`,
+       <p>Veja a conversa e responda no painel: Conversas.</p>`,
     );
 
     this.recomputeLeadScore(businessId, conversation?.leadId);
