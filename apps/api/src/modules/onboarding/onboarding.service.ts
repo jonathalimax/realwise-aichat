@@ -42,13 +42,13 @@ function validateFieldValue(type: string | undefined, value: unknown): { ok: tru
       // so garbage like "banana42" (which has a digit but no real time pattern) is rejected.
       const hasTimePattern = /\d{1,2}\s*[:h]\s*\d{0,2}/i.test(trimmed);
       const hasKeyword = /(segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|seg|ter|qua|qui|sex|s[áa]b|dom|hora|aberto|fechado)/i.test(trimmed);
-      return trimmed.length > 0 && trimmed.length <= 500 && (hasTimePattern || hasKeyword)
+      return trimmed.length > 0 && trimmed.length <= 1000 && (hasTimePattern || hasKeyword)
         ? { ok: true }
         : { ok: false, reason: "value must look like a valid schedule (horários ou dias da semana)" };
     }
     case "text":
     default:
-      return trimmed.length > 0 && trimmed.length <= 500 ? { ok: true } : { ok: false, reason: "value must be a non-empty reasonable-length string" };
+      return trimmed.length > 0 && trimmed.length <= 1000 ? { ok: true } : { ok: false, reason: "value must be a non-empty reasonable-length string" };
   }
 }
 
@@ -153,7 +153,8 @@ export class OnboardingService {
       `Você é a Clara, entrevistando o DONO da ${business.name} para completar o perfil do negócio (não é o cliente final).`,
       "Sua tarefa: perguntar, uma de cada vez, sobre os campos que ainda faltam preencher, na ordem dada.",
       "Se o conteúdo dos documentos abaixo já responder um campo, não pergunte de novo — apenas confirme e extraia o valor.",
-      "Quando o dono responder uma pergunta, extraia um valor curto e estruturado para o campo perguntado.",
+      "Quando o dono responder uma pergunta, extraia o valor completo da resposta para o campo perguntado — preserve o conteúdo real dito pelo dono, sem resumir, abreviar ou reduzir a um código curto.",
+      "Se a resposta for uma lista de itens (ex: tipos de imóvel, marcas, documentos), extraia TODOS os itens listados por extenso — NUNCA substitua a lista pela sua contagem. Exemplo do que NÃO fazer: se o dono disser \"temos casas, apartamentos e salas comerciais\", o valor extraído deve ser \"casas, apartamentos e salas comerciais\" — NUNCA \"3\".",
       "Responda SEMPRE em JSON puro, sem markdown, no formato: {\"reply\": string, \"fieldKey\": string|null, \"value\": string|null}.",
       "fieldKey/value só devem vir preenchidos quando a MENSAGEM MAIS RECENTE do dono responder a um campo — nunca invente valor.",
       "A pergunta em `reply` deve sempre nomear explicitamente o campo (use o label do campo, ex: \"Qual o horário de funcionamento?\") — nunca use um pronome vago como \"isso\"/\"isto\" sem dizer a que campo se refere.",

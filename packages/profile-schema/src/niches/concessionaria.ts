@@ -25,6 +25,7 @@ export const concessionariaTemplate: NicheTemplate = {
     { id: "iq7", prompt: "Como funciona a política de revisões programadas?", fillsField: "revisoes_programadas" },
     { id: "iq8", prompt: "Tem desconto para pagamento à vista?", fillsField: "desconto_a_vista" },
     { id: "iq9", prompt: "Vocês oferecem assistência 24h ou guincho para quem compra com vocês?", fillsField: "assistencia_24h" },
+    { id: "iq10", prompt: "Qual o prazo de entrega para um carro 0km?", fillsField: "prazo_entrega_0km" },
   ],
   defaultChips: ["Ver estoque", "Simular financiamento", "Agendar test-drive", "Aceita meu carro na troca?"],
   chipGraph: [

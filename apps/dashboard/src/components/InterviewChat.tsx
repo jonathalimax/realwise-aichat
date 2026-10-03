@@ -13,10 +13,14 @@ interface Message {
 export function InterviewChat({
   onFieldFilled,
   prefill,
+  prefillNonce,
 }: {
   onFieldFilled?: () => void;
-  // When this string changes, it's sent as an owner message — used to target a specific field from outside the chat.
+  // When `prefillNonce` changes, `prefill` is sent as an owner message — used to target a specific
+  // field from outside the chat. The nonce lets the same prefill text be re-sent (e.g. clicking
+  // "Pedir à Clara" again on the same field).
   prefill?: string;
+  prefillNonce?: number;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -25,7 +29,7 @@ export function InterviewChat({
   const [remainingGaps, setRemainingGaps] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const started = useRef(false);
-  const lastPrefill = useRef<string | undefined>(undefined);
+  const lastPrefillNonce = useRef<number | undefined>(undefined);
 
   async function send(history: Message[]) {
     setSending(true);
@@ -49,13 +53,14 @@ export function InterviewChat({
   }, []);
 
   useEffect(() => {
-    if (!prefill || prefill === lastPrefill.current || !started.current) return;
-    lastPrefill.current = prefill;
+    if (!prefill || prefillNonce === undefined || prefillNonce === lastPrefillNonce.current) return;
+    lastPrefillNonce.current = prefillNonce;
+    if (!started.current) started.current = true;
     const next: Message[] = [...messages, { role: "owner", content: prefill }];
     setMessages(next);
     send(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefill]);
+  }, [prefill, prefillNonce]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

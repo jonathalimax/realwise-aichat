@@ -24,6 +24,8 @@ export const imobiliariaTemplate: NicheTemplate = {
     { id: "iq6", prompt: "Qual o prazo mínimo de contrato que vocês praticam?", fillsField: "prazo_minimo_contrato" },
     { id: "iq7", prompt: "Em quais horários vocês conseguem fazer visitas?", fillsField: "horario_visitas" },
     { id: "iq8", prompt: "Quanto tempo leva a análise de crédito normalmente?", fillsField: "prazo_analise_credito" },
+    { id: "iq9", prompt: "Como funciona o reajuste anual do aluguel?", fillsField: "reajuste_anual" },
+    { id: "iq10", prompt: "Como é feita a vistoria de saída do imóvel?", fillsField: "vistoria_saida" },
   ],
   defaultChips: ["Quanto custa?", "Quais documentos preciso?", "Agendar visita", "Onde fica?"],
   chipGraph: [

@@ -10,3 +10,7 @@ export const nicheTemplates: Record<string, NicheTemplate> = {
   imobiliaria: imobiliariaTemplate,
   concessionaria: concessionariaTemplate,
 };
+
+export function questionForField(template: NicheTemplate, fieldKey: string): string | undefined {
+  return template.interviewQuestions.find((q) => q.fillsField === fieldKey)?.prompt;
+}
