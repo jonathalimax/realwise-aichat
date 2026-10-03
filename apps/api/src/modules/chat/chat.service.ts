@@ -593,11 +593,19 @@ export class ChatService {
       };
     }
 
+    const preliminaryChunks = await retrieveRelevantChunks(this.prisma, businessId, visitorText);
+    const preliminaryChunkTextForBrowsing = preliminaryChunks.map((c) => c.content).join("\n\n").slice(0, 4000);
+    // Real listings live in the structured Listing table, not in document chunks — a browsing
+    // question ("gostaria de ver os imóveis") can legitimately score below the chunk-relevance
+    // floor (there's no document chunk that textually matches generic browsing phrasing) even
+    // though the business has real inventory to show. Check this BEFORE the zero-chunk abstention
+    // below, or a real browsing query gets abstained before ever reaching resolveBrowsingListings.
+    const earlyBrowsingListings = await this.resolveBrowsingListings(businessId, niche, visitorText, preliminaryChunkTextForBrowsing);
+
     // Zero retrieved chunks means there's nothing to ground the model on — never send an empty-context
     // prompt and hope it abstains on its own, that's how it hallucinates confidently. This check
-    // runs before anything else, unchanged.
-    const preliminaryChunks = await retrieveRelevantChunks(this.prisma, businessId, visitorText);
-    if (preliminaryChunks.length === 0) {
+    // runs before anything else, unless a browsing-listing match was already found above.
+    if (preliminaryChunks.length === 0 && !earlyBrowsingListings) {
       return {
         text: NO_CONTEXT_FALLBACK,
         abstained: true,
@@ -612,10 +620,9 @@ export class ChatService {
       };
     }
 
-    // Resolve browsing-listing cards BEFORE building the final prompt / calling the LLM, so the
-    // model can be told cards are already attached and must not re-enumerate specs in prose.
-    const preliminaryChunkText = preliminaryChunks.map((c) => c.content).join("\n\n").slice(0, 4000);
-    const browsingListings = await this.resolveBrowsingListings(businessId, niche, visitorText, preliminaryChunkText);
+    // Already resolved above (needed before the zero-chunk abstention check) — reuse it rather
+    // than querying twice.
+    const browsingListings = earlyBrowsingListings;
 
     const { systemPrompt, prompt, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
       await this.buildChatPrompt(businessId, conversationId, visitorText, { listingsAttached: Boolean(browsingListings) });
@@ -751,10 +758,17 @@ export class ChatService {
       return { message: assistantMessage, escalated: false };
     }
 
-    // Zero retrieved chunks means there's nothing to ground the model on — this check runs before
-    // everything else, unchanged.
     const preliminaryChunks = await retrieveRelevantChunks(this.prisma, businessId, visitorText);
-    if (preliminaryChunks.length === 0) {
+    const preliminaryChunkTextForBrowsing = preliminaryChunks.map((c) => c.content).join("\n\n").slice(0, 4000);
+    // Real listings live in the structured Listing table, not in document chunks — a browsing
+    // question can legitimately score below the chunk-relevance floor even though the business has
+    // real inventory. Check this BEFORE the zero-chunk abstention, or a real browsing query gets
+    // abstained before ever reaching resolveBrowsingListings.
+    const earlyBrowsingListings = await this.resolveBrowsingListings(businessId, niche, visitorText, preliminaryChunkTextForBrowsing);
+
+    // Zero retrieved chunks means there's nothing to ground the model on — this check runs before
+    // everything else, unless a browsing-listing match was already found above.
+    if (preliminaryChunks.length === 0 && !earlyBrowsingListings) {
       onDelta(NO_CONTEXT_FALLBACK);
       const assistantMessage = await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: NO_CONTEXT_FALLBACK, answerSource: "abstained" },
@@ -777,11 +791,9 @@ export class ChatService {
       return { message: assistantMessage, escalated: false };
     }
 
-    // Resolve browsing-listing cards BEFORE streaming the LLM's answer — the visitor must never
-    // see prose streamed in before cards would've been attached, and the model needs to know cards
-    // are already attached so it doesn't re-enumerate specs in prose.
-    const preliminaryChunkText = preliminaryChunks.map((c) => c.content).join("\n\n").slice(0, 4000);
-    const browsingListings = await this.resolveBrowsingListings(businessId, niche, visitorText, preliminaryChunkText);
+    // Already resolved above (needed before the zero-chunk abstention check) — reuse it rather
+    // than querying twice.
+    const browsingListings = earlyBrowsingListings;
 
     const { systemPrompt, prompt, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
       await this.buildChatPrompt(businessId, conversationId, visitorText, { listingsAttached: Boolean(browsingListings) });
