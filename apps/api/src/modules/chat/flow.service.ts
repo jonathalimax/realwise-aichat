@@ -8,11 +8,30 @@ import { generateFromGateway } from "../../inference/gateway-client";
 import { retrieveRelevantChunks } from "./knowledge-retrieval";
 import { safeHttpUrl } from "../../common/safe-http-url";
 import { ListingsService, ChatQueryFilters } from "../listings/listings.service";
+import { BookingsService } from "../bookings/bookings.service";
+import { AvailabilityService } from "../bookings/availability.service";
+import { CalendarService } from "../calendar/calendar.service";
 
 // Scripted nodes that are supposed to hand the visitor off to a real human WhatsApp number —
 // their flow-JSON message templates have placeholders ({numero}, {espera}) that nothing ever
 // resolves, since the flow engine has no concept of "this node means: build a real wa.me link."
 const WHATSAPP_HANDOFF_NODE_IDS = new Set(["handoff_whats", "handoff_whatsapp"]);
+
+// Scripted day/time-picking nodes that used to show fixed "Hoje"/"Amanhã"/"{horario_1..3}"
+// placeholder bubbles with no real backend effect — now backed by AvailabilityService.computeSlots
+// when the business has configured real availability rules.
+const BOOKING_DAY_NODE_IDS = new Set(["visita_dia", "agend_dia"]);
+const BOOKING_PERIOD_NODE_IDS = new Set(["visita_periodo", "agend_periodo"]);
+const BOOKING_TIME_NODE_IDS = new Set(["visita_horario", "agend_horario"]);
+
+// Terminal confirmation nodes reached right after the visitor taps the final "✅ Confirmar"
+// bubble — these are where a real Appointment should actually be created.
+const BOOKING_CONFIRM_NODE_IDS = new Set(["visita_confirmada", "agend_ok"]);
+
+// Only "visita_local" (in-person) exists as a modeled AppointmentType today (see AppointmentType
+// enum in packages/db/prisma/schema.prisma) — both the imobiliaria property visit and the
+// concessionaria test-drive/showroom-visit flows are in-person, so both map to it.
+const BOOKING_APPOINTMENT_TYPE = "visita_local" as const;
 
 interface FlowBubble {
   label: string;
@@ -121,6 +140,9 @@ export class FlowService {
     private readonly prisma: PrismaService,
     private readonly leads: LeadsService,
     private readonly listingsService: ListingsService,
+    private readonly bookings: BookingsService,
+    private readonly availability: AvailabilityService,
+    private readonly calendar: CalendarService,
   ) {}
 
   // Fire-and-forget, same pattern as ChatService's own recomputeLeadScore — scoring must never
@@ -160,6 +182,14 @@ export class FlowService {
 
     if (WHATSAPP_HANDOFF_NODE_IDS.has(node.id)) {
       return this.resolveWhatsappHandoff(businessId, conversationId, substituted);
+    }
+
+    if (BOOKING_CONFIRM_NODE_IDS.has(node.id)) {
+      const booking = await this.tryCreateBooking(businessId, conversationId, params);
+      // Only short-circuit when the visitor actually came through the real slot-picker (slot_start/
+      // slot_end present in params) — otherwise fall through unchanged to the existing RAG-fallback
+      // confirmation text below (old saved conversation, or business with no availability configured).
+      if (booking) return booking;
     }
 
     if (!PLACEHOLDER_PATTERN.test(substituted)) return { message: substituted };
@@ -261,6 +291,208 @@ export class FlowService {
     });
 
     return { message: "Toque no botão abaixo para continuar no WhatsApp com um atendente ✅", whatsappUrl };
+  }
+
+  // Closes the "scripted booking is cosmetic" gap: visita_confirmada/agend_ok used to always show
+  // a static "{corretor}"/"{vendedor}" RAG-fallback sentence with no real backend effect. When the
+  // visitor actually came through the real slot-picker bubbles (slot_start/slot_end present in
+  // params), this creates a real Appointment via BookingsService (shared with ChatService's own
+  // "agendar" booking-card path, avoiding a FlowService <-> ChatService import cycle) and returns a
+  // message stating the real booked date/time. Returns null when slot_start/slot_end are missing so
+  // the caller falls through to the existing generic confirmation behavior unchanged.
+  private async tryCreateBooking(
+    businessId: string,
+    conversationId: string,
+    params: Record<string, unknown>,
+  ): Promise<{ message: string } | null> {
+    const slotStart = params.slot_start;
+    const slotEnd = params.slot_end;
+    if (typeof slotStart !== "string" || typeof slotEnd !== "string") return null;
+
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) return null;
+    const conversation = await this.prisma.client.conversation.findUnique({ where: { id: conversationId } });
+    if (!conversation) return null;
+
+    const startsAt = new Date(slotStart);
+    const endsAt = new Date(slotEnd);
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || startsAt.getTime() <= Date.now()) {
+      return { message: "Esse horário não é mais válido. Vamos escolher outro horário? 👉 Toque em \"Nenhum serve\" para ver os horários atuais." };
+    }
+
+    // Re-validate the slot is still free right before creating — time passes between the visitor
+    // picking a slot and tapping "Confirmar", and someone else could have booked it meanwhile.
+    // computeSlots already subtracts existing appointments, so this is a cheap, honest re-check.
+    const { configured, slots } = await this.availability.computeSlots(businessId, {
+      appointmentType: BOOKING_APPOINTMENT_TYPE,
+      from: startsAt,
+      to: endsAt,
+    });
+    const stillOpen = configured && slots.some((s) => s.startsAt === startsAt.toISOString() && s.endsAt === endsAt.toISOString());
+    if (!stillOpen) {
+      return { message: "Esse horário acabou de ser reservado por outra pessoa. Vamos escolher outro horário? 👉 Toque em \"Nenhum serve\" para ver os horários atuais." };
+    }
+
+    const serviceName = business.niche === "concessionaria" ? "Test-drive" : "Visita ao imóvel";
+    const appointment = await this.bookings.createAppointmentAndNotify(
+      businessId,
+      conversation.leadId ?? undefined,
+      conversationId,
+      serviceName,
+      startsAt,
+      endsAt,
+      "chat",
+      BOOKING_APPOINTMENT_TYPE,
+    );
+    this.calendar.createEvent(businessId, appointment).catch(() => {});
+
+    const timezone = business.timezone ?? "America/Sao_Paulo";
+    const formatted = startsAt.toLocaleString("pt-BR", { timeZone: timezone, dateStyle: "short", timeStyle: "short" });
+    const label = business.niche === "concessionaria" ? "Agendado" : "Visita agendada";
+    return { message: `${label}! 🎉 Confirmado para ${formatted}.` };
+  }
+
+  // Calendar-day key in the business's own timezone (YYYY-MM-DD) — used to group/filter real
+  // computeSlots() results by the date a visitor tapped, rather than by raw UTC instants.
+  private dateKeyInTimezone(iso: string, timezone: string): string {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
+  }
+
+  private periodoBucket(iso: string, timezone: string): "manha" | "tarde" | "noite" {
+    const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "2-digit", hour12: false }).format(new Date(iso)));
+    if (hour < 12) return "manha";
+    if (hour < 18) return "tarde";
+    return "noite";
+  }
+
+  private formatDateLabel(dateKey: string, timezone: string): string {
+    const [year, month, day] = dateKey.split("-").map(Number);
+    // Weekday-only formatting doesn't need the real timezone offset (we already resolved the
+    // calendar day) — noon UTC on that calendar day avoids any DST-adjacent edge case.
+    const noonUtc = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: "UTC" }).format(noonUtc);
+    const capitalized = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+    return `${capitalized}, ${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}`;
+  }
+
+  private formatTimeLabel(iso: string, timezone: string): string {
+    return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: timezone, hour12: false }).format(new Date(iso));
+  }
+
+  // visita_dia/agend_dia: groups real open slots (next 14 days, capped per computeSlots itself)
+  // by calendar date and emits one bubble per real upcoming date that has at least one slot,
+  // capped at 7 distinct dates. Returns null (meaning: fall back to the existing static
+  // "Hoje"/"Amanhã"/"Esta semana" bubbles) whenever the business hasn't configured real
+  // availability yet — same honesty principle as the listing fallback in resolveMessage().
+  private async dayBubbles(businessId: string, nodeId: string): Promise<FlowBubble[] | null> {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) return null;
+    const timezone = business.timezone ?? "America/Sao_Paulo";
+
+    const now = new Date();
+    const to = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const { configured, slots } = await this.availability.computeSlots(businessId, {
+      appointmentType: BOOKING_APPOINTMENT_TYPE,
+      from: now,
+      to,
+    });
+    if (!configured) return null;
+
+    const dateKeys = [...new Set(slots.map((s) => this.dateKeyInTimezone(s.startsAt, timezone)))].sort().slice(0, 7);
+    if (dateKeys.length === 0) {
+      return [{ label: "Nenhum horário disponível no momento", goto: "handoff" }];
+    }
+
+    const periodoGoto = nodeId === "visita_dia" ? "visita_periodo" : "agend_periodo";
+    return dateKeys.map((dateKey) => ({
+      label: this.formatDateLabel(dateKey, timezone),
+      goto: periodoGoto,
+      params: { booking_date: dateKey },
+    }));
+  }
+
+  // visita_periodo/agend_periodo: kept as a real coarse filter (manhã <12h / tarde 12-18h / fim de
+  // tarde >=18h) once a real date has been picked — only buckets that actually have ≥1 real slot
+  // that day are shown. Falls back to null (static Manhã/Tarde/Fim de tarde bubbles unchanged)
+  // whenever booking_date isn't present in params, i.e. the visitor is on the static fallback path.
+  private async periodoBubbles(businessId: string, nodeId: string, params: Record<string, unknown>): Promise<FlowBubble[] | null> {
+    const dateKey = params.booking_date;
+    if (typeof dateKey !== "string") return null;
+
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) return null;
+    const timezone = business.timezone ?? "America/Sao_Paulo";
+    const dayGoto = nodeId === "visita_periodo" ? "visita_dia" : "agend_dia";
+
+    const [year, month, day] = dateKey.split("-").map(Number);
+    // Widen the query range by a day on each side since the local calendar day in `timezone`
+    // doesn't align with UTC midnight.
+    const from = new Date(Date.UTC(year, month - 1, day - 1, 0, 0, 0));
+    const to = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0));
+    const { configured, slots } = await this.availability.computeSlots(businessId, {
+      appointmentType: BOOKING_APPOINTMENT_TYPE,
+      from,
+      to,
+    });
+    if (!configured) return null;
+
+    const daySlots = slots.filter((s) => this.dateKeyInTimezone(s.startsAt, timezone) === dateKey);
+    const horarioGoto = nodeId === "visita_periodo" ? "visita_horario" : "agend_horario";
+    const buckets: Array<{ key: "manha" | "tarde" | "noite"; label: string }> = [
+      { key: "manha", label: "Manhã" },
+      { key: "tarde", label: "Tarde" },
+      { key: "noite", label: "Fim de tarde" },
+    ];
+    const withSlots = buckets.filter((b) => daySlots.some((s) => this.periodoBucket(s.startsAt, timezone) === b.key));
+    if (withSlots.length === 0) {
+      return [{ label: "Nenhum horário disponível, tente outro dia", goto: dayGoto }];
+    }
+    return withSlots.map((b) => ({ label: b.label, goto: horarioGoto, params: { booking_date: dateKey, booking_periodo: b.key } }));
+  }
+
+  // visita_horario/agend_horario: given the date (and optional period) picked earlier, emits one
+  // bubble per real open time slot, capped at 8. Falls back to null (static {horario_1..3}
+  // placeholder bubbles, which resolveMessage's generic RAG fallback already handles honestly)
+  // whenever booking_date isn't present in params.
+  private async timeBubbles(businessId: string, nodeId: string, params: Record<string, unknown>): Promise<FlowBubble[] | null> {
+    const dateKey = params.booking_date;
+    if (typeof dateKey !== "string") return null;
+
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) return null;
+    const timezone = business.timezone ?? "America/Sao_Paulo";
+    const dayGoto = nodeId === "visita_horario" ? "visita_dia" : "agend_dia";
+    const confirmGoto = nodeId === "visita_horario" ? "visita_confirmar" : "agend_confirmar";
+
+    const [year, month, day] = dateKey.split("-").map(Number);
+    const from = new Date(Date.UTC(year, month - 1, day - 1, 0, 0, 0));
+    const to = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0));
+    const { configured, slots } = await this.availability.computeSlots(businessId, {
+      appointmentType: BOOKING_APPOINTMENT_TYPE,
+      from,
+      to,
+    });
+    if (!configured) return null;
+
+    let daySlots = slots.filter((s) => this.dateKeyInTimezone(s.startsAt, timezone) === dateKey);
+    const periodo = params.booking_periodo;
+    if (typeof periodo === "string") {
+      daySlots = daySlots.filter((s) => this.periodoBucket(s.startsAt, timezone) === periodo);
+    }
+    daySlots = daySlots.slice(0, 8);
+
+    if (daySlots.length === 0) {
+      // Defends against a race (another visitor booked every slot for that date/period between
+      // the day bubble appearing and this tap) — route back to the date-picker honestly instead
+      // of showing broken/empty time bubbles.
+      return [{ label: "Nenhum horário disponível, tente outro dia", goto: dayGoto }];
+    }
+
+    return daySlots.map((s) => ({
+      label: this.formatTimeLabel(s.startsAt, timezone),
+      goto: confirmGoto,
+      params: { slot_start: s.startsAt, slot_end: s.endsAt, booking_date: dateKey },
+    }));
   }
 
   // Turns the flow's accumulated filter params into a retrieval query that actually resembles
@@ -380,13 +612,21 @@ export class FlowService {
   // "quais imóveis vocês tem", "mostra os carros disponíveis") so the RAG chat path (ChatService)
   // can also surface structured cards instead of only a prose paragraph — NOT a general NLU
   // classifier, just enough to avoid running the extra extraction call on every unrelated question.
-  isListingQuery(visitorText: string): boolean {
+  // `chunkText` is optional and, when given, lets intent-only messages ("me mostre os
+  // disponíveis") still count as a listing query when the item itself was only named earlier in
+  // the conversation (e.g. "Creta" a few turns back) — the retrieved chunk text is grounded in
+  // what the RAG pipeline actually found for THIS turn, so if it genuinely contains item words,
+  // that's a more reliable signal than requiring the item word in this exact message's raw text.
+  isListingQuery(visitorText: string, chunkText?: string): boolean {
     const normalized = normalize(visitorText);
     const itemWords = ["imovel", "imoveis", "casa", "casas", "apartamento", "apartamentos", "carro", "carros", "veiculo", "veiculos"];
     const intentWords = ["disponivel", "disponiveis", "tem", "tem disponivel", "mostra", "mostre", "ver", "listar", "quais", "opcoes", "opcao"];
     const hasItemWord = itemWords.some((w) => normalized.includes(w));
     const hasIntentWord = intentWords.some((w) => normalized.includes(w));
-    return hasItemWord && hasIntentWord;
+    if (hasItemWord && hasIntentWord) return true;
+    if (!hasIntentWord || !chunkText) return false;
+    const normalizedChunk = normalize(chunkText);
+    return itemWords.some((w) => normalizedChunk.includes(w));
   }
 
   // Public entry point for ChatService's free-text RAG path — same grounding discipline as the
@@ -541,6 +781,9 @@ export class FlowService {
         return types.map((name) => ({ label: name, goto: "busca_preco", params: { tipo: name } }));
       }
       default:
+        if (BOOKING_DAY_NODE_IDS.has(nodeId)) return this.dayBubbles(businessId, nodeId);
+        if (BOOKING_PERIOD_NODE_IDS.has(nodeId)) return this.periodoBubbles(businessId, nodeId, params);
+        if (BOOKING_TIME_NODE_IDS.has(nodeId)) return this.timeBubbles(businessId, nodeId, params);
         return null;
     }
   }
@@ -582,6 +825,12 @@ export class FlowService {
       case "busca_tipo":
         return typeof bubble.params?.tipo === "string" && bubble.params.tipo !== "any";
       default:
+        // Day/period bubbles are replaced in full by the real dynamic options when they fire —
+        // mixing the old static "Hoje"/"Manhã" bubbles alongside real dates/periods would be
+        // confusing. Time bubbles only strip the unresolved {horario_N} placeholders, keeping the
+        // "Nenhum serve" nav bubble intact as a real fallback regardless.
+        if (BOOKING_DAY_NODE_IDS.has(nodeId) || BOOKING_PERIOD_NODE_IDS.has(nodeId)) return true;
+        if (BOOKING_TIME_NODE_IDS.has(nodeId)) return typeof bubble.label === "string" && bubble.label.startsWith("{horario_");
         return false;
     }
   }

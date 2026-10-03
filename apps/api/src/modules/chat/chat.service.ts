@@ -394,7 +394,7 @@ export class ChatService {
   // get a best-effort structured `listings` array alongside the prose answer, using the same
   // retrieved chunk text — same strict grounding discipline as the scripted "resultados" node.
   private async maybeExtractListings(businessId: string, visitorText: string, chunkText: string) {
-    if (!this.flow.isListingQuery(visitorText)) return undefined;
+    if (!this.flow.isListingQuery(visitorText, chunkText)) return undefined;
 
     // Free text has no structured filter params the way the scripted flow does — if the business
     // has real extracted inventory, ground on that directly (most-recently-updated active
@@ -648,7 +648,7 @@ export class ChatService {
       throw new ForbiddenException("Invalid appointment duration");
     }
 
-    const appointment = await this.bookings.createAppointment(
+    const appointment = await this.bookings.createAppointmentAndNotify(
       businessId,
       leadId,
       conversationId,
@@ -668,12 +668,6 @@ export class ChatService {
         answerSource: "fixed_flow",
       },
     });
-    this.notifyOwner(
-      businessId,
-      `Novo agendamento: ${escapeHtml(serviceName)}`,
-      `<p>Um cliente marcou <strong>${escapeHtml(serviceName)}</strong> para <strong>${escapeHtml(start.toLocaleString("pt-BR"))}</strong>.</p>
-       <p>Confira e confirme no painel: Agenda.</p>`,
-    );
     this.recomputeLeadScore(businessId, leadId ?? conversation.leadId);
     return appointment;
   }
