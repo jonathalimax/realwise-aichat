@@ -77,6 +77,12 @@ enum ListingStatus {
   inactive
 }
 
+enum AppointmentType {
+  presencial
+  remoto
+  visita_local
+}
+
 model Business {
   id              String         @id @default(uuid())
   name            String
@@ -89,6 +95,7 @@ model Business {
   logoUrl         String?
   brandColor      String?
   timezone        String         @default("America/Sao_Paulo")
+  defaultSlotDurationMinutes Int @default(60)
   address         String?
   websiteUrl      String?
   websiteContentHash String?
@@ -314,6 +321,13 @@ model BookingSlot {
   validFrom       DateTime?
   validUntil      DateTime?
   isBlocked       Boolean   @default(false)
+  appointmentType AppointmentType @default(presencial)
+  listingId       String?
+  listing         Listing?  @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  exceptionDate   DateTime?
+
+  @@index([businessId, appointmentType])
+  @@index([businessId, listingId])
 }
 
 model Appointment {
@@ -332,6 +346,12 @@ model Appointment {
   notes                   String?
   ownerConfirmedAt        DateTime?
   externalCalendarEventId String?
+  appointmentType         AppointmentType   @default(presencial)
+  listingId               String?
+  listing                 Listing?          @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  locationAddress         String?
+
+  @@index([businessId, startsAt])
 }
 
 model CalendarIntegration {
@@ -492,6 +512,8 @@ model Listing {
   deletedAt     DateTime?
 
   images        ListingImage[]
+  bookingSlots  BookingSlot[]
+  appointments  Appointment[]
 
   @@unique([businessId, dedupKey])
   @@unique([businessId, referenceCode])
