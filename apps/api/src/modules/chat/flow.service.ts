@@ -429,11 +429,13 @@ export class FlowService {
         const brands = await this.extractOptions(businessId, "marca", BRAND_PROMPT);
         const slice = nodeId === "busca_marca_mais" ? brands.slice(4) : brands.slice(0, 4);
         const goto = nodeId === "troca_marca" ? "troca_modelo" : "busca_modelo";
-        const paramKey = nodeId === "troca_marca" ? null : "marca";
+        // troca_marca previously passed no params at all, so the brand tapped here never reached
+        // troca_modelo — every trade-in model lookup silently fell back to marca="any" and came
+        // back empty. It needs the same "marca" param key as busca_marca.
         return slice.map((name) => ({
           label: name,
           goto,
-          ...(paramKey ? { params: { [paramKey]: name } } : {}),
+          params: { marca: name },
         }));
       }
       case "busca_modelo":
@@ -448,7 +450,7 @@ export class FlowService {
         return models.map((name) => ({
           label: name,
           goto,
-          ...(nodeId === "busca_modelo" ? { params: { modelo: name } } : {}),
+          params: { modelo: name },
         }));
       }
       case "busca_categoria": {
