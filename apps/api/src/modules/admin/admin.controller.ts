@@ -70,6 +70,11 @@ export class AdminController {
     return this.admin.metricsTimeseries(parseDays(days));
   }
 
+  @Get("metrics/extraction-cost")
+  extractionCost(@Query("days") days?: string) {
+    return this.admin.extractionCostMetrics(parseDays(days));
+  }
+
   @Get("metrics/confidence-distribution")
   confidenceDistribution() {
     return this.admin.confidenceDistribution();

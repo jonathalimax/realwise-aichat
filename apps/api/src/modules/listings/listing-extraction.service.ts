@@ -269,7 +269,9 @@ export class ListingExtractionService {
     for (const window of windowsToProcess) {
       try {
         const result = await generateFromGateway({
-          purpose: "extraction",
+          // Split from chat-path "extraction" so admin cost monitoring can isolate background
+          // scraper spend from live visitor-chat extraction calls.
+          purpose: "listing_extraction",
           businessId,
           systemPrompt,
           prompt: `Gere o array JSON de anúncios a partir do trecho abaixo.\n\nTrecho:\n${window}`,

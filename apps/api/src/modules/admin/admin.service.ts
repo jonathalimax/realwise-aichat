@@ -271,6 +271,82 @@ export class AdminService {
     return Array.from(buckets.values());
   }
 
+  // Splits "listing_extraction" (background scraper pipeline) from "extraction" (legacy +
+  // chat-path calls) so admin cost monitoring can isolate background scraper spend from the
+  // visitor-facing chat path that shares the same model/pricing machinery.
+  async extractionCostMetrics(days = 14) {
+    const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+    const calls = await this.prisma.client.llmCallLog.findMany({
+      where: { createdAt: { gte: since }, purpose: { in: ["listing_extraction", "extraction"] } },
+      select: {
+        purpose: true,
+        provider: true,
+        model: true,
+        inputTokens: true,
+        outputTokens: true,
+        latencyMs: true,
+        error: true,
+        createdAt: true,
+      },
+    });
+
+    type Group = {
+      calls: number;
+      failedCalls: number;
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      costUsd: number;
+      avgLatencyMs: number;
+    };
+    const makeGroup = (): Group & { latencySum: number; latencyCount: number } => ({
+      calls: 0,
+      failedCalls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      costUsd: 0,
+      avgLatencyMs: 0,
+      latencySum: 0,
+      latencyCount: 0,
+    });
+    const pipeline = makeGroup();
+    const chatPath = makeGroup();
+
+    for (const call of calls) {
+      const group = call.purpose === "listing_extraction" ? pipeline : chatPath;
+      group.calls++;
+      group.inputTokens += call.inputTokens;
+      group.outputTokens += call.outputTokens;
+      group.totalTokens += call.inputTokens + call.outputTokens;
+      if (call.error !== null) {
+        group.failedCalls++;
+        continue;
+      }
+      group.costUsd += estimateCostUsd(call.provider, call.model, call.inputTokens, call.outputTokens);
+      if (typeof call.latencyMs === "number") {
+        group.latencySum += call.latencyMs;
+        group.latencyCount++;
+      }
+    }
+
+    const finalize = ({ latencySum, latencyCount, ...rest }: ReturnType<typeof makeGroup>): Group => ({
+      ...rest,
+      avgLatencyMs: latencyCount > 0 ? latencySum / latencyCount : 0,
+    });
+
+    const pipelineResult = finalize(pipeline);
+    const chatPathResult = finalize(chatPath);
+
+    return {
+      days,
+      pipeline: pipelineResult,
+      chatPath: chatPathResult,
+      totalCostUsd: pipelineResult.costUsd + chatPathResult.costUsd,
+      totalTokens: pipelineResult.totalTokens + chatPathResult.totalTokens,
+    };
+  }
+
   async confidenceDistribution() {
     const businesses = await this.prisma.client.business.findMany({
       where: { deletedAt: null },

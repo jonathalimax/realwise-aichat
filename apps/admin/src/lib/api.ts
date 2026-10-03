@@ -27,6 +27,8 @@ export const bulkSuspendTenants = (ids: string[]) =>
 export const getGlobalMetrics = () => request("/admin/metrics");
 export const getMetricsTimeseries = (days?: number) => request(`/admin/metrics/timeseries${days ? `?days=${days}` : ""}`);
 export const getConfidenceDistribution = () => request("/admin/metrics/confidence-distribution");
+export const getExtractionCostMetrics = (days?: number) =>
+  request(`/admin/metrics/extraction-cost${days ? `?days=${days}` : ""}`);
 export const getConversationInsights = (days?: number) =>
   request(`/admin/conversations/insights${days ? `?days=${days}` : ""}`);
 export const getPlatformConfig = () => request("/admin/platform-config");

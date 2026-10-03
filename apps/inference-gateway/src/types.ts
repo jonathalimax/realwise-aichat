@@ -1,4 +1,4 @@
-export type InferencePurpose = "chat" | "chips" | "summary" | "extraction" | "eval" | "rerank";
+export type InferencePurpose = "chat" | "chips" | "summary" | "extraction" | "listing_extraction" | "eval" | "rerank";
 
 export interface GenerateRequest {
   purpose: InferencePurpose;

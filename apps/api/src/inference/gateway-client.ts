@@ -2,7 +2,7 @@ const GATEWAY_URL = process.env.INFERENCE_GATEWAY_URL ?? "http://localhost:3002"
 const GATEWAY_TOKEN = process.env.INFERENCE_GATEWAY_TOKEN;
 
 export interface GatewayGenerateParams {
-  purpose: "chat" | "summary" | "extraction" | "eval" | "rerank";
+  purpose: "chat" | "chips" | "summary" | "extraction" | "listing_extraction" | "eval" | "rerank";
   businessId: string;
   systemPrompt: string;
   prompt: string;

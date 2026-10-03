@@ -2,8 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, Activity, MessageSquare, UserCheck, DollarSign, CheckCircle2, Clock, Ban, MoreHorizontal } from "lucide-react";
-import { getTenants, getGlobalMetrics, getMetricsTimeseries, getConfidenceDistribution, bulkSuspendTenants } from "../lib/api";
+import { Users, Activity, MessageSquare, UserCheck, DollarSign, CheckCircle2, Clock, Ban, MoreHorizontal, FileSearch } from "lucide-react";
+import {
+  getTenants,
+  getGlobalMetrics,
+  getMetricsTimeseries,
+  getConfidenceDistribution,
+  getExtractionCostMetrics,
+  bulkSuspendTenants,
+} from "../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from "../components/ui/card";
 import { Badge, statusToBadgeVariant } from "../components/ui/badge";
 import { Checkbox } from "../components/ui/checkbox";
@@ -65,6 +72,7 @@ export default function TenantsPage() {
   const [metrics, setMetrics] = useState<any>(null);
   const [timeseries, setTimeseries] = useState<any[]>([]);
   const [distribution, setDistribution] = useState<any[]>([]);
+  const [extractionCost, setExtractionCost] = useState<any>(null);
   const [range, setRange] = useState<"7" | "30" | "90">("30");
   const [filter, setFilter] = useState("");
   const [statuses, setStatuses] = useState<string[]>([]);
@@ -79,6 +87,7 @@ export default function TenantsPage() {
 
   useEffect(() => {
     getMetricsTimeseries(Number(range)).then(setTimeseries).catch(() => setTimeseries([]));
+    getExtractionCostMetrics(Number(range)).then(setExtractionCost).catch(() => {});
   }, [range]);
 
   const filteredTenants = useMemo(() => {
@@ -142,6 +151,45 @@ export default function TenantsPage() {
           icon={<DollarSign className="h-3.5 w-3.5 text-ink-soft" strokeWidth={1.5} />}
         />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Custo de extração automática</CardTitle>
+          <CardDescription>Janela de {range} dias — pipeline de scraping em segundo plano vs. extração na rota do chat.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              label={`Custo extração (${range}d)`}
+              value={extractionCost ? formatCostUsd(extractionCost.pipeline.costUsd) : "—"}
+              context="Pipeline de scraping/anúncios — estimativa, exclui embeddings"
+              icon={<FileSearch className="h-3.5 w-3.5 text-ink-soft" strokeWidth={1.5} />}
+            />
+            <StatCard
+              label={`Tokens extração (${range}d)`}
+              value={extractionCost ? extractionCost.pipeline.totalTokens.toLocaleString("pt-BR") : "—"}
+              context={
+                extractionCost
+                  ? `${extractionCost.pipeline.inputTokens.toLocaleString("pt-BR")} entrada / ${extractionCost.pipeline.outputTokens.toLocaleString("pt-BR")} saída`
+                  : undefined
+              }
+              icon={<FileSearch className="h-3.5 w-3.5 text-ink-soft" strokeWidth={1.5} />}
+            />
+            <StatCard
+              label="Chamadas de extração"
+              value={extractionCost ? extractionCost.pipeline.calls : "—"}
+              context={extractionCost ? `${extractionCost.pipeline.failedCalls} com erro` : undefined}
+              icon={<FileSearch className="h-3.5 w-3.5 text-ink-soft" strokeWidth={1.5} />}
+            />
+            <StatCard
+              label={`Custo extração no chat (${range}d)`}
+              value={extractionCost ? formatCostUsd(extractionCost.chatPath.costUsd) : "—"}
+              context="Extração na rota do visitante (inclui histórico antes da separação)"
+              icon={<FileSearch className="h-3.5 w-3.5 text-ink-soft" strokeWidth={1.5} />}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
