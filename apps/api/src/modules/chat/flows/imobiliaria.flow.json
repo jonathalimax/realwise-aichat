@@ -386,7 +386,7 @@
     },
     "al_garantias": {
       "id": "al_garantias",
-      "message": "Aceitamos estas garantias. Qual quer conhecer?",
+      "message": "Aceitamos fiador, seguro-fiança, caução (depósito) ou título de capitalização. Qual quer conhecer melhor?",
       "bubbles": [
         { "label": "Fiador", "goto": "gar_fiador" },
         { "label": "Seguro-fiança", "goto": "gar_seguro" },
