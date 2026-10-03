@@ -52,6 +52,11 @@ interface ExtractedListing {
   year?: number;
   mileageKm?: number;
   images: string[];
+  // Per-document provenance — the document this item was extracted from, and that document's own
+  // authoritative `Fonte: <url>` URL (when present and non-boilerplate). Used to override a
+  // hallucinated/misattributed rawItem.url and to populate sourceDocumentId/sourceUrl.
+  documentId: string;
+  pageUrl?: string;
 }
 
 // Same discipline as FlowService's existing extractListings(): never invent a field, omit rather
@@ -68,7 +73,7 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
     "'transaction' só deve ser preenchido se o texto disser explicitamente aluguel ou venda.",
     "'city'/'state' só devem ser preenchidos se citados explicitamente no texto daquele item.",
     "'images' deve conter TODAS as URLs de 'Foto: <url>' claramente associadas a esse item específico (não apenas a primeira) — nunca reaproveite uma 'Foto:' distante no texto ou que pareça ser logo/ícone do site.",
-    "'url' só deve vir de um link real no formato [texto](url) ou de uma URL http(s) explícita no texto daquele item.",
+    "'url' só deve vir de um link real no formato [texto](url) ou de uma URL http(s) explícita no texto daquele item, copiada caractere por caractere exatamente como aparece no texto — NUNCA construa, monte ou infira uma URL a partir de um código de referência, slug ou padrão observado em outras URLs, e NUNCA use um link de navegação/home do site como se fosse a URL do item.",
     "Se nenhum item real e distinto puder ser identificado no trecho, responda com um array vazio [].",
     "IMPORTANTE: use EXATAMENTE os nomes de campos em inglês especificados acima (title, price, addressLine, etc) — nunca traduza as chaves do JSON para português.",
     "O VALOR de 'listingType' deve usar obrigatoriamente um destes termos em português, conforme o tipo de anúncio:",
@@ -76,6 +81,14 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
     "Veículos: hatch, seda, suv, picape, 7lugares, premium, eletrico, moto.",
     "Nunca use termos em inglês (ex: 'house', 'apartment', 'land') nem valores fora dessa lista para 'listingType' — escolha o termo da lista que melhor descreve o item.",
   ].join("\n");
+
+// Filename-based fallback for page-chrome images (logo, banners, etc) — never treat these as a
+// real per-listing photo. Mirrors apps/worker/src/website-extract.ts's CHROME_IMAGE_PATTERN.
+const CHROME_IMAGE_PATTERN = /(logo|favicon|icon|sprite|avatar|placeholder|banner|\/shared\/|watermark|selo)/i;
+
+// Matches the per-page `Fonte: <url>` annotation appended to each document's extractedMarkdown by
+// apps/worker/src/processors/website-sync.ts — this is that document's own authoritative URL.
+const SOURCE_URL_PATTERN = /\nFonte:\s*(\S+)$/;
 
 function windowText(text: string, size: number): string[] {
   const windows: string[] = [];
@@ -259,14 +272,51 @@ export class ListingExtractionService {
       where: { businessId, status: "processed", extractedMarkdown: { not: null } },
       select: { id: true, extractedMarkdown: true },
     });
-    const combinedText = documents.map((d) => d.extractedMarkdown ?? "").join("\n\n");
-    if (!combinedText.trim()) return noop;
+    if (documents.length === 0) return noop;
 
-    const windows = windowText(combinedText, WINDOW_SIZE);
-    const windowsToProcess = windows.slice(0, MAX_WINDOWS_PER_RUN);
-    if (windows.length > MAX_WINDOWS_PER_RUN) {
+    // Window PER DOCUMENT instead of concatenating every document into one blob first — a
+    // property's canonical `Fonte: <url>` only reliably sits at the END of its OWN document, so
+    // windowing per-document keeps it co-located with that property's actual data instead of
+    // landing in some other property's window after concatenation.
+    interface DocWindows {
+      documentId: string;
+      pageUrl?: string;
+      windows: string[];
+    }
+    const perDocument: DocWindows[] = [];
+    for (const doc of documents) {
+      const text = doc.extractedMarkdown ?? "";
+      if (!text.trim()) continue;
+      const sourceMatch = text.match(SOURCE_URL_PATTERN);
+      const candidateUrl = sourceMatch ? safeHttpUrl(sourceMatch[1]) : undefined;
+      const pageUrl = candidateUrl && !isBoilerplateUrl(candidateUrl) ? candidateUrl : undefined;
+      perDocument.push({ documentId: doc.id, pageUrl, windows: windowText(text, WINDOW_SIZE) });
+    }
+    if (perDocument.length === 0) return noop;
+
+    // Distribute the MAX_WINDOWS_PER_RUN budget across documents round-robin, so no document is
+    // silently dropped entirely — flattening all windows and truncating at the cap would starve
+    // documents that happen to sort later.
+    type WindowJob = { documentId: string; pageUrl?: string; window: string };
+    const windowJobs: WindowJob[] = [];
+    const totalAvailableWindows = perDocument.reduce((sum, d) => sum + d.windows.length, 0);
+    {
+      let round = 0;
+      let added = true;
+      while (added && windowJobs.length < MAX_WINDOWS_PER_RUN) {
+        added = false;
+        for (const doc of perDocument) {
+          if (windowJobs.length >= MAX_WINDOWS_PER_RUN) break;
+          if (round >= doc.windows.length) continue;
+          windowJobs.push({ documentId: doc.documentId, pageUrl: doc.pageUrl, window: doc.windows[round] });
+          added = true;
+        }
+        round++;
+      }
+    }
+    if (totalAvailableWindows > MAX_WINDOWS_PER_RUN) {
       this.logger.warn(
-        `extractForBusiness ${businessId}: ${windows.length} windows found, only processing first ${MAX_WINDOWS_PER_RUN} — some content skipped`,
+        `extractForBusiness ${businessId}: ${totalAvailableWindows} windows found across ${perDocument.length} documents, only processing ${windowJobs.length} (round-robin across documents) — some content skipped`,
       );
     }
 
@@ -275,7 +325,7 @@ export class ListingExtractionService {
     const systemPrompt = SYSTEM_PROMPT_TEMPLATE(business.name);
     let failedWindows = 0;
 
-    for (const window of windowsToProcess) {
+    for (const { documentId, pageUrl, window } of windowJobs) {
       try {
         const result = await generateFromGateway({
           // Split from chat-path "extraction" so admin cost monitoring can isolate background
@@ -314,7 +364,31 @@ export class ListingExtractionService {
           const rawImages = Array.isArray(rawItem.images) ? rawItem.images : [];
           const images = rawImages
             .map((img) => safeHttpUrl(img))
-            .filter((img): img is string => Boolean(img));
+            .filter((img): img is string => Boolean(img))
+            .filter((img) => {
+              if (CHROME_IMAGE_PATTERN.test(img)) return false;
+              if (isBoilerplateUrl(img)) return false;
+              if (!window.includes(img)) {
+                this.logger.warn(
+                  `extractForBusiness ${businessId}: rejected image URL not verbatim in source window — "${img}"`,
+                );
+                return false;
+              }
+              return true;
+            });
+
+          // rawItem.url rarely survives a verbatim check unchanged by the model's paraphrasing;
+          // validate it first, then let the document's own `pageUrl` win for single-listing
+          // detail pages (Issue 3.5) — pageUrl is already validated+non-boilerplate above.
+          let candidateRawUrl = safeHttpUrl(rawItem.url);
+          if (candidateRawUrl && isBoilerplateUrl(candidateRawUrl)) candidateRawUrl = undefined;
+          if (candidateRawUrl && !window.includes(candidateRawUrl)) {
+            this.logger.warn(
+              `extractForBusiness ${businessId}: rejected item URL not verbatim in source window — "${candidateRawUrl}"`,
+            );
+            candidateRawUrl = undefined;
+          }
+          const resolvedUrl = pageUrl ?? candidateRawUrl;
 
           extracted.push({
             title: rawItem.title,
@@ -322,7 +396,9 @@ export class ListingExtractionService {
             priceText,
             priceCents: parsedPrice?.priceCents,
             pricePeriod: parsedPrice?.pricePeriod,
-            url: safeHttpUrl(rawItem.url),
+            url: resolvedUrl,
+            documentId,
+            pageUrl,
             addressLine: parseRealStr(rawItem.addressLine),
             neighborhood: parseRealStr(rawItem.neighborhood),
             city: parseRealStr(rawItem.city),
@@ -455,6 +531,14 @@ export class ListingExtractionService {
         dataToWrite[key] = value;
       }
 
+      // System provenance fields — deliberately kept OUTSIDE the overriddenFields filter above:
+      // they describe where this run's data came from, not owner-editable listing content, so an
+      // owner override on e.g. `url` must never also freeze stale provenance.
+      const provenanceData = {
+        sourceDocumentId: item.documentId,
+        sourceUrl: item.pageUrl ?? null,
+      };
+
       if (existing) {
         // Self-heal the dedupKey when matched via fuzzy title/price instead of an exact key hit,
         // so a future run with this same (new) URL phrasing hits the primary key match directly
@@ -467,6 +551,7 @@ export class ListingExtractionService {
           where: { id: existing.id },
           data: {
             ...dataToWrite,
+            ...provenanceData,
             ...(canHealDedupKey ? { dedupKey } : {}),
             lastSeenInSourceAt: runStartedAt,
             status: existing.status === "inactive" ? "active" : existing.status,
@@ -517,6 +602,7 @@ export class ListingExtractionService {
                 extractedAt: runStartedAt,
                 lastSeenInSourceAt: runStartedAt,
                 ...fullData,
+                ...provenanceData,
                 title: item.title,
               },
             });
@@ -557,7 +643,7 @@ export class ListingExtractionService {
     // a couple of items and so slipped past a zero-extracted-only guard, retiring 27 real listings
     // down to 2). A partial-failure run must never be trusted to prove absence.
     let retired = 0;
-    const failureRate = windowsToProcess.length > 0 ? failedWindows / windowsToProcess.length : 0;
+    const failureRate = windowJobs.length > 0 ? failedWindows / windowJobs.length : 0;
     const runCoverageUnreliable = extracted.length === 0 || failureRate > 0.2;
     if (runCoverageUnreliable) {
       const existingActiveCount = await this.prisma.client.listing.count({
@@ -565,7 +651,7 @@ export class ListingExtractionService {
       });
       if (existingActiveCount > 0) {
         this.logger.warn(
-          `extractForBusiness ${businessId}: unreliable run (${failedWindows}/${windowsToProcess.length} windows failed, ${extracted.length} items extracted) with ${existingActiveCount} active listing(s) existing — skipping inactive sweep to avoid wiping inventory on a failed run`,
+          `extractForBusiness ${businessId}: unreliable run (${failedWindows}/${windowJobs.length} windows failed, ${extracted.length} items extracted) with ${existingActiveCount} active listing(s) existing — skipping inactive sweep to avoid wiping inventory on a failed run`,
         );
         return { created, updated, retired: 0 };
       }

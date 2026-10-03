@@ -11,6 +11,7 @@ export interface ListingItem {
   description?: string;
   url?: string;
   imageUrl?: string;
+  images?: string[];
   transaction?: string;
 }
 
@@ -224,7 +225,7 @@ export class ListingsService {
         ...priceCondition,
       },
       orderBy,
-      include: { images: { orderBy: { ordinal: "asc" }, take: 1 } },
+      include: { images: { orderBy: { ordinal: "asc" }, take: 12 } },
       skip: filters.offset ?? 0,
       take: limit,
     });
@@ -245,7 +246,10 @@ export class ListingsService {
     images: { url: string }[];
   }): ListingItem {
     const url = safeHttpUrl(row.url ?? undefined);
-    const imageUrl = safeHttpUrl(row.images[0]?.url);
+    const images = row.images
+      .map((image) => safeHttpUrl(image.url))
+      .filter((imageUrl): imageUrl is string => Boolean(imageUrl));
+    const imageUrl = images[0];
     return {
       id: row.id,
       title: row.title,
@@ -253,6 +257,7 @@ export class ListingsService {
       ...(row.description ? { description: row.description } : {}),
       ...(url ? { url } : {}),
       ...(imageUrl ? { imageUrl } : {}),
+      ...(images.length ? { images } : {}),
       ...(row.transaction ? { transaction: row.transaction } : {}),
     };
   }
@@ -311,7 +316,7 @@ export class ListingsService {
 
     const rows = await this.prisma.client.listing.findMany({
       where: { businessId, status: "active", deletedAt: null },
-      include: { images: { orderBy: { ordinal: "asc" }, take: 1 } },
+      include: { images: { orderBy: { ordinal: "asc" }, take: 12 } },
     });
 
     const matches = rows.filter((row) => {

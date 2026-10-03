@@ -126,6 +126,7 @@ export interface ListingItem {
   description?: string;
   url?: string;
   imageUrl?: string;
+  images?: string[];
 }
 
 // Node ids whose placeholder message is genuinely listing-shaped (a set of distinct real items,
@@ -662,7 +663,10 @@ export class FlowService {
     if (listing.priceText) parts.push(listing.priceText);
 
     const message = `${parts.length > 0 ? parts.join(" — ") : listing.title}. O que você quer ver?`;
-    const image = listing.images[0]?.url ? safeHttpUrl(listing.images[0].url) : undefined;
+    const images = listing.images
+      .map((img) => safeHttpUrl(img.url))
+      .filter((img): img is string => Boolean(img));
+    const image = images[0];
     const url = safeHttpUrl(listing.url ?? undefined);
     return {
       message,
@@ -673,6 +677,7 @@ export class FlowService {
           ...(listing.priceText ? { price: listing.priceText } : {}),
           ...(url ? { url } : {}),
           ...(image ? { imageUrl: image } : {}),
+          ...(images.length ? { images } : {}),
         },
       ],
     };

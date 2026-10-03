@@ -44,6 +44,7 @@ interface Message {
 function ListingCard({ listing, onOpen }: { listing: Listing; onOpen: (listing: Listing) => void }) {
   const imageUrl = safeHttpUrl(listing.imageUrl);
   const url = safeHttpUrl(listing.url);
+  const [imageFailed, setImageFailed] = useState(false);
   return (
     <Card className="w-56 shrink-0 overflow-hidden">
       <button
@@ -52,15 +53,13 @@ function ListingCard({ listing, onOpen }: { listing: Listing; onOpen: (listing: 
         className="block w-full text-left active:scale-[0.98] transition-transform"
       >
         <div className="flex h-32 w-full items-center justify-center bg-border/40">
-          {imageUrl ? (
+          {imageUrl && !imageFailed ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={imageUrl}
               alt={listing.title}
               className="h-32 w-full object-cover"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
+              onError={() => setImageFailed(true)}
             />
           ) : (
             <span className="text-3xl" aria-hidden>

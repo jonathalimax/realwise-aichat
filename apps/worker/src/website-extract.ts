@@ -21,7 +21,7 @@ const SKIP_EXTENSIONS = /\.(pdf|jpe?g|png|gif|svg|webp|zip|rar|mp4|mp3|avi|mov|d
 // Filename-based fallback for page-chrome images that aren't inside a semantic <header>/<nav>/
 // <footer> (e.g. a logo sitting in a plain <div class="navbar">) — never treat these as a real
 // per-listing photo.
-const CHROME_IMAGE_PATTERN = /(logo|favicon|icon|sprite|avatar|placeholder)/i;
+const CHROME_IMAGE_PATTERN = /(logo|favicon|icon|sprite|avatar|placeholder|banner|\/shared\/|watermark|selo)/i;
 
 // Validates the resolved address at the moment the socket actually connects, closing the
 // TOCTOU window a separate pre-fetch dns.lookup() would leave open to DNS rebinding.
