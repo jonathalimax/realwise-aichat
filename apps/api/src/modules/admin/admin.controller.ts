@@ -54,6 +54,11 @@ export class AdminController {
     return this.admin.confidenceDistribution();
   }
 
+  @Get("conversations/insights")
+  conversationInsights(@Query("days") days?: string) {
+    return this.admin.conversationInsights(parseDays(days));
+  }
+
   @Get("platform-config")
   getPlatformConfig() {
     return this.admin.getPlatformConfig();

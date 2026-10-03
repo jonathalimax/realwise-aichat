@@ -9,6 +9,7 @@ import { logout } from "../lib/api";
 
 const ITEMS = [
   { href: "/", label: "Clientes" },
+  { href: "/conversations", label: "Conversas" },
   { href: "/settings", label: "Configurações" },
 ];
 

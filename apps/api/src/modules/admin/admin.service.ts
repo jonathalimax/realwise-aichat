@@ -168,6 +168,80 @@ export class AdminService {
     return buckets;
   }
 
+  // Conversation-level debug/observability data: how many assistant replies abstained vs
+  // answered vs escalated, response-time distribution, and the same breakdown per tenant — so a
+  // slow or silent Clara can be spotted from the admin UI instead of only by someone reporting it.
+  async conversationInsights(days: number) {
+    const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+    const messages = await this.prisma.client.message.findMany({
+      where: { role: "assistant", createdAt: { gte: since } },
+      select: { businessId: true, answerSource: true, latencyMs: true, feedback: true, flagged: true, createdAt: true },
+    });
+
+    const bySource = { fixed_flow: 0, rag: 0, abstained: 0, escalation: 0, none: 0 };
+    const latencies: number[] = [];
+    const perBusiness = new Map<
+      string,
+      { total: number; abstained: number; escalated: number; flagged: number; negativeFeedback: number; latencies: number[] }
+    >();
+
+    for (const m of messages) {
+      bySource[m.answerSource ?? "none"] = (bySource[m.answerSource ?? "none"] ?? 0) + 1;
+      if (typeof m.latencyMs === "number" && m.latencyMs > 0) latencies.push(m.latencyMs);
+
+      const entry = perBusiness.get(m.businessId) ?? {
+        total: 0,
+        abstained: 0,
+        escalated: 0,
+        flagged: 0,
+        negativeFeedback: 0,
+        latencies: [] as number[],
+      };
+      entry.total++;
+      if (m.answerSource === "abstained") entry.abstained++;
+      if (m.answerSource === "escalation") entry.escalated++;
+      if (m.flagged) entry.flagged++;
+      if (m.feedback === "negative") entry.negativeFeedback++;
+      if (typeof m.latencyMs === "number" && m.latencyMs > 0) entry.latencies.push(m.latencyMs);
+      perBusiness.set(m.businessId, entry);
+    }
+
+    const median = (arr: number[]) => {
+      if (arr.length === 0) return null;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : sorted[mid];
+    };
+    const avg = (arr: number[]) => (arr.length === 0 ? null : Math.round(arr.reduce((a, b) => a + b, 0) / arr.length));
+
+    const businessIds = [...perBusiness.keys()];
+    const businesses = businessIds.length
+      ? await this.prisma.client.business.findMany({ where: { id: { in: businessIds } }, select: { id: true, name: true } })
+      : [];
+    const nameById = new Map(businesses.map((b) => [b.id, b.name]));
+
+    return {
+      totalMessages: messages.length,
+      bySource,
+      abstentionRate: messages.length ? bySource.abstained / messages.length : 0,
+      escalationRate: messages.length ? bySource.escalation / messages.length : 0,
+      medianLatencyMs: median(latencies),
+      avgLatencyMs: avg(latencies),
+      perBusiness: [...perBusiness.entries()]
+        .map(([businessId, e]) => ({
+          businessId,
+          businessName: nameById.get(businessId) ?? "—",
+          total: e.total,
+          abstained: e.abstained,
+          escalated: e.escalated,
+          flagged: e.flagged,
+          negativeFeedback: e.negativeFeedback,
+          medianLatencyMs: median(e.latencies),
+        }))
+        .sort((a, b) => b.total - a.total),
+    };
+  }
+
   async getPlatformConfig() {
     return this.prisma.client.platformConfig.upsert({
       where: { id: "singleton" },
