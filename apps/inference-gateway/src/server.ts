@@ -54,7 +54,15 @@ app.post<{ Body: GenerateRequest }>("/generate/stream", async (request, reply) =
   });
 
   try {
-    if (await selfHosted.isHealthy()) {
+    // Same priority as routeGenerate() in router.ts: when MANAGED_API_KEY is configured, prefer it
+    // over self-hosted Ollama even if Ollama is reachable — Ollama stays "healthy" while queued/slow
+    // under concurrency, so health alone can't detect capacity problems. This route previously
+    // checked selfHosted.isHealthy() first unconditionally, meaning every streamed reply (all
+    // free-text chat) silently went to the slow self-hosted path regardless of this fix already
+    // being applied to the non-streaming /generate route — the actual cause of streamed replies
+    // routinely taking 60s+ or appearing to hang entirely.
+    const managedConfigured = await managed.isHealthy();
+    if (!managedConfigured && (await selfHosted.isHealthy())) {
       const gen = selfHosted.generateStream(request.body, controller.signal);
       let next = await gen.next();
       while (!next.done) {
@@ -65,6 +73,8 @@ app.post<{ Body: GenerateRequest }>("/generate/stream", async (request, reply) =
       await logCall(request.body, result);
       send("done", result);
     } else {
+      // ManagedProvider has no token-level streaming — send the full text as one delta so the
+      // frontend still gets a "done" with real usage/latency instead of a fake incremental stream.
       const result = await managed.generate(request.body);
       send("delta", { text: result.text });
       await logCall(request.body, result);
