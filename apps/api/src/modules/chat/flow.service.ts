@@ -556,12 +556,53 @@ export class FlowService {
     return {
       nodeId: node.id,
       message,
-      bubbles,
+      bubbles: this.finalizeBubbles(bubbles),
       input: node.input ?? null,
       params,
       ...(listings ? { listings } : {}),
       ...(whatsappUrl !== undefined ? { whatsappUrl } : {}),
     };
+  }
+
+  // Human-handoff node ids a bubble can point at — "Falar com corretor"/"Falar com vendedor" and
+  // the global "💬 Atendente" bubble all land the visitor in the same place, so showing both is
+  // just visual noise, not a real second option.
+  private static readonly HANDOFF_GOTOS = new Set(["atendente", "handoff"]);
+  private static readonly MAX_BUBBLES = 8;
+
+  // Two independent trims, applied in this order: (1) drop the global "Atendente" bubble when the
+  // node already offers its own handoff option (e.g. "Falar com corretor") — same destination,
+  // redundant choice; (2) cap the total at MAX_BUBBLES, trimming from the node-specific options
+  // first (earliest-listed = highest priority per the flow JSON's own ordering) while always
+  // keeping nav bubbles (voltar/menu inicial) and whichever single handoff bubble survived step 1.
+  private finalizeBubbles(bubbles: FlowBubble[]): FlowBubble[] {
+    const hasNodeHandoff = bubbles.some((b) => b.goto === "handoff");
+    let deduped = bubbles;
+    if (hasNodeHandoff) {
+      let droppedGlobalAtendente = false;
+      deduped = bubbles.filter((b) => {
+        if (!droppedGlobalAtendente && b.goto === "atendente") {
+          droppedGlobalAtendente = true;
+          return false;
+        }
+        return true;
+      });
+    }
+
+    if (deduped.length <= FlowService.MAX_BUBBLES) return deduped;
+
+    const NAV_GOTOS = new Set(["__back__", "start"]);
+    const keep: FlowBubble[] = [];
+    const trimmable: FlowBubble[] = [];
+    for (const b of deduped) {
+      if (NAV_GOTOS.has(b.goto) || FlowService.HANDOFF_GOTOS.has(b.goto)) keep.push(b);
+      else trimmable.push(b);
+    }
+    const slotsLeft = Math.max(0, FlowService.MAX_BUBBLES - keep.length);
+    // Reassemble in original relative order rather than keep-then-trimmable, so nav bubbles don't
+    // all jump to the end of the list.
+    const survivors = new Set([...trimmable.slice(0, slotsLeft), ...keep]);
+    return deduped.filter((b) => survivors.has(b));
   }
 
   async start(businessId: string, conversationId: string) {
