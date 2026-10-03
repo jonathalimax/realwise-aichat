@@ -4,6 +4,7 @@ import { extractTextFromDocument } from "../extract-text";
 import { chunkMarkdown } from "../chunking";
 import { embedText } from "../embeddings";
 import { callInternalApi } from "../internal-api";
+import { listingExtractionQueue } from "../queues";
 
 export interface DocumentIngestionJobData {
   documentId: string;
@@ -50,6 +51,11 @@ export async function processDocumentIngestion(job: Job<DocumentIngestionJobData
       callInternalApi("/confidence/recompute", document.businessId),
       callInternalApi("/flow-options/regenerate", document.businessId),
     ]);
+    await listingExtractionQueue.add(
+      "extract",
+      { businessId: document.businessId },
+      { jobId: `extract-${document.businessId}`, removeOnComplete: true, removeOnFail: 50 },
+    );
   } catch (error) {
     await prisma.knowledgeDocument.update({
       where: { id: documentId },

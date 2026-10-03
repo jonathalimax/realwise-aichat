@@ -5,6 +5,8 @@ import { processDocumentIngestion } from "./processors/document-ingestion";
 import { processWebsiteSync } from "./processors/website-sync";
 import { processTrialWatch } from "./processors/trial-watch";
 import { processColdLeadDigest } from "./processors/cold-lead-digest";
+import { processListingExtraction } from "./processors/listing-extraction";
+import { listingExtractionQueue } from "./queues";
 
 const documentWorker = new Worker("document-ingestion", processDocumentIngestion, {
   connection: redisConnection,
@@ -42,6 +44,10 @@ const scheduleWorker = new Worker(
 );
 scheduleWorker.on("failed", (job, err) => console.error(`website-sync-schedule ${job?.id} failed`, err));
 
+const listingExtractionWorker = new Worker("listing-extraction", processListingExtraction, { connection: redisConnection });
+listingExtractionWorker.on("completed", (job) => console.log(`listing-extraction ${job.id} completed`));
+listingExtractionWorker.on("failed", (job, err) => console.error(`listing-extraction ${job?.id} failed`, err));
+
 const trialWatchQueue = new Queue("trial-watch", { connection: redisConnection });
 const trialWatchWorker = new Worker("trial-watch", processTrialWatch, { connection: redisConnection });
 trialWatchWorker.on("completed", (job) => console.log(`trial-watch ${job.id} completed`));
@@ -68,7 +74,7 @@ async function main() {
     {},
     { repeat: { pattern: "0 10 * * *" }, jobId: "daily-digest", removeOnComplete: true, removeOnFail: 10 },
   );
-  console.log("Realwise worker running — listening on queues: document-ingestion, website-sync, website-sync-schedule, trial-watch, cold-lead-digest");
+  console.log("Realwise worker running — listening on queues: document-ingestion, website-sync, website-sync-schedule, listing-extraction, trial-watch, cold-lead-digest");
 }
 
 main();

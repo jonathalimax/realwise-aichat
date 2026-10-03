@@ -4,6 +4,7 @@ import { fetchWebsiteText } from "../website-extract";
 import { chunkMarkdown } from "../chunking";
 import { embedText } from "../embeddings";
 import { callInternalApi } from "../internal-api";
+import { listingExtractionQueue } from "../queues";
 
 export interface WebsiteSyncJobData {
   businessId: string;
@@ -74,6 +75,11 @@ export async function processWebsiteSync(job: Job<WebsiteSyncJobData>) {
       callInternalApi("/confidence/recompute", businessId),
       callInternalApi("/flow-options/regenerate", businessId),
     ]);
+    await listingExtractionQueue.add(
+      "extract",
+      { businessId },
+      { jobId: `extract-${businessId}`, removeOnComplete: true, removeOnFail: 50 },
+    );
   } catch (error) {
     await prisma.knowledgeDocument.update({
       where: { id: document.id },
