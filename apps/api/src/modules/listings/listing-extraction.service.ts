@@ -64,6 +64,7 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
     "Responda APENAS com um array JSON (até 10 itens por trecho), cada item podendo conter os campos:",
     '{ "title": string, "description": string, "price": string, "url": string, "addressLine": string, "neighborhood": string, "city": string, "state": string, "listingType": string, "transaction": "aluguel"|"venda", "bedrooms": number, "parkingSpots": number, "areaM2": number, "brand": string, "model": string, "year": number, "mileageKm": number, "images": string[] }',
     "Regras: nunca invente um item ou valor de campo que não apareça explicitamente no texto. Se um campo não aparecer no texto para aquele item, OMITA o campo (nunca invente um placeholder).",
+    "NUNCA trate texto de carregamento, erro ou estado vazio da página como conteúdo real — se o valor de um campo contiver algo como 'Carregando...', 'Loading...', 'Aguarde', 'Consulte', 'undefined', 'null', 'R$ ???.???.???,00', '--', 'Preço a definir' ou uma sequência de '?' no lugar dos números, OMITA esse campo (e se nem o título for conteúdo real, não inclua o item).",
     "'transaction' só deve ser preenchido se o texto disser explicitamente aluguel ou venda.",
     "'city'/'state' só devem ser preenchidos se citados explicitamente no texto daquele item.",
     "'images' deve conter TODAS as URLs de 'Foto: <url>' claramente associadas a esse item específico (não apenas a primeira) — nunca reaproveite uma 'Foto:' distante no texto ou que pareça ser logo/ícone do site.",
@@ -225,6 +226,14 @@ function parseStr(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+const PLACEHOLDER_VALUE_PATTERN = /carregando|loading|aguarde|undefined|null|\?{3,}/i;
+
+function parseRealStr(value: unknown): string | undefined {
+  const str = parseStr(value);
+  if (!str) return undefined;
+  return PLACEHOLDER_VALUE_PATTERN.test(str) ? undefined : str;
+}
+
 function parseTransaction(value: unknown): string | undefined {
   const str = parseStr(value)?.toLowerCase();
   return str === "aluguel" || str === "venda" ? str : undefined;
@@ -292,8 +301,15 @@ export class ListingExtractionService {
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) continue;
         for (const rawItem of parsed as RawExtractedItem[]) {
-          if (!rawItem || typeof rawItem !== "object" || typeof rawItem.title !== "string") continue;
-          const priceText = parseStr(rawItem.price);
+          if (
+            !rawItem ||
+            typeof rawItem !== "object" ||
+            typeof rawItem.title !== "string" ||
+            PLACEHOLDER_VALUE_PATTERN.test(rawItem.title)
+          ) {
+            continue;
+          }
+          const priceText = parseRealStr(rawItem.price);
           const parsedPrice = priceText ? parseBrazilianPrice(priceText) : null;
           const rawImages = Array.isArray(rawItem.images) ? rawItem.images : [];
           const images = rawImages
@@ -302,15 +318,15 @@ export class ListingExtractionService {
 
           extracted.push({
             title: rawItem.title,
-            description: parseStr(rawItem.description),
+            description: parseRealStr(rawItem.description),
             priceText,
             priceCents: parsedPrice?.priceCents,
             pricePeriod: parsedPrice?.pricePeriod,
             url: safeHttpUrl(rawItem.url),
-            addressLine: parseStr(rawItem.addressLine),
-            neighborhood: parseStr(rawItem.neighborhood),
-            city: parseStr(rawItem.city),
-            state: parseStr(rawItem.state),
+            addressLine: parseRealStr(rawItem.addressLine),
+            neighborhood: parseRealStr(rawItem.neighborhood),
+            city: parseRealStr(rawItem.city),
+            state: parseRealStr(rawItem.state),
             listingType: parseStr(rawItem.listingType),
             transaction: parseTransaction(rawItem.transaction),
             bedrooms: parseInt2(rawItem.bedrooms),

@@ -355,6 +355,12 @@ export class FlowService {
       return this.resolveBookingFailureEscalation(businessId, conversationId);
     }
 
+    if (BOOKING_TIME_NODE_IDS.has(node.id)) {
+      const slots = await this.timeBubbles(businessId, node.id, params);
+      if (slots && slots.length > 0) return { message: substituted, bubblesOverride: slots };
+      return this.resolveBookingFailureEscalation(businessId, conversationId);
+    }
+
     if (BOOKING_SUMMARY_NODE_IDS.has(node.id) && !(params.slot_start && params.slot_end)) {
       return this.resolveBookingFailureEscalation(businessId, conversationId);
     }
@@ -570,9 +576,15 @@ export class FlowService {
   // success message, so this short-circuits before the generic LLM-prose fallback ever runs,
   // recording the same real escalation as resolveWhatsappHandoff (minus escalationNumberId, since
   // this path isn't necessarily routed through WhatsApp).
-  private async resolveBookingFailureEscalation(businessId: string, conversationId: string): Promise<{ message: string }> {
-    const message =
-      "Não consegui confirmar esse horário automaticamente — vou te colocar em contato com um vendedor para agendar manualmente.";
+  private async resolveBookingFailureEscalation(
+    businessId: string,
+    conversationId: string,
+  ): Promise<{ message: string; bubblesOverride?: FlowBubble[] }> {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    const isConcessionaria = business?.niche === "concessionaria";
+    const message = isConcessionaria
+      ? "Não consegui confirmar esse horário automaticamente — vou te colocar em contato com um vendedor para agendar manualmente."
+      : "Não consegui confirmar esse horário automaticamente — vou te colocar em contato com um corretor para agendar manualmente.";
 
     const conversation = await this.prisma.client.conversation.findUnique({ where: { id: conversationId } });
     if (conversation && conversation.status !== "escalated") {
@@ -586,7 +598,13 @@ export class FlowService {
       });
     }
 
-    return { message };
+    return {
+      message,
+      bubblesOverride: [
+        { label: isConcessionaria ? "Falar com um vendedor" : "Falar com um corretor", goto: "handoff_whats" },
+        { label: "⬅ Voltar ao menu", goto: "start" },
+      ],
+    };
   }
 
   // The flow engine has no per-card bubble mechanism — "resultados" renders multiple real
