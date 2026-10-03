@@ -418,7 +418,12 @@ export class ChatService {
     };
   }
 
-  private async buildChatPrompt(businessId: string, conversationId: string, visitorText: string) {
+  private async buildChatPrompt(
+    businessId: string,
+    conversationId: string,
+    visitorText: string,
+    opts?: { listingsAttached?: boolean },
+  ) {
     const [business, profile, recentMessages] = await Promise.all([
       this.prisma.client.business.findUnique({ where: { id: businessId } }),
       this.prisma.client.businessProfile.findUnique({ where: { businessId } }),
@@ -454,12 +459,23 @@ export class ChatService {
       "Responda apenas com base nas informações abaixo (dados estruturados do negócio e trechos de documentos). Se não souber, diga que vai confirmar com um atendente humano — nunca invente preço, prazo ou disponibilidade.",
       "Nunca afirme que um modelo, marca, veículo, imóvel ou item específico existe, está disponível ou em estoque, a menos que esse nome literal apareça nos trechos de documentos abaixo. Se o cliente perguntar por algo que não aparece nos trechos, diga que não tem essa informação específica e ofereça passar para um atendente humano — nunca recorra a conhecimento geral do mundo sobre marcas/modelos para completar a resposta.",
       "Só responda com uma informação específica (preço, prazo, política, garantia, etc.) se ela estiver EXPLICITAMENTE presente nos trechos abaixo. Se os trechos não cobrirem especificamente o que foi perguntado, diga que não tem essa informação, mesmo que os trechos contenham outras informações do negócio.",
-      "Se o cliente pedir uma lista (ex: imóveis disponíveis), liste os itens concretos encontrados nos trechos de documentos abaixo, não apenas um resumo genérico.",
+      opts?.listingsAttached
+        ? "O sistema já está anexando automaticamente os cards com os imóveis/veículos disponíveis abaixo da sua resposta. Responda com UMA frase curta apontando para os cards (ex: 'Encontrei algumas opções que podem te interessar 👇'). NUNCA repita título, preço, área, dormitórios, banheiros, vagas ou qualquer especificação dos itens em texto — isso já aparece nos cards. Nunca use listas com '-' nesta resposta. No máximo 2 frases."
+        : "Se o cliente pedir uma lista (ex: imóveis disponíveis), liste os itens concretos encontrados nos trechos de documentos abaixo, não apenas um resumo genérico.",
       "Formate a resposta usando apenas markdown simples: **negrito** com asteriscos duplos e listas com \"- \" no início da linha, no máximo 1 nível de indentação. Nunca use tabelas, nunca use títulos com #, e nunca use HTML bruto.",
       "Nunca inclua links, URLs ou endereços de imagem na resposta, mesmo que apareçam nos trechos de documentos — o sistema anexa automaticamente o link e a foto do item em separado.",
       `Dados cadastrais do negócio (descrevem o negócio em geral, mas NÃO autorizam afirmar que um item/modelo específico está disponível): ${profileSummary}`,
       documentContext || "\nNenhum trecho relevante foi encontrado na base de documentos para esta pergunta.",
     ];
+
+    if (opts?.listingsAttached) {
+      // Repeated as the LAST instruction (highest-recency weight for the model) — the earlier
+      // generic markdown-formatting rule above explicitly allows "- " lists, which otherwise
+      // dilutes the no-lists/no-specs rule already stated once above for this same turn.
+      systemPromptParts.push(
+        "Lembrete final: os cards com os itens já foram anexados. Sua resposta deve ter no máximo 2 frases curtas, sem listas, sem repetir preço/área/dormitórios/banheiros/vagas/título dos itens.",
+      );
+    }
 
     if (profile?.customInstructions) {
       systemPromptParts.push(
@@ -495,39 +511,69 @@ export class ChatService {
     return listingSuggestions(niche, listings[0].transaction);
   }
 
-  // Free-text questions that are genuinely listing-shaped (e.g. "quais imóveis vocês tem") also
-  // get a best-effort structured `listings` array alongside the prose answer, using the same
-  // retrieved chunk text — same strict grounding discipline as the scripted "resultados" node.
-  private async maybeExtractListings(businessId: string, visitorText: string, chunkText: string, answerText: string) {
-    if (this.flow.isListingQuery(visitorText, chunkText)) {
-      // Free text has no structured filter params the way the scripted flow does — if the business
-      // has real extracted inventory, ground on that directly (most-recently-updated active
-      // listings) rather than re-extracting from retrieved chunks every time. Only fall back to the
-      // LLM-chunk extraction path for businesses with zero rows (new/never-extracted).
-      const hasListings = await this.listingsService.hasAnyListings(businessId);
-      if (hasListings) {
-        const dbListings = await this.listingsService.queryForChat(businessId, {}, 6);
-        return dbListings.length > 0 ? dbListings : undefined;
-      }
+  // Extends the entity-claim guard's grounding allowlist with the real title/price/description of
+  // any browsing-listing cards already attached this turn — those fields are genuine DB values the
+  // visitor is meant to see, even when the specific listing's text didn't happen to come back in
+  // this turn's RAG chunk retrieval. Without this, a short "cards already attached" pointer
+  // sentence that legitimately references an attached card's own neighborhood/city gets
+  // false-flagged as an ungrounded claim.
+  private listingsGroundingAllowlist(groundingAllowlistText: string, browsingListings: ListingItem[] | undefined): string {
+    if (!browsingListings?.length) return groundingAllowlistText;
+    const listingsText = browsingListings.map((l) => `${l.title} ${l.price ?? ""} ${l.description ?? ""}`).join(" ");
+    return `${groundingAllowlistText} ${listingsText}`;
+  }
 
-      if (!chunkText) return undefined;
-      const listings = await this.flow.extractListingsForQuery(businessId, chunkText);
-      return listings.length > 0 ? listings : undefined;
+  // Free-text questions that are genuinely listing-shaped (e.g. "quais imóveis vocês tem") get a
+  // best-effort structured `listings` array using filters inferred from the visitor's own text
+  // (rental vs purchase, item type) — same strict grounding discipline as the scripted
+  // "resultados" node. CRITICAL: an over-eager filter inference must never regress today's "at
+  // least show something" behavior to zero cards — if the filtered query comes back empty while
+  // the business genuinely has inventory, retry once unfiltered before giving up.
+  private async resolveBrowsingListings(
+    businessId: string,
+    niche: string,
+    visitorText: string,
+    chunkText: string,
+  ): Promise<ListingItem[] | undefined> {
+    if (!this.flow.isListingQuery(visitorText, chunkText)) return undefined;
+
+    // Free text has no structured filter params the way the scripted flow does — if the business
+    // has real extracted inventory, ground on that directly (most-recently-updated active
+    // listings) rather than re-extracting from retrieved chunks every time. Only fall back to the
+    // LLM-chunk extraction path for businesses with zero rows (new/never-extracted).
+    const hasListings = await this.listingsService.hasAnyListings(businessId);
+    if (hasListings) {
+      const filters = await this.flow.listingFiltersForText(businessId, niche, visitorText);
+      const dbListings = await this.listingsService.queryForChat(businessId, filters, 6);
+      if (dbListings.length > 0) return dbListings;
+      const unfilteredListings = await this.listingsService.queryForChat(businessId, {}, 6);
+      return unfilteredListings.length > 0 ? unfilteredListings : undefined;
     }
 
-    // Not a listing-shaped query, but the answer (general RAG prose) may still be about a
-    // specific listing — surface its real link/photo if (and only if) exactly one listing is
-    // unambiguously identified by the visitor message + generated answer together.
+    if (!chunkText) return undefined;
+    const listings = await this.flow.extractListingsForQuery(businessId, chunkText);
+    return listings.length > 0 ? listings : undefined;
+  }
+
+  // Not a listing-shaped query, but the answer (general RAG prose) may still be about a specific
+  // listing — surface its real link/photo if (and only if) exactly one listing is unambiguously
+  // identified by the visitor message + generated answer together. Only called when
+  // resolveBrowsingListings found nothing.
+  private async resolveMentionedListing(businessId: string, visitorText: string, answerText: string): Promise<ListingItem[] | undefined> {
     const mentioned = await this.listingsService.findMentionedForChat(businessId, `${visitorText}\n${answerText}`, 1);
     return mentioned.length > 0 ? mentioned : undefined;
   }
 
   private async generateAnswer(businessId: string, conversationId: string, visitorText: string) {
-    const { niche, systemPrompt, prompt, hasRetrievedContext, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
-      await this.buildChatPrompt(businessId, conversationId, visitorText);
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) throw new NotFoundException("Business not found");
+    const niche = business.niche;
+
     // Zero retrieved chunks means there's nothing to ground the model on — never send an empty-context
-    // prompt and hope it abstains on its own, that's how it hallucinates confidently.
-    if (!hasRetrievedContext) {
+    // prompt and hope it abstains on its own, that's how it hallucinates confidently. This check
+    // runs before anything else, unchanged.
+    const preliminaryChunks = await retrieveRelevantChunks(this.prisma, businessId, visitorText);
+    if (preliminaryChunks.length === 0) {
       return {
         text: NO_CONTEXT_FALLBACK,
         abstained: true,
@@ -535,12 +581,21 @@ export class ChatService {
         inputTokens: 0,
         outputTokens: 0,
         latencyMs: 0,
-        retrievedChunkIds,
-        retrievalTopScore,
+        retrievedChunkIds: [],
+        retrievalTopScore: undefined,
         listings: undefined,
         suggestions: undefined,
       };
     }
+
+    // Resolve browsing-listing cards BEFORE building the final prompt / calling the LLM, so the
+    // model can be told cards are already attached and must not re-enumerate specs in prose.
+    const preliminaryChunkText = preliminaryChunks.map((c) => c.content).join("\n\n").slice(0, 4000);
+    const browsingListings = await this.resolveBrowsingListings(businessId, niche, visitorText, preliminaryChunkText);
+
+    const { systemPrompt, prompt, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
+      await this.buildChatPrompt(businessId, conversationId, visitorText, { listingsAttached: Boolean(browsingListings) });
+
     try {
       const result = await generateFromGateway({
         purpose: "chat",
@@ -551,12 +606,19 @@ export class ChatService {
       });
       // Deterministic last-line guard behind the prompt rules: catches exactly the confirmed bug
       // (a fabricated model/brand claim with no actual support in the retrieved chunks) even if
-      // the model ignores the "nunca afirme..." instruction above.
+      // the model ignores the "nunca afirme..." instruction above. When real browsing-listing
+      // cards are attached, their own real title/description/neighborhood/city are legitimately
+      // mentionable too (e.g. a short "Encontrei opções em Pinhais 👇" pointer referencing the
+      // attached card's own city) even if that specific listing's text didn't make it into this
+      // turn's RAG chunk retrieval — without this, the guard false-flags genuinely grounded short
+      // answers pointing at the very cards being attached.
       const abstained =
         looksLikeAbstention(result.text) ||
-        hasUngroundedEntityClaim(result.text, retrievedChunkText, groundingAllowlistText);
+        hasUngroundedEntityClaim(result.text, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings));
       const text = abstained && !looksLikeAbstention(result.text) ? ABSTENTION_FALLBACK : result.text;
-      const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText, text);
+      const listings = abstained
+        ? undefined
+        : browsingListings ?? (await this.resolveMentionedListing(businessId, visitorText, text));
       const suggestions = abstained ? undefined : this.buildSuggestions(niche, listings);
       return {
         text,
@@ -648,10 +710,14 @@ export class ChatService {
       return { message: assistantMessage, escalated: false, flow: flowResult };
     }
 
-    const { niche, systemPrompt, prompt, hasRetrievedContext, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
-      await this.buildChatPrompt(businessId, conversationId, visitorText);
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) throw new NotFoundException("Business not found");
+    const niche = business.niche;
 
-    if (!hasRetrievedContext) {
+    // Zero retrieved chunks means there's nothing to ground the model on — this check runs before
+    // everything else, unchanged.
+    const preliminaryChunks = await retrieveRelevantChunks(this.prisma, businessId, visitorText);
+    if (preliminaryChunks.length === 0) {
       onDelta(NO_CONTEXT_FALLBACK);
       const assistantMessage = await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: NO_CONTEXT_FALLBACK, answerSource: "abstained" },
@@ -673,6 +739,15 @@ export class ChatService {
       }
       return { message: assistantMessage, escalated: false };
     }
+
+    // Resolve browsing-listing cards BEFORE streaming the LLM's answer — the visitor must never
+    // see prose streamed in before cards would've been attached, and the model needs to know cards
+    // are already attached so it doesn't re-enumerate specs in prose.
+    const preliminaryChunkText = preliminaryChunks.map((c) => c.content).join("\n\n").slice(0, 4000);
+    const browsingListings = await this.resolveBrowsingListings(businessId, niche, visitorText, preliminaryChunkText);
+
+    const { systemPrompt, prompt, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
+      await this.buildChatPrompt(businessId, conversationId, visitorText, { listingsAttached: Boolean(browsingListings) });
 
     let fullText = "";
     let gatewayResult;
@@ -708,7 +783,8 @@ export class ChatService {
     // repeat. Not buffering/rewriting the stream to keep this fix scoped and low-risk.
     const abstained = streamFailed
       ? fullText.trim().length < MIN_MEANINGFUL_TEXT_LENGTH
-      : looksLikeAbstention(fullText) || hasUngroundedEntityClaim(fullText, retrievedChunkText, groundingAllowlistText);
+      : looksLikeAbstention(fullText) ||
+        hasUngroundedEntityClaim(fullText, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings));
     const assistantMessage = await this.prisma.client.message.create({
       data: {
         conversationId,
@@ -742,7 +818,9 @@ export class ChatService {
       }
     }
 
-    const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText, fullText);
+    const listings = abstained
+      ? undefined
+      : browsingListings ?? (await this.resolveMentionedListing(businessId, visitorText, fullText));
     const suggestions = abstained ? undefined : this.buildSuggestions(niche, listings);
     return { message: assistantMessage, escalated: autoEscalation?.escalated ?? false, listings, suggestions, ...(autoEscalation ?? {}) };
   }

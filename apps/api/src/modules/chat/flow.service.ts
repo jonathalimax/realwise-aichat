@@ -1180,6 +1180,33 @@ export class FlowService {
     };
   }
 
+  // Derives a best-effort filters object straight from a free-text browsing question (e.g.
+  // "quais imóveis vocês tem para alugar") for ChatService's RAG path — routes through the same
+  // chatFiltersFor() mapping the scripted "resultados" node already uses, so the two paths never
+  // drift. Deliberately takes businessId (not just niche/visitorText) because the item-type match
+  // below has to cross-reference this business's real distinctListingTypes — filtering to a
+  // listingType value that doesn't exist for this business would just produce an empty result and
+  // regress to zero cards instead of the broader "show something" fallback. Deliberately leaves
+  // neighborhood/price out of this pass — free text has no reliable signal for those yet.
+  async listingFiltersForText(businessId: string, niche: string, visitorText: string): Promise<ChatQueryFilters> {
+    const normalized = normalize(visitorText);
+    const params: Record<string, unknown> = {};
+
+    const rentalWords = ["aluguel", "alugar", "locacao", "locar", "alugo", "aluga"];
+    const purchaseWords = ["comprar", "compra", "venda", "vender", "comprando"];
+    if (rentalWords.some((w) => normalized.includes(w))) {
+      params.modo = "aluguel";
+    } else if (purchaseWords.some((w) => normalized.includes(w))) {
+      params.modo = "venda";
+    }
+
+    const dbTypes = await this.listingsService.distinctListingTypes(businessId);
+    const matchedType = dbTypes.find((t) => normalized.includes(normalize(t)));
+    if (matchedType) params.tipo = matchedType;
+
+    return this.chatFiltersFor(niche, params);
+  }
+
   // Asks the model for strictly-grounded structured listing items instead of prose — same
   // never-invent discipline as the rest of this file. Returns [] (not a fabricated placeholder)
   // whenever the retrieved text doesn't contain genuine distinct items.
@@ -1236,8 +1263,14 @@ export class FlowService {
   // that's a more reliable signal than requiring the item word in this exact message's raw text.
   isListingQuery(visitorText: string, chunkText?: string): boolean {
     const normalized = normalize(visitorText);
-    const itemWords = ["imovel", "imoveis", "casa", "casas", "apartamento", "apartamentos", "carro", "carros", "veiculo", "veiculos"];
-    const intentWords = ["disponivel", "disponiveis", "tem", "tem disponivel", "mostra", "mostre", "ver", "listar", "quais", "opcoes", "opcao"];
+    const itemWords = [
+      "imovel", "imoveis", "casa", "casas", "apartamento", "apartamentos", "carro", "carros", "veiculo", "veiculos",
+      "kitnet", "studio", "sobrado", "cobertura", "sala", "loja", "terreno", "apto", "galpao", "chacara",
+    ];
+    const intentWords = [
+      "disponivel", "disponiveis", "tem", "tem disponivel", "mostra", "mostre", "ver", "listar", "quais", "opcoes", "opcao",
+      "alugar", "aluguel", "locacao", "comprar", "venda", "quero", "procuro", "busco", "preciso", "tem alguma",
+    ];
     const hasItemWord = itemWords.some((w) => normalized.includes(w));
     const hasIntentWord = intentWords.some((w) => normalized.includes(w));
     if (hasItemWord && hasIntentWord) return true;
