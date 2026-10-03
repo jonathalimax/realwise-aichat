@@ -727,7 +727,16 @@ export class ChatService {
 
     await this.prisma.client.conversation.update({
       where: { id: conversationId },
-      data: { status: "escalated", escalatedAt: new Date(), escalationNumberId: routingNumber.id, referenceCode },
+      data: {
+        status: "escalated",
+        escalatedAt: new Date(),
+        escalationNumberId: routingNumber.id,
+        referenceCode,
+        // Without this the inbox's unread indicator (lastMessageAt vs lastReadByOwnerAt) never
+        // flips true right after escalation, since nothing else bumps lastMessageAt here.
+        lastMessageAt: new Date(),
+        messageCount: { increment: 1 },
+      },
     });
 
     const assistantMessage = await this.prisma.client.message.create({
