@@ -71,7 +71,7 @@ export default function MarketingHome() {
           <div className="absolute -bottom-8 -right-4 h-20 w-20 rounded-full bg-accent-soft blur-2xl animate-float-slow md:h-28 md:w-28" />
           <div className="relative mx-auto w-full max-w-[320px] rounded-[2rem] border border-border bg-surface shadow-2xl transition-transform duration-500 hover:-translate-y-1">
             <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft font-serif font-bold text-accent-ink">AS</div>
+              <img src="/clara-avatar.jpg" alt="Clara" className="h-8 w-8 flex-none rounded-lg object-cover" />
               <div className="text-left">
                 <div className="text-sm font-semibold">AutoSul Veículos</div>
                 <div className="flex items-center gap-1 text-[0.7rem] text-positive">
@@ -124,7 +124,7 @@ export default function MarketingHome() {
               {/* Mirrors the real chat UI in apps/chat: header, bubbles, tappable options, pill input */}
               <div className="mx-auto mb-6 flex w-full max-w-[260px] flex-col overflow-hidden rounded-2xl border border-border bg-bg">
                 <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ink font-serif text-xs font-bold text-bg">I</div>
+                  <img src="/clara-avatar.jpg" alt="Clara" className="h-7 w-7 flex-none rounded-lg object-cover" />
                   <div>
                     <div className="text-[0.72rem] font-semibold text-ink">Imóveis Costa</div>
                     <div className="flex items-center gap-1 text-[0.62rem] text-positive">
@@ -153,7 +153,7 @@ export default function MarketingHome() {
             <div className="rounded-3xl bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
               <div className="mx-auto mb-6 flex w-full max-w-[260px] flex-col overflow-hidden rounded-2xl border border-border bg-bg">
                 <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ink font-serif text-xs font-bold text-bg">I</div>
+                  <img src="/clara-avatar.jpg" alt="Clara" className="h-7 w-7 flex-none rounded-lg object-cover" />
                   <div>
                     <div className="text-[0.72rem] font-semibold text-ink">Imóveis Costa</div>
                     <div className="flex items-center gap-1 text-[0.62rem] text-positive">

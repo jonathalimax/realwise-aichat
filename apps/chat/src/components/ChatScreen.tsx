@@ -169,6 +169,45 @@ function WhatsappHandoffCard({ url }: { url: string }) {
   );
 }
 
+// Prefers the business's own logo; falls back to Clara's own photo (she's who's actually
+// "talking" when a business hasn't set a logo yet) and, if even that fails to load, the
+// initial-letter badge as a last resort so there's never a blank gap.
+function BusinessAvatar({ name, logoUrl, brandColor }: { name: string; logoUrl?: string | null; brandColor?: string | null }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  const [claraFailed, setClaraFailed] = useState(false);
+
+  if (logoUrl && !logoFailed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logoUrl}
+        alt={name}
+        className="h-10 w-10 flex-none rounded-card object-cover"
+        onError={() => setLogoFailed(true)}
+      />
+    );
+  }
+  if (!claraFailed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src="/clara-avatar.jpg"
+        alt="Clara"
+        className="h-10 w-10 flex-none rounded-card object-cover"
+        onError={() => setClaraFailed(true)}
+      />
+    );
+  }
+  return (
+    <div
+      className="flex h-10 w-10 flex-none items-center justify-center rounded-card font-serif font-bold"
+      style={{ background: brandColor ?? "#1F5F52", color: "#fff" }}
+    >
+      {name?.[0] ?? "R"}
+    </div>
+  );
+}
+
 let messageIdCounter = 0;
 function nextMessageId() {
   messageIdCounter += 1;
@@ -356,12 +395,7 @@ export function ChatScreen({
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-bg">
       <header className="flex flex-none items-center gap-3 border-b border-border bg-bg px-4 py-3">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-card font-serif font-bold"
-          style={{ background: business.brandColor ?? "#1F5F52", color: "#fff" }}
-        >
-          {business.name?.[0] ?? "R"}
-        </div>
+        <BusinessAvatar name={business.name} logoUrl={business.logoUrl} brandColor={business.brandColor} />
         <div>
           <div className="text-sm font-semibold text-ink">{business.name}</div>
           <div className="flex items-center gap-1 text-xs text-positive">
