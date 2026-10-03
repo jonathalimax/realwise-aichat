@@ -238,6 +238,7 @@ export function ChatScreen({
   const [selectedSlot, setSelectedSlot] = useState<{ start: string; end: string } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [flowRestored, setFlowRestored] = useState(false);
+  const [thinkingStage, setThinkingStage] = useState<0 | 1>(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   // Holds the in-flight (or resolved) conversation-creation promise so a message sent before the
   // mount effect's startConversation() resolves awaits that SAME promise instead of racing a
@@ -320,6 +321,18 @@ export function ChatScreen({
     });
   }, [messages, showBooking, sending]);
 
+  // Two-stage "thinking" label: starts as "Clara está pensando…" and, if the response takes
+  // longer than ~5s, swaps to a message acknowledging the extra wait instead of leaving the
+  // visitor staring at bare dots with no sense of progress.
+  useEffect(() => {
+    if (!sending) {
+      setThinkingStage(0);
+      return;
+    }
+    const timer = setTimeout(() => setThinkingStage(1), 5000);
+    return () => clearTimeout(timer);
+  }, [sending]);
+
   useEffect(() => {
     if (typeof window === "undefined" || !window.visualViewport) return;
     const onResize = () => {
@@ -355,10 +368,15 @@ export function ChatScreen({
     if (text.toLowerCase().includes("agendar")) {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: text }]);
       setInput("");
-      await ensureConversation();
-      setShowBooking(true);
-      // null means no calendar connected — the booking card falls back to free-text date/time inputs.
-      getAvailableSlots(business.id).then(setAvailableSlots).catch(() => setAvailableSlots(null));
+      setSending(true);
+      try {
+        await ensureConversation();
+        setShowBooking(true);
+        // null means no calendar connected — the booking card falls back to free-text date/time inputs.
+        await getAvailableSlots(business.id).then(setAvailableSlots).catch(() => setAvailableSlots(null));
+      } finally {
+        setSending(false);
+      }
       return;
     }
 
@@ -416,6 +434,8 @@ export function ChatScreen({
         { id: nextMessageId(), role: "assistant", content: result.message, listings: result.listings, whatsappUrl: result.whatsappUrl },
       ]);
       setBubbles(result.bubbles ?? []);
+    } catch {
+      setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "Tive um problema para responder — tenta de novo em instantes." }]);
     } finally {
       setSending(false);
       isStreamingRef.current = false;
@@ -496,10 +516,19 @@ export function ChatScreen({
         ))}
 
         {sending && (
-          <div className="flex max-w-[85%] items-center gap-1 rounded-2xl rounded-bl-sm bg-surface px-4 py-3">
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.3s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.15s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft" />
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex max-w-[85%] items-center gap-2 rounded-2xl rounded-bl-sm bg-surface px-4 py-3"
+          >
+            <span className="text-sm text-ink-soft">
+              {thinkingStage === 0 ? "Clara está pensando…" : "Clara está consultando as informações…"}
+            </span>
+            <span className="flex items-center gap-1" aria-hidden="true">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft" />
+            </span>
           </div>
         )}
 
