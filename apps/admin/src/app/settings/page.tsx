@@ -1,11 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { maskBrPhone } from "@realwise/shared";
 import { getPlatformConfig, updatePlatformConfig } from "../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+
+// The stored number includes the country code (e.g. "5511999999999"); maskBrPhone only knows how
+// to format the DDD+number part, so split off a leading "55" before masking and keep it as a
+// fixed "+55" prefix rather than letting it get mistaken for the DDD.
+function maskWithDdi(digits: string): string {
+  const ddiStripped = digits.startsWith("55") ? digits.slice(2) : digits;
+  return `+55 ${maskBrPhone(ddiStripped)}`.trim();
+}
 
 export default function AdminSettingsPage() {
   const [phone, setPhone] = useState("");
@@ -42,11 +51,14 @@ export default function AdminSettingsPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div>
-            <Label>Número de WhatsApp (apenas dígitos, com DDI e DDD)</Label>
+            <Label>Número de WhatsApp (com DDI e DDD)</Label>
             <Input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))}
-              placeholder="5511999999999"
+              value={phone ? maskWithDdi(phone) : ""}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, "");
+                setPhone(digits.startsWith("55") ? digits : `55${digits}`);
+              }}
+              placeholder="+55 (11) 99999-9999"
               inputMode="numeric"
               className="mt-1"
             />
