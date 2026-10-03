@@ -3,12 +3,20 @@ import { lookup as dnsLookup, LookupAllOptions } from "dns";
 import * as cheerio from "cheerio";
 import { Agent } from "undici";
 import { assertPublicHttpUrl, isBlockedIp } from "./url-safety";
+import { fetchRobots } from "./robots";
+import { discoverFromSitemaps } from "./sitemap";
 
 const MAX_REDIRECTS = 5;
 const MAX_PAGES = 40;
 const MAX_DEPTH = 2;
 const MAX_PAGE_CHARS = 20000;
-const CRAWL_DELAY_MS = 250;
+const MIN_CRAWL_DELAY_MS = 250;
+const MAX_CRAWL_MS = 180_000;
+const MAX_TOTAL_CHARS = 600_000;
+// Strip all query params except these — e.g. /estoque/?marca=honda and /estoque/?marca=toyota
+// are the same page for crawl-budget purposes; keeping pagination params avoids collapsing
+// genuinely distinct paginated listing pages into one.
+const QUERY_ALLOWLIST = new Set(["page", "pagina"]);
 const SKIP_EXTENSIONS = /\.(pdf|jpe?g|png|gif|svg|webp|zip|rar|mp4|mp3|avi|mov|docx?|xlsx?|css|js|ico|woff2?|ttf)$/i;
 // Filename-based fallback for page-chrome images that aren't inside a semantic <header>/<nav>/
 // <footer> (e.g. a logo sitting in a plain <div class="navbar">) — never treat these as a real
@@ -149,43 +157,106 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function fetchWebsiteText(seedUrl: string): Promise<{ markdown: string; contentHash: string; pagesVisited: number }> {
+// Collapses query-string variants of the same path (e.g. ?marca=honda vs ?marca=toyota) so
+// they don't each separately eat into the per-run page budget, while still letting pagination
+// params like ?page=2 count as distinct pages.
+function normalizeForDedup(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  const kept = new URLSearchParams();
+  for (const [key, value] of url.searchParams) {
+    if (QUERY_ALLOWLIST.has(key)) kept.set(key, value);
+  }
+  url.search = kept.toString();
+  url.hash = "";
+  return url.toString();
+}
+
+export interface CrawledPage {
+  url: string;
+  title: string;
+  text: string;
+}
+
+export interface FetchWebsiteResult {
+  pages: CrawledPage[];
+  contentHash: string;
+  pagesVisited: number;
+}
+
+async function fetchAndExtract(url: string): Promise<{ title: string; text: string; links: string[] } | null> {
+  let res: Response;
+  try {
+    res = await safeFetch(url);
+  } catch {
+    return null; // skip pages that fail SSRF checks or network errors, don't abort the whole crawl
+  }
+  if (!res.ok || !(res.headers.get("content-type") ?? "").includes("html")) return null;
+  const html = await res.text();
+  return extractPage(html, url);
+}
+
+export async function fetchWebsiteText(seedUrl: string): Promise<FetchWebsiteResult> {
+  const origin = new URL(seedUrl).origin;
+  const robots = await fetchRobots(origin);
+  const crawlDelayMs = Math.max(robots.crawlDelayMs, MIN_CRAWL_DELAY_MS);
+  const deadline = Date.now() + MAX_CRAWL_MS;
+
+  const pages: CrawledPage[] = [];
+  let totalChars = 0;
   const visited = new Set<string>();
-  const queue: { url: string; depth: number }[] = [{ url: seedUrl, depth: 0 }];
-  const sections: string[] = [];
 
-  while (queue.length > 0 && visited.size < MAX_PAGES) {
-    const { url, depth } = queue.shift()!;
-    if (visited.has(url)) continue;
-    visited.add(url);
+  const sitemapUrls = await discoverFromSitemaps(origin, robots);
 
-    let res: Response;
-    try {
-      res = await safeFetch(url);
-    } catch {
-      continue; // skip pages that fail SSRF checks or network errors, don't abort the whole crawl
+  if (sitemapUrls.length >= 5) {
+    for (const url of sitemapUrls) {
+      if (visited.size >= MAX_PAGES) break;
+      if (Date.now() >= deadline || totalChars >= MAX_TOTAL_CHARS) break;
+      const key = normalizeForDedup(url);
+      if (visited.has(key)) continue;
+      visited.add(key);
+      if (!robots.isAllowed(new URL(url).pathname)) continue;
+
+      const extracted = await fetchAndExtract(url);
+      if (extracted?.text) {
+        pages.push({ url, title: extracted.title, text: extracted.text });
+        totalChars += extracted.text.length;
+      }
+      if (visited.size < sitemapUrls.length) await sleep(crawlDelayMs);
     }
-    if (!res.ok || !(res.headers.get("content-type") ?? "").includes("html")) continue;
+  } else {
+    const queue: { url: string; depth: number }[] = [{ url: seedUrl, depth: 0 }];
 
-    const html = await res.text();
-    const { title, text, links } = extractPage(html, url);
-    if (text) {
-      sections.push(`## ${title || url}\n\n${text}\n\nFonte: ${url}`);
-    }
+    while (queue.length > 0 && visited.size < MAX_PAGES) {
+      if (Date.now() >= deadline || totalChars >= MAX_TOTAL_CHARS) break;
+      const { url, depth } = queue.shift()!;
+      const key = normalizeForDedup(url);
+      if (visited.has(key)) continue;
+      visited.add(key);
 
-    if (depth < MAX_DEPTH) {
-      for (const link of links) {
-        if (!visited.has(link) && queue.length + visited.size < MAX_PAGES) {
-          queue.push({ url: link, depth: depth + 1 });
+      if (!robots.isAllowed(new URL(url).pathname)) continue;
+
+      const extracted = await fetchAndExtract(url);
+      if (extracted?.text) {
+        pages.push({ url, title: extracted.title, text: extracted.text });
+        totalChars += extracted.text.length;
+      }
+
+      if (extracted && depth < MAX_DEPTH) {
+        for (const link of extracted.links) {
+          const linkKey = normalizeForDedup(link);
+          if (!visited.has(linkKey) && queue.length + visited.size < MAX_PAGES) {
+            queue.push({ url: link, depth: depth + 1 });
+          }
         }
       }
-    }
 
-    if (queue.length > 0) await sleep(CRAWL_DELAY_MS);
+      if (queue.length > 0) await sleep(crawlDelayMs);
+    }
   }
 
-  const markdown = sections.join("\n\n---\n\n");
-  const contentHash = createHash("sha256").update(markdown).digest("hex");
+  const contentHash = createHash("sha256")
+    .update(pages.map((p) => `${p.url}\n${p.text}`).join("\n\n---\n\n"))
+    .digest("hex");
 
-  return { markdown, contentHash, pagesVisited: visited.size };
+  return { pages, contentHash, pagesVisited: visited.size };
 }
