@@ -101,9 +101,9 @@ export default function AgendaPage() {
 
   return (
     <div>
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-serif text-2xl text-ink">Agenda</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link href="/agenda/disponibilidade">
             <Button size="sm" variant="outline">
               <CalendarCog className="h-4 w-4" /> Configurar disponibilidade
