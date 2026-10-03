@@ -32,16 +32,16 @@ export default function ConversationsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="font-serif text-2xl text-ink">Conversas</h1>
-        <SegmentedControl value={range} onValueChange={setRange} options={RANGE_OPTIONS} />
+        <SegmentedControl value={range} onValueChange={setRange} options={RANGE_OPTIONS} className="self-start" />
       </div>
 
       {!data ? (
         <p className="text-ink-soft">Carregando…</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Respostas da IA" value={data.totalMessages} />
             <StatCard
               label="Ficou em silêncio"
@@ -53,7 +53,7 @@ export default function ConversationsPage() {
               value={data.bySource.escalation}
               context={pct(data.escalationRate)}
             />
-            <StatCard label="Tempo de resposta (mediana)" value={formatMs(data.medianLatencyMs)} context={`média ${formatMs(data.avgLatencyMs)}`} />
+            <StatCard label="Tempo de resposta" value={formatMs(data.medianLatencyMs)} context={`mediana · média ${formatMs(data.avgLatencyMs)}`} />
           </div>
 
           <Card>
