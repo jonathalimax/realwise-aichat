@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { createHash } from "crypto";
+import { randomBytes } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 
 export interface ListingItem {
@@ -21,9 +21,11 @@ export interface ChatQueryFilters {
   ordem?: string;
 }
 
+// Manually-created listings have nothing stable to derive a deterministic code from (unlike the
+// extraction pipeline's dedupKey-derived codes), so this needs real randomness, not Date.now()+
+// Math.random() hashed through sha256 — that's guessable/predictable, not cryptographically random.
 function generateReferenceCode(): string {
-  const hash = createHash("sha256").update(`${Date.now()}-${Math.random()}`).digest("hex").slice(0, 6).toUpperCase();
-  return `AP-${hash}`;
+  return `AP-${randomBytes(5).toString("hex").toUpperCase()}`;
 }
 
 // Explicit allowlist of owner-settable fields. Anything not listed here (businessId, id,
@@ -131,7 +133,10 @@ export class ListingsService {
     }
 
     return this.prisma.client.listing.update({
-      where: { id: listingId },
+      // businessId/deletedAt repeated here even though findFirst above already checked them —
+      // defense in depth so a future edit that removes/weakens that check can't silently turn
+      // this into a cross-tenant write.
+      where: { id: listingId, businessId, deletedAt: null },
       data: { ...allowed, status: allowed.status as any, overriddenFields: overridden as any },
       include: { images: { orderBy: { ordinal: "asc" } } },
     });
@@ -157,7 +162,7 @@ export class ListingsService {
   async softDelete(businessId: string, listingId: string) {
     const existing = await this.prisma.client.listing.findFirst({ where: { id: listingId, businessId, deletedAt: null } });
     if (!existing) throw new NotFoundException("Listing not found");
-    return this.prisma.client.listing.update({ where: { id: listingId }, data: { deletedAt: new Date() } });
+    return this.prisma.client.listing.update({ where: { id: listingId, businessId, deletedAt: null }, data: { deletedAt: new Date() } });
   }
 
   async queryForChat(businessId: string, filters: ChatQueryFilters, limit = 6): Promise<ListingItem[]> {
