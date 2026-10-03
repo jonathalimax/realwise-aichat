@@ -97,6 +97,29 @@ function normalizeUrlForDedup(rawUrl: string): string {
   }
 }
 
+function jaccardSimilarity(a: string, b: string): number {
+  const setA = new Set(a.split(" ").filter(Boolean));
+  const setB = new Set(b.split(" ").filter(Boolean));
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let intersection = 0;
+  for (const token of setA) {
+    if (setB.has(token)) intersection++;
+  }
+  const union = setA.size + setB.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+const FUZZY_TITLE_THRESHOLD = 0.6;
+const FUZZY_PRICE_TOLERANCE = 0.05;
+
+function priceWithinTolerance(a?: number, b?: number): boolean {
+  if (a == null || b == null) return true;
+  if (a === 0 && b === 0) return true;
+  const diff = Math.abs(a - b);
+  const base = Math.max(a, b);
+  return base === 0 ? true : diff / base <= FUZZY_PRICE_TOLERANCE;
+}
+
 function computeDedupKey(item: ExtractedListing): string {
   if (item.url) {
     return `url:${normalizeUrlForDedup(item.url)}`;
@@ -227,9 +250,34 @@ export class ListingExtractionService {
       // every item.
       const explicitCode = findExplicitReferenceCode(`${item.title} ${item.description ?? ""}`);
 
-      const existing = await this.prisma.client.listing.findUnique({
+      let existing = await this.prisma.client.listing.findUnique({
         where: { businessId_dedupKey: { businessId, dedupKey } },
       });
+      let dedupKeyNeedsHealing = false;
+
+      // The LLM paraphrases/changes listing URLs between extraction runs, which breaks the
+      // url-based dedupKey and otherwise produces a duplicate row for the same real property on
+      // every re-run. Fall back to a fuzzy title+price match against this business's own
+      // persisted (non-inactive) rows before concluding this is a genuinely new listing.
+      if (!existing) {
+        const normalizedItemTitle = normalizeTitle(item.title);
+        const candidates = await this.prisma.client.listing.findMany({
+          where: { businessId, status: { not: "inactive" } },
+        });
+        const matches = candidates.filter((candidate) => {
+          const similarity = jaccardSimilarity(normalizedItemTitle, normalizeTitle(candidate.title));
+          if (similarity < FUZZY_TITLE_THRESHOLD) return false;
+          return priceWithinTolerance(item.priceCents ?? undefined, candidate.priceCents ?? undefined);
+        });
+        if (matches.length === 1) {
+          existing = matches[0];
+          dedupKeyNeedsHealing = true;
+        } else if (matches.length > 1) {
+          this.logger.warn(
+            `extractForBusiness ${businessId}: fuzzy title match for "${item.title}" was ambiguous (${matches.length} candidates) — falling back to exact dedupKey behavior`,
+          );
+        }
+      }
 
       const overridden: Record<string, unknown> = (existing?.overriddenFields as Record<string, unknown>) ?? {};
 
@@ -266,7 +314,15 @@ export class ListingExtractionService {
       if (existing) {
         await this.prisma.client.listing.update({
           where: { id: existing.id },
-          data: { ...dataToWrite, lastSeenInSourceAt: runStartedAt, status: existing.status === "inactive" ? "active" : existing.status },
+          data: {
+            ...dataToWrite,
+            // Self-heal the dedupKey when matched via fuzzy title/price instead of an exact key
+            // hit, so a future run with this same (new) URL phrasing hits the primary key match
+            // directly rather than requiring fuzzy matching forever.
+            ...(dedupKeyNeedsHealing && !overridden.url ? { dedupKey } : {}),
+            lastSeenInSourceAt: runStartedAt,
+            status: existing.status === "inactive" ? "active" : existing.status,
+          },
         });
         if (!overridden.images) {
           await this.prisma.client.listingImage.deleteMany({ where: { listingId: existing.id } });
