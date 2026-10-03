@@ -239,6 +239,12 @@ export function ChatScreen({
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [flowRestored, setFlowRestored] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Holds the in-flight (or resolved) conversation-creation promise so a message sent before the
+  // mount effect's startConversation() resolves awaits that SAME promise instead of racing a
+  // second POST /conversations call — that race was creating a second conversation untouched by
+  // flow/start, streaming the user's message into it, and then having the slower mount effect
+  // overwrite conversationId/bubbles/messages state mid-stream.
+  const conversationPromiseRef = useRef<Promise<string> | null>(null);
 
   useEffect(() => {
     getBusiness(slug).then(setBusiness).catch(() => setBusiness(null));
@@ -251,8 +257,14 @@ export function ChatScreen({
     (async () => {
       let convId = resumeConversationId ?? null;
       if (!convId) {
-        const conversation = await startConversation(business.id);
-        convId = conversation.id;
+        if (!conversationPromiseRef.current) {
+          conversationPromiseRef.current = startConversation(business.id).then((conversation) => conversation.id);
+        }
+        convId = await conversationPromiseRef.current;
+      } else {
+        // Resume-link path: pin the ref to the already-known id so ensureConversation() below
+        // never kicks off a second startConversation() call for this conversation.
+        conversationPromiseRef.current = Promise.resolve(convId);
       }
       setConversationId(convId);
       try {
@@ -283,18 +295,42 @@ export function ChatScreen({
       .catch(() => {});
   }, [business, conversationId, historyLoaded, flowRestored]);
 
+  // requestAnimationFrame ensures this runs after layout settles (e.g. right after the sending
+  // indicator or a new message mounts), and the visualViewport listener re-triggers the same
+  // scroll once the mobile keyboard's viewport resize actually settles — otherwise the typing
+  // indicator can end up rendered off-screen under the keyboard.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
   }, [messages, showBooking, sending]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    const onResize = () => {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
+    };
+    window.visualViewport.addEventListener("resize", onResize);
+    return () => window.visualViewport?.removeEventListener("resize", onResize);
+  }, []);
+
   async function ensureConversation() {
-    if (conversationId || !business) return conversationId;
-    const conversation = await startConversation(business.id);
-    setConversationId(conversation.id);
-    return conversation.id;
+    if (conversationId) return conversationId;
+    if (!business) return null;
+    // Await the SAME promise the mount effect kicked off (or is about to kick off) instead of
+    // racing a second startConversation() call while that effect hasn't resolved yet.
+    if (!conversationPromiseRef.current) {
+      conversationPromiseRef.current = startConversation(business.id).then((conversation) => conversation.id);
+    }
+    const id = await conversationPromiseRef.current;
+    setConversationId(id);
+    return id;
   }
 
   async function handleSend(text: string) {
+    if (sending) return;
     if (!text.trim() || !business) return;
     if (text.toLowerCase().includes("agendar")) {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: text }]);
@@ -315,6 +351,7 @@ export function ChatScreen({
     let assistantStarted = false;
     try {
       const convId = await ensureConversation();
+      if (!convId) throw new Error("conversation_unavailable");
       const result = await streamMessage(business.id, convId, text, (delta) => {
         setSending(false);
         setMessages((prev) => {
@@ -350,6 +387,7 @@ export function ChatScreen({
     }
     try {
       const convId = await ensureConversation();
+      if (!convId) throw new Error("conversation_unavailable");
       const result = await advanceFlow(business.id, convId, bubble.goto, bubble.params);
       if (isBack) {
         setMessages((prev) => prev.slice(0, -2));

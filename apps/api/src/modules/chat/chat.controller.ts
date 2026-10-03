@@ -72,10 +72,23 @@ export class ChatController {
       "content-type": "text/event-stream",
       "cache-control": "no-cache",
       connection: "keep-alive",
+      "x-accel-buffering": "no",
     });
+    res.flushHeaders?.();
+    // Prime the connection immediately: the client parser at apps/chat/src/lib/api.ts skips any
+    // frame without both `event:` and `data:` fields, so a bare SSE comment is a harmless no-op
+    // for the client but guarantees bytes leave the server well before the first real delta
+    // arrives (3-10s later from retrieval+LLM) — this is what prevents any buffering proxy or
+    // flaky mobile connection from holding the whole response until then.
+    res.write(":ok\n\n");
     const send = (event: string, data: unknown) => {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
+
+    // Heartbeat so the connection never looks idle to any intermediary while retrieval+LLM work.
+    const heartbeat = setInterval(() => {
+      res.write(":hb\n\n");
+    }, 15000);
 
     const controller = new AbortController();
     res.on("close", () => {
@@ -95,8 +108,10 @@ export class ChatController {
       send("done", result);
     } catch (error) {
       send("error", { message: error instanceof Error ? error.message : "stream_failed" });
+    } finally {
+      clearInterval(heartbeat);
+      res.end();
     }
-    res.end();
   }
 
   @Post(":businessId/conversations/:conversationId/flow/start")

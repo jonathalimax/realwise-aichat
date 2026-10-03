@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3006";
 
 async function request(path: string, options?: RequestInit) {
   const res = await fetch(`${API_URL}${path}`, {
@@ -40,40 +40,49 @@ export async function streamMessage(
   text: string,
   onDelta: (text: string) => void,
 ): Promise<any> {
-  const res = await fetch(`${API_URL}/chat/${businessId}/conversations/${conversationId}/messages/stream`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
-  if (!res.ok || !res.body) throw new Error(`Request failed: ${res.status}`);
+  // A genuinely stalled connection (dead proxy, backend hang) must fail visibly into the
+  // caller's catch-block error message instead of hanging with a silently-stuck sending state.
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), 45000);
+  try {
+    const res = await fetch(`${API_URL}/chat/${businessId}/conversations/${conversationId}/messages/stream`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+      signal: timeoutController.signal,
+    });
+    if (!res.ok || !res.body) throw new Error(`Request failed: ${res.status}`);
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let finalResult: any = null;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finalResult: any = null;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split("\n\n");
-    buffer = events.pop() ?? "";
-    for (const raw of events) {
-      const eventMatch = raw.match(/^event: (\w+)/m);
-      const dataMatch = raw.match(/^data: (.+)$/m);
-      if (!eventMatch || !dataMatch) continue;
-      const payload = JSON.parse(dataMatch[1]);
-      if (eventMatch[1] === "delta") {
-        onDelta(payload.text);
-      } else if (eventMatch[1] === "done") {
-        finalResult = payload;
-      } else if (eventMatch[1] === "error") {
-        throw new Error(payload.message ?? "stream_failed");
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+      for (const raw of events) {
+        const eventMatch = raw.match(/^event: (\w+)/m);
+        const dataMatch = raw.match(/^data: (.+)$/m);
+        if (!eventMatch || !dataMatch) continue;
+        const payload = JSON.parse(dataMatch[1]);
+        if (eventMatch[1] === "delta") {
+          onDelta(payload.text);
+        } else if (eventMatch[1] === "done") {
+          finalResult = payload;
+        } else if (eventMatch[1] === "error") {
+          throw new Error(payload.message ?? "stream_failed");
+        }
       }
     }
+    return finalResult;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return finalResult;
 }
 
 export function startFlow(businessId: string, conversationId: string) {
