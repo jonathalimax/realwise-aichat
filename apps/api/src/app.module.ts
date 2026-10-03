@@ -18,6 +18,7 @@ import { OwnerAssistantModule } from "./modules/owner-assistant/owner-assistant.
 import { AlertsModule } from "./modules/alerts/alerts.module";
 import { UsageModule } from "./modules/usage/usage.module";
 import { InboxModule } from "./modules/inbox/inbox.module";
+import { PushModule } from "./modules/push/push.module";
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { InboxModule } from "./modules/inbox/inbox.module";
     AlertsModule,
     UsageModule,
     InboxModule,
+    PushModule,
   ],
 })
 export class AppModule {}

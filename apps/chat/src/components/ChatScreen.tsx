@@ -14,6 +14,7 @@ import {
   advanceFlow,
   getAvailableSlots,
 } from "../lib/api";
+import { isPushSupported, enablePush } from "../lib/push";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
@@ -229,6 +230,7 @@ export function ChatScreen({
   const [activeListing, setActiveListing] = useState<Listing | null>(null);
   const [conversationStatus, setConversationStatus] = useState<string | null>(null);
   const [pollCapped, setPollCapped] = useState(false);
+  const [pushPrompt, setPushPrompt] = useState<"hidden" | "asking" | "done">("hidden");
   const bottomRef = useRef<HTMLDivElement>(null);
   // Holds the in-flight (or resolved) conversation-creation promise so a message sent before the
   // mount effect's startConversation() resolves awaits that SAME promise instead of racing a
@@ -401,6 +403,68 @@ export function ChatScreen({
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [business, conversationId, conversationStatus, pollCapped, resumeConversationId, resumeToken]);
+
+  // Conversational opt-in: once a conversation escalates to human handoff, ask the visitor (in
+  // Clara's voice, in a normal chat bubble) whether they want a notification if they leave —
+  // instead of a cold browser permission popup with no context. Asked at most once per
+  // conversation (localStorage flag), and only when the browser hasn't already decided.
+  useEffect(() => {
+    if (!business || !conversationId) return;
+    if (conversationStatus !== "escalated") return;
+    if (!isPushSupported()) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "default") return;
+    if (pushPrompt !== "hidden") return;
+
+    const askedKey = `rw_push_asked_${conversationId}`;
+    if (localStorage.getItem(askedKey)) return;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: nextMessageId(),
+        role: "assistant",
+        content: "Enquanto você espera, quer que eu te avise por notificação quando a resposta chegar, mesmo que você saia dessa tela?",
+      },
+    ]);
+    setPushPrompt("asking");
+  }, [business, conversationId, conversationStatus, pushPrompt]);
+
+  // Returning visitor whose browser already granted permission (e.g. a previous conversation on
+  // this same origin) but who has no active subscription for THIS conversation yet — subscribe
+  // silently, no prompt needed since permission is already settled.
+  useEffect(() => {
+    if (!business || !conversationId) return;
+    if (!isPushSupported()) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    enablePush(business.id, conversationId).catch(() => {});
+  }, [business, conversationId]);
+
+  async function handlePushChoice(accepted: boolean) {
+    if (!business || !conversationId) return;
+    const askedKey = `rw_push_asked_${conversationId}`;
+    localStorage.setItem(askedKey, "1");
+
+    if (accepted) {
+      const result = await enablePush(business.id, conversationId);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextMessageId(),
+          role: "assistant",
+          content:
+            result === "granted"
+              ? "Perfeito, vou te avisar por aqui assim que tivermos uma resposta!"
+              : "Não consegui ativar a notificação agora, mas pode continuar acompanhando por aqui.",
+        },
+      ]);
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        { id: nextMessageId(), role: "assistant", content: "Sem problema, fico por aqui aguardando você." },
+      ]);
+    }
+    setPushPrompt("done");
+  }
 
   async function handleManualRefresh() {
     if (!business || !conversationId) return;
@@ -670,6 +734,16 @@ export function ChatScreen({
           <div className="flex justify-center">
             <Button type="button" variant="outline" size="sm" onClick={handleManualRefresh}>
               Atualizar
+            </Button>
+          </div>
+        )}
+        {pushPrompt === "asking" && (
+          <div className="flex justify-center gap-2">
+            <Button type="button" size="sm" onClick={() => handlePushChoice(true)}>
+              Sim
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => handlePushChoice(false)}>
+              Não
             </Button>
           </div>
         )}

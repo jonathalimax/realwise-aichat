@@ -228,9 +228,16 @@ export class ChatService {
     return { exceeded: false };
   }
 
-  // Full ordered history plus the flow's last-known position, so the frontend can repaint the
-  // visitor's prior bubbles/state on reopen instead of restarting the scripted flow from scratch.
-  async getHistory(businessId: string, conversationId: string, visitorToken: string, leadId?: string, resumeToken?: string) {
+  // Shared ownership check used by getHistory and the push subscribe/unsubscribe endpoints — a
+  // visitor may own a conversation either via its original visitorToken/leadId or via a
+  // cross-device resume token. Returns the conversation row (so callers don't re-fetch) or throws.
+  async assertVisitorOwnsConversation(
+    businessId: string,
+    conversationId: string,
+    visitorToken: string,
+    leadId?: string,
+    resumeToken?: string,
+  ) {
     const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
     if (!conversation) throw new NotFoundException("Conversation not found");
 
@@ -239,6 +246,26 @@ export class ChatService {
     if (!ownsViaVisitor && !ownsViaResumeToken) {
       throw new ForbiddenException("Conversation does not belong to this visitor");
     }
+
+    return { conversation, ownsViaVisitor, ownsViaResumeToken };
+  }
+
+  // Full ordered history plus the flow's last-known position, so the frontend can repaint the
+  // visitor's prior bubbles/state on reopen instead of restarting the scripted flow from scratch.
+  async getHistory(businessId: string, conversationId: string, visitorToken: string, leadId?: string, resumeToken?: string) {
+    const { conversation, ownsViaVisitor, ownsViaResumeToken } = await this.assertVisitorOwnsConversation(
+      businessId,
+      conversationId,
+      visitorToken,
+      leadId,
+      resumeToken,
+    );
+
+    // Fire-and-forget presence touch — lets the push-notification trigger in InboxService know
+    // this visitor is actively polling the chat right now, so it can skip sending a redundant push.
+    this.prisma.client.conversation
+      .update({ where: { id: conversationId }, data: { lastVisitorSeenAt: new Date() } })
+      .catch(() => {});
 
     const messages = await this.prisma.client.message.findMany({
       where: { conversationId },

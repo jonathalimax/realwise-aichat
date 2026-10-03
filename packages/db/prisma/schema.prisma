@@ -127,6 +127,7 @@ model Business {
   dataSubjectRequests DataSubjectRequest[]
   alerts          BusinessAlert[]
   listings        Listing[]
+  pushSubscriptions PushSubscription[]
 }
 
 model Plan {
@@ -232,6 +233,7 @@ model Conversation {
   referenceCode       String?
   lastReadByOwnerAt   DateTime?
   lastOwnerReplyAt    DateTime?
+  lastVisitorSeenAt   DateTime?
   totalInputTokens    Int                 @default(0)
   totalOutputTokens   Int                 @default(0)
   fixedFlowTurns      Int                 @default(0)
@@ -245,6 +247,7 @@ model Conversation {
 
   messages            Message[]
   appointments        Appointment[]
+  pushSubscriptions   PushSubscription[]
 }
 
 model Message {
@@ -521,6 +524,24 @@ model Listing {
   @@index([businessId, status, listingType, transaction])
   @@index([businessId, status, priceCents])
   @@index([businessId, status, neighborhood])
+}
+
+model PushSubscription {
+  id             String       @id @default(uuid())
+  businessId     String
+  business       Business     @relation(fields: [businessId], references: [id])
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  endpoint       String       @unique
+  p256dh         String
+  auth           String
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+  lastSentAt     DateTime?
+  failureCount   Int          @default(0)
+  revokedAt      DateTime?
+
+  @@index([conversationId, revokedAt])
 }
 
 model ListingImage {

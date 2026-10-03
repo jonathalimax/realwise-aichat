@@ -120,3 +120,21 @@ export function identifyVisitor(businessSlug: string, name: string, phone: strin
     body: JSON.stringify({ businessSlug, name, phone }),
   });
 }
+
+export function getPushPublicKey(businessId: string): Promise<{ publicKey: string | null }> {
+  return request(`/chat/${businessId}/push/public-key`);
+}
+
+export function subscribePush(businessId: string, conversationId: string, subscription: unknown) {
+  return request(`/chat/${businessId}/conversations/${conversationId}/push/subscribe`, {
+    method: "POST",
+    body: JSON.stringify(subscription),
+  });
+}
+
+export function unsubscribePush(businessId: string, conversationId: string, endpoint: string) {
+  return request(`/chat/${businessId}/conversations/${conversationId}/push/unsubscribe`, {
+    method: "POST",
+    body: JSON.stringify({ endpoint }),
+  });
+}

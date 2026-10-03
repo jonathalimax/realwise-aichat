@@ -1,9 +1,20 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { PushService } from "../push/push.service";
+import { ChatService } from "../chat/chat.service";
+
+// Visitor is considered "live" (actively polling the chat, will see the owner's reply within a
+// few seconds via the existing poll loop) if they were seen more recently than this — in which
+// case a push notification would just be redundant noise.
+const VISITOR_LIVE_WINDOW_MS = 45_000;
 
 @Injectable()
 export class InboxService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly push: PushService,
+    private readonly chat: ChatService,
+  ) {}
 
   async listConversations(businessId: string, filter?: "all" | "escalated") {
     const conversations = await this.prisma.client.conversation.findMany({
@@ -74,7 +85,10 @@ export class InboxService {
       throw new BadRequestException("Mensagem inválida: não pode estar vazia e deve ter até 2000 caracteres.");
     }
 
-    const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
+    const conversation = await this.prisma.client.conversation.findFirst({
+      where: { id: conversationId, businessId },
+      include: { business: { select: { slug: true, name: true } } },
+    });
     if (!conversation) throw new NotFoundException("Conversation not found");
 
     if (conversation.status !== "escalated") {
@@ -94,6 +108,22 @@ export class InboxService {
         messageCount: { increment: 1 },
       },
     });
+
+    // Visitor is actively polling the chat (within VISITOR_LIVE_WINDOW_MS) — they'll see this
+    // reply within a few seconds via the existing poll loop, so a push would just be redundant.
+    const visitorIsLive =
+      conversation.lastVisitorSeenAt && Date.now() - conversation.lastVisitorSeenAt.getTime() < VISITOR_LIVE_WINDOW_MS;
+    if (!visitorIsLive) {
+      const url = this.chat.buildResumeLink(conversation.business, conversation);
+      this.push
+        .sendToConversation(conversationId, {
+          title: conversation.business.name,
+          body: trimmed.slice(0, 120),
+          url,
+          tag: `owner-reply-${conversationId}`,
+        })
+        .catch(() => {});
+    }
 
     return message;
   }
