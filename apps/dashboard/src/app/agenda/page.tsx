@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { CalendarCog } from "lucide-react";
 import { getAppointments, updateAppointmentStatus, getMe, getCalendarStatus, getCalendarAuthUrl } from "../../lib/api";
 import { Card, CardContent } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
@@ -102,6 +104,11 @@ export default function AgendaPage() {
       <div className="mb-5 flex items-center justify-between">
         <h1 className="font-serif text-2xl text-ink">Agenda</h1>
         <div className="flex items-center gap-2">
+          <Link href="/agenda/disponibilidade">
+            <Button size="sm" variant="outline">
+              <CalendarCog className="h-4 w-4" /> Configurar disponibilidade
+            </Button>
+          </Link>
           {calendarConnected ? (
             <Badge variant="positive">Google Calendar conectado</Badge>
           ) : (

@@ -83,6 +83,11 @@ export const updateAppointmentStatus = (id: string, status: string) =>
 
 export const getCalendarStatus = (businessId: string) => request(`/calendar/${businessId}/status`);
 
+export const getAvailabilityRules = () => request("/bookings/availability");
+export const upsertAvailabilityRule = (data: Record<string, unknown>) =>
+  request("/bookings/availability", { method: "POST", body: JSON.stringify(data) });
+export const deleteAvailabilityRule = (id: string) => request(`/bookings/availability/${id}`, { method: "DELETE" });
+
 export const askOwnerAssistant = (message: string, history: { role: "owner" | "assistant"; content: string }[]) =>
   request("/owner-assistant/ask", { method: "POST", body: JSON.stringify({ message, history }) });
 export const getCalendarAuthUrl = (businessId: string) => request(`/calendar/${businessId}/auth-url`);
