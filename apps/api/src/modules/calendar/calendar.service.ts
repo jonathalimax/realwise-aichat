@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { google } from "googleapis";
 import { PrismaService } from "../../prisma/prisma.service";
 import { encryptSecret, decryptSecret } from "../../common/crypto";
+import { AvailabilityService } from "../bookings/availability.service";
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -13,7 +14,10 @@ export class CalendarService {
   // In-memory is fine for a single-instance deploy; move to Redis/DB if the API ever scales out.
   private readonly pendingStates = new Map<string, { businessId: string; expiresAt: number }>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly availability: AvailabilityService,
+  ) {}
 
   private issueState(businessId: string): string {
     const token = randomBytes(32).toString("base64url");
@@ -104,60 +108,55 @@ export class CalendarService {
     return google.calendar({ version: "v3", auth: client });
   }
 
-  // Returns null when calendar sync isn't connected/enabled so callers fall back to free-text date/time entry.
+  // Returns null only when no availability rules exist at all, so callers fall back to free-text
+  // date/time entry. Delegates slot expansion (recurring-rule expansion, timezone handling,
+  // blackout dates, and existing-Appointment double-booking exclusion) to AvailabilityService —
+  // this used to be Google-Calendar-only logic, which meant businesses without a connected
+  // calendar never got real slots at all. When Google Calendar IS connected, additionally
+  // exclude anything that overlaps a busy block on the owner's calendar.
   async getAvailableSlots(businessId: string, dateRange: { from: Date; to: Date }): Promise<{ start: string; end: string }[] | null> {
-    if (!this.isConfigured()) return null;
-    const integration = await this.prisma.client.calendarIntegration.findUnique({ where: { businessId } });
-    if (!integration || !integration.syncEnabled) return null;
-
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     // Same public-access rule as the chat widget itself (getBySlug) — only live businesses are
-    // queryable, so this endpoint can't be used to probe/spam Google's API for arbitrary/dead IDs.
+    // queryable, so this endpoint can't be used to probe/spam arbitrary/dead IDs.
     if (!business || business.status !== "live") return [];
-    const slotRules = await this.prisma.client.bookingSlot.findMany({ where: { businessId, isBlocked: false, kind: "recurring" } });
-    if (slotRules.length === 0) return [];
 
-    const calendar = await this.calendarClient(integration);
-    const freebusy = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: dateRange.from.toISOString(),
-        timeMax: dateRange.to.toISOString(),
-        timeZone: business.timezone,
-        items: [{ id: integration.calendarId }],
-      },
+    const { configured, slots } = await this.availability.computeSlots(businessId, {
+      appointmentType: "presencial",
+      from: dateRange.from,
+      to: dateRange.to,
     });
-    const busy = freebusy.data.calendars?.[integration.calendarId]?.busy ?? [];
+    if (!configured) return null;
+    if (slots.length === 0) return [];
 
-    const slots: { start: string; end: string }[] = [];
-    for (const rule of slotRules) {
-      if (!rule.startTime || !rule.endTime) continue;
-      const day = new Date(dateRange.from);
-      while (day <= dateRange.to) {
-        if (day.getDay() === rule.weekday) {
-          const [startH, startM] = rule.startTime.split(":").map(Number);
-          const [endH, endM] = rule.endTime.split(":").map(Number);
-          let cursor = new Date(day);
-          cursor.setHours(startH, startM, 0, 0);
-          const dayEnd = new Date(day);
-          dayEnd.setHours(endH, endM, 0, 0);
-          while (cursor.getTime() + rule.slotDurationMinutes * 60000 <= dayEnd.getTime()) {
-            const slotStart = new Date(cursor);
-            const slotEnd = new Date(cursor.getTime() + rule.slotDurationMinutes * 60000);
-            const overlapsBusy = busy.some((b) => {
-              const bStart = new Date(b.start ?? 0).getTime();
-              const bEnd = new Date(b.end ?? 0).getTime();
-              return slotStart.getTime() < bEnd && slotEnd.getTime() > bStart;
-            });
-            if (!overlapsBusy && slotStart > new Date()) {
-              slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString() });
-            }
-            cursor = new Date(cursor.getTime() + rule.slotDurationMinutes * 60000);
-          }
-        }
-        day.setDate(day.getDate() + 1);
+    let busy: { start?: string | null; end?: string | null }[] = [];
+    if (this.isConfigured()) {
+      const integration = await this.prisma.client.calendarIntegration.findUnique({ where: { businessId } });
+      if (integration?.syncEnabled) {
+        const calendar = await this.calendarClient(integration);
+        const freebusy = await calendar.freebusy.query({
+          requestBody: {
+            timeMin: dateRange.from.toISOString(),
+            timeMax: dateRange.to.toISOString(),
+            timeZone: business.timezone,
+            items: [{ id: integration.calendarId }],
+          },
+        });
+        busy = freebusy.data.calendars?.[integration.calendarId]?.busy ?? [];
       }
     }
-    return slots;
+
+    return slots
+      .filter((slot) => {
+        if (busy.length === 0) return true;
+        const slotStart = new Date(slot.startsAt).getTime();
+        const slotEnd = new Date(slot.endsAt).getTime();
+        return !busy.some((b) => {
+          const bStart = new Date(b.start ?? 0).getTime();
+          const bEnd = new Date(b.end ?? 0).getTime();
+          return slotStart < bEnd && slotEnd > bStart;
+        });
+      })
+      .map((slot) => ({ start: slot.startsAt, end: slot.endsAt }));
   }
 
   // Additive side-effect of booking — if calendar isn't connected this is a no-op so the existing
