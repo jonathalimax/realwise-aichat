@@ -133,7 +133,7 @@
       "id": "resultados",
       "message": "Encontrei {n} imóveis para você 👇",
       "bubbles": [
-        { "label": "➡️ Ver próximo", "goto": "resultados" },
+        { "label": "➡️ Ver próximo", "goto": "resultados", "params": {"paginate": true} },
         { "label": "🔍 Ver detalhes", "goto": "imovel_detalhe" },
         { "label": "📅 Agendar visita", "goto": "visita_dia" },
         { "label": "💲 Menor preço primeiro", "goto": "resultados", "params": {"ordem": "preco_asc"} },
@@ -1298,7 +1298,8 @@
         { "label": "Sou o fiador", "goto": "fiador_area" },
         { "label": "Voltar", "goto": "start" }
       ],
-      "input": "CPF"
+      "input": "CPF",
+      "on_input": "inquilino"
     },
     "inquilino": {
       "id": "inquilino",
@@ -1983,7 +1984,8 @@
       "bubbles": [
         { "label": "Voltar", "goto": "proprietario" }
       ],
-      "input": "CPF"
+      "input": "CPF",
+      "on_input": "prop_cliente"
     },
     "prop_cliente": {
       "id": "prop_cliente",
@@ -2166,9 +2168,8 @@
     },
     "info_endereco": {
       "id": "info_endereco",
-      "message": "Estamos em {endereco} 📍",
+      "message": "Estamos em {endereco} 📍 — o endereço já está completo acima.",
       "bubbles": [
-        { "label": "Ver no mapa", "goto": "info_endereco" },
         { "label": "Outra informação", "goto": "outras" },
         { "label": "Voltar ao menu", "goto": "start" }
       ]

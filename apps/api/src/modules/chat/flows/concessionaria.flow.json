@@ -205,7 +205,7 @@
       "id": "resultados",
       "message": "Encontrei {n} carros para você 👇",
       "bubbles": [
-        { "label": "➡️ Ver próximo", "goto": "resultados" },
+        { "label": "➡️ Ver próximo", "goto": "resultados", "params": {"paginate": true} },
         { "label": "🔍 Ver detalhes", "goto": "carro_detalhe" },
         { "label": "🏦 Simular parcela deste", "goto": "fin_entrada" },
         { "label": "📅 Agendar test drive", "goto": "agend_dia" },
@@ -789,7 +789,8 @@
         { "label": "Isso afeta meu score?", "goto": "fin_score" },
         { "label": "Meus dados estão seguros?", "goto": "lgpd" }
       ],
-      "input": "CPF"
+      "input": "CPF",
+      "on_input": "fin_renda"
     },
     "fin_renda": {
       "id": "fin_renda",
@@ -824,11 +825,10 @@
     },
     "fin_aprovado": {
       "id": "fin_aprovado",
-      "message": "Boa notícia! 🎉 Crédito pré-aprovado em até {valor_aprovado}.",
+      "message": "Vamos analisar sua solicitação de financiamento — um especialista vai te retornar com as condições em breve.",
       "bubbles": [
         { "label": "Escolher um carro", "goto": "resultados", "params": {"por_parcela": true} },
-        { "label": "Seguir com o carro que vi", "goto": "fechar_docs" },
-        { "label": "Ver as propostas dos bancos", "goto": "fin_propostas" }
+        { "label": "Seguir com o carro que vi", "goto": "fechar_docs" }
       ]
     },
     "fin_negado": {
@@ -993,14 +993,14 @@
       "id": "troca_marca",
       "message": "Qual a marca do seu carro?",
       "bubbles": [
-        { "label": "Chevrolet", "goto": "troca_modelo" },
-        { "label": "Fiat", "goto": "troca_modelo" },
-        { "label": "Volkswagen", "goto": "troca_modelo" },
-        { "label": "Toyota", "goto": "troca_modelo" },
-        { "label": "Hyundai", "goto": "troca_modelo" },
-        { "label": "Honda", "goto": "troca_modelo" },
-        { "label": "Ford", "goto": "troca_modelo" },
-        { "label": "Renault", "goto": "troca_modelo" },
+        { "label": "Chevrolet", "goto": "troca_modelo", "params": {"marca": "Chevrolet"} },
+        { "label": "Fiat", "goto": "troca_modelo", "params": {"marca": "Fiat"} },
+        { "label": "Volkswagen", "goto": "troca_modelo", "params": {"marca": "Volkswagen"} },
+        { "label": "Toyota", "goto": "troca_modelo", "params": {"marca": "Toyota"} },
+        { "label": "Hyundai", "goto": "troca_modelo", "params": {"marca": "Hyundai"} },
+        { "label": "Honda", "goto": "troca_modelo", "params": {"marca": "Honda"} },
+        { "label": "Ford", "goto": "troca_modelo", "params": {"marca": "Ford"} },
+        { "label": "Renault", "goto": "troca_modelo", "params": {"marca": "Renault"} },
         { "label": "Outra", "goto": "troca_modelo" },
         { "label": "Informar pela placa", "goto": "troca_placa" }
       ],
@@ -1376,7 +1376,8 @@
         { "label": "Comprei em nome de outra pessoa", "goto": "handoff" },
         { "label": "Voltar", "goto": "start" }
       ],
-      "input": "CPF"
+      "input": "CPF",
+      "on_input": "cliente"
     },
     "cliente": {
       "id": "cliente",
@@ -1537,8 +1538,8 @@
       "id": "pos_nf",
       "message": "Aqui estão seus documentos da compra 📄",
       "bubbles": [
-        { "label": "Contrato", "goto": "pos_nf" },
-        { "label": "Nota fiscal", "goto": "pos_nf" },
+        { "label": "Contrato", "goto": "handoff_whats" },
+        { "label": "Nota fiscal", "goto": "handoff_whats" },
         { "label": "Outra dúvida", "goto": "cliente" }
       ]
     },

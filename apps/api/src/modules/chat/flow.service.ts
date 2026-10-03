@@ -39,6 +39,16 @@ const WHATSAPP_HANDOFF_NODE_IDS = new Set(["handoff_whats", "handoff_whatsapp", 
 // untrusted param. See resolveCallbackConfirm below.
 const CALLBACK_CONFIRM_NODE_IDS = new Set(["callback_ok"]);
 
+// "fin_aprovado" — reached via "fin_analise"'s "Aguardar resultado" bubble. This system has no
+// real credit-decisioning integration, so the node must never claim a specific approval amount
+// or outcome (its old {valor_aprovado} placeholder was never set by anything, which used to fall
+// through to the generic LLM fallback below and fabricate a fake pre-approval number/decision —
+// a compliance-grade problem, not just a UX one). This short-circuits BEFORE that fallback can
+// ever run, records a real escalation (same resolveWhatsappHandoff-style pattern as
+// resolveBookingFailureEscalation) so a human actually follows up on the financing request, and
+// renders the node's own honest, non-specific message unchanged.
+const FINANCING_ESCALATION_NODE_IDS = new Set(["fin_aprovado"]);
+
 // Scripted day/time-picking nodes that used to show fixed "Hoje"/"Amanhã"/"{horario_1..3}"
 // placeholder bubbles with no real backend effect — now backed by AvailabilityService.computeSlots
 // when the business has configured real availability rules.
@@ -232,6 +242,29 @@ const VEHICLE_CATEGORY_PROMPT =
 const PROPERTY_TYPE_PROMPT =
   "Extraia os tipos de imóveis mencionados nos documentos abaixo (ex: apartamento, casa, terreno, comercial, chácara). Responda apenas com um array JSON de até 8 tipos reais mencionados no texto — nunca invente um tipo que não apareça. Se nenhum for citado, responda com um array vazio [].";
 
+// "troca_marca"/"troca_modelo" ask about the VISITOR's own trade-in car, which can be any brand
+// on the Brazilian market — NOT one the dealer happens to currently stock. These must never
+// reuse BRAND_PROMPT/extractOptions (inventory-derived), so they get their own static, broad
+// list instead of a per-business LLM extraction.
+const TRADE_IN_BRANDS = [
+  "Chevrolet", "Fiat", "Volkswagen", "Toyota", "Hyundai", "Honda", "Ford", "Renault",
+  "Nissan", "Jeep", "Peugeot", "Citroën",
+];
+const TRADE_IN_MODELS_BY_BRAND: Record<string, string[]> = {
+  Chevrolet: ["Onix", "Onix Plus", "Tracker", "S10", "Spin"],
+  Fiat: ["Argo", "Mobi", "Strada", "Toro", "Pulse"],
+  Volkswagen: ["Gol", "Polo", "Virtus", "T-Cross", "Nivus"],
+  Toyota: ["Corolla", "Corolla Cross", "Hilux", "Yaris", "SW4"],
+  Hyundai: ["HB20", "Creta", "Tucson", "HB20S"],
+  Honda: ["Civic", "HR-V", "City", "Fit"],
+  Ford: ["Ka", "EcoSport", "Ranger", "Territory"],
+  Renault: ["Kwid", "Sandero", "Duster", "Logan"],
+  Nissan: ["Kicks", "Versa", "March", "Frontier"],
+  Jeep: ["Renegade", "Compass", "Commander"],
+  Peugeot: ["208", "2008", "3008"],
+  Citroën: ["C3", "C4 Cactus"],
+};
+
 @Injectable()
 export class FlowService {
   constructor(
@@ -298,6 +331,10 @@ export class FlowService {
       return this.resolveCallbackConfirm(businessId, conversationId);
     }
 
+    if (FINANCING_ESCALATION_NODE_IDS.has(node.id)) {
+      return this.resolveFinancingEscalation(businessId, conversationId, substituted);
+    }
+
     if (BOOKING_CONFIRM_NODE_IDS.has(node.id)) {
       const booking = await this.tryCreateBooking(businessId, conversationId, params);
       // Only short-circuit when the visitor actually came through the real slot-picker (slot_start/
@@ -339,14 +376,24 @@ export class FlowService {
       // live-LLM extraction path below.
       const hasListings = await this.listingsService.hasAnyListings(businessId);
       if (hasListings) {
+        // "➡️ Ver próximo" is the only bubble that tags its tap with `paginate: true` — every
+        // other entrance into "resultados" (a fresh search, a sort-order change, re-running the
+        // filters) must start back at offset 0 rather than inheriting a stale offset left over
+        // from browsing a previous, differently-filtered result set.
+        const isPaginating = params.paginate === true;
+        delete params.paginate;
+        if (!isPaginating) params.offset = 0;
         const filters = this.chatFiltersFor(business.niche, params);
         const dbListings = await this.listingsService.queryForChat(businessId, filters, 6);
         if (dbListings.length > 0) {
           // Mutates the same `params` object the caller holds a reference to (advance() stores
           // THIS object as the conversation's flowParams) so a later bubble tap into
           // carro_detalhe/carro_fotos with no listing-specific context can still resolve to the
-          // single listing just shown — see resolveListingId below.
+          // single listing just shown — see resolveListingId below. Also advances `offset` here so
+          // the NEXT "Ver próximo" tap (which carries no offset of its own) picks up where this
+          // page left off.
           params.last_listing_ids = dbListings.map((l) => l.id).filter((id): id is string => Boolean(id));
+          params.offset = (filters.offset ?? 0) + dbListings.length;
           return { message: "Encontrei algumas opções que podem te interessar 👇", listings: dbListings };
         }
         // Real inventory exists but nothing matches the visitor's chosen filters — route
@@ -473,6 +520,28 @@ export class FlowService {
     const message = phone
       ? `Combinado! Vamos te contatar em ${phone} 📞`
       : "Combinado! Um vendedor vai te ligar em breve 📞";
+
+    if (conversation && conversation.status !== "escalated") {
+      const referenceCode = generateReferenceCode();
+      await this.prisma.client.conversation.update({
+        where: { id: conversationId },
+        data: { status: "escalated", escalatedAt: new Date(), referenceCode },
+      });
+      await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: message, answerSource: "escalation" },
+      });
+    }
+
+    return { message };
+  }
+
+  // "fin_aprovado" (FINANCING_ESCALATION_NODE_IDS) — there is no real credit-decisioning
+  // integration behind this flow, so it must never claim a specific approval amount or outcome.
+  // Records a real escalation — same shape as resolveWhatsappHandoff/resolveCallbackConfirm — so
+  // a human actually follows up on the financing request, and renders the node's own honest
+  // message unchanged (no placeholder substitution needed, it has none left).
+  private async resolveFinancingEscalation(businessId: string, conversationId: string, message: string): Promise<{ message: string }> {
+    const conversation = await this.prisma.client.conversation.findUnique({ where: { id: conversationId } });
 
     if (conversation && conversation.status !== "escalated") {
       const referenceCode = generateReferenceCode();
@@ -1081,6 +1150,7 @@ export class FlowService {
       ...(typeof params.marca === "string" && params.marca !== "any" && { brand: params.marca }),
       ...(typeof params.modelo === "string" && params.modelo !== "any" && { model: params.modelo }),
       ...(typeof params.ordem === "string" && { ordem: params.ordem }),
+      ...(typeof params.offset === "number" && params.offset > 0 && { offset: params.offset }),
     };
   }
 
@@ -1286,34 +1356,51 @@ export class FlowService {
   ): Promise<FlowBubble[] | null> {
     switch (nodeId) {
       case "busca_marca":
-      case "busca_marca_mais":
-      case "troca_marca": {
+      case "busca_marca_mais": {
         const brands = await this.extractOptions(businessId, "marca", BRAND_PROMPT);
         const slice = nodeId === "busca_marca_mais" ? brands.slice(4) : brands.slice(0, 4);
-        const goto = nodeId === "troca_marca" ? "troca_modelo" : "busca_modelo";
-        // troca_marca previously passed no params at all, so the brand tapped here never reached
-        // troca_modelo — every trade-in model lookup silently fell back to marca="any" and came
-        // back empty. It needs the same "marca" param key as busca_marca.
         if (slice.length === 0) return null;
         return slice.map((name) => ({
           label: name,
-          goto,
+          goto: "busca_modelo",
           params: { marca: name },
         }));
       }
-      case "busca_modelo":
-      case "troca_modelo": {
+      case "troca_marca": {
+        // Asks about the VISITOR's own trade-in car, which can be any brand on the market — NOT
+        // one the dealer happens to currently stock — so this must never source from BRAND_PROMPT/
+        // extractOptions (inventory-derived). A broad, static market list instead.
+        return TRADE_IN_BRANDS.map((name) => ({
+          label: name,
+          goto: "troca_modelo",
+          params: { marca: name },
+        }));
+      }
+      case "busca_modelo": {
         const marca = (params.marca as string) ?? "any";
         const models = await this.extractOptions(
           businessId,
           `modelo:${marca}`,
           `Extraia os nomes de modelos da marca "${marca}" mencionados nos documentos abaixo. Responda apenas com um array JSON de até 6 modelos reais mencionados no texto — nunca invente um modelo que não apareça. Se nenhum modelo for citado, responda com um array vazio [].`,
         );
-        const goto = nodeId === "troca_modelo" ? "troca_ano" : "busca_preco";
         if (models.length === 0) return null;
         return models.map((name) => ({
           label: name,
-          goto,
+          goto: "busca_preco",
+          params: { modelo: name },
+        }));
+      }
+      case "troca_modelo": {
+        // Same reasoning as "troca_marca" above — static market models for the chosen trade-in
+        // brand instead of the dealer's own inventory. Unlisted/"Outra" brands fall through to
+        // null, which leaves only the node's own "Outro modelo" nav bubble (its {modelo_N}
+        // placeholders get stripped as unresolved) rather than a fake generic list.
+        const marca = (params.marca as string) ?? "";
+        const models = TRADE_IN_MODELS_BY_BRAND[marca];
+        if (!models) return null;
+        return models.map((name) => ({
+          label: name,
+          goto: "troca_ano",
           params: { modelo: name },
         }));
       }

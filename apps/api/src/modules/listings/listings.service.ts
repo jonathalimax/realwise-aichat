@@ -23,6 +23,9 @@ export interface ChatQueryFilters {
   brand?: string;
   model?: string;
   ordem?: string;
+  // Pagination offset for the chat flow's "➡️ Ver próximo" bubble (see flow.service.ts's
+  // resultados handling, which tracks this across turns via flowParams).
+  offset?: number;
 }
 
 // Manually-created listings have nothing stable to derive a deterministic code from (unlike the
@@ -202,7 +205,11 @@ export class ListingsService {
         ? { priceCents: "asc" as const }
         : filters.ordem === "recentes"
           ? { createdAt: "desc" as const }
-          : { updatedAt: "desc" as const };
+          : filters.ordem === "km_asc"
+            ? { mileageKm: "asc" as const }
+            : filters.ordem === "ano_desc"
+              ? { year: "desc" as const }
+              : { updatedAt: "desc" as const };
 
     const rows = await this.prisma.client.listing.findMany({
       where: {
@@ -218,6 +225,7 @@ export class ListingsService {
       },
       orderBy,
       include: { images: { orderBy: { ordinal: "asc" }, take: 1 } },
+      skip: filters.offset ?? 0,
       take: limit,
     });
 
