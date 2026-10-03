@@ -14,11 +14,11 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      <h1 className="mb-5 font-serif text-2xl text-ink">Perguntas mais feitas</h1>
+      <h1 className="mb-5 font-serif text-2xl text-ink">Perguntas sem resposta</h1>
       <Card>
         <CardHeader>
-          <CardTitle>Perguntas mais feitas</CardTitle>
-          <CardDescription>Perguntas recorrentes feitas pelos leads durante as conversas.</CardDescription>
+          <CardTitle>Perguntas sem resposta</CardTitle>
+          <CardDescription>Perguntas que a Clara não conseguiu responder, mais repetidas primeiro — ótimo ponto de partida para completar sua base de conhecimento.</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
           {questions.length === 0 ? (

@@ -12,6 +12,7 @@ import { FlowService } from "./flow.service";
 import { LeadsService } from "../leads/leads.service";
 import { AlertsService } from "../alerts/alerts.service";
 import { UsageService } from "../usage/usage.service";
+import { KnowledgeService } from "../knowledge/knowledge.service";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 const NO_CONTEXT_FALLBACK = "Não encontrei essa informação na nossa base. Quer que eu te passe pro atendimento?";
@@ -49,12 +50,21 @@ export class ChatService {
     private readonly leads: LeadsService,
     private readonly alerts: AlertsService,
     private readonly usage: UsageService,
+    private readonly knowledge: KnowledgeService,
   ) {}
 
   // Fire-and-forget, same pattern as notifyOwner — scoring must never slow down the visitor-facing response.
   private recomputeLeadScore(businessId: string, leadId?: string | null) {
     if (!leadId) return;
     this.leads.recomputeScoreForLead(businessId, leadId).catch(() => {});
+  }
+
+  // Nothing ever called KnowledgeService.recordUnanswered — the "Perguntas não respondidas" (Base
+  // de conhecimento page) and "Perguntas mais feitas" (Analytics page) widgets have real,
+  // fully-implemented backing logic that simply never got wired to the actual abstention path, so
+  // both have silently shown "sem dados" since launch regardless of real traffic.
+  private recordUnanswered(businessId: string, conversationId: string, messageId: string, questionText: string) {
+    this.knowledge.recordUnanswered(businessId, conversationId, messageId, questionText).catch(() => {});
   }
 
   async getOrCreateConversation(businessId: string, visitorToken: string, leadId?: string) {
@@ -256,6 +266,7 @@ export class ChatService {
         retrievalTopScore: answer.retrievalTopScore,
       },
     });
+    if (answer.abstained) this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
 
     await this.prisma.client.conversation.update({
       where: { id: conversationId },
@@ -460,6 +471,7 @@ export class ChatService {
         data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
       });
       this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
+      this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
       return { message: assistantMessage, escalated: false };
     }
 
@@ -513,6 +525,7 @@ export class ChatService {
       data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
     });
     this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
+    if (abstained) this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
 
     const listings = abstained ? undefined : await this.maybeExtractListings(businessId, visitorText, retrievedChunkText);
     return { message: assistantMessage, escalated: false, listings };
