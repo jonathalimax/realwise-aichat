@@ -5,6 +5,18 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 import { retrieveRelevantChunks } from "./knowledge-retrieval";
 
+// LLM-parsed JSON isn't trusted input — only ever accept a genuine http(s) URL for a listing
+// url/imageUrl, never a javascript:/data: scheme a malformed or adversarial model response could emit.
+function safeHttpUrl(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 interface FlowBubble {
   label: string;
   goto: string;
@@ -228,8 +240,8 @@ export class FlowService {
           title: String((item as any).title),
           ...(typeof (item as any).price === "string" ? { price: (item as any).price } : {}),
           ...(typeof (item as any).description === "string" ? { description: (item as any).description } : {}),
-          ...(typeof (item as any).url === "string" ? { url: (item as any).url } : {}),
-          ...(typeof (item as any).imageUrl === "string" ? { imageUrl: (item as any).imageUrl } : {}),
+          ...(safeHttpUrl((item as any).url) ? { url: safeHttpUrl((item as any).url) } : {}),
+          ...(safeHttpUrl((item as any).imageUrl) ? { imageUrl: safeHttpUrl((item as any).imageUrl) } : {}),
         }));
     } catch {
       return [];

@@ -74,14 +74,29 @@ function MessageContent({ text }: { text: string }) {
 // Real listing item (property/vehicle) rendered as a card — image with a sensible fallback when
 // no real photo URL was captured, title, price, a short description snippet, and a tappable link
 // to the real listing when one was genuinely found in the source documents.
+// listing.url/imageUrl come from LLM-parsed JSON, not from code we control — only ever render
+// them if they're a genuine http(s) URL, since a malformed/adversarial model response could
+// otherwise produce a javascript: href or similar.
+function safeHttpUrl(u?: string): string | undefined {
+  if (!u) return undefined;
+  try {
+    const parsed = new URL(u);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function ListingCard({ listing }: { listing: Listing }) {
+  const imageUrl = safeHttpUrl(listing.imageUrl);
+  const url = safeHttpUrl(listing.url);
   return (
     <Card className="w-56 shrink-0 overflow-hidden">
       <div className="flex h-32 w-full items-center justify-center bg-border/40">
-        {listing.imageUrl ? (
+        {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={listing.imageUrl}
+            src={imageUrl}
             alt={listing.title}
             className="h-32 w-full object-cover"
             onError={(e) => {
@@ -98,9 +113,9 @@ function ListingCard({ listing }: { listing: Listing }) {
         <div className="line-clamp-2 text-sm font-semibold text-ink">{listing.title}</div>
         {listing.price && <div className="mt-1 text-sm font-semibold text-accent">{listing.price}</div>}
         {listing.description && <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{listing.description}</p>}
-        {listing.url && (
+        {url && (
           <a
-            href={listing.url}
+            href={url}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-2 block rounded-full bg-accent px-3 py-1.5 text-center text-xs font-medium text-white"
