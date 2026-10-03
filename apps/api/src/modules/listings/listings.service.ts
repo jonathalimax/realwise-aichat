@@ -26,6 +26,68 @@ function generateReferenceCode(): string {
   return `AP-${hash}`;
 }
 
+// Explicit allowlist of owner-settable fields. Anything not listed here (businessId, id,
+// dedupKey, referenceCode, manuallyCreated, createdAt, updatedAt, extractedAt,
+// lastSeenInSourceAt, overriddenFields, deletedAt, etc.) must stay system-controlled and is
+// silently dropped rather than passed through to Prisma. Allowlisting (rather than
+// blacklisting these system fields) means a newly added column is safe-by-default until
+// explicitly opened up here.
+export interface OwnerSettableListingInput {
+  title?: string;
+  description?: string;
+  priceText?: string;
+  priceCents?: number;
+  pricePeriod?: string;
+  addressLine?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  listingType?: string;
+  transaction?: string;
+  bedrooms?: number;
+  parkingSpots?: number;
+  areaM2?: number;
+  brand?: string;
+  model?: string;
+  year?: number;
+  mileageKm?: number;
+  status?: string;
+  url?: string;
+}
+
+const OWNER_SETTABLE_LISTING_FIELDS: readonly (keyof OwnerSettableListingInput)[] = [
+  "title",
+  "description",
+  "priceText",
+  "priceCents",
+  "pricePeriod",
+  "addressLine",
+  "neighborhood",
+  "city",
+  "state",
+  "listingType",
+  "transaction",
+  "bedrooms",
+  "parkingSpots",
+  "areaM2",
+  "brand",
+  "model",
+  "year",
+  "mileageKm",
+  "status",
+  "url",
+];
+
+function pickOwnerSettableFields(data: Record<string, unknown>): OwnerSettableListingInput {
+  const picked: OwnerSettableListingInput = {};
+  for (const key of OWNER_SETTABLE_LISTING_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      (picked as Record<string, unknown>)[key] = data[key];
+    }
+  }
+  return picked;
+}
+
 @Injectable()
 export class ListingsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -61,28 +123,32 @@ export class ListingsService {
     const existing = await this.prisma.client.listing.findFirst({ where: { id: listingId, businessId, deletedAt: null } });
     if (!existing) throw new NotFoundException("Listing not found");
 
+    const allowed = pickOwnerSettableFields(data);
+
     const overridden: Record<string, unknown> = { ...((existing.overriddenFields as Record<string, unknown>) ?? {}) };
-    for (const key of Object.keys(data)) {
+    for (const key of Object.keys(allowed)) {
       overridden[key] = true;
     }
 
     return this.prisma.client.listing.update({
       where: { id: listingId },
-      data: { ...data, overriddenFields: overridden as any },
+      data: { ...allowed, status: allowed.status as any, overriddenFields: overridden as any },
       include: { images: { orderBy: { ordinal: "asc" } } },
     });
   }
 
   async create(businessId: string, data: Record<string, unknown>) {
-    const referenceCode = (data.referenceCode as string) ?? generateReferenceCode();
+    const allowed = pickOwnerSettableFields(data);
+    const referenceCode = generateReferenceCode();
     return this.prisma.client.listing.create({
       data: {
         businessId,
         referenceCode,
         dedupKey: `manual:${referenceCode}`,
         manuallyCreated: true,
-        title: (data.title as string) ?? "Sem título",
-        ...data,
+        title: allowed.title ?? "Sem título",
+        ...allowed,
+        status: allowed.status as any,
       },
       include: { images: { orderBy: { ordinal: "asc" } } },
     });
