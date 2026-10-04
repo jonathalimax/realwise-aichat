@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "crypto";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
 import type { Business, Conversation } from "@realwise/db";
@@ -120,6 +120,8 @@ function isBareGreeting(visitorText: string): boolean {
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly bookings: BookingsService,
@@ -733,7 +735,11 @@ export class ChatService {
         listings,
         suggestions,
       };
-    } catch {
+    } catch (error) {
+      this.logger.error(
+        `sendMessage ${businessId}: generation failed, falling back to abstention — ${error instanceof Error ? error.message : String(error)}`,
+        error instanceof Error ? error.stack : undefined,
+      );
       return {
         text: ABSTENTION_FALLBACK,
         abstained: true,
