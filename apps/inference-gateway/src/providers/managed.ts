@@ -4,11 +4,23 @@ const MANAGED_API_URL = process.env.MANAGED_API_URL ?? "https://openrouter.ai/ap
 const MANAGED_API_KEY = process.env.MANAGED_API_KEY;
 const MANAGED_MODEL = process.env.MANAGED_MODEL ?? "qwen/qwen-2.5-7b-instruct";
 
+// Simple in-memory circuit breaker: when the provider returns a definitive, non-retryable
+// failure (e.g. 402 payment required), remember when and skip straight to the fallback for a
+// cooldown window instead of repeating the same doomed call on every request. Single-process
+// gateway, so a module-level variable is fine — no need for Redis/shared state.
+const CIRCUIT_BREAKER_COOLDOWN_MS = 60000;
+const NON_RETRYABLE_STATUS_CODES = new Set([402, 401, 403]);
+let lastDefinitiveFailureAt: number | null = null;
+
 export class ManagedProvider implements InferenceProvider {
   readonly name = "managed" as const;
 
   async isHealthy(): Promise<boolean> {
-    return Boolean(MANAGED_API_KEY);
+    if (!MANAGED_API_KEY) return false;
+    if (lastDefinitiveFailureAt && Date.now() - lastDefinitiveFailureAt < CIRCUIT_BREAKER_COOLDOWN_MS) {
+      return false;
+    }
+    return true;
   }
 
   async generate(req: GenerateRequest): Promise<GenerateResult> {
@@ -37,7 +49,12 @@ export class ManagedProvider implements InferenceProvider {
       signal: AbortSignal.timeout(20000),
     });
 
-    if (!res.ok) throw new Error(`Managed provider request failed: ${res.status}`);
+    if (!res.ok) {
+      if (NON_RETRYABLE_STATUS_CODES.has(res.status)) {
+        lastDefinitiveFailureAt = Date.now();
+      }
+      throw new Error(`Managed provider request failed: ${res.status}`);
+    }
     const data = (await res.json()) as {
       choices: { message: { content: string } }[];
       usage?: { prompt_tokens: number; completion_tokens: number };
