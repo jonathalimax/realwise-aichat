@@ -104,7 +104,7 @@ function LoginPageInner() {
     <div className="flex min-h-dvh flex-col bg-bg text-ink lg:flex-row">
       {/* BRAND PANEL */}
       <div className="hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-between bg-ink px-12 py-10 text-bg">
-        <a href="/site" className="font-serif text-xl font-bold text-bg">Realwise</a>
+        <a href="/" className="font-serif text-xl font-bold text-bg">Realwise</a>
         <p className="max-w-sm font-serif text-2xl leading-[1.2] text-bg/80">
           Enquanto você dorme, <em className="italic text-[#0B4D38]">a Clara</em> responde.
         </p>
@@ -113,7 +113,7 @@ function LoginPageInner() {
       {/* FORM PANEL */}
       <div className="flex w-full flex-1 flex-col items-center justify-center px-6 py-10 sm:px-12 lg:w-1/2">
         <div className="w-full max-w-[380px]">
-          <a href="/site" className="mb-8 block font-serif text-lg font-bold text-ink lg:hidden">Realwise</a>
+          <a href="/" className="mb-8 block font-serif text-lg font-bold text-ink lg:hidden">Realwise</a>
           <h2 className="font-serif text-3xl text-ink">Entre ou crie sua conta</h2>
           <p className="mt-2 text-sm text-ink-soft">
             Seu telefone é seu login. Se for sua primeira vez, a gente cria sua conta agora — sem cartão, 7 dias

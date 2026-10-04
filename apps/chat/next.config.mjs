@@ -2,4 +2,5 @@
 export default {
   reactStrictMode: true,
   output: "standalone",
+  basePath: "/client/conversation",
 };
