@@ -19,5 +19,6 @@ COPY --from=build /repo/packages ./packages
 COPY --from=build /repo/apps/api/dist ./apps/api/dist
 COPY --from=build /repo/apps/api/node_modules ./apps/api/node_modules
 WORKDIR /repo/apps/api
+RUN npm install -g tsx
 EXPOSE 3001
-CMD ["node", "dist/main.js"]
+CMD ["tsx", "dist/main.js"]

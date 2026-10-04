@@ -14,9 +14,12 @@ RUN pnpm --filter @realwise/worker build
 
 FROM base AS runner
 ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/repo/apps/worker/.playwright
 COPY --from=build /repo/node_modules ./node_modules
 COPY --from=build /repo/packages ./packages
 COPY --from=build /repo/apps/worker/dist ./apps/worker/dist
 COPY --from=build /repo/apps/worker/node_modules ./apps/worker/node_modules
 WORKDIR /repo/apps/worker
-CMD ["node", "dist/index.js"]
+RUN pnpm exec playwright install --with-deps chromium
+RUN npm install -g tsx
+CMD ["tsx", "dist/index.js"]

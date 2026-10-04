@@ -19,5 +19,6 @@ COPY --from=build /repo/packages ./packages
 COPY --from=build /repo/apps/inference-gateway/dist ./apps/inference-gateway/dist
 COPY --from=build /repo/apps/inference-gateway/node_modules ./apps/inference-gateway/node_modules
 WORKDIR /repo/apps/inference-gateway
+RUN npm install -g tsx
 EXPOSE 3002
-CMD ["node", "dist/server.js"]
+CMD ["tsx", "dist/server.js"]
