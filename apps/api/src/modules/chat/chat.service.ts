@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "crypto";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
+import { nicheTemplates } from "@realwise/profile-schema";
 import type { Business, Conversation } from "@realwise/db";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway, generateFromGatewayStream } from "../../inference/gateway-client";
@@ -444,6 +445,26 @@ export class ChatService {
     };
   }
 
+  // Fallback used only when the profile has no cached human-written summary yet. A raw
+  // JSON.stringify of profile.data exposes bare field keys (e.g. "horario_visitas") to the model
+  // with no indication of what that field actually means, which is how a question about general
+  // business hours ("horário de atendimento") previously got answered with the value of the
+  // specific visit-scheduling field ("horário disponível para visitas") — a different concept
+  // that happens to share the "horário" word. Using each field's real template label keeps that
+  // distinction explicit in the prompt.
+  private describeProfileData(niche: string, data: unknown): string {
+    if (!data || typeof data !== "object") return JSON.stringify(data ?? {});
+    const template = nicheTemplates[niche];
+    const entries = Object.entries(data as Record<string, unknown>).filter(([, value]) => value !== null && value !== undefined && value !== "");
+    if (!entries.length) return "{}";
+    return entries
+      .map(([key, value]) => {
+        const label = template?.fields.find((f) => f.key === key)?.label ?? key;
+        return `${label}: ${typeof value === "string" ? value : JSON.stringify(value)}`;
+      })
+      .join("; ");
+  }
+
   private async buildChatPrompt(
     businessId: string,
     conversationId: string,
@@ -462,7 +483,7 @@ export class ChatService {
 
     if (!business) throw new NotFoundException("Business not found");
 
-    const profileSummary = profile?.cachedSummary ?? JSON.stringify(profile?.data ?? {});
+    const profileSummary = profile?.cachedSummary ?? this.describeProfileData(business.niche, profile?.data);
     const history = recentMessages
       .reverse()
       .map((m) => `${m.role === "visitor" ? "Cliente" : "Atendente"}: ${m.content}`)
@@ -491,6 +512,7 @@ export class ChatService {
       "Formate a resposta usando apenas markdown simples: **negrito** com asteriscos duplos e listas com \"- \" no início da linha, no máximo 1 nível de indentação. Nunca use tabelas, nunca use títulos com #, e nunca use HTML bruto.",
       "Nunca inclua links, URLs ou endereços de imagem na resposta, mesmo que apareçam nos trechos de documentos — o sistema anexa automaticamente o link e a foto do item em separado.",
       `Dados cadastrais do negócio (descrevem o negócio em geral, mas NÃO autorizam afirmar que um item/modelo específico está disponível): ${profileSummary}`,
+      "Atenção: \"Horário disponível para visitas\" é só sobre quando é possível agendar uma visita/test-drive — não é o horário de atendimento/funcionamento geral do negócio. Se o cliente perguntar sobre horário de atendimento/funcionamento e essa informação não estiver disponível separadamente, diga que não tem essa informação, mesmo que o horário de visitas esteja disponível.",
       documentContext || "\nNenhum trecho relevante foi encontrado na base de documentos para esta pergunta.",
     ];
 
