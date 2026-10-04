@@ -733,11 +733,19 @@ export class AdminService {
   }
 
   async deleteAdminUser(id: string) {
-    const total = await this.prisma.client.adminUser.count();
-    if (total <= 1) {
-      throw new BadRequestException("Não é possível remover o último administrador.");
-    }
-    await this.prisma.client.adminUser.delete({ where: { id } });
+    // Count-then-delete inside one transaction closes the race where two concurrent deletes
+    // could both pass a stale "at least one left" check and leave zero superadmins able to log in.
+    await this.prisma.client.$transaction(async (tx) => {
+      const target = await tx.adminUser.findUnique({ where: { id }, select: { role: true } });
+      if (!target) throw new BadRequestException("Administrador não encontrado.");
+      if (target.role === "superadmin") {
+        const remainingSuperadmins = await tx.adminUser.count({ where: { role: "superadmin", id: { not: id } } });
+        if (remainingSuperadmins < 1) {
+          throw new BadRequestException("Não é possível remover o último superadmin.");
+        }
+      }
+      await tx.adminUser.delete({ where: { id } });
+    });
     return { ok: true };
   }
 }

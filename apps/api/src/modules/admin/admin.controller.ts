@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { AdminService, PROBLEM_CASE_CATEGORIES } from "./admin.service";
 import { AdminSessionGuard } from "../../common/guards/admin-session.guard";
+import type { AdminSessionClaims } from "@realwise/auth";
 
 const ALLOWED_DAYS = [7, 30, 90];
 
@@ -117,25 +118,34 @@ export class AdminController {
     return this.admin.updatePlatformConfig(supportWhatsappNumber);
   }
 
-  // Gated behind AdminSessionGuard only (any logged-in admin, not just superadmin) — this codebase
-  // has no existing superadmin-vs-support role-gating pattern on any other admin route to reuse.
+  // Managing who can log into the admin panel is a superadmin-only action — "support" admins can
+  // see everything else above but must not be able to mint or remove other admin accounts.
+  private requireSuperadmin(req: { admin?: AdminSessionClaims }) {
+    if (req.admin?.role !== "superadmin") throw new ForbiddenException("Apenas superadmins podem gerenciar administradores.");
+  }
+
   @Get("users")
-  listAdminUsers() {
+  listAdminUsers(@Req() req: { admin?: AdminSessionClaims }) {
+    this.requireSuperadmin(req);
     return this.admin.listAdminUsers();
   }
 
   @Post("users")
   createAdminUser(
+    @Req() req: { admin?: AdminSessionClaims },
     @Body("email") email: string,
     @Body("name") name: string,
     @Body("role") role: string,
     @Body("password") password: string,
   ) {
+    this.requireSuperadmin(req);
     return this.admin.createAdminUser(email, name, role, password);
   }
 
   @Delete("users/:id")
-  deleteAdminUser(@Param("id") id: string) {
+  deleteAdminUser(@Req() req: { admin?: AdminSessionClaims }, @Param("id") id: string) {
+    this.requireSuperadmin(req);
+    if (req.admin?.adminId === id) throw new BadRequestException("Você não pode remover sua própria conta de administrador.");
     return this.admin.deleteAdminUser(id);
   }
 }
