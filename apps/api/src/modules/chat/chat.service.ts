@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "crypto";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
 import type { Business, Conversation } from "@realwise/db";
@@ -950,17 +950,37 @@ export class ChatService {
       listingId = null;
     }
 
-    const appointment = await this.bookings.createAppointmentAndNotify(
-      businessId,
-      leadId,
-      conversationId,
-      serviceName,
-      new Date(startsAt),
-      new Date(endsAt),
-      "chat",
-      undefined,
-      listingId,
-    );
+    let appointment;
+    try {
+      appointment = await this.bookings.createAppointmentAndNotify(
+        businessId,
+        leadId,
+        conversationId,
+        serviceName,
+        new Date(startsAt),
+        new Date(endsAt),
+        "chat",
+        undefined,
+        listingId,
+      );
+    } catch (err) {
+      // Capacity was re-checked right before creation and exceeded (e.g. someone else booked the
+      // same slot meanwhile) — never let this raw 400 reach the visitor, route to the same honest
+      // "não consegui confirmar automaticamente" escalation message used elsewhere on booking failure.
+      if (err instanceof BadRequestException) {
+        const assistantMessage = await this.prisma.client.message.create({
+          data: {
+            conversationId,
+            businessId,
+            role: "assistant",
+            content: "Não consegui confirmar esse horário automaticamente — vou te colocar em contato com um atendente para agendar manualmente.",
+            answerSource: "escalation",
+          },
+        });
+        return { message: assistantMessage, escalated: false };
+      }
+      throw err;
+    }
     // Additive — pushes the appointment to Google Calendar if connected, never blocks booking if it isn't.
     this.calendar.createEvent(businessId, appointment).catch(() => {});
     await this.prisma.client.message.create({

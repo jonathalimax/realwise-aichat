@@ -1,21 +1,43 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { sendEmail } from "../../common/email";
 import { buildIcs } from "../../common/ics";
 import { formatListingAddress, renderOwnerEmail, renderVisitorEmail } from "./booking-notifications";
+import { AvailabilityService } from "./availability.service";
 import type { AppointmentType } from "@realwise/db";
 
 @Injectable()
 export class BookingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly availability: AvailabilityService,
+  ) {}
 
   async listSlots(businessId: string) {
     return this.prisma.client.bookingSlot.findMany({ where: { businessId, isBlocked: false } });
   }
 
   async createSlotRule(businessId: string, data: { weekday: number; startTime: string; endTime: string; slotDurationMinutes: number; capacity?: number }) {
+    const capacity = data.capacity ?? 1;
+    if (!Number.isInteger(capacity) || capacity < 1 || capacity > 50) {
+      throw new BadRequestException("capacity must be an integer between 1 and 50");
+    }
+    if (!Number.isInteger(data.slotDurationMinutes) || data.slotDurationMinutes < 15) {
+      throw new BadRequestException("slotDurationMinutes must be an integer of at least 15");
+    }
+    // Explicit payload — never spread the controller's unvalidated `@Body() body: any` directly
+    // into the Prisma create call, so arbitrary BookingSlot columns can't be written by a
+    // malformed request.
     return this.prisma.client.bookingSlot.create({
-      data: { businessId, kind: "recurring", ...data },
+      data: {
+        businessId,
+        kind: "recurring",
+        weekday: data.weekday,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        slotDurationMinutes: data.slotDurationMinutes,
+        capacity,
+      },
     });
   }
 
@@ -70,6 +92,18 @@ export class BookingsService {
       ? await this.prisma.client.listing.findFirst({ where: { id: listingId, businessId, deletedAt: null } })
       : null;
     const locationAddress = formatListingAddress(listing) ?? business?.address ?? undefined;
+
+    // Re-verify capacity right before actually creating the Appointment — time passes between a
+    // slot being offered (computeSlots) and the visitor confirming, and another booking could have
+    // taken the last spot in the meantime. Throws BadRequestException when exceeded — callers
+    // (FlowService.tryCreateBooking, ChatService.bookAppointment) catch this and route to the
+    // existing honest "não consegui confirmar automaticamente" escalation message.
+    await this.availability.checkCapacity(businessId, {
+      appointmentType: appointmentType ?? "presencial",
+      listingId: listingId ?? null,
+      startsAt,
+      endsAt,
+    });
 
     const appointment = await this.prisma.client.appointment.create({
       data: {

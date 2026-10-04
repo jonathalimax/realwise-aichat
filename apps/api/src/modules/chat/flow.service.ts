@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
 import concessionariaFlow from "./flows/concessionaria.flow.json";
 import imobiliariaFlow from "./flows/imobiliaria.flow.json";
@@ -7,6 +7,7 @@ import { LeadsService } from "../leads/leads.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 import { retrieveRelevantChunks } from "./knowledge-retrieval";
 import { safeHttpUrl } from "../../common/safe-http-url";
+import { sendEmail, escapeHtml } from "../../common/email";
 import { ListingsService, ChatQueryFilters } from "../listings/listings.service";
 import { BookingsService } from "../bookings/bookings.service";
 import { AvailabilityService } from "../bookings/availability.service";
@@ -294,6 +295,43 @@ export class FlowService {
     this.leads.recomputeScoreForLead(businessId, leadId).catch(() => {});
   }
 
+  // Fire-and-forget — notifying the owner must never slow down or fail the visitor-facing chat
+  // response. Silently no-ops if the business hasn't set an email yet. Local copy of
+  // ChatService's own private notifyOwner — not shared/injected to avoid a FlowService <->
+  // ChatService DI cycle (ChatService already imports FlowService).
+  private notifyOwner(businessId: string, subject: string, html: string) {
+    this.prisma.client.business
+      .findUnique({ where: { id: businessId }, select: { email: true } })
+      .then((business) => {
+        if (business?.email) return sendEmail(business.email, subject, html);
+      })
+      .catch(() => {});
+  }
+
+  // Shared escalation write for the four flow-driven escalation paths below (resolveWhatsappHandoff,
+  // resolveCallbackConfirm, resolveFinancingEscalation, resolveBookingFailureEscalation) — all of
+  // these used to write `status: "escalated"` directly without bumping lastMessageAt/messageCount,
+  // which are what make the conversation show as unread/sorted-to-top in the inbox.
+  private async markEscalated(
+    businessId: string,
+    conversationId: string,
+    referenceCode: string,
+    extra?: Record<string, unknown>,
+  ) {
+    void businessId;
+    await this.prisma.client.conversation.update({
+      where: { id: conversationId },
+      data: {
+        status: "escalated",
+        escalatedAt: new Date(),
+        referenceCode,
+        lastMessageAt: new Date(),
+        messageCount: { increment: 1 },
+        ...(extra ?? {}),
+      },
+    });
+  }
+
   private flowFor(niche: string): FlowDef {
     return FLOWS[niche] ?? FLOWS.imobiliaria;
   }
@@ -506,13 +544,18 @@ export class FlowService {
     const waMessage = buildCustomerEscalationMessage(business.name, "Atendimento via chat", referenceCode);
     const whatsappUrl = buildWaMeLink(routingNumber.phone, waMessage);
 
-    await this.prisma.client.conversation.update({
-      where: { id: conversationId },
-      data: { status: "escalated", escalatedAt: new Date(), escalationNumberId: routingNumber.id, referenceCode },
-    });
+    await this.markEscalated(businessId, conversationId, referenceCode, { escalationNumberId: routingNumber.id });
     await this.prisma.client.message.create({
       data: { conversationId, businessId, role: "assistant", content: fallbackMessage.replace(PLACEHOLDER_PATTERN, "").trim(), answerSource: "escalation" },
     });
+
+    this.notifyOwner(
+      businessId,
+      "Pedido de atendimento",
+      `<p>Um cliente pediu para falar com alguém do time via WhatsApp.</p>
+       <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
+       <p>Veja a conversa e responda no painel: Conversas.</p>`,
+    );
 
     return { message: "Toque no botão abaixo para continuar no WhatsApp com um atendente ✅", whatsappUrl };
   }
@@ -537,13 +580,19 @@ export class FlowService {
 
     if (conversation && conversation.status !== "escalated") {
       const referenceCode = generateReferenceCode();
-      await this.prisma.client.conversation.update({
-        where: { id: conversationId },
-        data: { status: "escalated", escalatedAt: new Date(), referenceCode },
-      });
+      await this.markEscalated(businessId, conversationId, referenceCode);
       await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: message, answerSource: "escalation" },
       });
+
+      this.notifyOwner(
+        businessId,
+        "Pedido de ligação",
+        `<p>Um cliente pediu para ser contatado por telefone em vez de WhatsApp.</p>
+         ${phone ? `<p><strong>Telefone:</strong> ${escapeHtml(phone)}</p>` : ""}
+         <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
+         <p>Veja a conversa e responda no painel: Conversas.</p>`,
+      );
     }
 
     return { message };
@@ -559,13 +608,18 @@ export class FlowService {
 
     if (conversation && conversation.status !== "escalated") {
       const referenceCode = generateReferenceCode();
-      await this.prisma.client.conversation.update({
-        where: { id: conversationId },
-        data: { status: "escalated", escalatedAt: new Date(), referenceCode },
-      });
+      await this.markEscalated(businessId, conversationId, referenceCode);
       await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: message, answerSource: "escalation" },
       });
+
+      this.notifyOwner(
+        businessId,
+        "Lead quente (financiamento)",
+        `<p>Um cliente avançou até a etapa de aprovação de financiamento — este sistema não tem integração real de análise de crédito, então ele foi encaminhado para contato manual.</p>
+         <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
+         <p>Veja a conversa e responda no painel: Conversas.</p>`,
+      );
     }
 
     return { message };
@@ -590,13 +644,18 @@ export class FlowService {
     const conversation = await this.prisma.client.conversation.findUnique({ where: { id: conversationId } });
     if (conversation && conversation.status !== "escalated") {
       const referenceCode = generateReferenceCode();
-      await this.prisma.client.conversation.update({
-        where: { id: conversationId },
-        data: { status: "escalated", escalatedAt: new Date(), referenceCode },
-      });
+      await this.markEscalated(businessId, conversationId, referenceCode);
       await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: message, answerSource: "escalation" },
       });
+
+      this.notifyOwner(
+        businessId,
+        "Agendamento não confirmado — contato manual",
+        `<p>Um cliente tentou agendar ${isConcessionaria ? "um test-drive" : "uma visita"} pelo chat, mas o horário não pôde ser confirmado automaticamente.</p>
+         <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
+         <p>Veja a conversa e responda no painel: Conversas.</p>`,
+      );
     }
 
     return {
@@ -978,17 +1037,28 @@ export class FlowService {
     const matched = await this.listingsService.findMentionedForChat(businessId, haystack, 1);
     const listingId = matched[0]?.id ?? null;
 
-    const appointment = await this.bookings.createAppointmentAndNotify(
-      businessId,
-      conversation.leadId ?? undefined,
-      conversationId,
-      serviceName,
-      startsAt,
-      endsAt,
-      "chat",
-      BOOKING_APPOINTMENT_TYPE,
-      listingId,
-    );
+    let appointment;
+    try {
+      appointment = await this.bookings.createAppointmentAndNotify(
+        businessId,
+        conversation.leadId ?? undefined,
+        conversationId,
+        serviceName,
+        startsAt,
+        endsAt,
+        "chat",
+        BOOKING_APPOINTMENT_TYPE,
+        listingId,
+      );
+    } catch (err) {
+      // The slot shown to the visitor was re-checked for capacity right before creation and lost
+      // the race (someone else booked it meanwhile) — never let this raw 400 reach the visitor,
+      // route to the same honest fallback as a slot that was already full.
+      if (err instanceof BadRequestException) {
+        return { message: "Esse horário acabou de ser reservado por outra pessoa. Vamos escolher outro horário? 👉 Toque em \"Nenhum serve\" para ver os horários atuais." };
+      }
+      throw err;
+    }
     this.calendar.createEvent(businessId, appointment).catch(() => {});
 
     const timezone = business.timezone ?? "America/Sao_Paulo";
