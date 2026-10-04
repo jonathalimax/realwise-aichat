@@ -21,5 +21,5 @@ COPY --from=build /repo/apps/worker/dist ./apps/worker/dist
 COPY --from=build /repo/apps/worker/node_modules ./apps/worker/node_modules
 WORKDIR /repo/apps/worker
 RUN pnpm exec playwright install --with-deps chromium
-RUN npm install -g tsx
+RUN npm install -g tsx@4.23.15 --ignore-scripts
 CMD ["tsx", "dist/index.js"]
