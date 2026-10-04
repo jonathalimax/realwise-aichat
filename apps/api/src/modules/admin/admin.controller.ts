@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { AdminService, PROBLEM_CASE_CATEGORIES } from "./admin.service";
 import { AdminSessionGuard } from "../../common/guards/admin-session.guard";
 
@@ -115,5 +115,27 @@ export class AdminController {
   @Patch("platform-config")
   updatePlatformConfig(@Body("supportWhatsappNumber") supportWhatsappNumber: string) {
     return this.admin.updatePlatformConfig(supportWhatsappNumber);
+  }
+
+  // Gated behind AdminSessionGuard only (any logged-in admin, not just superadmin) — this codebase
+  // has no existing superadmin-vs-support role-gating pattern on any other admin route to reuse.
+  @Get("users")
+  listAdminUsers() {
+    return this.admin.listAdminUsers();
+  }
+
+  @Post("users")
+  createAdminUser(
+    @Body("email") email: string,
+    @Body("name") name: string,
+    @Body("role") role: string,
+    @Body("password") password: string,
+  ) {
+    return this.admin.createAdminUser(email, name, role, password);
+  }
+
+  @Delete("users/:id")
+  deleteAdminUser(@Param("id") id: string) {
+    return this.admin.deleteAdminUser(id);
   }
 }

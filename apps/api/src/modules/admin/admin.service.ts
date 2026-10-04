@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { nicheTemplates, questionForField } from "@realwise/profile-schema";
+import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
 import { estimateCostUsd } from "./model-pricing";
 
@@ -704,5 +705,39 @@ export class AdminService {
       update: { supportWhatsappNumber: value },
       create: { id: "singleton", supportWhatsappNumber: value },
     });
+  }
+
+  async listAdminUsers() {
+    return this.prisma.client.adminUser.findMany({
+      select: { id: true, email: true, name: true, role: true, lastLoginAt: true },
+      orderBy: { name: "asc" },
+    });
+  }
+
+  async createAdminUser(email: string, name: string, role: string, password: string) {
+    const normalizedEmail = (email ?? "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      throw new BadRequestException("Email inválido.");
+    }
+    if (!password || password.length < 8) {
+      throw new BadRequestException("A senha deve ter pelo menos 8 caracteres.");
+    }
+    if (role !== "superadmin" && role !== "support") {
+      throw new BadRequestException("Papel inválido.");
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const admin = await this.prisma.client.adminUser.create({
+      data: { email: normalizedEmail, name, role, passwordHash },
+    });
+    return { id: admin.id, email: admin.email, name: admin.name, role: admin.role, lastLoginAt: admin.lastLoginAt };
+  }
+
+  async deleteAdminUser(id: string) {
+    const total = await this.prisma.client.adminUser.count();
+    if (total <= 1) {
+      throw new BadRequestException("Não é possível remover o último administrador.");
+    }
+    await this.prisma.client.adminUser.delete({ where: { id } });
+    return { ok: true };
   }
 }
