@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getMe, getListings, getDocuments, updateListing, deleteListing, reextractListings } from "../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -113,7 +114,7 @@ export default function ListingsPage() {
           {!isStudio && (
             <p className="rounded-lg border border-border bg-bg-2 px-4 py-3 text-sm text-ink-soft">
               A extração automática de anúncios está disponível no plano Studio.{" "}
-              <a href="/billing" className="font-semibold text-accent">Ver planos</a>
+              <Link href="/billing" className="font-semibold text-accent">Ver planos</Link>
             </p>
           )}
 
@@ -124,7 +125,7 @@ export default function ListingsPage() {
               {documents.length === 0 ? (
                 <>
                   Nenhum documento enviado ainda —{" "}
-                  <a href="/knowledge" className="font-semibold text-accent">adicione documentos</a> para começar.
+                  <Link href="/knowledge" className="font-semibold text-accent">adicione documentos</Link> para começar.
                 </>
               ) : null}
             </p>

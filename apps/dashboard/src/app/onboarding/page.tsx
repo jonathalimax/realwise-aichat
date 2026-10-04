@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Building2, Car, Upload, MessageCircle } from "lucide-react";
 import {
   getMe,
@@ -313,7 +314,7 @@ export default function OnboardingPage() {
                   Seu perfil ainda precisa de{" "}
                   <span className="font-semibold text-ink">{pendingFieldsCount} {pendingFieldsCount === 1 ? "campo" : "campos"}</span>{" "}
                   aprovado{pendingFieldsCount === 1 ? "" : "s"}. Revise e aprove tudo na{" "}
-                  <a href="/knowledge" className="text-accent-ink underline">Base de conhecimento</a>.
+                  <Link href="/knowledge" className="text-accent-ink underline">Base de conhecimento</Link>.
                 </p>
               ) : (
                 <p className="text-sm font-semibold text-positive">Tudo revisado e aprovado 🎉</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getMe, getOnboardingProfile, updateBranding, updateCustomInstructions, updateFinancingRate, updateWebsiteUrl } from "../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -170,7 +171,7 @@ export default function SettingsPage() {
           {!isStudio ? (
             <p className="rounded-lg border border-border bg-bg-2 px-4 py-3 text-sm text-ink-soft">
               Disponível no plano Studio.{" "}
-              <a href="/billing" className="font-semibold text-accent">Ver planos</a>
+              <Link href="/billing" className="font-semibold text-accent">Ver planos</Link>
             </p>
           ) : (
             <div className="flex flex-col gap-3">

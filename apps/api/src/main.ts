@@ -41,9 +41,10 @@ async function bootstrap() {
   // so widening img-src here is safe and only matters if this CSP header is ever inherited
   // by a page that embeds the API's own responses directly (it isn't, today).
   app.use(helmet({ contentSecurityPolicy: { directives: { imgSrc: ["'self'", "data:", "https:"] } } }));
-  app.use("/billing/webhook", raw({ type: "application/json" }));
+  app.use("/api/billing/webhook", raw({ type: "application/json" }));
   app.use(json());
   app.use(cookieParser());
+  app.setGlobalPrefix("api");
 
   const allowedOrigins = buildAllowedOrigins();
   app.enableCors({
@@ -58,7 +59,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const port = process.env.API_PORT ?? 3001;
+  const port = process.env.API_PORT ?? 3006;
   await app.listen(port);
   console.log(`Realwise API listening on :${port}`);
   console.log(`CORS allowed origins: ${allowedOrigins.join(", ")}`);

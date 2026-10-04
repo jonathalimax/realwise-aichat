@@ -3,7 +3,7 @@ import { Reveal } from "../components/Reveal";
 const WHATSAPP_NUMBER = "5585992265544";
 const WHATSAPP_MSG = encodeURIComponent("Oi! Vi o site da Realwise e quero saber mais.");
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MSG}`;
-const DASHBOARD_LOGIN_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3003"}/login`;
+const DASHBOARD_LOGIN_URL = "/app/login";
 
 function Pill({ href, className = "", children }: { href: string; className?: string; children: React.ReactNode }) {
   return (

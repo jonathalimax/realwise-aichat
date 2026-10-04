@@ -9,6 +9,8 @@ COPY apps/chat ./apps/chat
 RUN pnpm install --frozen-lockfile=false
 
 FROM deps AS build
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN pnpm --filter @realwise/chat build
 
 FROM base AS runner
