@@ -22,8 +22,12 @@ export class AnalyticsController {
   }
 
   @Get("timeseries")
-  timeseries(@CurrentBusiness() session: BusinessSessionClaims, @Query("days") days?: string) {
-    return this.analytics.timeseries(session.businessId, parseDays(days));
+  async timeseries(@CurrentBusiness() session: BusinessSessionClaims, @Query("days") days?: string) {
+    let requestedDays = parseDays(days);
+    if (requestedDays === 90 && !(await this.analytics.canSeeFullAnalytics(session.businessId))) {
+      requestedDays = 30;
+    }
+    return this.analytics.timeseries(session.businessId, requestedDays);
   }
 
   @Get("top-questions")
@@ -34,5 +38,10 @@ export class AnalyticsController {
   @Get("insights")
   insights(@CurrentBusiness() session: BusinessSessionClaims) {
     return this.analytics.getInsights(session.businessId);
+  }
+
+  @Get("advanced")
+  advanced(@CurrentBusiness() session: BusinessSessionClaims) {
+    return this.analytics.getAdvancedAnalytics(session.businessId);
   }
 }

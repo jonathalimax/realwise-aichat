@@ -16,6 +16,7 @@ import { UsageService } from "../usage/usage.service";
 import { KnowledgeService } from "../knowledge/knowledge.service";
 import { ListingsService, type ListingItem } from "../listings/listings.service";
 import { listingSuggestions } from "./listing-suggestions";
+import { AnalyticsService } from "../analytics/analytics.service";
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 const NO_CONTEXT_FALLBACK = "Não encontrei essa informação na nossa base. Quer que eu te passe pro atendimento?";
@@ -133,6 +134,7 @@ export class ChatService {
     private readonly usage: UsageService,
     private readonly knowledge: KnowledgeService,
     private readonly listingsService: ListingsService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   // Fire-and-forget, same pattern as notifyOwner — scoring must never slow down the visitor-facing response.
@@ -199,6 +201,7 @@ export class ChatService {
           `<p>O limite de conversas do plano mensal foi atingido. Novas conversas estão sendo encaminhadas direto para a sua equipe até o início do próximo ciclo ou upgrade de plano.</p>
            <p>Veja os detalhes do plano: Configurações &gt; Assinatura.</p>`,
         );
+        this.analytics.recordEvent(businessId, "escalation", { reason: "quota_exceeded" }, conversation.id).catch(() => {});
       }
     }
     return conversation;
@@ -535,6 +538,13 @@ export class ChatService {
       systemPromptParts.push(
         `Imóvel/veículo em discussão nesta conversa (dados reais do cadastro, pode citar preço/dormitórios/área): ${contextListingSummary}`,
       );
+      // Financing-specific facts (entrada, renda mínima, composição de renda, documentos
+      // necessários) aren't on this summary — they come from the retrieved document trechos
+      // above when available. Making that explicit so the model doesn't treat "discuss this
+      // listing" as limited to the fields listed in the line above.
+      systemPromptParts.push(
+        "Perguntas sobre financiamento deste imóvel/veículo (entrada, renda mínima exigida, composição de renda, fiador, documentos necessários) também são válidas — responda com base nos trechos de documentos acima, se cobrirem o assunto; se não cobrirem, diga que não tem essa informação específica.",
+      );
     }
 
     if (opts?.listingsAttached) {
@@ -646,7 +656,29 @@ export class ChatService {
   // directly; more than 1 (e.g. a 6-card browse result) gets narrowed via findMentionedForChat run
   // over that prior message's own content, restricted to those ids — if that doesn't narrow to
   // exactly one, gives up (returns null) rather than guessing.
+  // "Selecionar e continuar" — pins one specific listing as this conversation's subject so
+  // resolveContextListing short-circuits straight to it instead of relying on message-history
+  // lookback, which only works when exactly one listing was shown previously.
+  async pinListing(businessId: string, conversationId: string, listingId: string) {
+    const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
+    if (!conversation) throw new NotFoundException("Conversation not found");
+
+    const belongsToBusiness = await this.listingsService.getContextSummaryForChat(businessId, listingId);
+    if (!belongsToBusiness) throw new NotFoundException("Listing not found");
+
+    return this.prisma.client.conversation.update({
+      where: { id: conversationId },
+      data: { pinnedListingId: listingId },
+    });
+  }
+
   private async resolveContextListing(businessId: string, conversationId: string): Promise<string | null> {
+    const conversation = await this.prisma.client.conversation.findFirst({
+      where: { id: conversationId, businessId },
+      select: { pinnedListingId: true },
+    });
+    if (conversation?.pinnedListingId) return conversation.pinnedListingId;
+
     const lastListingMessage = await this.prisma.client.message.findFirst({
       where: { conversationId, role: "assistant", listingIds: { isEmpty: false } },
       orderBy: { createdAt: "desc" },
@@ -1264,6 +1296,7 @@ export class ChatService {
       );
 
       this.recomputeLeadScore(businessId, conversation?.leadId);
+      this.analytics.recordEvent(businessId, "escalation", { reason: "visitor_request", topic: resolvedTopic }, conversationId).catch(() => {});
       return { message: assistantMessage, escalated: false, whatsappUrl: null, referenceCode: null };
     }
 
@@ -1299,6 +1332,7 @@ export class ChatService {
     );
 
     this.recomputeLeadScore(businessId, conversation?.leadId);
+    this.analytics.recordEvent(businessId, "escalation", { reason: "visitor_request", topic: resolvedTopic }, conversationId).catch(() => {});
     return { message: assistantMessage, escalated: true, whatsappUrl: url, referenceCode };
   }
 

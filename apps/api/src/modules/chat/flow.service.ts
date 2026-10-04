@@ -9,6 +9,7 @@ import { retrieveRelevantChunks } from "./knowledge-retrieval";
 import { safeHttpUrl } from "../../common/safe-http-url";
 import { sendEmail, escapeHtml } from "../../common/email";
 import { ListingsService, ChatQueryFilters } from "../listings/listings.service";
+import { AnalyticsService } from "../analytics/analytics.service";
 import { BookingsService } from "../bookings/bookings.service";
 import { AvailabilityService } from "../bookings/availability.service";
 import { CalendarService } from "../calendar/calendar.service";
@@ -284,6 +285,7 @@ export class FlowService {
     private readonly bookings: BookingsService,
     private readonly availability: AvailabilityService,
     private readonly calendar: CalendarService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   // Fire-and-forget, same pattern as ChatService's own recomputeLeadScore — scoring must never
@@ -319,7 +321,6 @@ export class FlowService {
     referenceCode: string,
     extra?: Record<string, unknown>,
   ) {
-    void businessId;
     await this.prisma.client.conversation.update({
       where: { id: conversationId },
       data: {
@@ -331,6 +332,7 @@ export class FlowService {
         ...(extra ?? {}),
       },
     });
+    this.analytics.recordEvent(businessId, "escalation", { reason: "flow_node" }, conversationId).catch(() => {});
   }
 
   private flowFor(niche: string): FlowDef {

@@ -136,6 +136,16 @@ export class ChatController {
     return this.flow.advance(businessId, conversationId, goto, params ?? {}, label);
   }
 
+  @Post(":businessId/conversations/:conversationId/listing/pin")
+  pinListing(
+    @Param("businessId") businessId: string,
+    @Param("conversationId") conversationId: string,
+    @Body("listingId") listingId: string,
+  ) {
+    if (!listingId) throw new BadRequestException("listingId is required");
+    return this.chat.pinListing(businessId, conversationId, listingId);
+  }
+
   @Post(":businessId/conversations/:conversationId/book")
   book(
     @Param("businessId") businessId: string,
