@@ -261,6 +261,10 @@ model Message {
   createdAt           DateTime      @default(now())
   answerSource        AnswerSource?
   retrievedChunkIds   String[]
+  // IDs of real Listing rows attached to this turn as cards. Stored as IDs, not denormalized
+  // listing data, so a replayed turn reflects current price/photos instead of a stale snapshot.
+  // Empty for the LLM-extraction listing path, whose items have no backing DB row.
+  listingIds          String[]      @default([])
   retrievalTopScore   Float?
   modelUsed           String?
   inputTokens         Int?

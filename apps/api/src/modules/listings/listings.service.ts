@@ -350,4 +350,21 @@ export class ListingsService {
     if (matches.length === 0 || matches.length > limit) return [];
     return matches.slice(0, limit).map((row) => this.mapRowToListingItem(row));
   }
+
+  // Used by chat.service's getHistory to re-hydrate listing cards attached to past turns.
+  // Deliberately does not filter on status: "active" — a listing that went inactive after the
+  // original answer should still replay in a historical turn; only soft-deleted rows are excluded.
+  // Output preserves the original `ids` order, not findMany's `in`-query order.
+  async findByIdsForChat(businessId: string, ids: string[]): Promise<ListingItem[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.client.listing.findMany({
+      where: { id: { in: ids }, businessId, deletedAt: null },
+      include: { images: { orderBy: { ordinal: "asc" }, take: 12 } },
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return ids
+      .map((id) => byId.get(id))
+      .filter((r): r is NonNullable<typeof r> => Boolean(r))
+      .map((r) => this.mapRowToListingItem(r));
+  }
 }

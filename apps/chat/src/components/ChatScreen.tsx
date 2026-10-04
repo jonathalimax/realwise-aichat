@@ -248,7 +248,7 @@ function mergeServerMessages(prev: Message[], serverMessages: any[]): Message[] 
   const knownByContent = new Set(prev.map((m) => `${m.role}:${m.content.trim()}`));
   const newOnes = (serverMessages ?? [])
     .filter((m: any) => !knownServerIds.has(m.id) && !knownByContent.has(`${m.role}:${String(m.content ?? "").trim()}`))
-    .map((m: any) => ({ id: m.id, serverId: m.id, role: m.role, content: m.content }));
+    .map((m: any) => ({ id: m.id, serverId: m.id, role: m.role, content: m.content, listings: m.listings }));
   if (newOnes.length === 0) return prev;
   return [...prev, ...newOnes];
 }
@@ -355,6 +355,7 @@ export function ChatScreen({
           serverId: m.id,
           role: m.role,
           content: m.content,
+          listings: m.listings,
         }));
         // Older conversations that predate server-side message persistence for the scripted
         // bubble flow (or any conversation that only ever got this far via taps) have an empty

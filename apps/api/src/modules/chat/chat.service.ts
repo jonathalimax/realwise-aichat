@@ -285,6 +285,20 @@ export class ChatService {
       orderBy: { createdAt: "asc" },
     });
 
+    // Re-hydrate listing cards attached to past turns (see Message.listingIds) in a single
+    // batched lookup rather than per-message, to avoid an N+1 query against the Listing table.
+    const allListingIds = [...new Set(messages.flatMap((m) => m.listingIds))];
+    const listingsById = new Map(
+      allListingIds.length > 0
+        ? (await this.listingsService.findByIdsForChat(businessId, allListingIds)).map((l) => [l.id as string, l])
+        : [],
+    );
+    const messagesWithListings = messages.map((m) => {
+      if (m.listingIds.length === 0) return m;
+      const listings = m.listingIds.map((id) => listingsById.get(id)).filter((l): l is ListingItem => Boolean(l));
+      return listings.length > 0 ? { ...m, listings } : m;
+    });
+
     return {
       // resumeToken is included so the client can persist a same-device localStorage pointer
       // (id + resumeToken) that works even if the visitor cookie doesn't round-trip (cross-origin
@@ -295,7 +309,7 @@ export class ChatService {
         status: conversation.status,
         resumeToken: conversation.resumeToken,
       },
-      messages,
+      messages: messagesWithListings,
       flowSnapshot: conversation.flowSnapshot ?? null,
       resumedViaToken: ownsViaResumeToken && !ownsViaVisitor,
     };
@@ -401,6 +415,7 @@ export class ChatService {
         latencyMs: answer.latencyMs,
         retrievedChunkIds: answer.retrievedChunkIds,
         retrievalTopScore: answer.retrievalTopScore,
+        listingIds: (answer.listings ?? []).map((l) => l.id).filter((id): id is string => Boolean(id)),
       },
     });
     let autoEscalation: { escalated: boolean; whatsappUrl: string | null; referenceCode: string | null } | undefined;
@@ -840,6 +855,12 @@ export class ChatService {
       ? streamFailedWithNoMeaningfulText
       : looksLikeAbstention(fullText) ||
         hasUngroundedEntityClaim(fullText, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings));
+
+    const listings = abstained
+      ? undefined
+      : browsingListings ?? (await this.resolveMentionedListing(businessId, visitorText, fullText));
+    const suggestions = abstained ? undefined : this.buildSuggestions(niche, listings);
+
     const assistantMessage = await this.prisma.client.message.create({
       data: {
         conversationId,
@@ -853,6 +874,7 @@ export class ChatService {
         latencyMs: gatewayResult.latencyMs,
         retrievedChunkIds,
         retrievalTopScore,
+        listingIds: (listings ?? []).map((l) => l.id).filter((id): id is string => Boolean(id)),
       },
     });
 
@@ -873,10 +895,6 @@ export class ChatService {
       }
     }
 
-    const listings = abstained
-      ? undefined
-      : browsingListings ?? (await this.resolveMentionedListing(businessId, visitorText, fullText));
-    const suggestions = abstained ? undefined : this.buildSuggestions(niche, listings);
     return { message: assistantMessage, escalated: autoEscalation?.escalated ?? false, listings, suggestions, ...(autoEscalation ?? {}) };
   }
 
