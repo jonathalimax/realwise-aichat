@@ -236,21 +236,43 @@ export interface CrawledPage {
 const CSR_FALLBACK_MIN_TEXT_CHARS = 2000;
 const CSR_FALLBACK_MIN_HTML_RATIO = 10;
 
+// A real browser executes page JS, follows redirects, and fetches subresources — any of which
+// could target an internal/private address (SSRF), and a DNS answer can legitimately differ
+// between this check and the moment Chromium actually connects (DNS rebinding). safeFetch/
+// safeLookup close that gap for the plain-fetch path; this does the equivalent for every single
+// request the browser makes, not just the initial navigation.
+async function assertRequestIsPublic(requestUrl: string): Promise<boolean> {
+  try {
+    await assertPublicHttpUrl(requestUrl);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Lazily imported — only paid for (and only requires the Chromium binary to be installed) on
 // the rare page that actually trips the CSR heuristic below, not on every crawled page.
 async function renderWithPlaywright(url: string): Promise<string | null> {
   try {
+    await assertPublicHttpUrl(url);
     const { chromium } = await import("playwright");
     const browser = await chromium.launch();
     try {
       const page = await browser.newPage({ userAgent: "RealwiseBot/1.0 (+https://realwise.com.br)" });
+      // Re-validate every navigation/subresource/redirect target the page makes, not just the
+      // entry URL — blocks in-page JS/redirects from reaching internal services.
+      await page.route("**/*", async (route) => {
+        const ok = await assertRequestIsPublic(route.request().url());
+        if (ok) await route.continue();
+        else await route.abort();
+      });
       await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
       return await page.content();
     } finally {
       await browser.close();
     }
   } catch {
-    return null; // Chromium missing/crashed/timed out — fall back to whatever plain-fetch got
+    return null; // Chromium missing/crashed/timed out/blocked — fall back to whatever plain-fetch got
   }
 }
 
