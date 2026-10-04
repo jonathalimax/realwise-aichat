@@ -50,6 +50,11 @@ export const getConversationProblemCases = (params: {
 export const getPlatformConfig = () => request("/admin/platform-config");
 export const updatePlatformConfig = (supportWhatsappNumber: string) =>
   request("/admin/platform-config", { method: "PATCH", body: JSON.stringify({ supportWhatsappNumber }) });
-export const verifyAdminFirebaseToken = (idToken: string) =>
-  request("/auth/admin/verify", { method: "POST", body: JSON.stringify({ idToken }) });
+export const loginAdmin = (email: string, password: string) =>
+  request("/auth/admin/verify", { method: "POST", body: JSON.stringify({ email, password }) });
 export const logout = () => request("/auth/admin/logout", { method: "POST" });
+
+export const getAdminUsers = () => request("/admin/users");
+export const createAdminUser = (data: { email: string; name: string; role: string; password: string }) =>
+  request("/admin/users", { method: "POST", body: JSON.stringify(data) });
+export const deleteAdminUser = (id: string) => request(`/admin/users/${id}`, { method: "DELETE" });

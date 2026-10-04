@@ -2,46 +2,26 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ConfirmationResult } from "firebase/auth";
-import { maskBrPhone, brPhoneToE164 } from "@realwise/shared";
-import { createRecaptchaVerifier, sendPhoneOtp } from "../../lib/firebase";
-import { verifyAdminFirebaseToken } from "../../lib/api";
+import { loginAdmin } from "../../lib/api";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSendCode() {
+  async function handleLogin() {
     try {
       setError("");
       setLoading(true);
-      const verifier = createRecaptchaVerifier("recaptcha-container");
-      setConfirmation(await sendPhoneOtp(brPhoneToE164(phone), verifier));
-    } catch {
-      setError("Não consegui enviar o código.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleConfirmCode() {
-    if (!confirmation) return;
-    try {
-      setError("");
-      setLoading(true);
-      const credential = await confirmation.confirm(code);
-      const idToken = await credential.user.getIdToken();
-      await verifyAdminFirebaseToken(idToken);
+      await loginAdmin(email, password);
       router.push("/");
     } catch {
-      setError("Código inválido, ou este número não é um admin cadastrado.");
+      setError("Email ou senha inválidos.");
     } finally {
       setLoading(false);
     }
@@ -62,62 +42,41 @@ export default function AdminLoginPage() {
         <div className="w-full max-w-[380px]">
           <span className="mb-8 block font-serif text-lg font-bold text-ink lg:hidden">Realwise · Admin</span>
           <h2 className="font-serif text-3xl text-ink">Acesso interno</h2>
-          <p className="mt-2 text-sm text-ink-soft">Use o telefone cadastrado como administrador.</p>
+          <p className="mt-2 text-sm text-ink-soft">Entre com o email e senha cadastrados como administrador.</p>
 
-          <div className="mt-8 flex flex-col gap-4">
-            {!confirmation ? (
-              <>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="phone">Telefone</Label>
-                  <div className="flex items-center gap-2 rounded-lg border border-border bg-bg-2 px-3 py-2 focus-within:border-ink/40">
-                    <span className="text-ink-soft">🇧🇷</span>
-                    <input
-                      id="phone"
-                      value={phone}
-                      onChange={(e) => setPhone(maskBrPhone(e.target.value))}
-                      placeholder="(11) 99999-9999"
-                      type="tel"
-                      inputMode="numeric"
-                      autoFocus
-                      className="w-full bg-transparent text-base text-ink outline-none placeholder:text-ink-soft/60 md:text-sm"
-                    />
-                  </div>
-                </div>
-                <Button
-                  onClick={handleSendCode}
-                  disabled={loading || phone.replace(/\D/g, "").length < 10}
-                  className="w-full"
-                >
-                  {loading ? "Enviando…" : "Enviar código"}
-                </Button>
-              </>
-            ) : (
-              <>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="code">Código de 6 dígitos</Label>
-                  <Input
-                    id="code"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    placeholder="000000"
-                    type="tel"
-                    inputMode="numeric"
-                    autoFocus
-                    className="tracking-[0.3em]"
-                  />
-                </div>
-                <Button
-                  onClick={handleConfirmCode}
-                  disabled={loading || code.length < 6}
-                  className="w-full"
-                >
-                  {loading ? "Confirmando…" : "Confirmar"}
-                </Button>
-              </>
-            )}
+          <form
+            className="mt-8 flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleLogin();
+            }}
+          >
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="voce@realwise.com.br"
+                type="email"
+                autoFocus
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="password">Senha</Label>
+              <Input
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                type="password"
+              />
+            </div>
+            <Button type="submit" disabled={loading || !email || !password} className="w-full">
+              {loading ? "Entrando…" : "Entrar"}
+            </Button>
             {error && <p className="text-sm text-negative">{error}</p>}
-          </div>
-          <div id="recaptcha-container" />
+          </form>
         </div>
       </div>
     </div>

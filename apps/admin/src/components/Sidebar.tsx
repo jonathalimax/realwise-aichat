@@ -11,6 +11,7 @@ const ITEMS = [
   { href: "/", label: "Clientes" },
   { href: "/conversations", label: "Conversas" },
   { href: "/settings", label: "Configurações" },
+  { href: "/settings/users", label: "Administradores" },
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
