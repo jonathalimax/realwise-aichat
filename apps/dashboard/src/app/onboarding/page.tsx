@@ -395,6 +395,9 @@ export default function OnboardingPage() {
               <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
                 <div className="text-sm font-semibold text-ink">Seu link está pronto:</div>
                 <code className="rounded bg-bg-2 px-2 py-1 text-xs">{publicUrl}</code>
+                <p className="text-xs text-ink-soft">
+                  Coloca na bio do Instagram, na descrição do perfil do WhatsApp Business, na sua ficha do Google Meu Negócio, ou adiciona um botão no seu próprio site.
+                </p>
                 <Button size="pill" onClick={() => confirmLinkPlaced().then(refresh)}>Já coloquei o link na bio</Button>
               </CardContent>
             </Card>

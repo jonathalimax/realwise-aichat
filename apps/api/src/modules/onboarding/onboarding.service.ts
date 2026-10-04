@@ -134,9 +134,33 @@ export class OnboardingService {
 
   async interviewChat(businessId: string, history: { role: "owner" | "clara"; content: string }[]) {
     const { business, gaps } = await this.findGaps(businessId);
+    const confidenceScore = business.confidenceScore ?? 0;
 
     if (gaps.length === 0) {
-      return { reply: "Já cobrimos tudo que eu precisava saber! Pode revisar os campos abaixo e aprovar quando estiver tudo certo.", allDone: true, remainingGaps: 0 };
+      const hasRealSlug = !!business.slug && !business.slug.startsWith("pending-");
+      if (confidenceScore >= 70 && hasRealSlug) {
+        const chatPublicUrl = process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005";
+        const publicUrl = `${chatPublicUrl}/${business.slug}`;
+        return {
+          reply: [
+            `Perfil pronto! Com ${confidenceScore}% de prontidão, já cobrimos tudo que eu precisava saber.`,
+            `Seu link de atendimento é: ${publicUrl}`,
+            "Agora é só divulgar: coloca na bio do Instagram, na descrição do perfil do WhatsApp Business, na sua ficha do Google Meu Negócio, ou adiciona um botão no seu próprio site apontando para esse link.",
+          ].join("\n\n"),
+          allDone: true,
+          remainingGaps: 0,
+          confidenceScore,
+          readyToPublish: true,
+          publicUrl,
+        };
+      }
+      return {
+        reply: `Já cobrimos todos os campos, mas ainda estamos em ${confidenceScore}% de prontidão — abaixo de 70%, o que ainda bloqueia a publicação. Revise e aprove os campos abaixo para melhorar esse número.`,
+        allDone: true,
+        remainingGaps: 0,
+        confidenceScore,
+        readyToPublish: false,
+      };
     }
 
     const documents = await this.prisma.client.knowledgeDocument.findMany({
@@ -160,6 +184,8 @@ export class OnboardingService {
       "A pergunta em `reply` deve sempre nomear explicitamente o campo (use o label do campo, ex: \"Qual o horário de funcionamento?\") — nunca use um pronome vago como \"isso\"/\"isto\" sem dizer a que campo se refere.",
       `Campos que faltam (em ordem de prioridade):\n${gapList}`,
       documentContext ? `Conteúdo já extraído dos documentos (use para não perguntar o que já está aqui):\n${documentContext}` : "",
+      `Prontidão atual: ${confidenceScore}%`,
+      "Quando for natural (ex: depois de preencher um campo importante), você pode mencionar brevemente esse percentual de prontidão para o dono acompanhar o progresso — sem exagerar nem interromper o fluxo das perguntas.",
     ].join("\n\n");
 
     const prompt = conversation
@@ -187,7 +213,7 @@ export class OnboardingService {
     }
 
     const { gaps: remaining } = await this.findGaps(businessId);
-    return { reply, allDone: remaining.length === 0, remainingGaps: remaining.length };
+    return { reply, allDone: remaining.length === 0, remainingGaps: remaining.length, confidenceScore };
   }
 
   private async runEvalQuestions(businessId: string, businessName: string, niche: string, profileSummary: string, evalQuestions: string[]): Promise<number> {
