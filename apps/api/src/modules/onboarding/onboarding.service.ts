@@ -154,8 +154,11 @@ export class OnboardingService {
           publicUrl,
         };
       }
+      const blockerMessage = !hasRealSlug
+        ? "ainda falta confirmar o nome do seu link"
+        : "ainda falta revisar e aprovar alguns campos na Base de Conhecimento";
       return {
-        reply: `Já cobrimos todos os campos, mas ainda estamos em ${confidenceScore}% de prontidão — abaixo de 70%, o que ainda bloqueia a publicação. Revise e aprove os campos abaixo para melhorar esse número.`,
+        reply: `Já cobrimos todos os campos, mas ainda estamos em ${confidenceScore}% de prontidão — abaixo de 70%, ${blockerMessage} para liberar a publicação.`,
         allDone: true,
         remainingGaps: 0,
         confidenceScore,
@@ -174,7 +177,7 @@ export class OnboardingService {
     const conversation = history.map((m) => `${m.role === "owner" ? "Dono" : "Clara"}: ${m.content}`).join("\n");
 
     const systemPrompt = [
-      `Você é a Clara, entrevistando o DONO da ${business.name} para completar o perfil do negócio (não é o cliente final).`,
+      `Você é a Clara, entrevistando o DONO ${business.name ? `da ${business.name}` : "do negócio"} para completar o perfil do negócio (não é o cliente final).`,
       "Sua tarefa: perguntar, uma de cada vez, sobre os campos que ainda faltam preencher, na ordem dada.",
       "Se o conteúdo dos documentos abaixo já responder um campo, não pergunte de novo — apenas confirme e extraia o valor.",
       "Quando o dono responder uma pergunta, extraia o valor completo da resposta para o campo perguntado — preserve o conteúdo real dito pelo dono, sem resumir, abreviar ou reduzir a um código curto.",
