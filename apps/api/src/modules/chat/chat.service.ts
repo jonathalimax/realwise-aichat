@@ -588,6 +588,45 @@ export class ChatService {
     return mentioned.length > 0 ? mentioned : undefined;
   }
 
+  // Fast, deterministic path for typed photo requests ("me mostra as fotos", "tem foto desse
+  // imovel") — resolves the single listing the visitor is actually asking about and returns its
+  // real images, skipping the generic chat/RAG LLM round-trip entirely. Resolution priority:
+  // the most recent assistant Message that attached listing cards (Message.listingIds), taken
+  // ONLY when it resolves to exactly one distinct listing (ambiguous history never guesses); then
+  // falls back to findMentionedForChat on the visitor's own text. Returns undefined (never a
+  // fabricated gallery) when nothing resolves or the resolved listing has zero real photos — the
+  // caller falls through to the normal LLM path unchanged.
+  private async resolvePhotoRequest(
+    businessId: string,
+    conversationId: string,
+    visitorText: string,
+  ): Promise<{ listings: ListingItem[] } | undefined> {
+    if (!this.flow.isPhotoQuery(visitorText)) return undefined;
+
+    let listingId: string | undefined;
+
+    const lastListingMessage = await this.prisma.client.message.findFirst({
+      where: { conversationId, role: "assistant", listingIds: { isEmpty: false } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (lastListingMessage) {
+      const distinctIds = [...new Set(lastListingMessage.listingIds)];
+      if (distinctIds.length === 1) listingId = distinctIds[0];
+    }
+
+    if (!listingId) {
+      const mentioned = await this.listingsService.findMentionedForChat(businessId, visitorText, 1);
+      if (mentioned.length === 1 && mentioned[0].id) listingId = mentioned[0].id;
+    }
+
+    if (!listingId) return undefined;
+
+    const images = await this.listingsService.getImagesForChat(businessId, listingId);
+    if (images.length === 0) return undefined;
+
+    return { listings: images };
+  }
+
   private async generateAnswer(businessId: string, conversationId: string, visitorText: string) {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException("Business not found");
@@ -605,6 +644,22 @@ export class ChatService {
         retrievalTopScore: undefined,
         listings: undefined,
         suggestions: undefined,
+      };
+    }
+
+    const photoRequest = await this.resolvePhotoRequest(businessId, conversationId, visitorText);
+    if (photoRequest) {
+      return {
+        text: "Aqui estão as fotos 📸",
+        abstained: false,
+        model: undefined,
+        inputTokens: 0,
+        outputTokens: 0,
+        latencyMs: 0,
+        retrievedChunkIds: [],
+        retrievalTopScore: undefined,
+        listings: photoRequest.listings,
+        suggestions: this.buildSuggestions(niche, photoRequest.listings),
       };
     }
 
@@ -769,6 +824,27 @@ export class ChatService {
       await this.prisma.client.conversation.update({
         where: { id: conversationId },
         data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
+      });
+      return { message: assistantMessage, escalated: false };
+    }
+
+    const photoRequest = await this.resolvePhotoRequest(businessId, conversationId, visitorText);
+    if (photoRequest) {
+      const photoMessage = "Aqui estão as fotos 📸";
+      onDelta(photoMessage);
+      const assistantMessage = await this.prisma.client.message.create({
+        data: {
+          conversationId,
+          businessId,
+          role: "assistant",
+          content: photoMessage,
+          answerSource: "fixed_flow",
+          listingIds: photoRequest.listings.map((l) => l.id).filter((id): id is string => Boolean(id)),
+        },
+      });
+      await this.prisma.client.conversation.update({
+        where: { id: conversationId },
+        data: { lastMessageAt: new Date(), messageCount: { increment: 2 } },
       });
       return { message: assistantMessage, escalated: false };
     }

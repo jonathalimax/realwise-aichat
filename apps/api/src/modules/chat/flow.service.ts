@@ -135,11 +135,12 @@ export interface ListingItem {
 // node with unresolved placeholders keeps the existing free-prose RAG fallback.
 const LISTING_NODE_IDS = new Set(["resultados"]);
 
-// Per-vehicle detail nodes whose message template is genuinely bound to ONE specific real
-// listing (brand/model/year/mileage/price) — these must never fall through to the generic
-// LLM-prose fallback, which has no real listing to ground on and will invent specifics (e.g. a
-// fabricated "BMW 2018, 30.000km, R$90.000" that doesn't exist in inventory).
-const LISTING_DETAIL_NODE_IDS = new Set(["carro_detalhe", "carro_fotos"]);
+// Per-listing detail nodes (both niches) whose message template is genuinely bound to ONE
+// specific real listing (brand/model/year/mileage/price, or neighborhood/city/bedrooms/area) —
+// these must never fall through to the generic LLM-prose fallback, which has no real listing to
+// ground on and will invent specifics (e.g. a fabricated "BMW 2018, 30.000km, R$90.000", or a
+// fabricated "apartamento de 3 quartos em bairro X", that doesn't exist in inventory).
+const LISTING_DETAIL_NODE_IDS = new Set(["carro_detalhe", "carro_fotos", "imovel_detalhe", "imovel_fotos"]);
 
 // Financing/cost "simulation" nodes that used to fall straight through to the generic LLM-prose
 // fallback below — slow (5-30s, sometimes a 60s timeout) AND prone to inventing numbers with no
@@ -682,44 +683,75 @@ export class FlowService {
     return null;
   }
 
-  // carro_detalhe/carro_fotos: binds the node to one real Listing row instead of ever falling
-  // through to the generic RAG-prose fallback. Returns a clarifying message (never a guess) when
-  // no specific listing can be resolved, and an honest "not available anymore" message when the
-  // resolved listing_id no longer exists (deleted/sold between the card being shown and tapped).
+  // carro_detalhe/carro_fotos/imovel_detalhe/imovel_fotos: binds the node to one real Listing row
+  // instead of ever falling through to the generic RAG-prose fallback. Returns a clarifying
+  // message (never a guess) when no specific listing can be resolved, and an honest "not
+  // available anymore" message when the resolved listing_id no longer exists (deleted/sold
+  // between the card being shown and tapped).
   private async resolveListingDetail(
     businessId: string,
     node: FlowNode,
     params: Record<string, unknown>,
   ): Promise<{ message: string; listings?: ListingItem[]; bubblesOverride?: FlowBubble[] }> {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    const isConcessionaria = business?.niche === "concessionaria";
+    const itemWord = isConcessionaria ? "carro" : "imóvel";
+
+    // "goto: resultados" works the same regardless of niche — the resultados node itself is
+    // already niche-aware (see LISTING_NODE_IDS handling above).
     const backToResults: FlowBubble[] = [{ label: "⬅ Voltar aos resultados", goto: "resultados" }];
     const listingId = this.resolveListingId(params);
     if (!listingId) {
-      return { message: "Qual carro você quer ver? Toque em 🔍 Ver detalhes em um dos carros que te mostrei 👇", bubblesOverride: backToResults };
+      return {
+        message: isConcessionaria
+          ? "Qual carro você quer ver? Toque em 🔍 Ver detalhes em um dos carros que te mostrei 👇"
+          : "Qual imóvel você quer ver? Toque em 🔍 Ver detalhes em um dos imóveis que te mostrei 👇",
+        bubblesOverride: backToResults,
+      };
     }
 
     let listing;
     try {
       listing = await this.listingsService.getOne(businessId, listingId);
     } catch {
-      return { message: "Esse carro não está mais disponível. Vamos ver outras opções?", bubblesOverride: backToResults };
+      return {
+        message: isConcessionaria
+          ? "Esse carro não está mais disponível. Vamos ver outras opções?"
+          : "Esse imóvel não está mais disponível. Vamos ver outras opções?",
+        bubblesOverride: backToResults,
+      };
     }
 
-    if (node.id === "carro_fotos") {
+    if (node.id.endsWith("_fotos")) {
       const images = await this.listingsService.getImagesForChat(businessId, listingId);
       if (images.length === 0) {
-        return { message: "Ainda não tenho fotos cadastradas para esse carro — mas posso te passar os outros detalhes que tenho 👇" };
+        return {
+          message: `Ainda não tenho fotos cadastradas para esse ${itemWord} — mas posso te passar os outros detalhes que tenho 👇`,
+        };
       }
       return { message: "Aqui estão as fotos 📸", listings: images };
     }
 
-    // carro_detalhe: build the message from real columns only — fields the business never filled
-    // in simply don't appear, rather than rendering a placeholder.
+    // *_detalhe: build the message from real columns only — fields the business never filled in
+    // simply don't appear, rather than rendering a placeholder. Fields differ by niche since
+    // vehicles and properties are described by different real columns on the same Listing model.
     const parts: string[] = [];
-    const brandModel = [listing.brand, listing.model].filter(Boolean).join(" ");
-    if (brandModel) parts.push(brandModel);
-    if (listing.year) parts.push(String(listing.year));
-    if (listing.mileageKm != null) parts.push(`${listing.mileageKm.toLocaleString("pt-BR")} km`);
-    if (listing.priceText) parts.push(listing.priceText);
+    if (isConcessionaria) {
+      const brandModel = [listing.brand, listing.model].filter(Boolean).join(" ");
+      if (brandModel) parts.push(brandModel);
+      if (listing.year) parts.push(String(listing.year));
+      if (listing.mileageKm != null) parts.push(`${listing.mileageKm.toLocaleString("pt-BR")} km`);
+      if (listing.priceText) parts.push(listing.priceText);
+    } else {
+      const locationParts = [listing.neighborhood, listing.city].filter(Boolean).join(", ");
+      const typeLocation = [listing.listingType, locationParts].filter(Boolean).join(" em ");
+      if (typeLocation) parts.push(typeLocation);
+      if (listing.transaction) parts.push(listing.transaction);
+      if (listing.bedrooms != null) parts.push(`${listing.bedrooms} quarto${listing.bedrooms === 1 ? "" : "s"}`);
+      if (listing.areaM2 != null) parts.push(`${listing.areaM2} m²`);
+      if (listing.parkingSpots != null) parts.push(`${listing.parkingSpots} vaga${listing.parkingSpots === 1 ? "" : "s"}`);
+      if (listing.priceText) parts.push(listing.priceText);
+    }
 
     const message = `${parts.length > 0 ? parts.join(" — ") : listing.title}. O que você quer ver?`;
     const images = listing.images
@@ -1377,6 +1409,16 @@ export class FlowService {
     if (!hasIntentWord || !chunkText) return false;
     const normalizedChunk = normalize(chunkText);
     return itemWords.some((w) => normalizedChunk.includes(w));
+  }
+
+  // Cheap keyword heuristic for free-text chat messages that are genuinely asking for photos
+  // ("me mostra as fotos", "tem foto desse imóvel", "manda foto") — same cheap-keyword-check
+  // scope as isListingQuery above, NOT an NLU classifier. Used by ChatService.resolvePhotoRequest
+  // to route to a fast, deterministic DB-image lookup instead of a full LLM round-trip.
+  isPhotoQuery(visitorText: string): boolean {
+    const normalized = normalize(visitorText);
+    const photoWords = ["foto", "fotos", "imagem", "imagens", "galeria"];
+    return photoWords.some((w) => normalized.includes(w));
   }
 
   // Public entry point for ChatService's free-text RAG path — same grounding discipline as the

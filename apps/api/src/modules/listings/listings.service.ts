@@ -316,7 +316,21 @@ export class ListingsService {
 
     const rows = await this.prisma.client.listing.findMany({
       where: { businessId, status: "active", deletedAt: null },
-      include: { images: { orderBy: { ordinal: "asc" }, take: 12 } },
+      // Bounds payload size as inventory grows — only the columns the matching logic below and
+      // mapRowToListingItem actually touch. Doesn't eliminate the full-table scan (out of scope
+      // here — not worth a caching layer for this), just the per-row payload.
+      select: {
+        id: true,
+        title: true,
+        referenceCode: true,
+        priceText: true,
+        description: true,
+        url: true,
+        neighborhood: true,
+        listingType: true,
+        transaction: true,
+        images: { orderBy: { ordinal: "asc" }, take: 12 },
+      },
     });
 
     const matches = rows.filter((row) => {
