@@ -8,8 +8,11 @@ const MANAGED_MODEL = process.env.MANAGED_MODEL ?? "qwen/qwen-2.5-7b-instruct";
 // failure (e.g. 402 payment required), remember when and skip straight to the fallback for a
 // cooldown window instead of repeating the same doomed call on every request. Single-process
 // gateway, so a module-level variable is fine — no need for Redis/shared state.
-const CIRCUIT_BREAKER_COOLDOWN_MS = 60000;
-const NON_RETRYABLE_STATUS_CODES = new Set([402, 401, 403]);
+const CIRCUIT_BREAKER_COOLDOWN_MS = 15000;
+// 402 (payment required) is deliberately NOT in this set — credit can be topped up at any
+// moment, so a past 402 shouldn't keep punishing requests with a blanket breaker; it's retried
+// on the next request instead.
+const NON_RETRYABLE_STATUS_CODES = new Set([401, 403]);
 let lastDefinitiveFailureAt: number | null = null;
 
 export class ManagedProvider implements InferenceProvider {
