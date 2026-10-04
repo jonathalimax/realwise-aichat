@@ -46,13 +46,13 @@ function ListingCard({ listing, onOpen }: { listing: Listing; onOpen: (listing: 
   const url = safeHttpUrl(listing.url);
   const [imageFailed, setImageFailed] = useState(false);
   return (
-    <Card className="w-56 shrink-0 overflow-hidden">
+    <Card className="flex h-[23rem] w-56 shrink-0 flex-col overflow-hidden">
       <button
         type="button"
         onClick={() => onOpen(listing)}
-        className="block w-full text-left active:scale-[0.98] transition-transform"
+        className="flex h-full w-full flex-col text-left active:scale-[0.98] transition-transform"
       >
-        <div className="flex h-32 w-full items-center justify-center bg-border/40">
+        <div className="flex h-32 w-full shrink-0 items-center justify-center bg-border/40">
           {imageUrl && !imageFailed ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -67,15 +67,20 @@ function ListingCard({ listing, onOpen }: { listing: Listing; onOpen: (listing: 
             </span>
           )}
         </div>
-        <CardContent className="p-3">
+        <CardContent className="flex flex-1 flex-col p-3">
           <div className="line-clamp-2 text-sm font-semibold text-ink">{listing.title}</div>
           {listing.price && <div className="mt-1 text-sm font-semibold text-accent">{listing.price}</div>}
           {listing.description && <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{listing.description}</p>}
-          {url && (
-            <span className="mt-2 block rounded-full bg-accent px-3 py-1.5 text-center text-xs font-medium text-white">
-              Ver anúncio
-            </span>
-          )}
+          {/* Always reserve the button's footprint, even with no real url, so every card in the
+              carousel lines up — an invisible spacer keeps the exact same box without offering a
+              dead link. */}
+          <span
+            className={`mt-auto block rounded-full px-3 pt-2 text-center text-xs font-medium ${
+              url ? "bg-accent text-white" : "invisible"
+            }`}
+          >
+            Ver anúncio
+          </span>
         </CardContent>
       </button>
     </Card>
