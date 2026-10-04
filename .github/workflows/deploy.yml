@@ -1,0 +1,31 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Install SSH key
+        run: |
+          install -m 600 -D /dev/null ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.VPS_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Trigger guarded Coolify deploys
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          API_UUID: ${{ vars.COOLIFY_APP_API_UUID }}
+          WORKER_UUID: ${{ vars.COOLIFY_APP_WORKER_UUID }}
+          GATEWAY_UUID: ${{ vars.COOLIFY_APP_INFERENCE_GATEWAY_UUID }}
+          CHAT_UUID: ${{ vars.COOLIFY_APP_CHAT_UUID }}
+          DASHBOARD_UUID: ${{ vars.COOLIFY_APP_DASHBOARD_UUID }}
+          ADMIN_UUID: ${{ vars.COOLIFY_APP_ADMIN_UUID }}
+          MARKETING_UUID: ${{ vars.COOLIFY_APP_MARKETING_UUID }}
+        run: |
+          for uuid in "$API_UUID" "$WORKER_UUID" "$GATEWAY_UUID" "$CHAT_UUID" "$DASHBOARD_UUID" "$ADMIN_UUID" "$MARKETING_UUID"; do
+            ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" "coolify-guarded-deploy '$uuid'"
+          done
