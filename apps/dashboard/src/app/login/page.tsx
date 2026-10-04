@@ -19,6 +19,19 @@ export default function LoginPage() {
   );
 }
 
+const WHATSAPP_URL = "https://wa.me/5585992265544?text=" + encodeURIComponent("Oi! Estou tentando entrar no painel da Realwise e deu erro.");
+
+const PLAN_LABELS: Record<string, string> = {
+  essencial: "Essencial",
+  profissional: "Profissional",
+};
+
+function isRateLimitError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code ?? "";
+  const status = (err as { status?: number })?.status;
+  return status === 429 || code === "auth/too-many-requests" || code === "auth/quota-exceeded";
+}
+
 function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -26,22 +39,33 @@ function LoginPageInner() {
   const [code, setCode] = useState("");
   const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
   const [error, setError] = useState("");
+  const [rateLimited, setRateLimited] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
   useEffect(() => {
     const plan = searchParams.get("plan");
-    if (plan) localStorage.setItem("rw_selected_plan", plan);
+    if (plan) {
+      localStorage.setItem("rw_selected_plan", plan);
+      setSelectedPlan(plan);
+    }
   }, [searchParams]);
 
   async function handleSendCode() {
     try {
       setError("");
+      setRateLimited(false);
       setLoading(true);
       const verifier = createRecaptchaVerifier("recaptcha-container");
       const result = await sendPhoneOtp(brPhoneToE164(phone), verifier);
       setConfirmation(result);
-    } catch {
-      setError("Não consegui enviar o código. Confira o número e tente de novo.");
+    } catch (err) {
+      if (isRateLimitError(err)) {
+        setRateLimited(true);
+        setError("Muitas tentativas agora. Espere alguns minutos ou fale com a gente no WhatsApp.");
+      } else {
+        setError("Não consegui enviar o código. Confira o número e tente de novo.");
+      }
     } finally {
       setLoading(false);
     }
@@ -51,6 +75,7 @@ function LoginPageInner() {
     if (!confirmation) return;
     try {
       setError("");
+      setRateLimited(false);
       setLoading(true);
       const credential = await confirmation.confirm(code);
       const idToken = await credential.user.getIdToken();
@@ -63,8 +88,13 @@ function LoginPageInner() {
       } else {
         router.push("/");
       }
-    } catch {
-      setError("Código inválido ou expirado.");
+    } catch (err) {
+      if (isRateLimitError(err)) {
+        setRateLimited(true);
+        setError("Muitas tentativas agora. Espere alguns minutos ou fale com a gente no WhatsApp.");
+      } else {
+        setError("Código inválido ou expirado.");
+      }
     } finally {
       setLoading(false);
     }
@@ -84,8 +114,16 @@ function LoginPageInner() {
       <div className="flex w-full flex-1 flex-col items-center justify-center px-6 py-10 sm:px-12 lg:w-1/2">
         <div className="w-full max-w-[380px]">
           <a href="/site" className="mb-8 block font-serif text-lg font-bold text-ink lg:hidden">Realwise</a>
-          <h2 className="font-serif text-3xl text-ink">Entrar na sua conta</h2>
-          <p className="mt-2 text-sm text-ink-soft">Use o telefone cadastrado do seu negócio.</p>
+          <h2 className="font-serif text-3xl text-ink">Entre ou crie sua conta</h2>
+          <p className="mt-2 text-sm text-ink-soft">
+            Seu telefone é seu login. Se for sua primeira vez, a gente cria sua conta agora — sem cartão, 7 dias
+            grátis.
+          </p>
+          {selectedPlan && (
+            <p className="mt-3 rounded-lg bg-bg-2 px-3 py-2 text-sm text-ink-soft">
+              Plano selecionado: <span className="font-semibold text-ink">{PLAN_LABELS[selectedPlan] ?? selectedPlan}</span>
+            </p>
+          )}
 
           <div className="mt-8 flex flex-col gap-4">
             {!confirmation ? (
@@ -138,7 +176,19 @@ function LoginPageInner() {
                 </Button>
               </>
             )}
-            {error && <p className="text-sm text-negative">{error}</p>}
+            {error && (
+              <p className="text-sm text-negative">
+                {error}
+                {rateLimited && (
+                  <>
+                    {" "}
+                    <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="font-semibold underline">
+                      Falar no WhatsApp
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
           </div>
           <div id="recaptcha-container" />
         </div>
