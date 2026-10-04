@@ -18,9 +18,9 @@ export class AuthController {
   @UseGuards(AuthRateLimitGuard)
   @Post("business/verify")
   async verifyBusiness(@Body("idToken") idToken: string, @Res({ passthrough: true }) res: Response) {
-    const { token, business } = await this.auth.loginBusinessWithFirebaseToken(idToken);
+    const { token, business, isNew } = await this.auth.loginBusinessWithFirebaseToken(idToken);
     res.cookie("rw_business_session", token, SESSION_COOKIE_OPTIONS);
-    return { business };
+    return { business, isNew };
   }
 
   @UseGuards(AuthRateLimitGuard)
