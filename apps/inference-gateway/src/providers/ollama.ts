@@ -23,7 +23,7 @@ export class OllamaProvider implements InferenceProvider {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: false, options: { temperature: req.temperature ?? 0.2 } }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!res.ok) throw new Error(`Ollama request failed: ${res.status}`);
