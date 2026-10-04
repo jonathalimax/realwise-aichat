@@ -32,7 +32,9 @@ export async function generateFromGateway(params: GatewayGenerateParams): Promis
       ...(GATEWAY_TOKEN ? { "x-internal-token": GATEWAY_TOKEN } : {}),
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs ?? 25000),
+    // Must stay longer than ollama.ts's own 30000ms internal timeout, otherwise this outer
+    // timeout always wins the race and the inner one never actually fires.
+    signal: AbortSignal.timeout(timeoutMs ?? 35000),
   });
   if (!res.ok) {
     const body = await res.text();
