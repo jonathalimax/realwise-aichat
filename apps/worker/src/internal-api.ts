@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3006";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3006/api";
 const INTERNAL_TOKEN = process.env.INFERENCE_GATEWAY_TOKEN;
 
 export async function callInternalApi(path: string, businessId: string) {

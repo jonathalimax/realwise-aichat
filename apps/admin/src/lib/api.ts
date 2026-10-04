@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3006";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3006/api";
 const BASE_PATH = "/admin";
 
 async function request(path: string, options?: RequestInit) {

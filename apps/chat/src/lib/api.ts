@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3006";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3006/api";
 
 async function request(path: string, options?: RequestInit) {
   // A genuinely stalled connection (dead proxy, saturated inference gateway on the backend) must
