@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Building2, Car, Upload, MessageCircle } from "lucide-react";
+import { Upload, MessageCircle } from "lucide-react";
 import {
   getMe,
   updateBusiness,
@@ -19,6 +19,8 @@ import {
   confirmLinkPlaced,
 } from "../../lib/api";
 import { InterviewChat } from "../../components/InterviewChat";
+import { ChatOnboarding } from "./ChatOnboarding";
+import { NICHES } from "./niches";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea";
@@ -28,21 +30,6 @@ import { Card, CardContent } from "../../components/ui/card";
 import { cn } from "../../lib/utils";
 
 const STEPS = ["Negócio", "Documentos", "Entrevista", "Revisão", "WhatsApp", "Publicar"];
-
-const NICHES = [
-  {
-    value: "imobiliaria",
-    label: "Imobiliária",
-    description: "Locação e venda de imóveis — a Clara ajuda seus clientes a encontrar o imóvel certo.",
-    icon: Building2,
-  },
-  {
-    value: "concessionaria",
-    label: "Concessionária",
-    description: "Venda de veículos — a Clara ajuda seus clientes a encontrar o carro ideal e agendar test-drives.",
-    icon: Car,
-  },
-] as const;
 
 function StepIndicator({ step }: { step: number }) {
   return (
@@ -75,6 +62,7 @@ function StepHeader({ title, subtitle }: { title: string; subtitle: string }) {
 }
 
 export default function OnboardingPage() {
+  const [mode, setMode] = useState<"chat" | "wizard">("chat");
   const [step, setStep] = useState(0);
   const [business, setBusiness] = useState<any>(null);
   const [slug, setSlug] = useState("");
@@ -99,6 +87,16 @@ export default function OnboardingPage() {
   useEffect(() => {
     refresh();
   }, []);
+
+  // Resume rule: a business that already has a real name + slug started the old wizard flow
+  // before chat-first existed — keep it there instead of yanking it into a different UX.
+  const resumeChecked = useRef(false);
+  useEffect(() => {
+    if (resumeChecked.current || !business) return;
+    resumeChecked.current = true;
+    const hasRealSlug = !!business.slug && !business.slug.startsWith("pending-");
+    if (business.name && hasRealSlug) setMode("wizard");
+  }, [business]);
 
   async function handleCheckSlug() {
     const available = await checkSlugAvailable(slug);
@@ -163,6 +161,10 @@ export default function OnboardingPage() {
         </Card>
       )}
 
+      {mode === "chat" ? (
+        <ChatOnboarding business={business} refresh={refresh} onSwitchToWizard={() => setMode("wizard")} />
+      ) : (
+        <>
       <StepIndicator step={step} />
 
       {step === 0 && (
@@ -404,6 +406,8 @@ export default function OnboardingPage() {
             </Card>
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   );
