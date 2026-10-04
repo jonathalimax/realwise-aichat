@@ -27,7 +27,17 @@ function buildAllowedOrigins(): string[] {
     process.env.NEXT_PUBLIC_ADMIN_URL,
     process.env.NEXT_PUBLIC_MARKETING_URL,
     process.env.DASHBOARD_URL,
-  ].filter((v): v is string => Boolean(v));
+  ]
+    .filter((v): v is string => Boolean(v))
+    // CORS origins are scheme+host+port only — strip any path (e.g. NEXT_PUBLIC_CHAT_URL now
+    // includes /client/conversation for building public chat links, which isn't a valid origin).
+    .map((v) => {
+      try {
+        return new URL(v).origin;
+      } catch {
+        return v;
+      }
+    });
 
   const devDefaults = process.env.NODE_ENV === "production" ? [] : DEV_DEFAULT_ORIGINS;
 
