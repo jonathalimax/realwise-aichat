@@ -31,6 +31,21 @@ export const getExtractionCostMetrics = (days?: number) =>
   request(`/admin/metrics/extraction-cost${days ? `?days=${days}` : ""}`);
 export const getConversationInsights = (days?: number) =>
   request(`/admin/conversations/insights${days ? `?days=${days}` : ""}`);
+export const getConversationProblemCases = (params: {
+  days: number;
+  businessId?: string;
+  category?: string;
+  limit?: number;
+  offset?: number;
+}) => {
+  const search = new URLSearchParams();
+  search.set("days", String(params.days));
+  if (params.businessId) search.set("businessId", params.businessId);
+  if (params.category) search.set("category", params.category);
+  search.set("limit", String(params.limit ?? 25));
+  search.set("offset", String(params.offset ?? 0));
+  return request(`/admin/conversations/problem-cases?${search.toString()}`);
+};
 export const getPlatformConfig = () => request("/admin/platform-config");
 export const updatePlatformConfig = (supportWhatsappNumber: string) =>
   request("/admin/platform-config", { method: "PATCH", body: JSON.stringify({ supportWhatsappNumber }) });

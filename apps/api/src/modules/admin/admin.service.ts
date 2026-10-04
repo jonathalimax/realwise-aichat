@@ -3,6 +3,50 @@ import { nicheTemplates, questionForField } from "@realwise/profile-schema";
 import { PrismaService } from "../../prisma/prisma.service";
 import { estimateCostUsd } from "./model-pricing";
 
+// Mirrors ABSTENTION_FALLBACK/NO_CONTEXT_FALLBACK in chat.service.ts. Duplicated locally rather
+// than imported across modules so admin stays independent of the chat module's internals — if
+// those fallback copies ever change, this categorization heuristic needs updating too.
+const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
+const NO_CONTEXT_FALLBACK = "Não encontrei essa informação na nossa base. Quer que eu te passe pro atendimento?";
+
+export const PROBLEM_CASE_CATEGORIES = [
+  "no_context",
+  "grounding_guard",
+  "gateway_error",
+  "model_abstained",
+  "escalated",
+  "flagged",
+  "negative_feedback",
+] as const;
+export type ProblemCaseCategory = (typeof PROBLEM_CASE_CATEGORIES)[number];
+
+type ProblemCaseMessageShape = {
+  answerSource: string | null;
+  retrievedChunkIds: string[];
+  retrievalTopScore: number | null;
+  modelUsed: string | null;
+  inputTokens: number | null;
+  content: string;
+  flagged: boolean;
+  feedback: string | null;
+};
+
+// Categorizes an assistant message by field-shape inference — there is no stored "reason" column,
+// so we distinguish "silent" failure modes from the combination of answerSource plus a few
+// telltale fields (no retrieved context, no model used, or the exact fallback string).
+function categorizeProblemMessage(m: ProblemCaseMessageShape): ProblemCaseCategory {
+  if (m.answerSource === "escalation") return "escalated";
+  if (m.answerSource === "abstained") {
+    if (m.retrievedChunkIds.length === 0 && m.retrievalTopScore == null) return "no_context";
+    if (!m.modelUsed || m.modelUsed === "unknown" || !m.inputTokens) return "gateway_error";
+    if (m.content.trim() === ABSTENTION_FALLBACK) return "grounding_guard";
+    return "model_abstained";
+  }
+  if (m.flagged) return "flagged";
+  if (m.feedback === "negative") return "negative_feedback";
+  return "model_abstained"; // fallback, shouldn't hit given the where clause
+}
+
 @Injectable()
 export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
@@ -458,6 +502,187 @@ export class AdminService {
         }))
         .sort((a, b) => b.total - a.total),
     };
+  }
+
+  // Drill-down behind the "Silêncio"/"Escalado"/"Sinalizado" counts in conversationInsights: the
+  // actual problem cases (question/answer/category) instead of just a count, since there's no
+  // stored "reason" column — categoryWhere below mirrors categorizeProblemMessage's own logic.
+  async conversationProblemCases(params: { days: number; businessId?: string; category?: string; limit: number; offset: number }) {
+    const { days, businessId, category } = params;
+    const limit = Math.min(Math.max(params.limit, 1), 100);
+    const offset = Math.max(params.offset, 0);
+    const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+
+    const categoryWhere = (() => {
+      switch (category) {
+        case "no_context":
+          return { answerSource: "abstained" as const, retrievedChunkIds: { isEmpty: true }, retrievalTopScore: null };
+        case "grounding_guard":
+          return { answerSource: "abstained" as const, content: ABSTENTION_FALLBACK };
+        case "gateway_error":
+          return { answerSource: "abstained" as const };
+        case "model_abstained":
+          return { answerSource: "abstained" as const };
+        case "escalated":
+          return { answerSource: "escalation" as const };
+        case "flagged":
+          return { flagged: true };
+        case "negative_feedback":
+          return { feedback: "negative" };
+        default:
+          return undefined;
+      }
+    })();
+
+    const where = {
+      role: "assistant",
+      createdAt: { gte: since },
+      ...(businessId ? { businessId } : {}),
+      ...(categoryWhere ?? {
+        OR: [
+          { answerSource: { in: ["abstained" as const, "escalation" as const] } },
+          { flagged: true },
+          { feedback: "negative" },
+        ],
+      }),
+      // Cast needed because categoryWhere's union of narrow literal shapes doesn't line up with
+      // Prisma's generated WhereInput type without importing @prisma/client's Prisma namespace
+      // into this module (not currently a direct dependency here — @realwise/db owns that).
+    } as any;
+
+    const rows = await this.prisma.client.message.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit + 1,
+      skip: offset,
+      select: {
+        id: true,
+        conversationId: true,
+        businessId: true,
+        content: true,
+        createdAt: true,
+        answerSource: true,
+        retrievedChunkIds: true,
+        retrievalTopScore: true,
+        modelUsed: true,
+        inputTokens: true,
+        latencyMs: true,
+        flagged: true,
+        feedback: true,
+      },
+    });
+
+    const hasMore = rows.length > limit;
+    const cases = rows.slice(0, limit);
+
+    // Some categories (gateway_error, model_abstained, no explicit category filter) select
+    // multiple answerSource="abstained" shapes server-side; refine to the exact category client
+    // of this method expects by re-running the same inference used for the overview counts.
+    const filtered = category
+      ? cases.filter((m) => categorizeProblemMessage(m) === category)
+      : cases;
+
+    const conversationIds = [...new Set(filtered.map((m) => m.conversationId))];
+    const maxCreatedAt = filtered.reduce<Date | null>(
+      (max, m) => (max === null || m.createdAt > max ? m.createdAt : max),
+      null,
+    );
+
+    const visitorMessages = conversationIds.length
+      ? await this.prisma.client.message.findMany({
+          where: {
+            conversationId: { in: conversationIds },
+            role: "visitor",
+            ...(maxCreatedAt ? { createdAt: { lte: maxCreatedAt } } : {}),
+          },
+          select: { conversationId: true, content: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+        })
+      : [];
+
+    const visitorByConversation = new Map<string, { content: string; createdAt: Date }[]>();
+    for (const vm of visitorMessages) {
+      const list = visitorByConversation.get(vm.conversationId) ?? [];
+      list.push({ content: vm.content, createdAt: vm.createdAt });
+      visitorByConversation.set(vm.conversationId, list);
+    }
+    const nearestQuestion = (conversationId: string, before: Date): string | null => {
+      const list = visitorByConversation.get(conversationId);
+      if (!list) return null;
+      const candidate = list.find((vm) => vm.createdAt <= before);
+      return candidate?.content ?? null;
+    };
+
+    const businessIds = [...new Set(filtered.map((m) => m.businessId))];
+    const businesses = businessIds.length
+      ? await this.prisma.client.business.findMany({ where: { id: { in: businessIds } }, select: { id: true, name: true } })
+      : [];
+    const nameById = new Map(businesses.map((b) => [b.id, b.name]));
+
+    // Best-effort proximity match: LlmCallLog has no foreign key to Message, so we pair a
+    // gateway_error case to the nearest-in-time failed "chat" purpose call for the same
+    // business, within a loose +/-60s window — approximate, not a guaranteed correlation.
+    const gatewayErrorCases = filtered.filter((m) => categorizeProblemMessage(m) === "gateway_error");
+    const gatewayErrorByBusiness = new Map<string, { createdAt: Date; error: string }[]>();
+    if (gatewayErrorCases.length) {
+      const minCreatedAt = new Date(Math.min(...gatewayErrorCases.map((m) => m.createdAt.getTime())) - 60_000);
+      const maxCreatedAtWindow = new Date(Math.max(...gatewayErrorCases.map((m) => m.createdAt.getTime())) + 60_000);
+      const logs = await this.prisma.client.llmCallLog.findMany({
+        where: {
+          purpose: "chat",
+          error: { not: null },
+          businessId: { in: [...new Set(gatewayErrorCases.map((m) => m.businessId))] },
+          createdAt: { gte: minCreatedAt, lte: maxCreatedAtWindow },
+        },
+        select: { businessId: true, createdAt: true, error: true },
+      });
+      for (const log of logs) {
+        if (!log.businessId || !log.error) continue;
+        const list = gatewayErrorByBusiness.get(log.businessId) ?? [];
+        list.push({ createdAt: log.createdAt, error: log.error });
+        gatewayErrorByBusiness.set(log.businessId, list);
+      }
+    }
+    const nearestGatewayError = (businessId: string, at: Date): string | undefined => {
+      const list = gatewayErrorByBusiness.get(businessId);
+      if (!list || list.length === 0) return undefined;
+      let nearest = list[0];
+      let nearestDiff = Math.abs(nearest.createdAt.getTime() - at.getTime());
+      for (const entry of list) {
+        const diff = Math.abs(entry.createdAt.getTime() - at.getTime());
+        if (diff < nearestDiff) {
+          nearest = entry;
+          nearestDiff = diff;
+        }
+      }
+      return nearest.error.length > 300 ? `${nearest.error.slice(0, 300)}…` : nearest.error;
+    };
+
+    const truncate = (text: string) => (text.length > 600 ? `${text.slice(0, 600)}…` : text);
+
+    const items = filtered.map((m) => {
+      const resolvedCategory = categorizeProblemMessage(m);
+      const questionRaw = nearestQuestion(m.conversationId, m.createdAt);
+      return {
+        messageId: m.id,
+        conversationId: m.conversationId,
+        businessId: m.businessId,
+        businessName: nameById.get(m.businessId) ?? "—",
+        createdAt: m.createdAt,
+        category: resolvedCategory,
+        questionText: questionRaw ? truncate(questionRaw) : null,
+        answerText: m.content ? truncate(m.content) : null,
+        latencyMs: m.latencyMs,
+        retrievalTopScore: m.retrievalTopScore,
+        retrievedChunkCount: m.retrievedChunkIds.length,
+        modelUsed: m.modelUsed,
+        flagged: m.flagged,
+        feedback: m.feedback,
+        gatewayError: resolvedCategory === "gateway_error" ? nearestGatewayError(m.businessId, m.createdAt) : undefined,
+      };
+    });
+
+    return { days, hasMore, limit, offset, items };
   }
 
   async getPlatformConfig() {

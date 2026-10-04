@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
-import { AdminService } from "./admin.service";
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { AdminService, PROBLEM_CASE_CATEGORIES } from "./admin.service";
 import { AdminSessionGuard } from "../../common/guards/admin-session.guard";
 
 const ALLOWED_DAYS = [7, 30, 90];
@@ -83,6 +83,28 @@ export class AdminController {
   @Get("conversations/insights")
   conversationInsights(@Query("days") days?: string) {
     return this.admin.conversationInsights(parseDays(days));
+  }
+
+  @Get("conversations/problem-cases")
+  conversationProblemCases(
+    @Query("days") days?: string,
+    @Query("businessId") businessId?: string,
+    @Query("category") category?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
+  ) {
+    if (category && !PROBLEM_CASE_CATEGORIES.includes(category as (typeof PROBLEM_CASE_CATEGORIES)[number])) {
+      throw new BadRequestException("Categoria inválida");
+    }
+    const parsedLimit = Number(limit);
+    const parsedOffset = Number(offset);
+    return this.admin.conversationProblemCases({
+      days: parseDays(days),
+      businessId,
+      category,
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 25,
+      offset: Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0,
+    });
   }
 
   @Get("platform-config")

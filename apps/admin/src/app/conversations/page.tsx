@@ -6,6 +6,9 @@ import { StatCard } from "../../components/ui/stat-card";
 import { SegmentedControl } from "../../components/ui/segmented";
 import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../components/ui/table";
+import { ProblemCasesDrawer } from "../../components/conversations/ProblemCasesDrawer";
+
+type Drill = { businessId?: string; businessName?: string; category: string };
 
 const RANGE_OPTIONS = [
   { label: "Últimos 7 dias", value: "7" },
@@ -30,6 +33,7 @@ function formatCostUsd(value: number): string {
 export default function ConversationsPage() {
   const [range, setRange] = useState<(typeof RANGE_OPTIONS)[number]["value"]>("7");
   const [data, setData] = useState<any>(null);
+  const [drill, setDrill] = useState<Drill | null>(null);
 
   useEffect(() => {
     getConversationInsights(Number(range)).then(setData).catch(() => setData(null));
@@ -48,16 +52,30 @@ export default function ConversationsPage() {
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Respostas da IA" value={data.totalMessages} />
-            <StatCard
-              label="Ficou em silêncio"
-              value={data.bySource.abstained}
-              context={pct(data.abstentionRate)}
-            />
-            <StatCard
-              label="Escalado p/ humano"
-              value={data.bySource.escalation}
-              context={pct(data.escalationRate)}
-            />
+            <button
+              type="button"
+              disabled={data.bySource.abstained === 0}
+              onClick={() => setDrill({ category: "model_abstained" })}
+              className="text-left disabled:cursor-default"
+            >
+              <StatCard
+                label="Ficou em silêncio"
+                value={data.bySource.abstained}
+                context={pct(data.abstentionRate)}
+              />
+            </button>
+            <button
+              type="button"
+              disabled={data.bySource.escalation === 0}
+              onClick={() => setDrill({ category: "escalated" })}
+              className="text-left disabled:cursor-default"
+            >
+              <StatCard
+                label="Escalado p/ humano"
+                value={data.bySource.escalation}
+                context={pct(data.escalationRate)}
+              />
+            </button>
             <StatCard label="Tempo de resposta" value={formatMs(data.medianLatencyMs)} context={`mediana · média ${formatMs(data.avgLatencyMs)}`} />
           </div>
 
@@ -113,9 +131,51 @@ export default function ConversationsPage() {
                           <TableRow key={b.businessId}>
                             <TableCell>{b.businessName}</TableCell>
                             <TableCell>{b.total}</TableCell>
-                            <TableCell>{b.abstained}</TableCell>
-                            <TableCell>{b.escalated}</TableCell>
-                            <TableCell>{b.flagged}</TableCell>
+                            <TableCell>
+                              {b.abstained > 0 ? (
+                                <button
+                                  type="button"
+                                  className="underline decoration-dotted decoration-ink-soft hover:text-ink"
+                                  onClick={() =>
+                                    setDrill({ businessId: b.businessId, businessName: b.businessName, category: "model_abstained" })
+                                  }
+                                >
+                                  {b.abstained}
+                                </button>
+                              ) : (
+                                b.abstained
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {b.escalated > 0 ? (
+                                <button
+                                  type="button"
+                                  className="underline decoration-dotted decoration-ink-soft hover:text-ink"
+                                  onClick={() =>
+                                    setDrill({ businessId: b.businessId, businessName: b.businessName, category: "escalated" })
+                                  }
+                                >
+                                  {b.escalated}
+                                </button>
+                              ) : (
+                                b.escalated
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {b.flagged > 0 ? (
+                                <button
+                                  type="button"
+                                  className="underline decoration-dotted decoration-ink-soft hover:text-ink"
+                                  onClick={() =>
+                                    setDrill({ businessId: b.businessId, businessName: b.businessName, category: "flagged" })
+                                  }
+                                >
+                                  {b.flagged}
+                                </button>
+                              ) : (
+                                b.flagged
+                              )}
+                            </TableCell>
                             <TableCell>{b.negativeFeedback}</TableCell>
                             <TableCell>{formatMs(b.medianLatencyMs)}</TableCell>
                             <TableCell>{formatCostUsd(b.costUsd ?? 0)}</TableCell>
@@ -136,15 +196,57 @@ export default function ConversationsPage() {
                           </div>
                           <div>
                             <div className="text-ink-soft">Silêncio</div>
-                            <div className="text-ink">{b.abstained}</div>
+                            <div className="text-ink">
+                              {b.abstained > 0 ? (
+                                <button
+                                  type="button"
+                                  className="underline decoration-dotted decoration-ink-soft"
+                                  onClick={() =>
+                                    setDrill({ businessId: b.businessId, businessName: b.businessName, category: "model_abstained" })
+                                  }
+                                >
+                                  {b.abstained}
+                                </button>
+                              ) : (
+                                b.abstained
+                              )}
+                            </div>
                           </div>
                           <div>
                             <div className="text-ink-soft">Escalado</div>
-                            <div className="text-ink">{b.escalated}</div>
+                            <div className="text-ink">
+                              {b.escalated > 0 ? (
+                                <button
+                                  type="button"
+                                  className="underline decoration-dotted decoration-ink-soft"
+                                  onClick={() =>
+                                    setDrill({ businessId: b.businessId, businessName: b.businessName, category: "escalated" })
+                                  }
+                                >
+                                  {b.escalated}
+                                </button>
+                              ) : (
+                                b.escalated
+                              )}
+                            </div>
                           </div>
                           <div>
                             <div className="text-ink-soft">Sinalizado</div>
-                            <div className="text-ink">{b.flagged}</div>
+                            <div className="text-ink">
+                              {b.flagged > 0 ? (
+                                <button
+                                  type="button"
+                                  className="underline decoration-dotted decoration-ink-soft"
+                                  onClick={() =>
+                                    setDrill({ businessId: b.businessId, businessName: b.businessName, category: "flagged" })
+                                  }
+                                >
+                                  {b.flagged}
+                                </button>
+                              ) : (
+                                b.flagged
+                              )}
+                            </div>
                           </div>
                           <div>
                             <div className="text-ink-soft">Feedback negativo</div>
@@ -168,6 +270,15 @@ export default function ConversationsPage() {
           </Card>
         </>
       )}
+
+      <ProblemCasesDrawer
+        open={drill !== null}
+        onClose={() => setDrill(null)}
+        businessId={drill?.businessId}
+        businessName={drill?.businessName}
+        category={drill?.category}
+        days={Number(range)}
+      />
     </div>
   );
 }
