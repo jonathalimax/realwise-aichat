@@ -90,6 +90,108 @@ const CHROME_IMAGE_PATTERN = /(logo|favicon|icon|sprite|avatar|placeholder|banne
 // apps/worker/src/processors/website-sync.ts — this is that document's own authoritative URL.
 const SOURCE_URL_PATTERN = /\nFonte:\s*(\S+)$/;
 
+// Matches the JSON-LD block apps/worker/src/processors/website-sync.ts embeds into
+// extractedMarkdown (see that file for why this is a marker block rather than a DB column).
+const STRUCTURED_DATA_PATTERN = /<!--STRUCTURED_DATA\n([\s\S]*?)\nSTRUCTURED_DATA-->/;
+
+function parseStructuredDataBlock(markdown: string): Record<string, unknown>[] {
+  const match = markdown.match(STRUCTURED_DATA_PATTERN);
+  if (!match) return [];
+  try {
+    const parsed = JSON.parse(match[1]);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function flattenStructuredValue(value: unknown): Record<string, unknown> {
+  // schema.org sites nest the useful fields at varying depths (offers.price, about.numberOfRooms,
+  // address.addressLocality, brand.name, etc) — liberally flatten one level of known wrapper
+  // objects into the top level instead of trying to model every exact schema shape.
+  if (!value || typeof value !== "object") return {};
+  const obj = value as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...obj };
+  for (const wrapperKey of ["offers", "about", "address", "brand", "itemOffered"]) {
+    const wrapper = obj[wrapperKey];
+    if (wrapper && typeof wrapper === "object" && !Array.isArray(wrapper)) {
+      for (const [key, val] of Object.entries(wrapper as Record<string, unknown>)) {
+        if (merged[key] === undefined) merged[key] = val;
+      }
+    }
+  }
+  return merged;
+}
+
+function structuredImages(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : value != null ? [value] : [];
+  return raw
+    .map((img) => (typeof img === "object" && img && "url" in (img as Record<string, unknown>) ? (img as Record<string, unknown>).url : img))
+    .map((img) => safeHttpUrl(img))
+    .filter((img): img is string => Boolean(img) && !CHROME_IMAGE_PATTERN.test(img as string));
+}
+
+function structuredString(value: unknown): string | undefined {
+  if (typeof value === "object" && value) return structuredString((value as Record<string, unknown>).name);
+  return parseRealStr(value);
+}
+
+function structuredNumber(value: unknown): number | undefined {
+  if (typeof value === "number") return value;
+  if (typeof value === "object" && value) return structuredNumber((value as Record<string, unknown>).value);
+  const parsed = typeof value === "string" ? Number(value.replace(/[^\d.-]/g, "")) : NaN;
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+const STRUCTURED_LISTING_TYPE_BY_SCHEMA_TYPE: Record<string, string> = {
+  House: "casa",
+  SingleFamilyResidence: "casa",
+  Residence: "casa",
+  Apartment: "apartamento",
+  ApartmentComplex: "apartamento",
+  Accommodation: "apartamento",
+};
+
+// Maps a single schema.org JSON-LD object (already liberally flattened) directly to
+// ExtractedListing — skips the LLM entirely for whatever structured data a site already hands us.
+function mapStructuredDataToListing(raw: Record<string, unknown>, documentId: string, pageUrl: string | undefined): ExtractedListing | null {
+  const flat = flattenStructuredValue(raw);
+  const title = parseRealStr(flat.name ?? flat.title);
+  if (!title) return null;
+
+  const priceRaw = flat.price;
+  const priceCents = structuredNumber(priceRaw) != null ? Math.round((structuredNumber(priceRaw) as number) * 100) : undefined;
+  const priceText = priceCents != null ? String(structuredNumber(priceRaw)) : undefined;
+
+  const schemaType = typeof raw["@type"] === "string" ? (raw["@type"] as string) : Array.isArray(raw["@type"]) ? (raw["@type"] as string[])[0] : undefined;
+
+  let url = safeHttpUrl(flat.url);
+  if (url && isBoilerplateUrl(url)) url = undefined;
+
+  return {
+    title,
+    description: parseRealStr(flat.description),
+    priceText,
+    priceCents,
+    url: pageUrl ?? url,
+    addressLine: parseRealStr(flat.streetAddress),
+    neighborhood: parseRealStr(flat.addressNeighborhood ?? flat.neighborhood),
+    city: parseRealStr(flat.addressLocality),
+    state: parseRealStr(flat.addressRegion),
+    listingType: schemaType ? STRUCTURED_LISTING_TYPE_BY_SCHEMA_TYPE[schemaType] : undefined,
+    bedrooms: parseInt2(structuredNumber(flat.numberOfRooms ?? flat.numberOfBedrooms)),
+    parkingSpots: undefined,
+    areaM2: parseInt2(structuredNumber(flat.floorSize ?? flat.area)),
+    brand: schemaType === "Vehicle" || schemaType === "Car" ? structuredString(flat.brand ?? flat.manufacturer) : undefined,
+    model: schemaType === "Vehicle" || schemaType === "Car" ? parseRealStr(flat.model) : undefined,
+    year: parseInt2(structuredNumber(flat.vehicleModelDate ?? flat.productionDate)),
+    mileageKm: parseInt2(structuredNumber(flat.mileageFromOdometer)),
+    images: structuredImages(flat.image),
+    documentId,
+    pageUrl,
+  };
+}
+
 function windowText(text: string, size: number): string[] {
   const windows: string[] = [];
   const step = size - WINDOW_OVERLAP;
@@ -284,12 +386,23 @@ export class ListingExtractionService {
       windows: string[];
     }
     const perDocument: DocWindows[] = [];
+    const extracted: ExtractedListing[] = [];
     for (const doc of documents) {
       const text = doc.extractedMarkdown ?? "";
       if (!text.trim()) continue;
       const sourceMatch = text.match(SOURCE_URL_PATTERN);
       const candidateUrl = sourceMatch ? safeHttpUrl(sourceMatch[1]) : undefined;
       const pageUrl = candidateUrl && !isBoilerplateUrl(candidateUrl) ? candidateUrl : undefined;
+
+      // Structured data (JSON-LD) a site already emits maps directly to ExtractedListing fields
+      // with no LLM call needed — the LLM-windowing path below still runs over the same
+      // document's text as a fallback, and the existing dedup logic merges the two if they
+      // describe the same item.
+      const structuredItems = parseStructuredDataBlock(text)
+        .map((item) => mapStructuredDataToListing(item, doc.id, pageUrl))
+        .filter((item): item is ExtractedListing => item !== null);
+      extracted.push(...structuredItems);
+
       perDocument.push({ documentId: doc.id, pageUrl, windows: windowText(text, WINDOW_SIZE) });
     }
     if (perDocument.length === 0) return noop;
@@ -321,7 +434,6 @@ export class ListingExtractionService {
     }
 
     const runStartedAt = new Date();
-    const extracted: ExtractedListing[] = [];
     const systemPrompt = SYSTEM_PROMPT_TEMPLATE(business.name);
     let failedWindows = 0;
 
