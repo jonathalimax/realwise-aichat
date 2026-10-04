@@ -1810,6 +1810,7 @@ export class FlowService {
   // everything else relies on free-text typing instead.
   private static readonly START_LAYER_MAX_DEPTH = 1;
   private static readonly CHOICE_MESSAGE_MAX_WORDS = 7;
+  private static readonly MENU_LABEL_MAX_WORDS = 6;
   private static readonly YESNO_LABEL_PATTERN =
     /^(sim|n[ãa]o|ok|confirmar|confirmo|cancelar|pode ser|claro|aceito|concordo|agora n[ãa]o|depois|talvez)\b/i;
 
@@ -1857,17 +1858,21 @@ export class FlowService {
   }
 
   // Implements the mechanical keep/suppress classification rule — see module doc for the full
-  // 6-condition rationale. Returns "full" to keep the node's bubbles visible, "none" to suppress.
+  // 7-condition rationale. Returns "full" to keep the node's bubbles visible, "none" to suppress.
   private bubblePolicy(node: FlowNode, depth: number): "full" | "none" {
     if (node.bubbleMode) return node.bubbleMode;
 
     // 2. Start/category-choice layer.
     if (depth <= FlowService.START_LAYER_MAX_DEPTH) return "full";
 
-    // 3. Short interrogative message — a genuine quick question.
+    // 3. Short interrogative message — a genuine quick question. Many nodes carry a data-prefix
+    // sentence (e.g. "{marca} {modelo} {ano} — {km} km — {preco}.") before the actual question, so
+    // only the final sentence is checked against the word cap, not the whole message.
     const trimmedMessage = node.message.trim();
-    if (trimmedMessage.endsWith("?")) {
-      const wordCount = trimmedMessage.split(/\s+/).filter(Boolean).length;
+    const sentences = trimmedMessage.split(/(?<=[.!?])\s+/).filter(Boolean);
+    const lastSentence = (sentences[sentences.length - 1] ?? trimmedMessage).trim();
+    if (lastSentence.endsWith("?")) {
+      const wordCount = lastSentence.split(/\s+/).filter(Boolean).length;
       if (wordCount <= FlowService.CHOICE_MESSAGE_MAX_WORDS) return "full";
     }
 
@@ -1881,6 +1886,16 @@ export class FlowService {
 
     // 6. Short yes/no-ish confirmation.
     if (bubbles.length > 0 && bubbles.length <= 3 && bubbles.some((b) => FlowService.YESNO_LABEL_PATTERN.test(b.label.trim()))) {
+      return "full";
+    }
+
+    // 7. Genuine discrete menu — the message itself ends on a colon/question mark, and the
+    // authored bubbles read as short discrete options rather than free-form navigation.
+    if (
+      (trimmedMessage.endsWith(":") || trimmedMessage.endsWith("?")) &&
+      bubbles.length >= 2 &&
+      bubbles.every((b) => b.label.trim().split(/\s+/).filter(Boolean).length <= FlowService.MENU_LABEL_MAX_WORDS)
+    ) {
       return "full";
     }
 
