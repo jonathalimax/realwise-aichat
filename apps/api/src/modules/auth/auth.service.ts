@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { verifyPhoneIdToken, normalizePhone, signBusinessSession, signVisitorSession, signAdminSession } from "@realwise/auth";
 import { createHash } from "crypto";
+import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
 
 const CONSENT_TEXT_VERSION = "2026-01";
@@ -87,12 +88,13 @@ export class AuthService {
     return { token, lead };
   }
 
-  async loginAdminWithFirebaseToken(idToken: string) {
-    const { phoneNumber } = await verifyPhoneIdToken(idToken);
-    const phone = normalizePhone(phoneNumber);
-
-    const admin = await this.prisma.client.adminUser.findUnique({ where: { phone } });
-    if (!admin) throw new UnauthorizedException("This phone number is not registered as an admin");
+  async loginAdminWithPassword(email: string, password: string) {
+    const admin = await this.prisma.client.adminUser.findUnique({ where: { email: email.toLowerCase().trim() } });
+    // Same generic error whether the email doesn't exist or the password is wrong, so a caller
+    // can't use the response to enumerate which admin emails are registered.
+    if (!admin || !(await bcrypt.compare(password, admin.passwordHash))) {
+      throw new UnauthorizedException("Invalid email or password");
+    }
 
     await this.prisma.client.adminUser.update({ where: { id: admin.id }, data: { lastLoginAt: new Date() } });
     const token = await signAdminSession({ adminId: admin.id, role: admin.role as "superadmin" | "support" });

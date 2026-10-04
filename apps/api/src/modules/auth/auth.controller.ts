@@ -25,8 +25,8 @@ export class AuthController {
 
   @UseGuards(AuthRateLimitGuard)
   @Post("admin/verify")
-  async verifyAdmin(@Body("idToken") idToken: string, @Res({ passthrough: true }) res: Response) {
-    const { token, admin } = await this.auth.loginAdminWithFirebaseToken(idToken);
+  async verifyAdmin(@Body("email") email: string, @Body("password") password: string, @Res({ passthrough: true }) res: Response) {
+    const { token, admin } = await this.auth.loginAdminWithPassword(email, password);
     res.cookie("rw_admin_session", token, { ...SESSION_COOKIE_OPTIONS, maxAge: 12 * 3600 * 1000 });
     return { admin: { id: admin.id, name: admin.name, role: admin.role } };
   }
