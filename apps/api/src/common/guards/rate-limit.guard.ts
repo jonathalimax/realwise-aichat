@@ -48,4 +48,7 @@ function createRateLimitGuard(options: RateLimitOptions): Type<CanActivate> {
 export const RateLimitGuard = createRateLimitGuard({ windowMs: 60_000, maxRequests: 20 });
 
 // Tighter, IP-only guard for login/OTP-verification endpoints (brute-force sensitive).
-export const AuthRateLimitGuard = createRateLimitGuard({ windowMs: 15 * 60_000, maxRequests: 10, ipOnly: true });
+// This is in-memory/per-process, so it's a soft backstop, not the real limit — Firebase's own
+// SMS quota per phone/IP is what actually caps abuse. Raised from 10 to accommodate self-serve
+// signup traffic (send + confirm each count as a hit) without false-locking legitimate users.
+export const AuthRateLimitGuard = createRateLimitGuard({ windowMs: 15 * 60_000, maxRequests: 30, ipOnly: true });
