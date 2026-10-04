@@ -35,6 +35,15 @@ export function getConversationHistory(businessId: string, conversationId: strin
   return request(`/chat/${businessId}/conversations/${conversationId}/messages${qs}`);
 }
 
+// "Selecionar e continuar" — pins a specific listing as this conversation's subject so follow-up
+// questions resolve against it directly instead of the ambiguous message-history lookback.
+export function pinListing(businessId: string, conversationId: string, listingId: string) {
+  return request(`/chat/${businessId}/conversations/${conversationId}/listing/pin`, {
+    method: "POST",
+    body: JSON.stringify({ listingId }),
+  });
+}
+
 export function sendMessage(businessId: string, conversationId: string, text: string) {
   return request(`/chat/${businessId}/conversations/${conversationId}/messages`, {
     method: "POST",

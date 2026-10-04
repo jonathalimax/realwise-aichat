@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 export interface Listing {
+  id?: string;
   title: string;
   price?: string;
   description?: string;

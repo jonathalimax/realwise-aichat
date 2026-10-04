@@ -13,6 +13,7 @@ import {
   startFlow,
   advanceFlow,
   getAvailableSlots,
+  pinListing,
 } from "../lib/api";
 import { isPushSupported, enablePush } from "../lib/push";
 import { Button } from "./ui/button";
@@ -41,7 +42,15 @@ interface Message {
 // Real listing item (property/vehicle) rendered as a card — image with a sensible fallback when
 // no real photo URL was captured, title, price, a short description snippet, and a tappable
 // surface that opens the listing in-app (ListingDetailOverlay) instead of navigating away.
-function ListingCard({ listing, onOpen }: { listing: Listing; onOpen: (listing: Listing) => void }) {
+function ListingCard({
+  listing,
+  onOpen,
+  onSelect,
+}: {
+  listing: Listing;
+  onOpen: (listing: Listing) => void;
+  onSelect?: (listing: Listing) => void;
+}) {
   const imageUrl = safeHttpUrl(listing.imageUrl);
   const url = safeHttpUrl(listing.url);
   const [imageFailed, setImageFailed] = useState(false);
@@ -50,7 +59,7 @@ function ListingCard({ listing, onOpen }: { listing: Listing; onOpen: (listing: 
       <button
         type="button"
         onClick={() => onOpen(listing)}
-        className="flex h-full w-full flex-col text-left active:scale-[0.98] transition-transform"
+        className="flex flex-1 w-full flex-col overflow-hidden text-left active:scale-[0.98] transition-transform"
       >
         <div className="flex h-32 w-full shrink-0 items-center justify-center bg-border/40">
           {imageUrl && !imageFailed ? (
@@ -71,18 +80,31 @@ function ListingCard({ listing, onOpen }: { listing: Listing; onOpen: (listing: 
           <div className="line-clamp-2 text-sm font-semibold text-ink">{listing.title}</div>
           {listing.price && <div className="mt-1 text-sm font-semibold text-accent">{listing.price}</div>}
           {listing.description && <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{listing.description}</p>}
-          {/* Always reserve the button's footprint, even with no real url, so every card in the
-              carousel lines up — an invisible spacer keeps the exact same box without offering a
-              dead link. */}
-          <span
-            className={`mt-auto block rounded-full px-3 pt-2 text-center text-xs font-medium ${
-              url ? "bg-accent text-white" : "invisible"
-            }`}
-          >
-            Ver anúncio
-          </span>
         </CardContent>
       </button>
+      {/* Footer row lives outside the main clickable card button so "Selecionar e continuar" can
+          sit next to "Ver anúncio" without either tap target swallowing the other. */}
+      <div className="flex items-center gap-2 px-3 pb-3 pt-1">
+        {/* Always reserve this pill's footprint, even with no real url, so every card in the
+            carousel lines up — an invisible spacer keeps the exact same box without offering a
+            dead link. */}
+        <span
+          className={`flex-1 rounded-full px-3 py-1.5 text-center text-xs font-medium ${
+            url ? "bg-accent text-white" : "invisible"
+          }`}
+        >
+          Ver anúncio
+        </span>
+        {listing.id && onSelect && (
+          <button
+            type="button"
+            onClick={() => onSelect(listing)}
+            className="flex-1 rounded-full border border-accent px-2 py-1.5 text-center text-xs font-medium text-accent active:scale-[0.98] transition-transform"
+          >
+            Selecionar e continuar
+          </button>
+        )}
+      </div>
     </Card>
   );
 }
@@ -93,7 +115,15 @@ function ListingCard({ listing, onOpen }: { listing: Listing; onOpen: (listing: 
 const LISTING_CARD_STEP_PX = 224 + 8; // w-56 (14rem=224px) + gap-2 (8px)
 const MAX_VISIBLE_DOTS = 8;
 
-function ListingCards({ listings, onOpen }: { listings: Listing[]; onOpen: (listing: Listing) => void }) {
+function ListingCards({
+  listings,
+  onOpen,
+  onSelect,
+}: {
+  listings: Listing[];
+  onOpen: (listing: Listing) => void;
+  onSelect?: (listing: Listing) => void;
+}) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
@@ -109,7 +139,7 @@ function ListingCards({ listings, onOpen }: { listings: Listing[]; onOpen: (list
       >
         {listings.map((listing, i) => (
           <div key={`${listing.title}-${i}`} className="snap-start">
-            <ListingCard listing={listing} onOpen={onOpen} />
+            <ListingCard listing={listing} onOpen={onOpen} onSelect={onSelect} />
           </div>
         ))}
       </div>
@@ -710,6 +740,22 @@ export function ChatScreen({
     }
   }
 
+  // "Selecionar e continuar" — pins the listing server-side, then sends a natural message
+  // through the existing send flow so the visitor sees a conversational transition and gets an
+  // immediate acknowledging response grounded on that specific listing.
+  async function handleSelectListing(listing: Listing) {
+    if (!business || !listing.id) return;
+    try {
+      const convId = await ensureConversation();
+      if (!convId) return;
+      await pinListing(business.id, convId, listing.id);
+    } catch {
+      // Pin failing silently still lets the visitor send the follow-up text below — worst case
+      // it resolves via the existing message-history lookback instead of the explicit pin.
+    }
+    handleSend(`Quero saber mais sobre ${listing.title}`);
+  }
+
   async function handleBubbleTap(bubble: FlowBubble) {
     if (!business) return;
     if (isStreamingRef.current) return;
@@ -811,7 +857,7 @@ export function ChatScreen({
             </div>
             {m.listings && m.listings.length > 0 && (
               <div className="mt-2">
-                <ListingCards listings={m.listings} onOpen={setActiveListing} />
+                <ListingCards listings={m.listings} onOpen={setActiveListing} onSelect={handleSelectListing} />
               </div>
             )}
             {m.whatsappUrl && (
