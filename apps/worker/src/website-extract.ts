@@ -115,9 +115,61 @@ function extractTextWithSeparators($: cheerio.CheerioAPI, node: any, base: URL):
   return out;
 }
 
-function extractPage(html: string, pageUrl: string): { title: string; text: string; links: string[] } {
+// schema.org types commonly used by real-estate/dealer site themes to mark up a single listing —
+// kept liberal since site authors vary a lot in which of these they actually emit.
+const STRUCTURED_DATA_TYPES = new Set([
+  "RealEstateListing",
+  "House",
+  "Apartment",
+  "SingleFamilyResidence",
+  "Residence",
+  "ApartmentComplex",
+  "Accommodation",
+  "Vehicle",
+  "Car",
+  "Product",
+  "Offer",
+]);
+
+function matchesStructuredType(type: unknown): boolean {
+  if (typeof type === "string") return STRUCTURED_DATA_TYPES.has(type);
+  if (Array.isArray(type)) return type.some((t) => typeof t === "string" && STRUCTURED_DATA_TYPES.has(t));
+  return false;
+}
+
+// Collects schema.org JSON-LD objects (and nested @graph entries) that look like a real-estate
+// or vehicle listing, so apps/api's extraction service can read structured fields directly
+// instead of paying for an LLM call on content the site already hands us pre-structured.
+function extractStructuredData($: cheerio.CheerioAPI): Record<string, unknown>[] {
+  const found: Record<string, unknown>[] = [];
+  $('script[type="application/ld+json"]').each((_, el) => {
+    const raw = $(el).contents().text();
+    if (!raw || !raw.trim()) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return; // malformed JSON-LD on real sites is common — skip this script tag, keep the page
+    }
+    const candidates: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+    for (const candidate of candidates) {
+      if (!candidate || typeof candidate !== "object") continue;
+      const graph = (candidate as Record<string, unknown>)["@graph"];
+      const entries = Array.isArray(graph) ? graph : [candidate];
+      for (const entry of entries) {
+        if (!entry || typeof entry !== "object") continue;
+        const obj = entry as Record<string, unknown>;
+        if (matchesStructuredType(obj["@type"])) found.push(obj);
+      }
+    }
+  });
+  return found;
+}
+
+function extractPage(html: string, pageUrl: string): { title: string; text: string; links: string[]; structuredData: Record<string, unknown>[] } {
   const $ = cheerio.load(html);
   const base = new URL(pageUrl);
+  const structuredData = extractStructuredData($);
 
   const links: string[] = [];
   $("a[href]").each((_, el) => {
@@ -150,7 +202,7 @@ function extractPage(html: string, pageUrl: string): { title: string; text: stri
     .join("\n\n")
     .slice(0, MAX_PAGE_CHARS);
 
-  return { title, text, links: [...new Set(links)] };
+  return { title, text, links: [...new Set(links)], structuredData };
 }
 
 function sleep(ms: number) {
@@ -175,6 +227,31 @@ export interface CrawledPage {
   url: string;
   title: string;
   text: string;
+  structuredData: Record<string, unknown>[];
+}
+
+// Below this, a plain-fetch extraction whose source HTML is much larger is treated as
+// "suspiciously empty" — a decent heuristic for a client-side-rendered page where the initial
+// HTML is mostly an empty app shell and the real content only appears after JS runs.
+const CSR_FALLBACK_MIN_TEXT_CHARS = 2000;
+const CSR_FALLBACK_MIN_HTML_RATIO = 10;
+
+// Lazily imported — only paid for (and only requires the Chromium binary to be installed) on
+// the rare page that actually trips the CSR heuristic below, not on every crawled page.
+async function renderWithPlaywright(url: string): Promise<string | null> {
+  try {
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage({ userAgent: "RealwiseBot/1.0 (+https://realwise.com.br)" });
+      await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
+      return await page.content();
+    } finally {
+      await browser.close();
+    }
+  } catch {
+    return null; // Chromium missing/crashed/timed out — fall back to whatever plain-fetch got
+  }
 }
 
 export interface FetchWebsiteResult {
@@ -183,7 +260,7 @@ export interface FetchWebsiteResult {
   pagesVisited: number;
 }
 
-async function fetchAndExtract(url: string): Promise<{ title: string; text: string; links: string[] } | null> {
+async function fetchAndExtract(url: string): Promise<{ title: string; text: string; links: string[]; structuredData: Record<string, unknown>[] } | null> {
   let res: Response;
   try {
     res = await safeFetch(url);
@@ -192,7 +269,21 @@ async function fetchAndExtract(url: string): Promise<{ title: string; text: stri
   }
   if (!res.ok || !(res.headers.get("content-type") ?? "").includes("html")) return null;
   const html = await res.text();
-  return extractPage(html, url);
+  const extracted = extractPage(html, url);
+
+  // Only pay for a headless render as a fallback — rendering every page is slow and resource
+  // heavy, so this only fires when plain-fetch's result looks like an empty CSR app shell.
+  const looksSuspiciouslyEmpty =
+    extracted.text.length < CSR_FALLBACK_MIN_TEXT_CHARS && html.length > extracted.text.length * CSR_FALLBACK_MIN_HTML_RATIO;
+  if (looksSuspiciouslyEmpty) {
+    const renderedHtml = await renderWithPlaywright(url);
+    if (renderedHtml) {
+      const renderedExtracted = extractPage(renderedHtml, url);
+      if (renderedExtracted.text.length > extracted.text.length) return renderedExtracted;
+    }
+  }
+
+  return extracted;
 }
 
 export async function fetchWebsiteText(seedUrl: string): Promise<FetchWebsiteResult> {
@@ -218,7 +309,7 @@ export async function fetchWebsiteText(seedUrl: string): Promise<FetchWebsiteRes
 
       const extracted = await fetchAndExtract(url);
       if (extracted?.text) {
-        pages.push({ url, title: extracted.title, text: extracted.text });
+        pages.push({ url, title: extracted.title, text: extracted.text, structuredData: extracted.structuredData });
         totalChars += extracted.text.length;
       }
       if (visited.size < sitemapUrls.length) await sleep(crawlDelayMs);
@@ -237,7 +328,7 @@ export async function fetchWebsiteText(seedUrl: string): Promise<FetchWebsiteRes
 
       const extracted = await fetchAndExtract(url);
       if (extracted?.text) {
-        pages.push({ url, title: extracted.title, text: extracted.text });
+        pages.push({ url, title: extracted.title, text: extracted.text, structuredData: extracted.structuredData });
         totalChars += extracted.text.length;
       }
 

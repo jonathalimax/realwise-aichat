@@ -16,9 +16,18 @@ function storageKeyFor(businessId: string, url: string): string {
   return `website-sync/${businessId}/${hash}`;
 }
 
+// Embedded as a marker block rather than a new DB column — apps/api/src/modules/listings/
+// listing-extraction.service.ts already parses `Fonte: <url>` out of extractedMarkdown with a
+// regex, so a second regex-matched block here is a much smaller/less risky change than adding a
+// JSON column plus a migration and threading it through the document-read path.
+function structuredDataBlock(structuredData: Record<string, unknown>[]): string {
+  if (structuredData.length === 0) return "";
+  return `\n\n<!--STRUCTURED_DATA\n${JSON.stringify(structuredData)}\nSTRUCTURED_DATA-->`;
+}
+
 async function processPage(businessId: string, page: CrawledPage): Promise<boolean> {
   const storageKey = storageKeyFor(businessId, page.url);
-  const markdown = `## ${page.title || page.url}\n\n${page.text}\n\nFonte: ${page.url}`;
+  const markdown = `## ${page.title || page.url}\n\n${page.text}${structuredDataBlock(page.structuredData)}\n\nFonte: ${page.url}`;
 
   let document = await prisma.knowledgeDocument.findFirst({ where: { businessId, source: "website_sync", storageKey } });
   if (!document) {
