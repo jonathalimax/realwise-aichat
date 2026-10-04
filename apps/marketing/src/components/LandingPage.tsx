@@ -2,6 +2,7 @@ import { Reveal } from "./Reveal";
 import { CAPABILITY_ICON_PATHS, type NicheConfig } from "../lib/niches";
 
 const WHATSAPP_NUMBER = "5585992265544";
+const DASHBOARD_LOGIN_URL = "/app/login";
 
 function waUrl(context: string) {
   const msg = encodeURIComponent(`Oi! Vi o site da Realwise (${context}) e quero saber mais.`);
@@ -48,7 +49,8 @@ function ChatBubble({ msg }: { msg: { from: "bot" | "user"; text: string } }) {
 
 export function LandingPage({ niche }: { niche: NicheConfig }) {
   const WHATSAPP_URL = waUrl(niche.label);
-  const ctaLabel = niche.earlyAccess ? "Entrar na lista de espera" : "Falar no WhatsApp";
+  const ctaLabel = niche.earlyAccess ? "Entrar na lista de espera" : "Entrar no painel";
+  const navCtaHref = niche.earlyAccess ? WHATSAPP_URL : DASHBOARD_LOGIN_URL;
 
   return (
     <div className="bg-bg text-ink">
@@ -61,7 +63,7 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
             <a href="#precos" className="hover:text-ink">Preços</a>
             <a href="#faq" className="hover:text-ink">Perguntas</a>
           </nav>
-          <Pill href={WHATSAPP_URL} className="px-4 py-2 text-xs">{ctaLabel}</Pill>
+          <Pill href={navCtaHref} className="px-4 py-2 text-xs">{ctaLabel}</Pill>
         </div>
       </header>
 
@@ -84,9 +86,9 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
         </Reveal>
         <Reveal delay={200}>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Pill href={WHATSAPP_URL} className="px-7 py-3.5 text-[0.95rem]">Falar no WhatsApp</Pill>
-            <a href="#solucao" className="inline-flex items-center justify-center rounded-full border border-ink/20 bg-transparent px-7 py-3.5 text-[0.95rem] font-semibold text-ink transition-all duration-200 hover:-translate-y-0.5 hover:bg-surface">
-              Ver a solução
+            <Pill href={navCtaHref} className="px-7 py-3.5 text-[0.95rem]">{niche.earlyAccess ? "Entrar na lista de espera" : "Começar agora"}</Pill>
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-full border border-ink/20 bg-transparent px-7 py-3.5 text-[0.95rem] font-semibold text-ink transition-all duration-200 hover:-translate-y-0.5 hover:bg-surface">
+              Falar no WhatsApp
             </a>
           </div>
         </Reveal>
@@ -212,6 +214,9 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
                 <li>— Agendamento embutido</li>
                 <li>— 1 número de WhatsApp</li>
               </ul>
+              <Pill href={niche.earlyAccess ? WHATSAPP_URL : `${DASHBOARD_LOGIN_URL}?plan=essencial`} className="mt-6 w-full justify-center px-6 py-3">
+                {niche.earlyAccess ? "Entrar na lista de espera" : "Escolher Essencial"}
+              </Pill>
             </div>
             <div className="relative rounded-3xl bg-ink p-7 text-bg transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl">
               <span className="absolute -top-3 left-7 rounded-full bg-lime px-3 py-1 text-[0.65rem] font-bold uppercase text-lime-ink">Mais escolhido</span>
@@ -225,6 +230,9 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
                 <li>— Sua marca no chat</li>
                 <li>— Revisão trimestral da base</li>
               </ul>
+              <Pill href={niche.earlyAccess ? WHATSAPP_URL : `${DASHBOARD_LOGIN_URL}?plan=profissional`} className="mt-6 w-full justify-center bg-lime px-6 py-3 text-lime-ink">
+                {niche.earlyAccess ? "Entrar na lista de espera" : "Escolher Profissional"}
+              </Pill>
             </div>
             <div className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
               <h3 className="font-serif text-lg">Studio</h3>
@@ -342,7 +350,12 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
       <section className="mx-auto max-w-2xl px-5 py-20 text-center">
         <Reveal>
           <h2 className="font-serif text-3xl text-ink md:text-4xl">Seu cliente já está mandando mensagem. <em className="italic">A pergunta é quem responde.</em></h2>
-          <Pill href={WHATSAPP_URL} className="mx-auto mt-7 px-7 py-3.5">Falar no WhatsApp</Pill>
+          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Pill href={navCtaHref} className="px-7 py-3.5">{niche.earlyAccess ? "Entrar na lista de espera" : "Começar agora"}</Pill>
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-ink-soft hover:text-ink">
+              ou falar no WhatsApp antes
+            </a>
+          </div>
         </Reveal>
       </section>
 
