@@ -1411,6 +1411,18 @@ export class FlowService {
     return itemWords.some((w) => normalizedChunk.includes(w));
   }
 
+  // Cheap keyword heuristic for referent-only follow-ups ("Qual o valor e quantos quartos tem
+  // desse imóvel?") that must NOT be routed into the listing-cards browse path even though they
+  // contain item/intent words isListingQuery alone would match — they're asking about the SPECIFIC
+  // item already discussed, not browsing for new ones. Checked first by ChatService before the
+  // browse path runs, so the question falls through to normal RAG/prose answering instead.
+  isReferentOnlyFollowUp(visitorText: string): boolean {
+    const normalized = normalize(visitorText);
+    const demonstratives = /\b(desse|deste|dessa|desta|nesse|neste|nessa|nesta|nela|nele|esse|este|essa|esta|aquele|aquela|mesmo|mesma)\b/;
+    const itemWords = /\b(imovel|imoveis|casa|casas|apartamento|apartamentos|carro|carros|veiculo|veiculos)\b/;
+    return demonstratives.test(normalized) && itemWords.test(normalized);
+  }
+
   // Cheap keyword heuristic for free-text chat messages that are genuinely asking for photos
   // ("me mostra as fotos", "tem foto desse imóvel", "manda foto") — same cheap-keyword-check
   // scope as isListingQuery above, NOT an NLU classifier. Used by ChatService.resolvePhotoRequest

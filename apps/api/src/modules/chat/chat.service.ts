@@ -422,7 +422,7 @@ export class ChatService {
       },
     });
     let autoEscalation: { escalated: boolean; whatsappUrl: string | null; referenceCode: string | null } | undefined;
-    if (answer.abstained) {
+    if (answer.abstained && !answer.infraFailure) {
       this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
       if (await this.shouldAutoEscalate(conversationId)) {
         const escalation = await this.escalate(businessId, conversationId, visitorText);
@@ -471,14 +471,19 @@ export class ChatService {
     visitorText: string,
     opts?: { listingsAttached?: boolean },
   ) {
-    const [business, profile, recentMessages] = await Promise.all([
+    const [business, profile, recentMessages, contextListingId] = await Promise.all([
       this.prisma.client.business.findUnique({ where: { id: businessId } }),
       this.prisma.client.businessProfile.findUnique({ where: { businessId } }),
       this.prisma.client.message.findMany({
+        // The current visitor turn's message was already persisted to the DB before this prompt
+        // is built, and it's also appended explicitly below as the trailing "Cliente: ..." line —
+        // excluding the single most recent row here avoids including it twice in the prompt.
         where: { conversationId },
         orderBy: { createdAt: "desc" },
-        take: 6,
+        take: 10,
+        skip: 1,
       }),
+      this.resolveContextListing(businessId, conversationId),
     ]);
 
     if (!business) throw new NotFoundException("Business not found");
@@ -489,7 +494,12 @@ export class ChatService {
       .map((m) => `${m.role === "visitor" ? "Cliente" : "Atendente"}: ${m.content}`)
       .join("\n");
 
-    const retrievedChunks = await retrieveRelevantChunks(this.prisma, businessId, visitorText);
+    const contextListingSummary = contextListingId
+      ? await this.listingsService.getContextSummaryForChat(businessId, contextListingId)
+      : null;
+
+    const retrieveText = contextListingSummary ? `${visitorText} ${contextListingSummary}` : visitorText;
+    const retrievedChunks = await retrieveRelevantChunks(this.prisma, businessId, retrieveText);
     const documentContext = retrievedChunks.length
       ? `\nTrechos relevantes da base de documentos:\n${retrievedChunks.map((c) => `- ${c.content}`).join("\n")}`
       : "";
@@ -512,9 +522,20 @@ export class ChatService {
       "Formate a resposta usando apenas markdown simples: **negrito** com asteriscos duplos e listas com \"- \" no início da linha, no máximo 1 nível de indentação. Nunca use tabelas, nunca use títulos com #, e nunca use HTML bruto.",
       "Nunca inclua links, URLs ou endereços de imagem na resposta, mesmo que apareçam nos trechos de documentos — o sistema anexa automaticamente o link e a foto do item em separado.",
       `Dados cadastrais do negócio (descrevem o negócio em geral, mas NÃO autorizam afirmar que um item/modelo específico está disponível): ${profileSummary}`,
+      "Os dados cadastrais acima SÃO uma fonte válida para políticas gerais do negócio e dados de contato (telefone, endereço, política de pets, formas de pagamento, permuta). Eles NÃO autorizam afirmar que um item/modelo específico existe ou está disponível.",
       "Atenção: \"Horário disponível para visitas\" é só sobre quando é possível agendar uma visita/test-drive — não é o horário de atendimento/funcionamento geral do negócio. Se o cliente perguntar sobre horário de atendimento/funcionamento e essa informação não estiver disponível separadamente, diga que não tem essa informação, mesmo que o horário de visitas esteja disponível.",
       documentContext || "\nNenhum trecho relevante foi encontrado na base de documentos para esta pergunta.",
     ];
+
+    if (contextListingSummary) {
+      // Grounds a referent-only follow-up ("Qual o valor e quantos quartos tem desse imóvel?") on
+      // the real DB fields of the specific listing this conversation was already discussing —
+      // without this, the model has no legitimate way to answer and either hallucinates or
+      // abstains even though the real data is sitting right there.
+      systemPromptParts.push(
+        `Imóvel/veículo em discussão nesta conversa (dados reais do cadastro, pode citar preço/dormitórios/área): ${contextListingSummary}`,
+      );
+    }
 
     if (opts?.listingsAttached) {
       // Repeated as the LAST instruction (highest-recency weight for the model) — the earlier
@@ -546,7 +567,7 @@ export class ChatService {
       retrievedChunkText,
       // Grounding text for the post-generation entity-claim guard: anything legitimately
       // mentionable (retrieved chunks, profile summary, business name/niche) in one string.
-      groundingAllowlistText: `${profileSummary} ${business.name} ${business.niche}`,
+      groundingAllowlistText: `${profileSummary} ${business.name} ${business.niche} ${contextListingSummary ?? ""}`,
     };
   }
 
@@ -583,6 +604,12 @@ export class ChatService {
     visitorText: string,
     chunkText: string,
   ): Promise<ListingItem[] | undefined> {
+    // Referent-only follow-ups ("Qual o valor e quantos quartos tem desse imóvel?") must never be
+    // hijacked into the generic listing-cards browse path, even though they contain item/intent
+    // words isListingQuery alone would match — they're asking about the SPECIFIC item already
+    // discussed, and attaching cards here would forbid the model from answering with the real
+    // price/bedrooms. Let it fall through to normal RAG/prose answering instead.
+    if (this.flow.isReferentOnlyFollowUp(visitorText)) return undefined;
     if (!this.flow.isListingQuery(visitorText, chunkText)) return undefined;
 
     // Free text has no structured filter params the way the scripted flow does — if the business
@@ -610,6 +637,27 @@ export class ChatService {
   private async resolveMentionedListing(businessId: string, visitorText: string, answerText: string): Promise<ListingItem[] | undefined> {
     const mentioned = await this.listingsService.findMentionedForChat(businessId, `${visitorText}\n${answerText}`, 1);
     return mentioned.length > 0 ? mentioned : undefined;
+  }
+
+  // Resolves which specific listing a referent-only follow-up ("desse imóvel") is pointing at, so
+  // buildChatPrompt can inject its real price/bedrooms/area into the prompt instead of the model
+  // being stuck with no grounded way to answer. Same lookup style as resolvePhotoRequest: looks at
+  // the most recent assistant Message with non-empty listingIds. Exactly 1 prior id is used
+  // directly; more than 1 (e.g. a 6-card browse result) gets narrowed via findMentionedForChat run
+  // over that prior message's own content, restricted to those ids — if that doesn't narrow to
+  // exactly one, gives up (returns null) rather than guessing.
+  private async resolveContextListing(businessId: string, conversationId: string): Promise<string | null> {
+    const lastListingMessage = await this.prisma.client.message.findFirst({
+      where: { conversationId, role: "assistant", listingIds: { isEmpty: false } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!lastListingMessage) return null;
+
+    const distinctIds = [...new Set(lastListingMessage.listingIds)];
+    if (distinctIds.length === 1) return distinctIds[0];
+
+    const narrowed = await this.listingsService.findMentionedForChat(businessId, lastListingMessage.content, 1, distinctIds);
+    return narrowed.length === 1 && narrowed[0].id ? narrowed[0].id : null;
   }
 
   // Fast, deterministic path for typed photo requests ("me mostra as fotos", "tem foto desse
@@ -687,7 +735,17 @@ export class ChatService {
       };
     }
 
-    const preliminaryChunks = await retrieveRelevantChunks(this.prisma, businessId, visitorText);
+    // Appends the real title of whatever listing this conversation already has in context (if
+    // any) to the retrieval query text, so a referent-only follow-up ("desse imóvel") retrieves
+    // document chunks about that specific listing instead of only the follow-up's own generic
+    // wording.
+    const contextListingId = await this.resolveContextListing(businessId, conversationId);
+    const contextListingSummary = contextListingId
+      ? await this.listingsService.getContextSummaryForChat(businessId, contextListingId)
+      : null;
+    const retrievalQueryText = contextListingSummary ? `${visitorText} ${contextListingSummary}` : visitorText;
+
+    const preliminaryChunks = await retrieveRelevantChunks(this.prisma, businessId, retrievalQueryText);
     const preliminaryChunkTextForBrowsing = preliminaryChunks.map((c) => c.content).join("\n\n").slice(0, 4000);
     // Real listings live in the structured Listing table, not in document chunks — a browsing
     // question ("gostaria de ver os imóveis") can legitimately score below the chunk-relevance
@@ -758,13 +816,18 @@ export class ChatService {
         suggestions,
       };
     } catch (error) {
-      this.logger.error(
-        `sendMessage ${businessId}: generation failed, falling back to abstention — ${error instanceof Error ? error.message : String(error)}`,
+      // Infrastructure failure (gateway timeout/error), not a genuine "we have no answer for
+      // this" abstention — visitors still see the honest fallback text, but infraFailure:true
+      // tells the caller not to record this as an unanswered question or count it toward
+      // auto-escalation, which would otherwise pollute both with outage noise.
+      this.logger.warn(
+        `sendMessage ${businessId}: generation failed (infra), falling back to abstention — retrievalTopScore=${retrievalTopScore} chunks=${retrievedChunkIds.length} error=${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error.stack : undefined,
       );
       return {
         text: ABSTENTION_FALLBACK,
         abstained: true,
+        infraFailure: true,
         model: undefined,
         inputTokens: 0,
         outputTokens: 0,
@@ -930,7 +993,7 @@ export class ChatService {
         },
         signal,
       );
-    } catch {
+    } catch (error) {
       streamFailed = true;
       // A mid-stream gateway error must not discard an already-generated, likely-correct answer —
       // only fall back to the generic abstention message when nothing meaningful was produced yet.
@@ -946,6 +1009,13 @@ export class ChatService {
         fullText = ABSTENTION_FALLBACK;
         onDelta(ABSTENTION_FALLBACK);
       }
+      // This is an infrastructure failure (gateway timeout/error), not a genuine "no answer"
+      // abstention — gated below so it isn't recorded as an unanswered question or counted
+      // toward auto-escalation, which would otherwise pollute both with outage noise.
+      this.logger.warn(
+        `streamMessage ${businessId}: generation failed (infra), falling back to abstention — retrievalTopScore=${retrievalTopScore} chunks=${retrievedChunkIds.length} error=${error instanceof Error ? error.message : String(error)}`,
+        error instanceof Error ? error.stack : undefined,
+      );
       gatewayResult = { text: fullText, provider: "self_hosted" as const, model: "unknown", inputTokens: 0, outputTokens: 0, latencyMs: 0 };
     }
 
@@ -988,7 +1058,7 @@ export class ChatService {
     });
     this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
     let autoEscalation: { escalated: boolean; whatsappUrl: string | null; referenceCode: string | null } | undefined;
-    if (abstained) {
+    if (abstained && !streamFailedWithNoMeaningfulText) {
       this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
       // Don't re-stream/re-onDelta the escalation copy — the abstention text itself stays the
       // visible streamed reply; escalate()'s own assistant message follows it in history, and its

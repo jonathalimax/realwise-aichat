@@ -310,12 +310,17 @@ export class ListingsService {
   // is deliberately conservative — ambiguous matches (more than `limit` candidates) return []
   // rather than guessing, since attaching the wrong listing's link/photo would be worse than
   // attaching none.
-  async findMentionedForChat(businessId: string, haystack: string, limit = 1): Promise<ListingItem[]> {
+  async findMentionedForChat(businessId: string, haystack: string, limit = 1, restrictToIds?: string[]): Promise<ListingItem[]> {
     const normalizedHaystack = ListingsService.normalizeForMatch(haystack);
     if (!normalizedHaystack) return [];
 
     const rows = await this.prisma.client.listing.findMany({
-      where: { businessId, status: "active", deletedAt: null },
+      where: {
+        businessId,
+        status: "active",
+        deletedAt: null,
+        ...(restrictToIds?.length ? { id: { in: restrictToIds } } : {}),
+      },
       // Bounds payload size as inventory grows — only the columns the matching logic below and
       // mapRowToListingItem actually touch. Doesn't eliminate the full-table scan (out of scope
       // here — not worth a caching layer for this), just the per-row payload.
@@ -380,5 +385,21 @@ export class ListingsService {
       .map((id) => byId.get(id))
       .filter((r): r is NonNullable<typeof r> => Boolean(r))
       .map((r) => this.mapRowToListingItem(r));
+  }
+
+  // Used by ChatService.buildChatPrompt to ground a referent-only follow-up ("desse imóvel") on
+  // the specific listing's real price/bedrooms/area/neighborhood — fields not exposed on the
+  // generic ListingItem shape (which is deliberately card-rendering-only).
+  async getContextSummaryForChat(businessId: string, listingId: string): Promise<string | null> {
+    const listing = await this.prisma.client.listing.findFirst({
+      where: { id: listingId, businessId, deletedAt: null },
+    });
+    if (!listing) return null;
+    const parts = [listing.title];
+    if (listing.priceText) parts.push(listing.priceText);
+    if (listing.bedrooms != null) parts.push(`${listing.bedrooms} dormitórios`);
+    if (listing.areaM2 != null) parts.push(`${listing.areaM2}m²`);
+    if (listing.neighborhood) parts.push(listing.neighborhood);
+    return parts.join(" — ");
   }
 }
