@@ -456,11 +456,13 @@ model BusinessAlert {
 }
 
 model AdminUser {
-  id          String    @id @default(uuid())
-  phone       String    @unique
-  name        String
-  role        String
-  lastLoginAt DateTime?
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  phone        String?   @unique
+  name         String
+  role         String
+  lastLoginAt  DateTime?
 }
 
 // Single row (id always "singleton") holding platform-wide settings configured from the admin UI —

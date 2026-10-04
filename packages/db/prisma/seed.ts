@@ -1,3 +1,4 @@
+import * as bcrypt from "bcrypt";
 import { prisma } from "../src/index";
 
 async function main() {
@@ -80,16 +81,18 @@ async function main() {
 
   console.log("Seeded plans: essencial, profissional (studio retired/inactive)");
 
-  const adminPhone = process.env.SEED_ADMIN_PHONE;
-  if (adminPhone) {
+  const adminEmail = process.env.SEED_ADMIN_EMAIL;
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (adminEmail && adminPassword) {
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
     await prisma.adminUser.upsert({
-      where: { phone: adminPhone },
-      update: {},
-      create: { phone: adminPhone, name: process.env.SEED_ADMIN_NAME ?? "Founder", role: "superadmin" },
+      where: { email: adminEmail },
+      update: { passwordHash },
+      create: { email: adminEmail, passwordHash, name: process.env.SEED_ADMIN_NAME ?? "Founder", role: "superadmin" },
     });
-    console.log(`Seeded admin user: ${adminPhone}`);
+    console.log(`Seeded admin user: ${adminEmail}`);
   } else {
-    console.log("SEED_ADMIN_PHONE not set — skipping admin user seed. Set it in .env to log into apps/admin.");
+    console.log("SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD not set — skipping admin user seed. Set them in .env to log into apps/admin.");
   }
 }
 
