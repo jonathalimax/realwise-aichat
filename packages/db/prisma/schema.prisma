@@ -245,6 +245,9 @@ model Conversation {
   flowStack           String[]
   flowSnapshot        Json?
   flowHistory         Json                @default("[]")
+  // Explicit "Selecionar e continuar" pin — when set, follow-up questions resolve against this
+  // listing directly instead of the message-history lookback in resolveContextListing.
+  pinnedListingId     String?
 
   messages            Message[]
   appointments        Appointment[]
