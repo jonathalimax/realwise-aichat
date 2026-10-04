@@ -823,7 +823,7 @@ export function ChatScreen({
             className="flex max-w-[85%] items-center gap-2 rounded-2xl rounded-bl-sm bg-surface px-4 py-3"
           >
             <span className="text-sm text-ink-soft">
-              {thinkingStage === 0 ? "Clara está pensando…" : "Clara está consultando as informações…"}
+              {thinkingStage === 0 ? "Clara está pensando" : "Clara está consultando as informações"}
             </span>
             <span className="flex items-center gap-1" aria-hidden="true">
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.3s]" />
