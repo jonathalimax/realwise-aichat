@@ -21,6 +21,7 @@ export function InterviewChat({
   onFieldFilled,
   prefill,
   prefillNonce,
+  onStateChange,
 }: {
   onFieldFilled?: () => void;
   // When `prefillNonce` changes, `prefill` is sent as an owner message — used to target a specific
@@ -28,6 +29,7 @@ export function InterviewChat({
   // "Pedir à Clara" again on the same field).
   prefill?: string;
   prefillNonce?: number;
+  onStateChange?: (s: { allDone: boolean; readyToPublish: boolean; confidenceScore: number | null }) => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -57,6 +59,13 @@ export function InterviewChat({
       setConfidenceScore(typeof result.confidenceScore === "number" ? result.confidenceScore : null);
       setReadyToPublish(!!result.readyToPublish);
       setPublicUrl(result.publicUrl ?? null);
+      if (onStateChange) {
+        onStateChange({
+          allDone: result.allDone,
+          readyToPublish: !!result.readyToPublish,
+          confidenceScore: typeof result.confidenceScore === "number" ? result.confidenceScore : null,
+        });
+      }
       if (onFieldFilled) onFieldFilled();
     } catch {
       setMessages((prev) => [...prev, { role: "clara", content: "Tive um problema para continuar — tenta de novo em instantes." }]);
