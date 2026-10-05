@@ -1,5 +1,9 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // worker's image ends up with a newer OpenSSL than the build stage after Playwright's
+  // --with-deps install pulls in extra system packages — ship both engine binaries so
+  // whichever runtime libssl is actually present at container start still resolves.
+  binaryTargets = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
