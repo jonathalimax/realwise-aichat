@@ -88,9 +88,12 @@ volumes:
 
 networks:
   # Coolify manages the compose project's own "default" network itself (for Traefik + inter-
-  # service routing) and overrides any attempt to rename/replace it — so Postgres/Redis, which
-  # live on the separately-managed "coolify" network, are reached via this additional network
-  # instead, attached explicitly on the services that need database access.
+  # service routing) and overrides any attempt to rename/replace it, so Postgres/Redis are
+  # reached via this separate, dedicated network instead — NOT the global "coolify" network
+  # every other tenant on this VPS shares, which would let any co-located container reach
+  # api/worker/inference-gateway directly, bypassing Traefik entirely. Postgres/Redis were
+  # explicitly attached to this network (docker network connect) alongside their own existing
+  # one, so nothing about their original connectivity changed.
   shared-infra:
-    name: coolify
+    name: realwise-data
     external: true
