@@ -8,9 +8,12 @@ import { processColdLeadDigest } from "./processors/cold-lead-digest";
 import { processListingExtraction } from "./processors/listing-extraction";
 import { listingExtractionQueue } from "./queues";
 
+// concurrency:1 — embedding generation is CPU-bound against a single-instance Ollama on a small
+// VPS; two documents embedding simultaneously forces requests to queue inside Ollama itself,
+// pushing real (sequential) compute time past even a generous per-request timeout.
 const documentWorker = new Worker("document-ingestion", processDocumentIngestion, {
   connection: redisConnection,
-  concurrency: 2,
+  concurrency: 1,
 });
 documentWorker.on("completed", (job) => console.log(`document-ingestion ${job.id} completed`));
 documentWorker.on("failed", (job, err) => console.error(`document-ingestion ${job?.id} failed`, err));
@@ -20,7 +23,7 @@ const defaultJobOptions = { attempts: 3, backoff: { type: "exponential" as const
 const websiteSyncQueue = new Queue("website-sync", { connection: redisConnection, defaultJobOptions });
 const websiteSyncWorker = new Worker("website-sync", processWebsiteSync, {
   connection: redisConnection,
-  concurrency: 2,
+  concurrency: 1,
 });
 websiteSyncWorker.on("completed", (job) => console.log(`website-sync ${job.id} completed`));
 websiteSyncWorker.on("failed", (job, err) => {

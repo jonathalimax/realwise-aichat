@@ -9,10 +9,10 @@ export async function embedText(text: string): Promise<number[]> {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ model: EMBEDDING_MODEL, prompt: text.slice(0, MAX_PROMPT_CHARS) }),
-    // CPU-bound inference on a small/shared VPS genuinely takes 10s+ per call under load —
-    // measured ~11s for a single short prompt in production. 15s was cutting off real,
-    // eventually-successful calls, not just hung ones.
-    signal: AbortSignal.timeout(60000),
+    // CPU-bound inference on a small/shared VPS genuinely takes 10-30s+ per call depending on
+    // input length (measured ~27s for a full 6000-char chunk in production) — combined with
+    // queue concurrency this was still timing out at 60s. 120s leaves real margin.
+    signal: AbortSignal.timeout(120000),
   });
   if (!res.ok) throw new Error(`Embedding request failed: ${res.status}`);
   const data = (await res.json()) as { embedding: number[] };
