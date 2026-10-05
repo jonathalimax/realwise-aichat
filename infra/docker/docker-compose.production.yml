@@ -6,6 +6,9 @@ services:
     restart: unless-stopped
     volumes:
       - realwise_storage:/data/realwise-storage
+    networks:
+      - default
+      - shared-infra
     labels:
       - traefik.enable=true
       - traefik.http.routers.realwise-api.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/api`)
@@ -19,10 +22,16 @@ services:
     restart: unless-stopped
     volumes:
       - realwise_storage:/data/realwise-storage
+    networks:
+      - default
+      - shared-infra
 
   inference-gateway:
     image: ghcr.io/jonathalimax/realwise-inference-gateway:latest
     restart: unless-stopped
+    networks:
+      - default
+      - shared-infra
 
   chat:
     image: ghcr.io/jonathalimax/realwise-chat:latest
@@ -78,6 +87,10 @@ volumes:
   realwise_storage:
 
 networks:
-  default:
+  # Coolify manages the compose project's own "default" network itself (for Traefik + inter-
+  # service routing) and overrides any attempt to rename/replace it — so Postgres/Redis, which
+  # live on the separately-managed "coolify" network, are reached via this additional network
+  # instead, attached explicitly on the services that need database access.
+  shared-infra:
     name: coolify
     external: true
