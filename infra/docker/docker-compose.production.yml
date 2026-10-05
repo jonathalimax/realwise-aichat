@@ -1,0 +1,83 @@
+name: realwise-aichat
+
+services:
+  api:
+    image: ghcr.io/jonathalimax/realwise-api:latest
+    restart: unless-stopped
+    volumes:
+      - realwise_storage:/data/realwise-storage
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.realwise-api.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/api`)
+      - traefik.http.routers.realwise-api.entrypoints=https
+      - traefik.http.routers.realwise-api.tls=true
+      - traefik.http.routers.realwise-api.tls.certresolver=letsencrypt
+      - traefik.http.services.realwise-api.loadbalancer.server.port=3006
+
+  worker:
+    image: ghcr.io/jonathalimax/realwise-worker:latest
+    restart: unless-stopped
+    volumes:
+      - realwise_storage:/data/realwise-storage
+
+  inference-gateway:
+    image: ghcr.io/jonathalimax/realwise-inference-gateway:latest
+    restart: unless-stopped
+
+  chat:
+    image: ghcr.io/jonathalimax/realwise-chat:latest
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.realwise-chat.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/client/conversation`)
+      - traefik.http.routers.realwise-chat.entrypoints=https
+      - traefik.http.routers.realwise-chat.tls=true
+      - traefik.http.routers.realwise-chat.tls.certresolver=letsencrypt
+      - traefik.http.services.realwise-chat.loadbalancer.server.port=3000
+
+  dashboard:
+    image: ghcr.io/jonathalimax/realwise-dashboard:latest
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.realwise-dashboard.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/app`)
+      - traefik.http.routers.realwise-dashboard.entrypoints=https
+      - traefik.http.routers.realwise-dashboard.tls=true
+      - traefik.http.routers.realwise-dashboard.tls.certresolver=letsencrypt
+      - traefik.http.services.realwise-dashboard.loadbalancer.server.port=3003
+
+  admin:
+    image: ghcr.io/jonathalimax/realwise-admin:latest
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.realwise-admin.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/admin`)
+      - traefik.http.routers.realwise-admin.entrypoints=https
+      - traefik.http.routers.realwise-admin.tls=true
+      - traefik.http.routers.realwise-admin.tls.certresolver=letsencrypt
+      - traefik.http.services.realwise-admin.loadbalancer.server.port=3004
+
+  marketing:
+    image: ghcr.io/jonathalimax/realwise-marketing:latest
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.realwise-redirect-https.redirectscheme.scheme=https
+      - traefik.http.routers.realwise-marketing.rule=Host(`aichat.realwise.com.br`)
+      - traefik.http.routers.realwise-marketing.entrypoints=https
+      - traefik.http.routers.realwise-marketing.tls=true
+      - traefik.http.routers.realwise-marketing.tls.certresolver=letsencrypt
+      - traefik.http.services.realwise-marketing.loadbalancer.server.port=3007
+      - traefik.http.routers.realwise-marketing.priority=1
+      - traefik.http.routers.realwise-marketing-http.rule=Host(`aichat.realwise.com.br`)
+      - traefik.http.routers.realwise-marketing-http.entrypoints=http
+      - traefik.http.routers.realwise-marketing-http.middlewares=realwise-redirect-https
+      - traefik.http.routers.realwise-marketing-http.priority=1
+
+volumes:
+  realwise_storage:
+
+networks:
+  default:
+    name: coolify
+    external: true
