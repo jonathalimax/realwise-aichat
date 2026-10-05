@@ -25,6 +25,21 @@ services:
     networks:
       - default
       - shared-infra
+    depends_on:
+      - ollama-embeddings
+
+  # Chat generation moved to the managed provider in production, but embedText() (apps/worker/
+  # src/embeddings.ts) always calls Ollama directly with no managed-provider fallback — there was
+  # no embeddings service in production at all until now, so every single document/website-sync
+  # ingestion job failed with "fetch failed" (ECONNREFUSED to the OLLAMA_URL default/localhost).
+  # nomic-embed-text is small (~275MB) — this is viable even on a small VPS.
+  ollama-embeddings:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama serve & sleep 5 && ollama pull nomic-embed-text; wait"]
 
   inference-gateway:
     image: ghcr.io/jonathalimax/realwise-inference-gateway:latest
@@ -85,6 +100,7 @@ services:
 
 volumes:
   realwise_storage:
+  ollama_data:
 
 networks:
   # Coolify manages the compose project's own "default" network itself (for Traefik + inter-
