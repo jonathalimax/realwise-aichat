@@ -53,7 +53,7 @@ services:
       - traefik.http.routers.realwise-dashboard.entrypoints=https
       - traefik.http.routers.realwise-dashboard.tls=true
       - traefik.http.routers.realwise-dashboard.tls.certresolver=letsencrypt
-      - traefik.http.services.realwise-dashboard.loadbalancer.server.port=3003
+      - traefik.http.services.realwise-dashboard.loadbalancer.server.port=3000
 
   admin:
     image: ghcr.io/jonathalimax/realwise-admin:latest
@@ -64,7 +64,7 @@ services:
       - traefik.http.routers.realwise-admin.entrypoints=https
       - traefik.http.routers.realwise-admin.tls=true
       - traefik.http.routers.realwise-admin.tls.certresolver=letsencrypt
-      - traefik.http.services.realwise-admin.loadbalancer.server.port=3004
+      - traefik.http.services.realwise-admin.loadbalancer.server.port=3000
 
   marketing:
     image: ghcr.io/jonathalimax/realwise-marketing:latest
@@ -76,7 +76,7 @@ services:
       - traefik.http.routers.realwise-marketing.entrypoints=https
       - traefik.http.routers.realwise-marketing.tls=true
       - traefik.http.routers.realwise-marketing.tls.certresolver=letsencrypt
-      - traefik.http.services.realwise-marketing.loadbalancer.server.port=3007
+      - traefik.http.services.realwise-marketing.loadbalancer.server.port=3000
       - traefik.http.routers.realwise-marketing.priority=1
       - traefik.http.routers.realwise-marketing-http.rule=Host(`aichat.realwise.com.br`)
       - traefik.http.routers.realwise-marketing-http.entrypoints=http
