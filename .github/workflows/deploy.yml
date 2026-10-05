@@ -40,10 +40,8 @@ jobs:
           file: apps/${{ matrix.app }}/Dockerfile
           push: true
           tags: ghcr.io/${{ env.IMAGE_OWNER }}/realwise-${{ matrix.app }}:latest,ghcr.io/${{ env.IMAGE_OWNER }}/realwise-${{ matrix.app }}:${{ github.sha }}
-          # TEMPORARILY DISABLED — the gha cache served stale layers across source changes
-          # (listing-extraction.service.ts edits weren't reflected in the pushed image across
-          # two separate commits/deploys). Re-enable once confirmed this was the actual cause.
-          no-cache: true
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
           build-args: |
             NEXT_PUBLIC_API_URL=https://aichat.realwise.com.br/api
             NEXT_PUBLIC_CHAT_URL=https://aichat.realwise.com.br/client/conversation

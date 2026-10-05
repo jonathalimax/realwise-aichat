@@ -3,6 +3,7 @@ name: realwise-aichat
 services:
   api:
     image: ghcr.io/jonathalimax/realwise-api:latest
+    pull_policy: always
     restart: unless-stopped
     volumes:
       - realwise_storage:/data/realwise-storage
@@ -19,6 +20,7 @@ services:
 
   worker:
     image: ghcr.io/jonathalimax/realwise-worker:latest
+    pull_policy: always
     restart: unless-stopped
     volumes:
       - realwise_storage:/data/realwise-storage
@@ -43,6 +45,7 @@ services:
 
   inference-gateway:
     image: ghcr.io/jonathalimax/realwise-inference-gateway:latest
+    pull_policy: always
     restart: unless-stopped
     networks:
       - default
@@ -50,6 +53,7 @@ services:
 
   chat:
     image: ghcr.io/jonathalimax/realwise-chat:latest
+    pull_policy: always
     restart: unless-stopped
     labels:
       - traefik.enable=true
@@ -61,6 +65,7 @@ services:
 
   dashboard:
     image: ghcr.io/jonathalimax/realwise-dashboard:latest
+    pull_policy: always
     restart: unless-stopped
     labels:
       - traefik.enable=true
@@ -72,6 +77,7 @@ services:
 
   admin:
     image: ghcr.io/jonathalimax/realwise-admin:latest
+    pull_policy: always
     restart: unless-stopped
     labels:
       - traefik.enable=true
@@ -83,6 +89,7 @@ services:
 
   marketing:
     image: ghcr.io/jonathalimax/realwise-marketing:latest
+    pull_policy: always
     restart: unless-stopped
     labels:
       - traefik.enable=true
