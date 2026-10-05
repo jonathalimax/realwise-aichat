@@ -40,6 +40,12 @@ const ESCALATION_KEYWORDS = [
   "transferir para",
   "humano",
   "atendente",
+  // Bare role nouns — the exact-phrase entries above miss extremely common natural insertions
+  // like "falar com UM corretor" or "falar com A pessoa", which don't literally contain "falar
+  // com corretor"/"falar com pessoa". Catching the role noun alone is safe here since almost any
+  // mention of wanting a "corretor"/"vendedor" in a chat context signals wanting a human.
+  "corretor",
+  "vendedor",
 ];
 const AFFIRMATIVE_REPLIES = ["sim", "sim por favor", "pode", "pode ser", "claro", "quero", "por favor", "ok", "okay", "isso"];
 const ABSTENTION_MARKERS = [
@@ -97,6 +103,29 @@ function hasUngroundedEntityClaim(answerText: string, groundingText: string, all
     }
   }
   return false;
+}
+
+// hasUngroundedEntityClaim's word-tokenizer doesn't reliably catch Brazilian-formatted numbers —
+// "R$ 900.000,00" and "558m²" contain internal punctuation/symbols the edge-trim regex doesn't
+// strip, so the token never matches normalized grounding text even when the number is real, and
+// (worse) never gets flagged when it's fabricated. Confirmed bug: the model was told (when cards
+// are attached) to describe listings with ONE short pointer sentence and never state price/area —
+// on the rare occasion it ignores that and states a price/area anyway, this is the deterministic
+// check for whether that specific number actually belongs to one of the attached listings, since
+// the word-level guard above can't reliably tell us.
+const PRICE_OR_AREA_PATTERN = /R\$\s?[\d.,]+|\d+[.,]?\d*\s?m[²2]/gi;
+function hasUnmatchedPriceOrArea(answerText: string, browsingListings: ListingItem[] | undefined): boolean {
+  if (!browsingListings?.length) return false;
+  const matches = answerText.match(PRICE_OR_AREA_PATTERN);
+  if (!matches) return false;
+  const listingsNormalized = browsingListings
+    .map((l) => normalize(`${l.price ?? ""} ${l.description ?? ""} ${l.title ?? ""}`))
+    .join(" ");
+  return matches.some((m) => {
+    const digits = m.replace(/[^\d]/g, "");
+    if (digits.length < 2) return false; // too short to be a meaningful price/area collision check
+    return !listingsNormalized.includes(normalize(m)) && !listingsNormalized.includes(digits);
+  });
 }
 
 // Local duplicate of flow.service.ts's own normalize() — same small accent/punctuation-stripping
@@ -830,7 +859,15 @@ export class ChatService {
       const abstained =
         looksLikeAbstention(result.text) ||
         hasUngroundedEntityClaim(result.text, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings));
-      const text = abstained && !looksLikeAbstention(result.text) ? ABSTENTION_FALLBACK : result.text;
+      // Cards themselves are real and correctly attached — if only the accompanying pointer
+      // sentence stated a price/area that doesn't match any of them, swap just the text rather
+      // than abstaining outright (which would also hide the legitimate cards).
+      const hasBadPriceOrArea = !abstained && hasUnmatchedPriceOrArea(result.text, browsingListings);
+      const text = abstained && !looksLikeAbstention(result.text)
+        ? ABSTENTION_FALLBACK
+        : hasBadPriceOrArea
+          ? "Encontrei algumas opções que podem te interessar 👇"
+          : result.text;
       const listings = abstained
         ? undefined
         : browsingListings ?? (await this.resolveMentionedListing(businessId, visitorText, text));
@@ -1057,10 +1094,14 @@ export class ChatService {
     // existing recordUnanswered/shouldAutoEscalate logic run below, so at minimum the flagged
     // question surfaces in "Perguntas não respondidas" and can trigger auto-escalation on a
     // repeat. Not buffering/rewriting the stream to keep this fix scoped and low-risk.
+    // Text is already on the wire by this point (see note above) — a bad price/area can't be
+    // un-sent, but marking the persisted record lets it surface in "Perguntas não respondidas"
+    // the same way the entity-claim guard's catches already do.
     const abstained = streamFailed
       ? streamFailedWithNoMeaningfulText
       : looksLikeAbstention(fullText) ||
-        hasUngroundedEntityClaim(fullText, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings));
+        hasUngroundedEntityClaim(fullText, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings)) ||
+        hasUnmatchedPriceOrArea(fullText, browsingListings);
 
     const listings = abstained
       ? undefined
