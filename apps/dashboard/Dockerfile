@@ -28,4 +28,5 @@ COPY --from=build /repo/apps/dashboard/.next/static ./apps/dashboard/.next/stati
 COPY --from=build /repo/apps/dashboard/public ./apps/dashboard/public
 WORKDIR /repo/apps/dashboard
 EXPOSE 3003
+ENV HOSTNAME="0.0.0.0"
 CMD ["node", "server.js"]

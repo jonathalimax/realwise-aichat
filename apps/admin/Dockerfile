@@ -26,4 +26,5 @@ COPY --from=build /repo/apps/admin/.next/static ./apps/admin/.next/static
 COPY --from=build /repo/apps/admin/public ./apps/admin/public
 WORKDIR /repo/apps/admin
 EXPOSE 3004
+ENV HOSTNAME="0.0.0.0"
 CMD ["node", "server.js"]

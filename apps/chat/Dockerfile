@@ -20,4 +20,5 @@ COPY --from=build /repo/apps/chat/.next/static ./apps/chat/.next/static
 COPY --from=build /repo/apps/chat/public ./apps/chat/public
 WORKDIR /repo/apps/chat
 EXPOSE 3000
+ENV HOSTNAME="0.0.0.0"
 CMD ["node", "server.js"]

@@ -18,4 +18,5 @@ COPY --from=build /repo/apps/marketing/.next/static ./apps/marketing/.next/stati
 COPY --from=build /repo/apps/marketing/public ./apps/marketing/public
 WORKDIR /repo/apps/marketing
 EXPOSE 3007
+ENV HOSTNAME="0.0.0.0"
 CMD ["node", "server.js"]
