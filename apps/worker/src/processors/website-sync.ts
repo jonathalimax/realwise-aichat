@@ -120,9 +120,16 @@ export async function processWebsiteSync(job: Job<WebsiteSyncJobData>) {
     await prisma.knowledgeDocument.deleteMany({ where: { id: { in: staleIds } } });
   }
 
+  // Only record the content hash on a fully-clean run — saving it after a partial failure
+  // (e.g. a transient embedding-service hiccup) would make the next sync see "unchanged content"
+  // via the early-return above and silently skip retrying the pages that actually failed,
+  // permanently stranding them until the site's real content changes.
   await prisma.business.update({
     where: { id: businessId },
-    data: { websiteContentHash: contentHash, websiteSyncedAt: new Date() },
+    data: {
+      websiteContentHash: successCount === pages.length ? contentHash : business.websiteContentHash,
+      websiteSyncedAt: new Date(),
+    },
   });
 
   await Promise.all([
