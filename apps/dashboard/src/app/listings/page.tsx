@@ -91,13 +91,11 @@ export default function ListingsPage() {
 
   if (loading || !business) return <p className="text-ink-soft">Carregando…</p>;
 
-  const isStudio = business.subscription?.plan?.code === "studio";
-
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-serif text-2xl text-ink">Anúncios</h1>
-        <Button variant="outline" size="sm" disabled={extracting || !isStudio} onClick={handleReextract}>
+        <Button variant="outline" size="sm" disabled={extracting} onClick={handleReextract}>
           {extracting ? "Extraindo… isso pode levar alguns minutos" : "Reextrair anúncios"}
         </Button>
       </div>
@@ -106,22 +104,14 @@ export default function ListingsPage() {
         <CardHeader>
           <CardTitle>Inventário</CardTitle>
           <CardDescription>
-            Anúncios extraídos automaticamente dos seus documentos (disponível no plano Studio). Edições feitas aqui não
-            são sobrescritas por uma nova extração.
+            Anúncios extraídos automaticamente dos seus documentos. Edições feitas aqui não são sobrescritas por uma
+            nova extração.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          {!isStudio && (
-            <p className="rounded-lg border border-border bg-bg-2 px-4 py-3 text-sm text-ink-soft">
-              A extração automática de anúncios está disponível no plano Studio.{" "}
-              <Link href="/billing" className="font-semibold text-accent">Ver planos</Link>
-            </p>
-          )}
-
           {listings.length === 0 && (
             <p className="rounded-lg border border-border bg-bg-2 px-4 py-3 text-sm text-ink-soft">
-              Nenhum anúncio encontrado ainda. Anúncios são extraídos automaticamente dos seus documentos (disponível no
-              plano Studio).{" "}
+              Nenhum anúncio encontrado ainda. Anúncios são extraídos automaticamente dos seus documentos.{" "}
               {documents.length === 0 ? (
                 <>
                   Nenhum documento enviado ainda —{" "}

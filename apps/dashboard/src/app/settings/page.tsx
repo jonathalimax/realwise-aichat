@@ -5,7 +5,6 @@ import Link from "next/link";
 import { getMe, getOnboardingProfile, updateBranding, updateCustomInstructions, updateFinancingRate, updateWebsiteUrl } from "../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
-import { Badge } from "../../components/ui/badge";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea";
@@ -20,7 +19,6 @@ export default function SettingsPage() {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [websiteSavedUrl, setWebsiteSavedUrl] = useState("");
   const [websiteSyncedAt, setWebsiteSyncedAt] = useState<string | null>(null);
-  const [planCode, setPlanCode] = useState<string | null>(null);
   const [websiteSaved, setWebsiteSaved] = useState(false);
 
   const [customInstructions, setCustomInstructions] = useState("");
@@ -36,7 +34,6 @@ export default function SettingsPage() {
       setWebsiteUrl(b.websiteUrl ?? "");
       setWebsiteSavedUrl(b.websiteUrl ?? "");
       setWebsiteSyncedAt(b.websiteSyncedAt ?? null);
-      setPlanCode(b.subscription?.plan?.code ?? null);
       setFinancingRatePercent(b.financingRatePercent != null ? String(b.financingRatePercent) : "");
     });
     getOnboardingProfile().then(({ profile }) => {
@@ -69,8 +66,6 @@ export default function SettingsPage() {
     setWebsiteSaved(true);
     setTimeout(() => setWebsiteSaved(false), 2000);
   }
-
-  const isStudio = planCode === "studio";
 
   return (
     <div className="flex max-w-xl flex-col gap-6">
@@ -159,43 +154,34 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <CardTitle>Sincronizar site</CardTitle>
-            <Badge variant="accent">Studio</Badge>
-          </div>
+          <CardTitle>Sincronizar site</CardTitle>
           <CardDescription>
-            No plano Studio, a Clara revisita o site do seu negócio toda semana e atualiza a base de conhecimento sozinha — você só precisa manter o site em dia.
+            A Clara revisita o site do seu negócio periodicamente e atualiza a base de conhecimento sozinha — você só
+            precisa manter o site em dia.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!isStudio ? (
-            <p className="rounded-lg border border-border bg-bg-2 px-4 py-3 text-sm text-ink-soft">
-              Disponível no plano Studio.{" "}
-              <Link href="/billing" className="font-semibold text-accent">Ver planos</Link>
-            </p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>URL do site</Label>
-                <Input
-                  value={websiteUrl}
-                  onChange={(e) => setWebsiteUrl(e.target.value)}
-                  placeholder="https://seusite.com.br"
-                  type="url"
-                />
-              </div>
-              <Button className="self-start" disabled={websiteUrl === websiteSavedUrl} onClick={saveWebsite}>
-                {websiteSaved ? "Salvo!" : "Salvar"}
-              </Button>
-              {websiteSavedUrl && (
-                <p className="text-xs text-ink-soft">
-                  {websiteSyncedAt
-                    ? `Última sincronização: ${new Date(websiteSyncedAt).toLocaleString("pt-BR")}`
-                    : "Ainda não sincronizado — a primeira varredura roda na próxima segunda-feira."}
-                </p>
-              )}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>URL do site</Label>
+              <Input
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="https://seusite.com.br"
+                type="url"
+              />
             </div>
-          )}
+            <Button className="self-start" disabled={websiteUrl === websiteSavedUrl} onClick={saveWebsite}>
+              {websiteSaved ? "Salvo!" : "Salvar"}
+            </Button>
+            {websiteSavedUrl && (
+              <p className="text-xs text-ink-soft">
+                {websiteSyncedAt
+                  ? `Última sincronização: ${new Date(websiteSyncedAt).toLocaleString("pt-BR")}`
+                  : "Ainda não sincronizado — a primeira varredura roda na próxima segunda-feira."}
+              </p>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -363,11 +363,10 @@ export class ListingExtractionService {
   async extractForBusiness(businessId: string): Promise<{ created: number; updated: number; retired: number }> {
     const noop = { created: 0, updated: 0, retired: 0 };
 
-    // Studio-plan-only gate — same restriction pattern as the existing website-sync-schedule
-    // queue in apps/worker/src/index.ts.
-    const business = await this.prisma.client.business.findFirst({
-      where: { id: businessId, subscription: { plan: { code: "studio" } } },
-    });
+    // Studio was retired in favor of essencial/profissional — listing extraction is core
+    // product functionality for the imobiliária/concessionária niches, not a premium add-on,
+    // and must run regardless of plan.
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) return noop;
 
     const documents = await this.prisma.client.knowledgeDocument.findMany({
