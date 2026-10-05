@@ -63,13 +63,10 @@ export class BusinessesService {
       }
     }
     if (data.websiteUrl !== undefined && data.websiteUrl !== "") {
-      const business = await this.prisma.client.business.findUnique({
-        where: { id: businessId },
-        include: { subscription: { include: { plan: true } } },
-      });
-      if (business?.subscription?.plan.code !== "studio") {
-        throw new ForbiddenException("Sincronização de site disponível apenas no plano Studio");
-      }
+      // Website sync was originally a "studio" plan exclusive, but that tier was retired in
+      // favor of essencial/profissional — automatic site ingestion is the product's core
+      // differentiator and must be available on every paying tier, not locked behind a plan
+      // that no longer exists to purchase.
       try {
         await assertPublicHttpUrl(data.websiteUrl);
       } catch (error) {
