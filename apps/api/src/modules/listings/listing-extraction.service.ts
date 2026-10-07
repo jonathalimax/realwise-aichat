@@ -552,8 +552,12 @@ export class ListingExtractionService {
             .filter((img): img is string => Boolean(img))
             .filter((img) => {
               if (CHROME_IMAGE_PATTERN.test(img)) return false;
+              // isBoilerplateUrl is for item.url (the listing's own page link, which should
+              // never BE an image file) — deliberately NOT applied here: BOILERPLATE_URL_EXT_PATTERN
+              // rejects any URL ending in .jpg/.png/etc, which is the exact shape every real photo
+              // URL has. Confirmed live via diagnostics: this was silently discarding every valid
+              // photo candidate the model ever correctly returned.
               if (!IMAGE_LOOKS_LIKE_PHOTO_PATTERN.test(img)) return false;
-              if (isBoilerplateUrl(img)) return false;
               if (!window.includes(img)) {
                 this.logger.warn(
                   `extractForBusiness ${businessId}: rejected image URL not verbatim in source window — "${img}"`,
@@ -609,13 +613,6 @@ export class ListingExtractionService {
         // Deterministic pass first (see extractImagesByCodeProximity above) — free, no LLM
         // involved, and more reliable than model recall when the site exposes reference codes.
         const codeToImages = extractImagesByCodeProximity(window);
-        // TEMPORARY diagnostic — zero live ListingImage rows despite an isolated test of this
-        // exact prompt+window succeeding; need visibility into which link in the chain breaks in
-        // production specifically (codes found in window text? model returning item.code? the
-        // filter chain rejecting everything?) before guessing further.
-        this.logger.warn(
-          `extractForBusiness ${businessId}: [diag] codeToImages.size=${codeToImages.size} keys=${JSON.stringify([...codeToImages.keys()])} windowItems=${windowItems.map((i) => `${i.title.slice(0, 20)}|code=${i.code ?? "none"}|images=${i.images.length}`).join(";; ")}`,
-        );
         if (codeToImages.size > 0) {
           for (const item of windowItems) {
             if (item.images.length > 0) continue;
@@ -625,33 +622,18 @@ export class ListingExtractionService {
             // return a code but title/description happen to contain one anyway.
             const code = item.code ?? findExplicitReferenceCode(`${item.title} ${item.description ?? ""}`);
             const candidateUrls = code ? codeToImages.get(code) : undefined;
-            if (!candidateUrls) {
-              this.logger.warn(`extractForBusiness ${businessId}: [diag] no candidateUrls for code=${code ?? "none"} title="${item.title.slice(0, 30)}"`);
-              continue;
-            }
+            if (!candidateUrls) continue;
             item.images = candidateUrls
               .map((img) => safeHttpUrl(img))
               .filter((img): img is string => Boolean(img))
               .filter((img) => {
-                if (CHROME_IMAGE_PATTERN.test(img)) {
-                  this.logger.warn(`extractForBusiness ${businessId}: [diag] rejected by CHROME_IMAGE_PATTERN: "${img}"`);
-                  return false;
-                }
-                if (!IMAGE_LOOKS_LIKE_PHOTO_PATTERN.test(img)) {
-                  this.logger.warn(`extractForBusiness ${businessId}: [diag] rejected by IMAGE_LOOKS_LIKE_PHOTO_PATTERN: "${img}"`);
-                  return false;
-                }
-                if (isBoilerplateUrl(img)) {
-                  this.logger.warn(`extractForBusiness ${businessId}: [diag] rejected by isBoilerplateUrl: "${img}"`);
-                  return false;
-                }
-                if (!window.includes(img)) {
-                  this.logger.warn(`extractForBusiness ${businessId}: [diag] rejected by verbatim check: "${img}"`);
-                  return false;
-                }
+                if (CHROME_IMAGE_PATTERN.test(img)) return false;
+                // Deliberately no isBoilerplateUrl check here — see the main extraction path's
+                // identical comment above for why.
+                if (!IMAGE_LOOKS_LIKE_PHOTO_PATTERN.test(img)) return false;
+                if (!window.includes(img)) return false;
                 return true;
               });
-            this.logger.warn(`extractForBusiness ${businessId}: [diag] code=${code} candidates=${candidateUrls.length} survived-filter=${item.images.length} sample-candidate=${JSON.stringify(candidateUrls[0])} sample-mapped=${JSON.stringify(safeHttpUrl(candidateUrls[0]))}`);
           }
         }
 
@@ -683,8 +665,9 @@ export class ListingExtractionService {
                   .filter((img): img is string => Boolean(img))
                   .filter((img) => {
                     if (CHROME_IMAGE_PATTERN.test(img)) return false;
+                    // Deliberately no isBoilerplateUrl check here — see the main extraction path's
+                    // identical comment above for why.
                     if (!IMAGE_LOOKS_LIKE_PHOTO_PATTERN.test(img)) return false;
-                    if (isBoilerplateUrl(img)) return false;
                     if (!window.includes(img)) {
                       this.logger.warn(
                         `extractForBusiness ${businessId}: rejected image URL not verbatim in source window (image-association pass) — "${img}"`,
