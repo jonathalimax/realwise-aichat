@@ -55,6 +55,7 @@ function maxPrincipalForPaymentCents(paymentCents: number, monthlyRatePercent: n
 
 export interface VehicleFinancingResult {
   monthlyPaymentCents: number;
+  /** Total cash outlay: down payment + all installments. */
   totalPaidCents: number;
   totalInterestCents: number;
   principalCents: number;
@@ -147,6 +148,85 @@ export function calculateRealEstateFinancing(input: {
     monthlyPaymentCents,
     loanCents,
     downPaymentCents: maxPropertyPriceCents - loanCents,
+  };
+}
+
+export type AmortizationSystem = "sac" | "price";
+
+export interface FinancingSimulationResult {
+  principalCents: number;
+  downPaymentCents: number;
+  downPaymentPercent: number;
+  months: number;
+  monthlyRatePercent: number;
+  system: AmortizationSystem;
+  firstInstallmentCents: number;
+  lastInstallmentCents: number;
+  averageInstallmentCents: number;
+  /** Total cash outlay: down payment + all installments (matches VehicleFinancingResult's semantics). */
+  totalPaidCents: number;
+  totalInterestCents: number;
+}
+
+/**
+ * Pure amortization simulator supporting both Brazilian systems: SAC (Sistema de Amortização
+ * Constante — constant amortization, declining installments, the Brazilian real-estate default)
+ * and Price (constant installment, already used elsewhere in this file via pmtCents). This is a
+ * standalone building block for a later simulator stage — not wired into any flow/chat orchestration
+ * yet. Returns null when the price/down-payment/term/rate combination is missing or invalid.
+ */
+export function simulateFinancing(input: {
+  propertyPriceCents: number;
+  downPaymentCents: number;
+  months: number;
+  monthlyRatePercent: number;
+  system: AmortizationSystem;
+}): FinancingSimulationResult | null {
+  const { propertyPriceCents, downPaymentCents, months, monthlyRatePercent, system } = input;
+  if (!isPositiveFinite(propertyPriceCents)) return null;
+  if (!isNonNegativeFinite(downPaymentCents) || downPaymentCents >= propertyPriceCents) return null;
+  if (!Number.isInteger(months) || months <= 0) return null;
+  if (!isPositiveFinite(monthlyRatePercent)) return null;
+
+  const principalCents = propertyPriceCents - downPaymentCents;
+  const i = monthlyRatePercent / 100;
+
+  let firstInstallmentCents: number;
+  let lastInstallmentCents: number;
+  let totalInterestCents: number;
+
+  if (system === "price") {
+    const installmentCents = pmtCents(principalCents, monthlyRatePercent, months);
+    if (installmentCents == null) return null;
+    firstInstallmentCents = installmentCents;
+    lastInstallmentCents = installmentCents;
+    totalInterestCents = installmentCents * months - principalCents;
+  } else {
+    // SAC: constant amortization each month, interest declines linearly on the outstanding balance.
+    const amortizationCents = principalCents / months;
+    firstInstallmentCents = amortizationCents + principalCents * i;
+    lastInstallmentCents = amortizationCents * (1 + i);
+    // Closed-form sum of the declining-balance interest series — O(1), no per-installment loop.
+    totalInterestCents = principalCents * i * ((months + 1) / 2);
+  }
+
+  // Total cash outlay the consumer actually pays: principal + interest + the down payment itself
+  // (matches VehicleFinancingResult's totalPaidCents semantics — see interface doc comment above).
+  const totalPaidCents = principalCents + totalInterestCents + downPaymentCents;
+  const averageInstallmentCents = (principalCents + totalInterestCents) / months;
+
+  return {
+    principalCents: Math.round(principalCents),
+    downPaymentCents: Math.round(downPaymentCents),
+    downPaymentPercent: (downPaymentCents / propertyPriceCents) * 100,
+    months,
+    monthlyRatePercent,
+    system,
+    firstInstallmentCents: Math.round(firstInstallmentCents),
+    lastInstallmentCents: Math.round(lastInstallmentCents),
+    averageInstallmentCents: Math.round(averageInstallmentCents),
+    totalPaidCents: Math.round(totalPaidCents),
+    totalInterestCents: Math.round(totalInterestCents),
   };
 }
 

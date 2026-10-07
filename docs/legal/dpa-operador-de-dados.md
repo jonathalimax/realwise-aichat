@@ -33,7 +33,7 @@ Dados hospedados na União Europeia (Hetzner, Alemanha). Realwise declara adotar
 
 ## 5. Dados sensíveis
 
-Em nichos que envolvem documentos sensíveis (ex.: comprovante de renda, documento de identidade em locação imobiliária), aplica-se consentimento específico e destacado do Visitante, conforme art. 11 da LGPD, com retenção reduzida e descrita na Política de Privacidade.
+Em nichos que envolvem documentos sensíveis (ex.: comprovante de renda, documento de identidade em locação imobiliária), aplica-se consentimento específico e destacado do Visitante, conforme art. 11 da LGPD, com retenção reduzida e descrita na Política de Privacidade. Já informações autodeclaradas de orçamento/capacidade de pagamento em simulações de financiamento, por não constituírem documento comprobatório, são tratadas sob o consentimento conversacional geral já coberto pela Política de Privacidade, sem exigir o fluxo de consentimento destacado.
 
 ## 6. Vigência e responsabilidade
 

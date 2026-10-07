@@ -5,6 +5,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { BusinessesModule } from "./modules/businesses/businesses.module";
 import { OnboardingModule } from "./modules/onboarding/onboarding.module";
 import { KnowledgeModule } from "./modules/knowledge/knowledge.module";
+import { SharedKnowledgeModule } from "./modules/shared-knowledge/shared-knowledge.module";
 import { ChatModule } from "./modules/chat/chat.module";
 import { LeadsModule } from "./modules/leads/leads.module";
 import { BookingsModule } from "./modules/bookings/bookings.module";
@@ -28,6 +29,7 @@ import { PushModule } from "./modules/push/push.module";
     BusinessesModule,
     OnboardingModule,
     KnowledgeModule,
+    SharedKnowledgeModule,
     ChatModule,
     LeadsModule,
     BookingsModule,

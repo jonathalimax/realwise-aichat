@@ -201,6 +201,47 @@ model KnowledgeChunk {
   sectionPath String?
 }
 
+// Shared/global knowledge tier (Stage 2b) — general domain content (rental/vehicle law,
+// financing basics, documentation) that is NOT specific to any one tenant, scoped only by
+// niche. Deliberately separate tables from KnowledgeDocument/KnowledgeChunk (rather than a
+// nullable businessId on those) so a tenant-scoped query can never accidentally reach shared
+// rows.
+model SharedKnowledgeDocument {
+  id                String          @id @default(uuid())
+  niche             String
+  title             String
+  filename          String
+  mimeType          String
+  sizeBytes         Int
+  storageKey        String
+  source            String
+  status            DocumentStatus  @default(uploaded)
+  extractedMarkdown String?
+  version           String?
+  sourceCitation    String?
+  reviewedAt        DateTime?
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+
+  chunks            SharedKnowledgeChunk[]
+
+  @@index([niche])
+}
+
+model SharedKnowledgeChunk {
+  id          String                  @id @default(uuid())
+  documentId  String
+  document    SharedKnowledgeDocument @relation(fields: [documentId], references: [id])
+  niche       String
+  ordinal     Int
+  content     String
+  tokenCount  Int
+  embedding   Unsupported("vector(768)")?
+  sectionPath String?
+
+  @@index([niche])
+}
+
 model BusinessProfile {
   id               String    @id @default(uuid())
   businessId       String    @unique
@@ -272,6 +313,11 @@ model Message {
   // listing data, so a replayed turn reflects current price/photos instead of a stale snapshot.
   // Empty for the LLM-extraction listing path, whose items have no backing DB row.
   listingIds          String[]      @default([])
+  // Point-in-time financing-simulation breakdown (see simulator.service.ts), persisted as a
+  // snapshot since the numbers themselves (installments, rate, totals) must replay exactly as
+  // originally shown — only matchedListingIds inside this JSON get rehydrated against the live
+  // Listing table on replay (same rule as listingIds above), the numeric breakdown never does.
+  simulationData      Json?
   retrievalTopScore   Float?
   modelUsed           String?
   inputTokens         Int?
@@ -477,6 +523,13 @@ model AdminUser {
 model PlatformConfig {
   id                    String  @id @default("singleton")
   supportWhatsappNumber String?
+
+  // Weekly BCB SGS sync (see apps/worker/src/processors/bcb-rate-sync.ts) — monthly percent
+  // rates, same convention as Business.financingRatePercent / DEFAULT_*_MONTHLY_RATE_PERCENT.
+  realEstateRatePercent Float?
+  vehicleRatePercent    Float?
+  ratesReferenceMonth   String? // e.g. "2026-09" — the BCB release month these rates belong to
+  ratesFetchedAt        DateTime?
 }
 
 model Listing {

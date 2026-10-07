@@ -22,7 +22,7 @@
   "nodes": {
     "start": {
       "id": "start",
-      "message": "Olá! 👋 Sou a Clara, assistente de IA da loja. Como posso te ajudar?",
+      "message": "Olá! 👋 Sou o Tom, assistente de IA da loja. Bora encontrar o carro certo pra você?",
       "bubbles": [
         { "label": "🚗 Quero comprar um carro", "goto": "comprar" },
         { "label": "💰 Quero vender meu carro", "goto": "vender" },

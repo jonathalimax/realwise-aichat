@@ -27,6 +27,7 @@ import {
   DEFAULT_LATE_PAYMENT_FINE_PERCENT,
   DEFAULT_LATE_PAYMENT_INTEREST_PERCENT,
 } from "./flow-calculators";
+import { getPersona } from "./personas";
 
 // Scripted nodes that are supposed to hand the visitor off to a real human WhatsApp number —
 // their flow-JSON message templates have placeholders ({numero}, {espera}) that nothing ever
@@ -468,7 +469,7 @@ export class FlowService {
         const listingQuery = this.listingQueryFor(business.niche, params);
         const listingChunks = await retrieveRelevantChunks(this.prisma, businessId, listingQuery);
         const listingChunkText = listingChunks.map((c) => c.content).join("\n\n").slice(0, 8000);
-        const listings = await this.extractListings(businessId, business.name, listingChunkText);
+        const listings = await this.extractListings(businessId, business.name, business.niche, listingChunkText);
         if (listings.length > 0) {
           return { message: "Encontrei algumas opções que podem te interessar 👇", listings };
         }
@@ -497,7 +498,7 @@ export class FlowService {
     const chunkText = chunks.map((c) => c.content).join("\n\n").slice(0, 4000);
 
     const systemPrompt = [
-      `Você é a Clara, atendente de IA da ${business.name}.`,
+      `Você é ${getPersona(business.niche).name}, atendente de IA da ${business.name}.`,
       "O fluxo de conversa pede a seguinte informação para o cliente, mas ela depende de dados reais do negócio que não estão totalmente estruturados:",
       `"${node.message}"`,
       "Responda de forma natural e curta (2-4 frases), usando SOMENTE os trechos de documentos abaixo. Se não houver dados suficientes, diga isso honestamente e sugira falar com um atendente — nunca invente preço, modelo ou disponibilidade.",
@@ -1344,11 +1345,17 @@ export class FlowService {
   // Asks the model for strictly-grounded structured listing items instead of prose — same
   // never-invent discipline as the rest of this file. Returns [] (not a fabricated placeholder)
   // whenever the retrieved text doesn't contain genuine distinct items.
-  private async extractListings(businessId: string, businessName: string, chunkText: string): Promise<ListingItem[]> {
+  private async extractListings(
+    businessId: string,
+    businessName: string,
+    niche: string,
+    chunkText: string,
+  ): Promise<ListingItem[]> {
     if (!chunkText) return [];
 
+    const personaName = niche === "imobiliaria" || niche === "concessionaria" ? getPersona(niche).name : "o atendente de IA";
     const systemPrompt = [
-      `Você é a Clara, atendente de IA da ${businessName}.`,
+      `Você é ${personaName}, atendente de IA da ${businessName}.`,
       "Extraia itens de anúncio (imóveis ou veículos) genuinamente descritos nos trechos de documentos abaixo.",
       "Responda APENAS com um array JSON (até 6 itens), cada item no formato:",
       '{ "title": string, "price": string | omitido, "description": string | omitido, "url": string | omitido, "imageUrl": string | omitido }',
@@ -1452,7 +1459,7 @@ export class FlowService {
   async extractListingsForQuery(businessId: string, chunkText: string): Promise<ListingItem[]> {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) return [];
-    return this.extractListings(businessId, business.name, chunkText);
+    return this.extractListings(businessId, business.name, business.niche, chunkText);
   }
 
   // Derives region/bairro bubbles from what's actually mentioned in the business's ingested

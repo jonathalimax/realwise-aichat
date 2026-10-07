@@ -6,6 +6,9 @@ import { processWebsiteSync } from "./processors/website-sync";
 import { processTrialWatch } from "./processors/trial-watch";
 import { processColdLeadDigest } from "./processors/cold-lead-digest";
 import { processListingExtraction } from "./processors/listing-extraction";
+import { processBcbRateSync } from "./processors/bcb-rate-sync";
+import { processSharedKnowledgeIngestion } from "./processors/shared-knowledge-ingestion";
+import { processConversationRetentionPurge } from "./processors/conversation-retention-purge";
 import { listingExtractionQueue } from "./queues";
 
 // concurrency:1 — embedding generation is CPU-bound against a single-instance Ollama on a small
@@ -79,6 +82,31 @@ const coldLeadDigestWorker = new Worker("cold-lead-digest", processColdLeadDiges
 coldLeadDigestWorker.on("completed", (job) => console.log(`cold-lead-digest ${job.id} completed`));
 coldLeadDigestWorker.on("failed", (job, err) => console.error(`cold-lead-digest ${job?.id} failed`, err));
 
+const bcbRateSyncQueue = new Queue("bcb-rate-sync", { connection: redisConnection });
+const bcbRateSyncWorker = new Worker("bcb-rate-sync", processBcbRateSync, { connection: redisConnection });
+bcbRateSyncWorker.on("completed", (job) => console.log(`bcb-rate-sync ${job.id} completed`));
+bcbRateSyncWorker.on("failed", (job, err) => console.error(`bcb-rate-sync ${job?.id} failed`, err));
+
+// Same embedding-CPU-bound reasoning as documentWorker above — one at a time.
+const sharedKnowledgeWorker = new Worker("shared-knowledge-ingestion", processSharedKnowledgeIngestion, {
+  connection: redisConnection,
+  concurrency: 1,
+});
+sharedKnowledgeWorker.on("completed", (job) => console.log(`shared-knowledge-ingestion ${job.id} completed`));
+sharedKnowledgeWorker.on("failed", (job, err) => console.error(`shared-knowledge-ingestion ${job?.id} failed`, err));
+
+// LGPD retention enforcement (docs/legal/politica-de-privacidade.md §4). Weekly cadence is
+// sufficient — a 12-month retention window has no need for daily precision, and this keeps DB
+// load for a delete-heavy job off the busier daily slots already used by other jobs.
+const conversationRetentionPurgeQueue = new Queue("conversation-retention-purge", { connection: redisConnection });
+const conversationRetentionPurgeWorker = new Worker(
+  "conversation-retention-purge",
+  processConversationRetentionPurge,
+  { connection: redisConnection },
+);
+conversationRetentionPurgeWorker.on("completed", (job) => console.log(`conversation-retention-purge ${job.id} completed`));
+conversationRetentionPurgeWorker.on("failed", (job, err) => console.error(`conversation-retention-purge ${job?.id} failed`, err));
+
 async function main() {
   await scheduleQueue.add(
     "weekly-scan",
@@ -100,7 +128,17 @@ async function main() {
     {},
     { repeat: { pattern: "0 10 * * *" }, jobId: "daily-digest", removeOnComplete: true, removeOnFail: 10 },
   );
-  console.log("Realwise worker running — listening on queues: document-ingestion, website-sync, website-sync-schedule, website-sync-schedule-daily, listing-extraction, trial-watch, cold-lead-digest");
+  await bcbRateSyncQueue.add(
+    "weekly-sync",
+    {},
+    { repeat: { pattern: "0 5 * * 1" }, jobId: "weekly-sync", removeOnComplete: true, removeOnFail: 10 },
+  );
+  await conversationRetentionPurgeQueue.add(
+    "weekly-purge",
+    {},
+    { repeat: { pattern: "0 3 * * 0" }, jobId: "weekly-purge", removeOnComplete: true, removeOnFail: 10 },
+  );
+  console.log("Realwise worker running — listening on queues: document-ingestion, website-sync, website-sync-schedule, website-sync-schedule-daily, listing-extraction, trial-watch, cold-lead-digest, bcb-rate-sync, shared-knowledge-ingestion, conversation-retention-purge");
 }
 
 main();

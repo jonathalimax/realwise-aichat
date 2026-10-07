@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { ChatController } from "./chat.controller";
 import { ChatService } from "./chat.service";
 import { FlowService } from "./flow.service";
+import { FinancingRatesService } from "./financing-rates.service";
+import { SimulatorService } from "./simulator.service";
 import { BookingsModule } from "../bookings/bookings.module";
 import { CalendarModule } from "../calendar/calendar.module";
 import { LeadsModule } from "../leads/leads.module";
@@ -14,7 +16,7 @@ import { AnalyticsModule } from "../analytics/analytics.module";
 @Module({
   imports: [BookingsModule, CalendarModule, LeadsModule, AlertsModule, UsageModule, KnowledgeModule, ListingsModule, AnalyticsModule],
   controllers: [ChatController],
-  providers: [ChatService, FlowService],
-  exports: [ChatService, FlowService],
+  providers: [ChatService, FlowService, FinancingRatesService, SimulatorService],
+  exports: [ChatService, FlowService, FinancingRatesService, SimulatorService],
 })
 export class ChatModule {}

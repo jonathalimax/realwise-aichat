@@ -23,10 +23,12 @@ Realwise ("nós") opera uma plataforma de atendimento via chat com inteligência
 
 | Categoria | Prazo de retenção | Ação ao expirar |
 |---|---|---|
-| Conversas e mensagens | 12 meses após o último contato | Exclusão automática |
+| Conversas e mensagens | 12 meses após o último contato | Exclusão automática — aplicada por job automatizado semanal |
 | Documentos enviados pelo Visitante | 6 meses após cumprida a finalidade, ou imediatamente a pedido | Exclusão automática |
 | Dados de lead (nome, telefone) | Enquanto a relação com o Tenant estiver ativa + 12 meses | Exclusão automática |
 | Registro de consentimento | Indefinido (prova legal) | Nunca excluído, apenas marcado como revogado |
+
+Dados informados pelo Visitante em simulações de financiamento (ex.: faixa de orçamento, capacidade de pagamento autodeclarada) são tratados como conteúdo de conversa, sujeitos ao mesmo prazo de retenção de 12 meses acima, e não são utilizados para decisão de crédito.
 
 ## 5. Direitos do titular
 

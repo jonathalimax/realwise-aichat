@@ -21,6 +21,7 @@ import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
 import { ListingDetailOverlay, safeHttpUrl, type Listing } from "./ListingDetailOverlay";
 import { MessageContent } from "./MessageContent";
+import { SimulationCard, type SimulationData } from "./SimulationCard";
 
 interface FlowBubble {
   label: string;
@@ -34,6 +35,10 @@ interface Message {
   content: string;
   listings?: Listing[];
   whatsappUrl?: string | null;
+  // Financing-simulation breakdown (see simulator.service.ts) — rendered via SimulationCard
+  // instead of the plain text bubble when present. `listings` above already carries this turn's
+  // budget-matched inventory (same Message.listingIds rehydration path as any other card turn).
+  simulationData?: SimulationData;
   // Set only for messages that originated from a server fetch (history load or poll tick) —
   // used to dedup against locally-created optimistic bubbles, which never get this field.
   serverId?: string;
@@ -115,7 +120,7 @@ function ListingCard({
 const LISTING_CARD_STEP_PX = 224 + 8; // w-56 (14rem=224px) + gap-2 (8px)
 const MAX_VISIBLE_DOTS = 8;
 
-function ListingCards({
+export function ListingCards({
   listings,
   onOpen,
   onSelect,
@@ -191,10 +196,27 @@ function WhatsappHandoffCard({ url }: { url: string }) {
   );
 }
 
-// Prefers the business's own logo; falls back to Clara's own photo (she's who's actually
-// "talking" when a business hasn't set a logo yet) and, if even that fails to load, the
+// Niche -> persona name, mirroring apps/api/src/modules/chat/personas.ts's two cases. The API
+// doesn't currently expose the persona name on the business/conversation response, so this is
+// resolved locally from the niche the component already receives.
+function getPersonaName(niche: string): string {
+  return niche === "concessionaria" ? "Tom" : "Clara";
+}
+
+// Prefers the business's own logo; falls back to the persona's own photo (she/he's who's
+// actually "talking" when a business hasn't set a logo yet) and, if even that fails to load, the
 // initial-letter badge as a last resort so there's never a blank gap.
-function BusinessAvatar({ name, logoUrl, brandColor }: { name: string; logoUrl?: string | null; brandColor?: string | null }) {
+function BusinessAvatar({
+  name,
+  logoUrl,
+  brandColor,
+  personaName,
+}: {
+  name: string;
+  logoUrl?: string | null;
+  brandColor?: string | null;
+  personaName: string;
+}) {
   const [logoFailed, setLogoFailed] = useState(false);
   const [claraFailed, setClaraFailed] = useState(false);
 
@@ -214,7 +236,7 @@ function BusinessAvatar({ name, logoUrl, brandColor }: { name: string; logoUrl?:
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src="/clara-avatar.jpg"
-        alt="Clara"
+        alt={personaName}
         className="h-10 w-10 flex-none rounded-card object-cover"
         onError={() => setClaraFailed(true)}
       />
@@ -391,6 +413,7 @@ export function ChatScreen({
           role: m.role,
           content: m.content,
           listings: m.listings,
+          simulationData: m.simulationData,
         }));
         // Older conversations that predate server-side message persistence for the scripted
         // bubble flow (or any conversation that only ever got this far via taps) have an empty
@@ -717,6 +740,11 @@ export function ChatScreen({
       if (result?.listings?.length) {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, listings: result.listings } : m)));
       }
+      if (result?.message?.simulationData) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, simulationData: result.message.simulationData } : m)),
+        );
+      }
       setSuggestions(result?.suggestions ?? []);
       if (result?.escalated) {
         setConversationStatus("escalated");
@@ -820,11 +848,16 @@ export function ChatScreen({
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-bg">
       <header className="flex flex-none items-center gap-3 border-b border-border bg-bg px-4 py-3">
-        <BusinessAvatar name={business.name} logoUrl={business.logoUrl} brandColor={business.brandColor} />
+        <BusinessAvatar
+          name={business.name}
+          logoUrl={business.logoUrl}
+          brandColor={business.brandColor}
+          personaName={getPersonaName(business.niche)}
+        />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold text-ink">{business.name}</div>
           <div className="flex items-center gap-1 text-xs text-positive">
-            <span className="h-1.5 w-1.5 rounded-full bg-positive" /> Clara · Online agora
+            <span className="h-1.5 w-1.5 rounded-full bg-positive" /> {getPersonaName(business.niche)} · Online agora
           </div>
         </div>
       </header>
@@ -836,7 +869,7 @@ export function ChatScreen({
             className={
               m.role === "visitor"
                 ? "ml-auto max-w-[80%]"
-                : m.listings?.length
+                : m.listings?.length || m.simulationData
                   ? "max-w-full"
                   : "max-w-[85%]"
             }
@@ -855,10 +888,21 @@ export function ChatScreen({
             >
               <MessageContent text={m.content} />
             </div>
-            {m.listings && m.listings.length > 0 && (
-              <div className="mt-2">
-                <ListingCards listings={m.listings} onOpen={setActiveListing} onSelect={handleSelectListing} />
-              </div>
+            {m.simulationData ? (
+              <SimulationCard
+                data={m.simulationData}
+                listings={m.listings}
+                niche={business.niche}
+                onOpenListing={setActiveListing}
+                onSelectListing={handleSelectListing}
+              />
+            ) : (
+              m.listings &&
+              m.listings.length > 0 && (
+                <div className="mt-2">
+                  <ListingCards listings={m.listings} onOpen={setActiveListing} onSelect={handleSelectListing} />
+                </div>
+              )
             )}
             {m.whatsappUrl && (
               <div className="mt-2">
@@ -875,7 +919,9 @@ export function ChatScreen({
             className="flex max-w-[85%] items-center gap-2 rounded-2xl rounded-bl-sm bg-surface px-4 py-3"
           >
             <span className="text-sm text-ink-soft">
-              {thinkingStage === 0 ? "Clara está pensando" : "Clara está consultando as informações"}
+              {thinkingStage === 0
+                ? `${getPersonaName(business.niche)} está pensando`
+                : `${getPersonaName(business.niche)} está consultando as informações`}
             </span>
             <span className="flex items-center gap-1" aria-hidden="true">
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.3s]" />
