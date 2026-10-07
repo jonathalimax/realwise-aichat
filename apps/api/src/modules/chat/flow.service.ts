@@ -1408,7 +1408,18 @@ export class FlowService {
     const hasItemWord = itemWords.some((w) => normalized.includes(w));
     const hasIntentWord = intentWords.some((w) => normalized.includes(w));
     if (hasItemWord && hasIntentWord) return true;
-    if (!hasIntentWord || !chunkText) return false;
+    // The chunk-text fallback below exists so item-only follow-ups ("me mostre os disponíveis",
+    // the item itself named a few turns back) still count as a listing query — but "tem",
+    // "quero", "procuro", "busco", "preciso" are so generic they match almost any message
+    // ("tem horário de atendimento?", "preciso de ajuda"), and a real-estate/car-dealership
+    // knowledge base will mention an item word ("apartamento", "carro") in nearly every chunk
+    // regardless of topic — combining the two falsely attached listing cards to unrelated
+    // questions. Only browsing-specific intent words are strong enough signal to drive this
+    // fallback; the generic ones above still work, but only when the item word is in THIS
+    // message too (handled by the hasItemWord && hasIntentWord check above).
+    const strongBrowsingIntentWords = ["disponivel", "disponiveis", "mostra", "mostre", "ver", "listar", "quais", "opcoes", "opcao"];
+    const hasStrongIntentWord = strongBrowsingIntentWords.some((w) => normalized.includes(w));
+    if (!hasStrongIntentWord || !chunkText) return false;
     const normalizedChunk = normalize(chunkText);
     return itemWords.some((w) => normalizedChunk.includes(w));
   }

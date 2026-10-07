@@ -149,6 +149,34 @@ function isBareGreeting(visitorText: string): boolean {
   return GREETING_PATTERN.test(normalize(visitorText));
 }
 
+// Free-text scheduling intent ("quero agendar uma visita", "posso marcar um test-drive?") was
+// previously falling straight into the generic RAG path, which can only talk ABOUT scheduling
+// (from whatever's in the knowledge base) rather than actually opening the real booking flow with
+// live calendar slots. Checked only when the conversation hasn't engaged the scripted flow yet
+// (flowNodeId null) — once inside a flow, the existing bubble/on_input handling already owns it.
+const BOOKING_INTENT_PATTERN = /\b(agendar|marcar)\b.*\b(visita|test[\s-]?drive)\b|\bquero\s+(visitar|agendar)\b/;
+function isBookingIntent(visitorText: string): boolean {
+  return BOOKING_INTENT_PATTERN.test(normalize(visitorText));
+}
+
+// A vague interest message ("tenho interesse em um imóvel", "quero um apartamento") names the
+// item category but gives no filterable detail — dumping every active listing as cards is more
+// noise than help. Asking a clarifying question first (same short-circuit style as
+// isBareGreeting) matches how a real attendant would respond. Any concrete detail (a number, a
+// bedroom count, a neighborhood/transaction word) means the request isn't actually vague.
+const VAGUE_INTEREST_PATTERN = /\b(tenho interesse|quero|procuro|busco|gostaria)\b.*\b(imovel|imoveis|apartamento|apartamentos|casa|casas|carro|carros|veiculo|veiculos)\b/;
+const CONCRETE_DETAIL_PATTERN = /\d|\b(quarto|quartos|dormitorio|dormitorios|bairro|centro|zona|aluguel|alugar|comprar|venda|financiamento|suite|suites|modelo|km|ano)\b/;
+function isVagueListingInterest(visitorText: string): boolean {
+  const normalized = normalize(visitorText);
+  return VAGUE_INTEREST_PATTERN.test(normalized) && !CONCRETE_DETAIL_PATTERN.test(normalized);
+}
+
+function vagueInterestClarifyingQuestion(niche: string): string {
+  return niche === "concessionaria"
+    ? "Posso te ajudar a encontrar o veículo ideal! Pra filtrar certo: qual modelo ou faixa de preço você tem em mente, e prefere 0km ou usado?"
+    : "Posso te ajudar a encontrar o imóvel ideal! Pra filtrar certo: você procura pra alugar ou comprar, quantos quartos, e qual bairro ou faixa de preço tem em mente?";
+}
+
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
@@ -434,6 +462,29 @@ export class ChatService {
         data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
       });
       return { message: assistantMessage, escalated: false, flow: flowResult };
+    }
+
+    if (!conversation.flowNodeId && isBookingIntent(visitorText)) {
+      const bookingBusiness = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
+      if (bookingBusiness) {
+        const dayNodeId = bookingBusiness.niche === "concessionaria" ? "agend_dia" : "visita_dia";
+        const flowResult = await this.flow.advance(businessId, conversationId, dayNodeId, {}, undefined, false);
+        const assistantMessage = await this.prisma.client.message.create({
+          data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
+        });
+        return { message: assistantMessage, escalated: false, flow: flowResult };
+      }
+    }
+
+    if (!conversation.flowNodeId && isVagueListingInterest(visitorText)) {
+      const vagueBusiness = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
+      if (vagueBusiness) {
+        const clarifying = vagueInterestClarifyingQuestion(vagueBusiness.niche);
+        const assistantMessage = await this.prisma.client.message.create({
+          data: { conversationId, businessId, role: "assistant", content: clarifying, answerSource: "rag" },
+        });
+        return { message: assistantMessage, escalated: false };
+      }
     }
 
     const answer = await this.generateAnswer(businessId, conversationId, visitorText);
@@ -974,6 +1025,25 @@ export class ChatService {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException("Business not found");
     const niche = business.niche;
+
+    if (!conversation.flowNodeId && isBookingIntent(visitorText)) {
+      const dayNodeId = niche === "concessionaria" ? "agend_dia" : "visita_dia";
+      const flowResult = await this.flow.advance(businessId, conversationId, dayNodeId, {}, undefined, false);
+      const assistantMessage = await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
+      });
+      onDelta(flowResult.message);
+      return { message: assistantMessage, escalated: false, flow: flowResult };
+    }
+
+    if (!conversation.flowNodeId && isVagueListingInterest(visitorText)) {
+      const clarifying = vagueInterestClarifyingQuestion(niche);
+      onDelta(clarifying);
+      const assistantMessage = await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: clarifying, answerSource: "rag" },
+      });
+      return { message: assistantMessage, escalated: false };
+    }
 
     if (isBareGreeting(visitorText)) {
       const greeting = `Olá! 👋 Sou a assistente da ${business.name}. Como posso te ajudar?`;
