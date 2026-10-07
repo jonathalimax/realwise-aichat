@@ -73,6 +73,12 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
     "'transaction' só deve ser preenchido se o texto disser explicitamente aluguel ou venda.",
     "'city'/'state' só devem ser preenchidos se citados explicitamente no texto daquele item.",
     "'images' deve conter TODAS as URLs de 'Foto: <url>' claramente associadas a esse item específico (não apenas a primeira) — nunca reaproveite uma 'Foto:' distante no texto ou que pareça ser logo/ícone do site.",
+    // Smaller instruct models reliably fill simple string/number fields but tend to silently drop
+    // the one array-of-URLs field under instruction load unless given a concrete worked example —
+    // confirmed pattern: real titles/prices/descriptions extracted correctly while `images` came
+    // back empty for every item across an entire real run. A literal example right next to the
+    // schema (not just a prose rule) is the fix that actually changes smaller-model behavior here.
+    'Exemplo de como preencher "images": se o trecho contém "Apartamento Centro Foto: https://cdn.site.com/a.jpg Foto: https://cdn.site.com/b.jpg", o item correspondente deve incluir "images": ["https://cdn.site.com/a.jpg", "https://cdn.site.com/b.jpg"] — nunca omita esse campo quando existir ao menos uma URL de Foto: genuinamente associada ao item.',
     "'url' só deve vir de um link real no formato [texto](url) ou de uma URL http(s) explícita no texto daquele item, copiada caractere por caractere exatamente como aparece no texto — NUNCA construa, monte ou infira uma URL a partir de um código de referência, slug ou padrão observado em outras URLs, e NUNCA use um link de navegação/home do site como se fosse a URL do item.",
     "Se nenhum item real e distinto puder ser identificado no trecho, responda com um array vazio [].",
     "IMPORTANTE: use EXATAMENTE os nomes de campos em inglês especificados acima (title, price, addressLine, etc) — nunca traduza as chaves do JSON para português.",
