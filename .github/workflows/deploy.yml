@@ -54,8 +54,57 @@ jobs:
             NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
             NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
 
-  deploy:
+  migrate:
     needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SSH key
+        run: |
+          install -m 600 -D /dev/null ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.VPS_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Copy prisma schema + migrations to VPS
+        run: |
+          tar --exclude=node_modules -czf /tmp/db-migrate.tar.gz -C packages/db prisma package.json
+          scp /tmp/db-migrate.tar.gz "root@${{ secrets.VPS_HOST }}:/root/db-migrate.tar.gz"
+
+      # Runs `prisma migrate deploy` from a throwaway container attached to the same docker
+      # network as the running api container, reading DATABASE_URL from that container's own env
+      # (no DB credentials stored as a GitHub secret). The production api image doesn't ship the
+      # prisma CLI (devDependency, not present in the runner image — see apps/api/Dockerfile), so
+      # this uses a plain node image with just the schema/migrations mounted, mirroring the manual
+      # process used to backfill migrations for the 2026-10-07 release.
+      - name: Run database migrations
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          rm -rf /root/migrate-tmp
+          mkdir -p /root/migrate-tmp
+          tar -xzf /root/db-migrate.tar.gz -C /root/migrate-tmp
+          rm -f /root/db-migrate.tar.gz
+
+          API_CONTAINER=$(docker ps --format '{{.Names}}' | grep '^api-' | head -1)
+          if [ -z "$API_CONTAINER" ]; then
+            echo "No running api-* container found; cannot resolve DATABASE_URL/network." >&2
+            exit 1
+          fi
+          DB_URL=$(docker exec "$API_CONTAINER" printenv DATABASE_URL)
+          NETWORK=$(docker inspect "$API_CONTAINER" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' | tr ' ' '\n' | grep -v '^$' | head -1)
+
+          docker run --rm --network "$NETWORK" -v /root/migrate-tmp:/app -w /app \
+            -e DATABASE_URL="$DB_URL" node:20-alpine \
+            sh -c "npm install -g prisma@6.19.3 >/dev/null 2>&1 && prisma migrate deploy"
+
+          rm -rf /root/migrate-tmp
+          REMOTE
+
+  deploy:
+    needs: [build-and-push, migrate]
     runs-on: ubuntu-latest
     steps:
       - name: Install SSH key
