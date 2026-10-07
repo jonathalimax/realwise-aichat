@@ -3,6 +3,16 @@ import type { GenerateRequest, GenerateResult, InferenceProvider } from "../type
 const MANAGED_API_URL = process.env.MANAGED_API_URL ?? "https://openrouter.ai/api/v1/chat/completions";
 const MANAGED_API_KEY = process.env.MANAGED_API_KEY;
 const MANAGED_MODEL = process.env.MANAGED_MODEL ?? "qwen/qwen-2.5-7b-instruct";
+// listing_extraction asks for a 19-field JSON schema (including an array-of-URLs field) per
+// window — confirmed via multiple live runs that the default 7B model reliably fills simple
+// string/number fields but essentially never populates the images array no matter how the prompt
+// is worded, nor via a dedicated narrower second call. A bigger model for this one purpose only
+// (chat generation is untouched) is the next real lever.
+const MANAGED_MODEL_LISTING_EXTRACTION = process.env.MANAGED_MODEL_LISTING_EXTRACTION ?? "qwen/qwen-2.5-72b-instruct";
+
+function modelForPurpose(purpose: GenerateRequest["purpose"]): string {
+  return purpose === "listing_extraction" ? MANAGED_MODEL_LISTING_EXTRACTION : MANAGED_MODEL;
+}
 
 // Simple in-memory circuit breaker: when the provider returns a definitive, non-retryable
 // failure (e.g. 402 payment required), remember when and skip straight to the fallback for a
@@ -29,6 +39,7 @@ export class ManagedProvider implements InferenceProvider {
   async generate(req: GenerateRequest): Promise<GenerateResult> {
     if (!MANAGED_API_KEY) throw new Error("MANAGED_API_KEY not configured");
     const start = Date.now();
+    const model = modelForPurpose(req.purpose);
 
     const res = await fetch(MANAGED_API_URL, {
       method: "POST",
@@ -37,7 +48,7 @@ export class ManagedProvider implements InferenceProvider {
         authorization: `Bearer ${MANAGED_API_KEY}`,
       },
       body: JSON.stringify({
-        model: MANAGED_MODEL,
+        model,
         messages: [
           { role: "system", content: req.systemPrompt },
           { role: "user", content: req.prompt },
@@ -70,7 +81,7 @@ export class ManagedProvider implements InferenceProvider {
     return {
       text: data.choices[0]?.message.content ?? "",
       provider: "managed",
-      model: MANAGED_MODEL,
+      model,
       inputTokens: data.usage?.prompt_tokens ?? 0,
       outputTokens: data.usage?.completion_tokens ?? 0,
       latencyMs: Date.now() - start,
