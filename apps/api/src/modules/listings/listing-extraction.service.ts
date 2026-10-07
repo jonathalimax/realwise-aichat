@@ -98,6 +98,20 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
 // real per-listing photo. Mirrors apps/worker/src/website-extract.ts's CHROME_IMAGE_PATTERN.
 const CHROME_IMAGE_PATTERN = /(logo|favicon|icon|sprite|avatar|placeholder|banner|\/shared\/|watermark|selo)/i;
 
+// Dedicated second pass, scoped to ONLY title+images, for whichever items the main extraction
+// call left with an empty images array. Two independent live runs (with increasingly explicit
+// prompt instructions added directly to the main schema) both still came back with zero images
+// across every item — the 19-field schema's cognitive load, not prompt wording, is the actual
+// blocker for this small model. A narrow, single-purpose call removes that load entirely.
+const IMAGE_ASSOCIATION_SYSTEM_PROMPT = [
+  "Você recebe um trecho de texto de uma página de anúncios e uma lista de títulos de itens já identificados nesse trecho.",
+  "Para CADA título da lista, encontre todas as URLs de 'Foto: <url>' que aparecem associadas a esse item específico no trecho (geralmente o título/código/preço do item se repete antes de cada Foto: do mesmo item — colete TODAS essas repetições).",
+  "Responda APENAS com um array JSON: [{ \"title\": string, \"images\": string[] }, ...], um objeto por título da lista recebida.",
+  "Copie as URLs caractere por caractere exatamente como aparecem no texto — nunca invente, monte ou corrija uma URL.",
+  "Nunca inclua uma 'Foto:' que pareça ser logo, ícone ou banner do site, nem uma 'Foto:' claramente associada a outro item.",
+  "Se um título não tiver nenhuma Foto: associada no trecho, responda \"images\": [] para ele.",
+].join("\n");
+
 // Matches the per-page `Fonte: <url>` annotation appended to each document's extractedMarkdown by
 // apps/worker/src/processors/website-sync.ts — this is that document's own authoritative URL.
 const SOURCE_URL_PATTERN = /\nFonte:\s*(\S+)$/;
@@ -473,6 +487,7 @@ export class ListingExtractionService {
         const raw = result.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) continue;
+        const windowItems: ExtractedListing[] = [];
         for (const rawItem of parsed as RawExtractedItem[]) {
           if (
             !rawItem ||
@@ -513,7 +528,7 @@ export class ListingExtractionService {
           }
           const resolvedUrl = pageUrl ?? candidateRawUrl;
 
-          extracted.push({
+          windowItems.push({
             title: rawItem.title,
             description: parseRealStr(rawItem.description),
             priceText,
@@ -538,6 +553,53 @@ export class ListingExtractionService {
             images,
           });
         }
+
+        // Dedicated second pass (see IMAGE_ASSOCIATION_SYSTEM_PROMPT above) for whichever items
+        // the main call above left with zero images — only worth the extra call when the window
+        // actually contains photo annotations to associate.
+        const itemsNeedingImages = windowItems.filter((item) => item.images.length === 0);
+        if (itemsNeedingImages.length > 0 && window.includes("Foto:")) {
+          try {
+            const imageResult = await generateFromGateway({
+              purpose: "listing_extraction",
+              businessId,
+              systemPrompt: IMAGE_ASSOCIATION_SYSTEM_PROMPT,
+              prompt: `Títulos dos itens já identificados neste trecho:\n${itemsNeedingImages.map((i) => `- ${i.title}`).join("\n")}\n\nTrecho:\n${window}`,
+              maxTokens: 3000,
+              timeoutMs: 30000,
+            });
+            const imageRaw = imageResult.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+            const parsedImages = JSON.parse(imageRaw);
+            if (Array.isArray(parsedImages)) {
+              for (const entry of parsedImages as { title?: unknown; images?: unknown }[]) {
+                if (!entry || typeof entry.title !== "string" || !Array.isArray(entry.images)) continue;
+                const entryTitle = entry.title;
+                const match = itemsNeedingImages.find((item) => normalizeForCompare(item.title) === normalizeForCompare(entryTitle));
+                if (!match) continue;
+                match.images = (entry.images as unknown[])
+                  .map((img) => safeHttpUrl(img))
+                  .filter((img): img is string => Boolean(img))
+                  .filter((img) => {
+                    if (CHROME_IMAGE_PATTERN.test(img)) return false;
+                    if (isBoilerplateUrl(img)) return false;
+                    if (!window.includes(img)) {
+                      this.logger.warn(
+                        `extractForBusiness ${businessId}: rejected image URL not verbatim in source window (image-association pass) — "${img}"`,
+                      );
+                      return false;
+                    }
+                    return true;
+                  });
+              }
+            }
+          } catch (error) {
+            this.logger.warn(
+              `extractForBusiness ${businessId}: image-association pass failed — ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
+
+        extracted.push(...windowItems);
       } catch (error) {
         failedWindows++;
         this.logger.warn(`extractForBusiness ${businessId}: window extraction failed — ${error instanceof Error ? error.message : String(error)}`);
