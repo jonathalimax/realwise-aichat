@@ -578,7 +578,10 @@ export class ListingExtractionService {
 
           windowItems.push({
             title: rawItem.title,
-            code: parseStr(rawItem.code)?.toUpperCase(),
+            // The model occasionally includes trailing words beyond the literal code (e.g. "243
+            // VENDA TERRENO" instead of "243") despite the instruction — take only the leading
+            // alphanumeric/hyphen token so it matches the keys extractImagesByCodeProximity builds.
+            code: parseStr(rawItem.code)?.toUpperCase().match(/^[A-Z0-9-]+/)?.[0],
             description: parseRealStr(rawItem.description),
             priceText,
             priceCents: parsedPrice?.priceCents,
@@ -630,13 +633,25 @@ export class ListingExtractionService {
               .map((img) => safeHttpUrl(img))
               .filter((img): img is string => Boolean(img))
               .filter((img) => {
-                if (CHROME_IMAGE_PATTERN.test(img)) return false;
-                if (!IMAGE_LOOKS_LIKE_PHOTO_PATTERN.test(img)) return false;
-                if (isBoilerplateUrl(img)) return false;
-                if (!window.includes(img)) return false;
+                if (CHROME_IMAGE_PATTERN.test(img)) {
+                  this.logger.warn(`extractForBusiness ${businessId}: [diag] rejected by CHROME_IMAGE_PATTERN: "${img}"`);
+                  return false;
+                }
+                if (!IMAGE_LOOKS_LIKE_PHOTO_PATTERN.test(img)) {
+                  this.logger.warn(`extractForBusiness ${businessId}: [diag] rejected by IMAGE_LOOKS_LIKE_PHOTO_PATTERN: "${img}"`);
+                  return false;
+                }
+                if (isBoilerplateUrl(img)) {
+                  this.logger.warn(`extractForBusiness ${businessId}: [diag] rejected by isBoilerplateUrl: "${img}"`);
+                  return false;
+                }
+                if (!window.includes(img)) {
+                  this.logger.warn(`extractForBusiness ${businessId}: [diag] rejected by verbatim check: "${img}"`);
+                  return false;
+                }
                 return true;
               });
-            this.logger.warn(`extractForBusiness ${businessId}: [diag] code=${code} candidates=${candidateUrls.length} survived-filter=${item.images.length}`);
+            this.logger.warn(`extractForBusiness ${businessId}: [diag] code=${code} candidates=${candidateUrls.length} survived-filter=${item.images.length} sample-candidate=${JSON.stringify(candidateUrls[0])} sample-mapped=${JSON.stringify(safeHttpUrl(candidateUrls[0]))}`);
           }
         }
 
