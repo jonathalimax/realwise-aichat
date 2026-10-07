@@ -12,6 +12,7 @@ const MAX_WINDOWS_PER_RUN = 60;
 
 interface RawExtractedItem {
   title?: unknown;
+  code?: unknown;
   description?: unknown;
   price?: unknown;
   url?: unknown;
@@ -33,6 +34,7 @@ interface RawExtractedItem {
 
 interface ExtractedListing {
   title: string;
+  code?: string;
   description?: string;
   priceText?: string;
   priceCents?: number;
@@ -67,11 +69,15 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
     `Você é um extrator de dados para a ${businessName}.`,
     "Extraia anúncios (imóveis ou veículos) genuinamente descritos no texto abaixo.",
     "Responda APENAS com um array JSON (até 10 itens por trecho), cada item podendo conter os campos:",
-    '{ "title": string, "description": string, "price": string, "url": string, "addressLine": string, "neighborhood": string, "city": string, "state": string, "listingType": string, "transaction": "aluguel"|"venda", "bedrooms": number, "parkingSpots": number, "areaM2": number, "brand": string, "model": string, "year": number, "mileageKm": number, "images": string[] }',
+    '{ "title": string, "code": string, "description": string, "price": string, "url": string, "addressLine": string, "neighborhood": string, "city": string, "state": string, "listingType": string, "transaction": "aluguel"|"venda", "bedrooms": number, "parkingSpots": number, "areaM2": number, "brand": string, "model": string, "year": number, "mileageKm": number, "images": string[] }',
     "Regras: nunca invente um item ou valor de campo que não apareça explicitamente no texto. Se um campo não aparecer no texto para aquele item, OMITA o campo (nunca invente um placeholder).",
     "NUNCA trate texto de carregamento, erro ou estado vazio da página como conteúdo real — se o valor de um campo contiver algo como 'Carregando...', 'Loading...', 'Aguarde', 'Consulte', 'undefined', 'null', 'R$ ???.???.???,00', '--', 'Preço a definir' ou uma sequência de '?' no lugar dos números, OMITA esse campo (e se nem o título for conteúdo real, não inclua o item).",
     "'transaction' só deve ser preenchido se o texto disser explicitamente aluguel ou venda.",
     "'city'/'state' só devem ser preenchidos se citados explicitamente no texto daquele item.",
+    // A short literal token (e.g. "AP139") is a much easier copy task for the model than an array
+    // of long URLs — this is what makes the deterministic image-by-code matching below possible,
+    // since the model's own title/description rarely preserve the raw "Cód: X" boilerplate text.
+    "'code' deve ser o código/referência do item copiado EXATAMENTE como aparece no texto após 'Cód:', 'Código:' ou 'Referência:' (ex: se o texto tem 'Cód: AP139', o valor de code é \"AP139\", sem o prefixo 'Cód:'). OMITA o campo se não houver um código explícito no texto para esse item.",
     "'images' deve conter TODAS as URLs de 'Foto: <url>' claramente associadas a esse item específico (não apenas a primeira) — nunca reaproveite uma 'Foto:' distante no texto ou que pareça ser logo/ícone do site.",
     // Smaller instruct models reliably fill simple string/number fields but tend to silently drop
     // the one array-of-URLs field under instruction load unless given a concrete worked example —
@@ -572,6 +578,7 @@ export class ListingExtractionService {
 
           windowItems.push({
             title: rawItem.title,
+            code: parseStr(rawItem.code)?.toUpperCase(),
             description: parseRealStr(rawItem.description),
             priceText,
             priceCents: parsedPrice?.priceCents,
@@ -602,7 +609,11 @@ export class ListingExtractionService {
         if (codeToImages.size > 0) {
           for (const item of windowItems) {
             if (item.images.length > 0) continue;
-            const code = findExplicitReferenceCode(`${item.title} ${item.description ?? ""}`);
+            // item.code is the model's own copy of the item's literal "Cód: X" token — far more
+            // reliable than re-deriving it from title/description, which rarely preserve that raw
+            // boilerplate text. Fall back to the old heuristic for windows where the model didn't
+            // return a code but title/description happen to contain one anyway.
+            const code = item.code ?? findExplicitReferenceCode(`${item.title} ${item.description ?? ""}`);
             const candidateUrls = code ? codeToImages.get(code) : undefined;
             if (!candidateUrls) continue;
             item.images = candidateUrls
