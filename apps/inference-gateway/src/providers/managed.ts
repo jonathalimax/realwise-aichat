@@ -60,7 +60,11 @@ export class ManagedProvider implements InferenceProvider {
         // via https://openrouter.ai/docs/features/provider-routing) — a bare top-level `zdr` is a no-op.
         provider: { zdr: true, data_collection: "deny" },
       }),
-      signal: AbortSignal.timeout(20000),
+      // 72B listing_extraction calls need materially more time than the 7B chat-path default —
+      // confirmed live: 20s timed out on the very first real run after switching models. 45s
+      // covers the slower model's real latency while staying well inside the 60s per-window
+      // ceiling listing-extraction.service.ts is tuned around.
+      signal: AbortSignal.timeout(req.purpose === "listing_extraction" ? 45000 : 20000),
     });
 
     if (!res.ok) {

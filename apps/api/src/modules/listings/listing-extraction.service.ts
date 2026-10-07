@@ -488,9 +488,11 @@ export class ListingExtractionService {
           // Capped lower than the chat-path extraction timeouts on purpose: with up to
           // MAX_WINDOWS_PER_RUN windows processed serially, a 60s-per-window timeout let a single
           // extraction run monopolize the inference gateway for up to 60 minutes, starving
-          // visitor-facing chat requests on the same gateway. 30s keeps a slow run from blocking
-          // the gateway for anywhere near as long while still giving each window a real chance.
-          timeoutMs: 30000,
+          // visitor-facing chat requests on the same gateway. 50s keeps a slow run from blocking
+          // the gateway for anywhere near as long while still giving the bigger listing_extraction
+          // model (see managed.ts's 45s internal timeout for this purpose) room to actually finish
+          // instead of the client aborting first.
+          timeoutMs: 50000,
         });
         const raw = result.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
         const parsed = JSON.parse(raw);
@@ -575,7 +577,7 @@ export class ListingExtractionService {
               systemPrompt: IMAGE_ASSOCIATION_SYSTEM_PROMPT,
               prompt: `Títulos dos itens já identificados neste trecho:\n${itemsNeedingImages.map((i) => `- ${i.title}`).join("\n")}\n\nTrecho:\n${window}`,
               maxTokens: 3000,
-              timeoutMs: 30000,
+              timeoutMs: 50000,
             });
             const imageRaw = imageResult.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
             const parsedImages = JSON.parse(imageRaw);
