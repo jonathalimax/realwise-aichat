@@ -98,6 +98,14 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
 // real per-listing photo. Mirrors apps/worker/src/website-extract.ts's CHROME_IMAGE_PATTERN.
 const CHROME_IMAGE_PATTERN = /(logo|favicon|icon|sprite|avatar|placeholder|banner|\/shared\/|watermark|selo)/i;
 
+// Confirmed real bug from a live run: the image-association pass (and, in principle, the main
+// extraction call too) can confuse "URL associated with this item" with the item's own detail-
+// page link and return that as an "image" — e.g. ".../imovel/apartamento-xyz-260" with no image
+// extension at all, not a real CDN photo URL. An actual photo URL always has an image extension
+// (optionally followed by a query string, e.g. Next.js's /_next/image?url=...) or is itself a
+// Next.js image-proxy URL — require one or the other.
+const IMAGE_LOOKS_LIKE_PHOTO_PATTERN = /\.(jpe?g|png|gif|webp|avif|bmp)(\?|$)|\/_next\/image\?/i;
+
 // Dedicated second pass, scoped to ONLY title+images, for whichever items the main extraction
 // call left with an empty images array. Two independent live runs (with increasingly explicit
 // prompt instructions added directly to the main schema) both still came back with zero images
@@ -505,6 +513,7 @@ export class ListingExtractionService {
             .filter((img): img is string => Boolean(img))
             .filter((img) => {
               if (CHROME_IMAGE_PATTERN.test(img)) return false;
+              if (!IMAGE_LOOKS_LIKE_PHOTO_PATTERN.test(img)) return false;
               if (isBoilerplateUrl(img)) return false;
               if (!window.includes(img)) {
                 this.logger.warn(
@@ -581,6 +590,7 @@ export class ListingExtractionService {
                   .filter((img): img is string => Boolean(img))
                   .filter((img) => {
                     if (CHROME_IMAGE_PATTERN.test(img)) return false;
+                    if (!IMAGE_LOOKS_LIKE_PHOTO_PATTERN.test(img)) return false;
                     if (isBoilerplateUrl(img)) return false;
                     if (!window.includes(img)) {
                       this.logger.warn(
