@@ -24,6 +24,15 @@ export async function routeGenerate(req: GenerateRequest): Promise<GenerateResul
     }
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
+    // Only actually attempt the self-hosted fallback when it's genuinely capable of serving this
+    // request (server up AND the right model pulled) — otherwise it's a guaranteed second failure
+    // that masks the real (often transient/retryable) managed-provider error behind an unrelated
+    // Ollama error. Surface the original error directly instead.
+    const fallbackViable = managedConfigured ? await selfHosted.isHealthy() : true;
+    if (!fallbackViable) {
+      await logCall(req, null, error);
+      throw e;
+    }
     try {
       result = managedConfigured ? await selfHosted.generate(req) : await managed.generate(req);
     } catch (fallbackError) {

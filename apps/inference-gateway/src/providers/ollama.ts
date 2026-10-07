@@ -9,7 +9,15 @@ export class OllamaProvider implements InferenceProvider {
   async isHealthy(): Promise<boolean> {
     try {
       const res = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(2000) });
-      return res.ok;
+      if (!res.ok) return false;
+      // The server responding isn't enough — production's self-hosted Ollama instance only ever
+      // pulls the embeddings model (nomic-embed-text), never OLLAMA_MODEL itself. Without this
+      // check, isHealthy() reports true while generate() is guaranteed to 404, which matters
+      // because router.ts's fallback path calls generate() as a last resort after a managed-
+      // provider failure — a guaranteed-404 fallback masks the real (often transient/retryable)
+      // managed error behind a confusing, unrelated Ollama error.
+      const data = (await res.json()) as { models?: { name: string }[] };
+      return (data.models ?? []).some((m) => m.name === OLLAMA_MODEL);
     } catch {
       return false;
     }
