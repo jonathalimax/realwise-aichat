@@ -361,6 +361,37 @@ function findExplicitReferenceCode(sourceText: string): string | undefined {
   return match ? match[1].toUpperCase() : undefined;
 }
 
+// Deterministic alternative to asking the LLM to associate photos with items — confirmed via
+// direct inspection of real crawled markdown that this doesn't need a model at all. Real listing
+// sites (Vista CRM — a template used by many Brazilian real-estate agencies, not just this one
+// customer — and similar platforms) repeat the SAME reference code right next to every one of an
+// item's photos: the <img> alt text itself (e.g. "Imagem da propriedade AP139 1") and a nearby
+// "Cód: AP139" line both carry the item's own code, immediately before/after each "Foto: <url>".
+// Scanning the window for codes near each Foto: line and grouping by code is both free (no extra
+// LLM call) and more reliable than LLM recall across a long, repetitive block. Only a fallback to
+// the LLM-based association pass (kept below) when a business's site doesn't expose explicit
+// reference codes at all.
+const FOTO_LINE_PATTERN = /Foto:\s*(\S+)/g;
+const CODE_PROXIMITY_WINDOW = 300;
+
+function extractImagesByCodeProximity(window: string): Map<string, string[]> {
+  const codeToImages = new Map<string, string[]>();
+  for (const match of window.matchAll(FOTO_LINE_PATTERN)) {
+    const url = match[1];
+    const matchIndex = match.index ?? 0;
+    const context = window.slice(Math.max(0, matchIndex - CODE_PROXIMITY_WINDOW), matchIndex + CODE_PROXIMITY_WINDOW);
+    const code = findExplicitReferenceCode(context);
+    if (!code) continue;
+    const existing = codeToImages.get(code);
+    if (existing) {
+      if (!existing.includes(url)) existing.push(url);
+    } else {
+      codeToImages.set(code, [url]);
+    }
+  }
+  return codeToImages;
+}
+
 function generateReferenceCode(dedupKey: string): string {
   const hash = createHash("sha256").update(dedupKey).digest("hex").slice(0, 6).toUpperCase();
   return `AP-${hash}`;
@@ -565,9 +596,32 @@ export class ListingExtractionService {
           });
         }
 
+        // Deterministic pass first (see extractImagesByCodeProximity above) — free, no LLM
+        // involved, and more reliable than model recall when the site exposes reference codes.
+        const codeToImages = extractImagesByCodeProximity(window);
+        if (codeToImages.size > 0) {
+          for (const item of windowItems) {
+            if (item.images.length > 0) continue;
+            const code = findExplicitReferenceCode(`${item.title} ${item.description ?? ""}`);
+            const candidateUrls = code ? codeToImages.get(code) : undefined;
+            if (!candidateUrls) continue;
+            item.images = candidateUrls
+              .map((img) => safeHttpUrl(img))
+              .filter((img): img is string => Boolean(img))
+              .filter((img) => {
+                if (CHROME_IMAGE_PATTERN.test(img)) return false;
+                if (!IMAGE_LOOKS_LIKE_PHOTO_PATTERN.test(img)) return false;
+                if (isBoilerplateUrl(img)) return false;
+                if (!window.includes(img)) return false;
+                return true;
+              });
+          }
+        }
+
         // Dedicated second pass (see IMAGE_ASSOCIATION_SYSTEM_PROMPT above) for whichever items
-        // the main call above left with zero images — only worth the extra call when the window
-        // actually contains photo annotations to associate.
+        // the deterministic pass above still left with zero images (e.g. the site doesn't expose
+        // explicit reference codes) — only worth the extra LLM call when the window actually
+        // contains photo annotations to associate.
         const itemsNeedingImages = windowItems.filter((item) => item.images.length === 0);
         if (itemsNeedingImages.length > 0 && window.includes("Foto:")) {
           try {
