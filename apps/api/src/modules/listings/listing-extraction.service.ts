@@ -79,6 +79,12 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
     // back empty for every item across an entire real run. A literal example right next to the
     // schema (not just a prose rule) is the fix that actually changes smaller-model behavior here.
     'Exemplo de como preencher "images": se o trecho contém "Apartamento Centro Foto: https://cdn.site.com/a.jpg Foto: https://cdn.site.com/b.jpg", o item correspondente deve incluir "images": ["https://cdn.site.com/a.jpg", "https://cdn.site.com/b.jpg"] — nunca omita esse campo quando existir ao menos uma URL de Foto: genuinamente associada ao item.',
+    // Confirmed real-world pattern (Allure listing pages): a single item's photo gallery repeats
+    // the SAME title/código/preço block before every "Foto:" line, once per thumbnail — e.g. the
+    // same "Cód: AP139 ... R$ 588.000,00" block appears 20+ times, each followed by a different
+    // Foto: URL. Without calling this out explicitly, the repetition reads as noise/boilerplate
+    // and the model tends to drop the whole images field defensively.
+    "Atenção a um padrão comum: quando o MESMO título/código/preço se repete várias vezes no texto, cada repetição seguida de uma 'Foto:' diferente, isso é a galeria de fotos de UM ÚNICO item (não itens duplicados) — colete TODAS essas URLs de Foto: distintas no campo \"images\" desse item, mesmo que sejam 10, 20 ou mais. Não crie itens repetidos para o mesmo anúncio e não descarte o campo \"images\" por causa da repetição.",
     "'url' só deve vir de um link real no formato [texto](url) ou de uma URL http(s) explícita no texto daquele item, copiada caractere por caractere exatamente como aparece no texto — NUNCA construa, monte ou infira uma URL a partir de um código de referência, slug ou padrão observado em outras URLs, e NUNCA use um link de navegação/home do site como se fosse a URL do item.",
     "Se nenhum item real e distinto puder ser identificado no trecho, responda com um array vazio [].",
     "IMPORTANTE: use EXATAMENTE os nomes de campos em inglês especificados acima (title, price, addressLine, etc) — nunca traduza as chaves do JSON para português.",
