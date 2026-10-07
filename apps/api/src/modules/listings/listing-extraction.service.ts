@@ -606,6 +606,13 @@ export class ListingExtractionService {
         // Deterministic pass first (see extractImagesByCodeProximity above) — free, no LLM
         // involved, and more reliable than model recall when the site exposes reference codes.
         const codeToImages = extractImagesByCodeProximity(window);
+        // TEMPORARY diagnostic — zero live ListingImage rows despite an isolated test of this
+        // exact prompt+window succeeding; need visibility into which link in the chain breaks in
+        // production specifically (codes found in window text? model returning item.code? the
+        // filter chain rejecting everything?) before guessing further.
+        this.logger.warn(
+          `extractForBusiness ${businessId}: [diag] codeToImages.size=${codeToImages.size} keys=${JSON.stringify([...codeToImages.keys()])} windowItems=${windowItems.map((i) => `${i.title.slice(0, 20)}|code=${i.code ?? "none"}|images=${i.images.length}`).join(";; ")}`,
+        );
         if (codeToImages.size > 0) {
           for (const item of windowItems) {
             if (item.images.length > 0) continue;
@@ -615,7 +622,10 @@ export class ListingExtractionService {
             // return a code but title/description happen to contain one anyway.
             const code = item.code ?? findExplicitReferenceCode(`${item.title} ${item.description ?? ""}`);
             const candidateUrls = code ? codeToImages.get(code) : undefined;
-            if (!candidateUrls) continue;
+            if (!candidateUrls) {
+              this.logger.warn(`extractForBusiness ${businessId}: [diag] no candidateUrls for code=${code ?? "none"} title="${item.title.slice(0, 30)}"`);
+              continue;
+            }
             item.images = candidateUrls
               .map((img) => safeHttpUrl(img))
               .filter((img): img is string => Boolean(img))
@@ -626,6 +636,7 @@ export class ListingExtractionService {
                 if (!window.includes(img)) return false;
                 return true;
               });
+            this.logger.warn(`extractForBusiness ${businessId}: [diag] code=${code} candidates=${candidateUrls.length} survived-filter=${item.images.length}`);
           }
         }
 
