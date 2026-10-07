@@ -3,12 +3,16 @@ import type { GenerateRequest, GenerateResult, InferenceProvider } from "../type
 const MANAGED_API_URL = process.env.MANAGED_API_URL ?? "https://openrouter.ai/api/v1/chat/completions";
 const MANAGED_API_KEY = process.env.MANAGED_API_KEY;
 const MANAGED_MODEL = process.env.MANAGED_MODEL ?? "qwen/qwen-2.5-7b-instruct";
-// listing_extraction asks for a 19-field JSON schema (including an array-of-URLs field) per
-// window — confirmed via multiple live runs that the default 7B model reliably fills simple
-// string/number fields but essentially never populates the images array no matter how the prompt
-// is worded, nor via a dedicated narrower second call. A bigger model for this one purpose only
-// (chat generation is untouched) is the next real lever.
-const MANAGED_MODEL_LISTING_EXTRACTION = process.env.MANAGED_MODEL_LISTING_EXTRACTION ?? "qwen/qwen-2.5-72b-instruct";
+// Tried qwen-2.5-72b-instruct here for listing_extraction's images-array problem — reverted.
+// Confirmed via direct, isolated test calls: qwen-2.5-72b-instruct + the required
+// `provider: { zdr: true, data_collection: "deny" }` routing (see generate() below — this is a
+// deliberate compliance requirement, not something to relax to fix this) together leave almost no
+// eligible fast provider for this specific model; body streaming took 60s+ and never completed,
+// vs 7B+ZDR responding in ~300ms and 72B WITHOUT zdr responding in ~1s. The slowness is specific
+// to the ZDR+72B combination, not the prompt or the model's general capability. Defaults back to
+// the same model as everything else until a bigger model with real ZDR-compliant capacity is
+// identified — override via env if testing a different candidate.
+const MANAGED_MODEL_LISTING_EXTRACTION = process.env.MANAGED_MODEL_LISTING_EXTRACTION ?? MANAGED_MODEL;
 
 function modelForPurpose(purpose: GenerateRequest["purpose"]): string {
   return purpose === "listing_extraction" ? MANAGED_MODEL_LISTING_EXTRACTION : MANAGED_MODEL;
