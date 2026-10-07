@@ -29,6 +29,10 @@ jobs:
           # GITHUB_TOKEN was denied package-write (permission_denied: write_package) despite the
           # workflow's own packages:write permission — using a PAT with confirmed write:packages
           # scope instead.
+          # MANUAL FOLLOW-UP (not yet done): GHCR_PAT is currently a broad classic PAT. Rotate it
+          # for a fine-grained PAT scoped to exactly: this repo only (jonathalimax/realwise-aichat),
+          # permission "Contents: Read" + "Packages: Read and write" — nothing else. Classic PATs
+          # can't be scoped to a single repo at all, which is the actual problem being fixed here.
           password: ${{ secrets.GHCR_PAT }}
 
       - uses: docker/setup-buildx-action@v3
