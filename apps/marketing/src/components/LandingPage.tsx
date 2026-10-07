@@ -2,7 +2,7 @@ import { Reveal } from "./Reveal";
 import { CAPABILITY_ICON_PATHS, type NicheConfig } from "../lib/niches";
 
 const WHATSAPP_NUMBER = "5585992265544";
-const DASHBOARD_LOGIN_URL = "/app/login";
+const DASHBOARD_LOGIN_URL = "/imobiliaria/app/login";
 
 function waUrl(context: string) {
   const msg = encodeURIComponent(`Oi! Vi o site da Realwise (${context}) e quero saber mais.`);
@@ -202,12 +202,11 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
       <section id="precos" className="py-20">
         <Reveal className="mx-auto max-w-5xl px-5 text-center">
           <h2 className="font-serif text-3xl text-ink md:text-4xl">Preço</h2>
-          <p className="mx-auto mt-2 max-w-md text-ink-soft">Sem letra miúda. Taxa de setup única, mais a mensalidade.</p>
+          <p className="mx-auto mt-2 max-w-md text-ink-soft">Sem letra miúda. Sem taxa de setup — só a mensalidade.</p>
           <div className="mt-10 grid gap-5 text-left md:grid-cols-3">
             <div className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
               <h3 className="font-serif text-lg">Essencial</h3>
               <div className="mt-2 font-mono text-3xl text-ink">R$297<span className="text-sm font-sans text-muted">/mês</span></div>
-              <div className="text-xs text-muted">+ R$497 de setup</div>
               <ul className="mt-5 flex flex-col gap-2 text-sm text-ink-soft">
                 <li>— 300 conversas/mês</li>
                 <li>— 10 documentos na base</li>
@@ -222,7 +221,6 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
               <span className="absolute -top-3 left-7 rounded-full bg-lime px-3 py-1 text-[0.65rem] font-bold uppercase text-lime-ink">Mais escolhido</span>
               <h3 className="font-serif text-lg">Profissional</h3>
               <div className="mt-2 font-mono text-3xl">R$597<span className="text-sm font-sans opacity-60">/mês</span></div>
-              <div className="text-xs opacity-60">+ R$997 de setup</div>
               <ul className="mt-5 flex flex-col gap-2 text-sm opacity-90">
                 <li>— 1.200 conversas/mês</li>
                 <li>— 50 documentos na base</li>
@@ -237,7 +235,6 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
             <div className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
               <h3 className="font-serif text-lg">Studio</h3>
               <div className="mt-2 font-mono text-3xl text-ink">R$1.197<span className="text-sm font-sans text-muted">/mês</span></div>
-              <div className="text-xs text-muted">+ R$1.997 de setup</div>
               <ul className="mt-5 flex flex-col gap-2 text-sm text-ink-soft">
                 <li>— 4.000 conversas/mês</li>
                 <li>— Documentos ilimitados</li>
@@ -255,7 +252,7 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
       <section className="bg-bg-2 py-16">
         <Reveal className="mx-auto max-w-2xl px-5 text-center">
           <h2 className="font-serif text-2xl text-ink">Estou selecionando os primeiros 5 negócios</h2>
-          <p className="mt-3 text-ink-soft">Setup grátis pra quem entrar agora, em troca de um depoimento depois dos primeiros 30 dias. Prefiro ser honesto: ainda não tenho case publicado — mas o primeiro pode ser o seu.</p>
+          <p className="mt-3 text-ink-soft">Condições especiais pra quem entrar agora, em troca de um depoimento depois dos primeiros 30 dias. Prefiro ser honesto: ainda não tenho case publicado — mas o primeiro pode ser o seu.</p>
           <Pill href={WHATSAPP_URL} className="mx-auto mt-6 px-6 py-3">Quero ser um dos primeiros</Pill>
         </Reveal>
       </section>
@@ -365,8 +362,8 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
           <span className="font-serif text-lg font-bold">Realwise</span>
           <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-ink-soft">
             <a href="/" className="hover:text-ink">Início</a>
-            <a href="/imobiliarias" className="hover:text-ink">Imobiliárias</a>
-            <a href="/concessionarias" className="hover:text-ink">Concessionárias</a>
+            <a href="/imobiliaria" className="hover:text-ink">Imobiliárias</a>
+            <a href="/concessionaria" className="hover:text-ink">Concessionárias</a>
             <a href="#faq" className="hover:text-ink">FAQ</a>
           </nav>
         </div>

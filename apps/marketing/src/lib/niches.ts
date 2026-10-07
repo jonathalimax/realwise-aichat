@@ -106,6 +106,7 @@ export const NICHES: Record<string, NicheConfig> = {
       { title: "Nunca inventa resposta", desc: "Se não sabe algo, admite e te chama — nunca chuta preço ou prazo pro seu cliente." },
     ],
     faqExtra: ["A IA avalia meu carro na troca?", "Ela coleta fotos, km e modelo e já te passa isso pronto — a avaliação final de valor continua sendo sua."],
+    earlyAccess: true,
   },
   estetica: {
     slug: "estetica",

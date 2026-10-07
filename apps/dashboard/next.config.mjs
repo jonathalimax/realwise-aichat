@@ -2,5 +2,5 @@
 export default {
   reactStrictMode: true,
   output: "standalone",
-  basePath: "/app",
+  basePath: "/imobiliaria/app",
 };

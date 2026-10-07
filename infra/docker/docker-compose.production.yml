@@ -69,7 +69,7 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.http.routers.realwise-dashboard.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/app`)
+      - traefik.http.routers.realwise-dashboard.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/imobiliaria/app`)
       - traefik.http.routers.realwise-dashboard.entrypoints=https
       - traefik.http.routers.realwise-dashboard.tls=true
       - traefik.http.routers.realwise-dashboard.tls.certresolver=letsencrypt

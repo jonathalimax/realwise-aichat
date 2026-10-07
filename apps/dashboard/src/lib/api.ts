@@ -1,5 +1,5 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3006/api";
-const BASE_PATH = "/app";
+const BASE_PATH = "/imobiliaria/app";
 
 async function request(path: string, options?: RequestInit) {
   const res = await fetch(`${API_URL}${path}`, {

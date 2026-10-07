@@ -3,7 +3,7 @@ import { Reveal } from "../components/Reveal";
 const WHATSAPP_NUMBER = "5585992265544";
 const WHATSAPP_MSG = encodeURIComponent("Oi! Vi o site da Realwise e quero saber mais.");
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MSG}`;
-const DASHBOARD_LOGIN_URL = "/app/login";
+const DASHBOARD_LOGIN_URL = "/imobiliaria/app/login";
 
 function Pill({ href, className = "", children }: { href: string; className?: string; children: React.ReactNode }) {
   return (
@@ -73,7 +73,7 @@ export default function MarketingHome() {
             <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5">
               <img src="/clara-avatar.jpg" alt="Clara" className="h-8 w-8 flex-none rounded-lg object-cover" />
               <div className="text-left">
-                <div className="text-sm font-semibold">AutoSul Veículos</div>
+                <div className="text-sm font-semibold">Imobiliária Vale Real</div>
                 <div className="flex items-center gap-1 text-[0.7rem] text-positive">
                   <span className="h-1.5 w-1.5 rounded-full bg-positive" /> Clara · Online agora
                 </div>
@@ -81,17 +81,17 @@ export default function MarketingHome() {
             </div>
             <div className="flex flex-col gap-2.5 px-4 py-4 text-left">
               <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-bg-2 px-3.5 py-2.5 text-[0.82rem]">
-                Oi! Posso ajudar com estoque, financiamento ou agendar um test-drive.
+                Oi! Posso ajudar com documentos, valores ou agendar uma visita.
               </div>
               <div className="ml-auto max-w-[75%] rounded-2xl rounded-br-sm bg-ink px-3.5 py-2.5 text-[0.82rem] text-bg">
-                Vocês têm o Corolla 2023?
+                Quais documentos preciso pra alugar?
               </div>
               <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-bg-2 px-3.5 py-2.5 text-[0.82rem]">
-                Temos! Corolla XEi 2023, automático, 18.400 km, R$ 128.900.
+                RG, CPF, comprovante de renda e fiador ou seguro fiança. Quer agendar uma visita?
               </div>
               <div className="flex flex-wrap gap-1.5">
-                <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-[0.68rem] text-ink-soft">Simular financiamento</span>
-                <span className="rounded-full bg-ink px-2.5 py-1 text-[0.68rem] font-semibold text-bg">📅 Test-drive</span>
+                <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-[0.68rem] text-ink-soft">Ver imóveis disponíveis</span>
+                <span className="rounded-full bg-ink px-2.5 py-1 text-[0.68rem] font-semibold text-bg">📅 Agendar visita</span>
               </div>
             </div>
             <div className="flex items-center gap-2 border-t border-border px-4 py-3">
@@ -184,15 +184,16 @@ export default function MarketingHome() {
           <h2 className="font-serif text-3xl text-ink md:text-4xl">Feito pro seu <em className="italic">tipo de negócio</em></h2>
           <p className="mx-auto mt-3 max-w-md text-ink-soft">A entrevista, os exemplos e as respostas mudam de acordo com o seu nicho.</p>
           <div className="mt-10 grid gap-5 sm:grid-cols-2">
-            <a href="/imobiliarias" className="group rounded-3xl border border-border bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+            <a href="/imobiliaria" className="group rounded-3xl border border-border bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
               <h3 className="font-serif text-xl text-ink">Imobiliárias</h3>
               <p className="mt-2 text-sm text-ink-soft">Documentos, fiador, seguro fiança e agendamento de visita — explicado antes do cliente ligar.</p>
               <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-accent">Ver página do nicho <span className="transition-transform group-hover:translate-x-1">→</span></span>
             </a>
-            <a href="/concessionarias" className="group rounded-3xl border border-border bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+            <a href="/concessionaria" className="group relative rounded-3xl border border-border bg-surface p-8 text-left opacity-80 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:opacity-100">
+              <span className="absolute -top-3 right-6 rounded-full bg-lime px-3 py-1 text-[0.65rem] font-bold uppercase text-lime-ink">Em breve</span>
               <h3 className="font-serif text-xl text-ink">Concessionárias</h3>
               <p className="mt-2 text-sm text-ink-soft">Estoque, simulação de financiamento, avaliação de troca e test-drive, direto no chat.</p>
-              <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-accent">Ver página do nicho <span className="transition-transform group-hover:translate-x-1">→</span></span>
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-accent">Entrar na lista de espera <span className="transition-transform group-hover:translate-x-1">→</span></span>
             </a>
           </div>
           <p className="mt-8 text-sm text-ink-soft">
@@ -234,12 +235,11 @@ export default function MarketingHome() {
       <section id="precos" className="py-20">
         <Reveal className="mx-auto max-w-5xl px-5 text-center">
           <h2 className="font-serif text-3xl text-ink md:text-4xl">Preço</h2>
-          <p className="mx-auto mt-2 max-w-md text-ink-soft">Sem letra miúda. Taxa de setup única, mais a mensalidade.</p>
+          <p className="mx-auto mt-2 max-w-md text-ink-soft">Sem letra miúda. Sem taxa de setup — só a mensalidade.</p>
           <div className="mt-10 grid gap-5 text-left md:grid-cols-2">
             <div className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
               <h3 className="font-serif text-lg">Essencial</h3>
               <div className="mt-2 font-mono text-3xl text-ink">R$297<span className="text-sm font-sans text-muted">/mês</span></div>
-              <div className="text-xs text-muted">+ R$99 de setup</div>
               <ul className="mt-5 flex flex-col gap-2 text-sm text-ink-soft">
                 <li>— 100 conversas/mês</li>
                 <li>— 10 documentos na base</li>
@@ -253,7 +253,6 @@ export default function MarketingHome() {
               <span className="absolute -top-3 left-7 rounded-full bg-lime px-3 py-1 text-[0.65rem] font-bold uppercase text-lime-ink">Mais escolhido</span>
               <h3 className="font-serif text-lg">Profissional</h3>
               <div className="mt-2 font-mono text-3xl">R$697<span className="text-sm font-sans opacity-60">/mês</span></div>
-              <div className="text-xs opacity-60">+ R$997 de setup</div>
               <span className="mt-3 inline-block rounded-full bg-lime px-2.5 py-1 text-[0.68rem] font-bold text-lime-ink">50x mais conversas que o Essencial</span>
               <ul className="mt-4 flex flex-col gap-2 text-sm opacity-90">
                 <li>— 5.000 conversas/mês</li>
@@ -274,7 +273,7 @@ export default function MarketingHome() {
       <section className="bg-bg-2 py-16">
         <Reveal className="mx-auto max-w-2xl px-5 text-center">
           <h2 className="font-serif text-2xl text-ink">Estou selecionando os primeiros 5 negócios</h2>
-          <p className="mt-3 text-ink-soft">Setup grátis pra quem entrar agora, em troca de um depoimento depois dos primeiros 30 dias. Prefiro ser honesto: ainda não tenho case publicado — mas o primeiro pode ser o seu.</p>
+          <p className="mt-3 text-ink-soft">Condições especiais pra quem entrar agora, em troca de um depoimento depois dos primeiros 30 dias. Prefiro ser honesto: ainda não tenho case publicado — mas o primeiro pode ser o seu.</p>
           <Pill href={WHATSAPP_URL} className="mx-auto mt-6 px-6 py-3">Quero ser um dos primeiros</Pill>
         </Reveal>
       </section>
