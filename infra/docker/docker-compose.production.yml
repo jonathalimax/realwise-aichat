@@ -10,6 +10,15 @@ services:
     networks:
       - default
       - shared-infra
+    # node:20-slim has no curl/wget (confirmed) -- Node's own http module is always present, so
+    # this checks for any non-5xx response (any valid HTTP response, including a 404 on a path
+    # with no handler, proves the server is actually listening and answering).
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3006/api', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     labels:
       - traefik.enable=true
       - traefik.http.routers.realwise-api.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/api`)
@@ -29,6 +38,11 @@ services:
       - shared-infra
     depends_on:
       - ollama-embeddings
+    # No HTTP server here (BullMQ worker process only, no listening port) -- a real healthcheck
+    # would need to verify the worker is actually consuming the queue, not just that the
+    # container hasn't exited (restart: unless-stopped already covers a hard crash). Skipped
+    # rather than adding a "node -e process.exit(0)"-style check that would always report
+    # healthy regardless of whether the worker is actually processing jobs.
 
   # Chat generation moved to the managed provider in production, but embedText() (apps/worker/
   # src/embeddings.ts) always calls Ollama directly with no managed-provider fallback — there was
@@ -50,11 +64,23 @@ services:
     networks:
       - default
       - shared-infra
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   chat:
     image: ghcr.io/jonathalimax/realwise-chat:latest
     pull_policy: always
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     labels:
       - traefik.enable=true
       - traefik.http.routers.realwise-chat.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/client/conversation`)
@@ -67,6 +93,12 @@ services:
     image: ghcr.io/jonathalimax/realwise-dashboard:latest
     pull_policy: always
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     labels:
       - traefik.enable=true
       - traefik.http.routers.realwise-dashboard.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/imobiliaria/app`)
@@ -79,6 +111,12 @@ services:
     image: ghcr.io/jonathalimax/realwise-admin:latest
     pull_policy: always
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     labels:
       - traefik.enable=true
       - traefik.http.routers.realwise-admin.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/admin`)
@@ -91,6 +129,12 @@ services:
     image: ghcr.io/jonathalimax/realwise-marketing:latest
     pull_policy: always
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     labels:
       - traefik.enable=true
       - traefik.http.middlewares.realwise-redirect-https.redirectscheme.scheme=https

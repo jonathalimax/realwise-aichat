@@ -298,6 +298,11 @@ model Conversation {
   // Explicit "Selecionar e continuar" pin — when set, follow-up questions resolve against this
   // listing directly instead of the message-history lookback in resolveContextListing.
   pinnedListingId     String?
+  // Last explicit transaction intent ("aluguel" | "venda") the visitor stated in this
+  // conversation — persists across turns so a keyword-less follow-up ("Quais imóveis
+  // disponíveis?") still carries the previously stated rental/purchase intent instead of
+  // dropping the transaction filter entirely.
+  pinnedTransaction   String?
 
   messages            Message[]
   appointments        Appointment[]

@@ -776,6 +776,29 @@ export class ChatService {
     return `${groundingAllowlistText} ${listingsText}`;
   }
 
+  // Reads the current explicit rental/purchase keyword (if any) out of this message, and keeps
+  // Conversation.pinnedTransaction in sync with it — mirrors the pinnedListingId pattern (see
+  // pinListing below): an explicit current-message keyword always overwrites whatever was
+  // pinned before (e.g. visitor switches from "alugar" to "comprar" mid-conversation), and once
+  // set, the pin persists across later turns that don't restate it. Returns the transaction value
+  // that should apply to THIS turn (explicit keyword if present, else whatever was already
+  // pinned), so callers never have to re-derive it.
+  private async syncPinnedTransaction(businessId: string, conversationId: string, visitorText: string): Promise<string | null> {
+    const explicitModo = this.flow.extractTransactionKeyword(visitorText);
+    if (explicitModo) {
+      await this.prisma.client.conversation.update({
+        where: { id: conversationId },
+        data: { pinnedTransaction: explicitModo },
+      });
+      return explicitModo;
+    }
+    const conversation = await this.prisma.client.conversation.findFirst({
+      where: { id: conversationId, businessId },
+      select: { pinnedTransaction: true },
+    });
+    return conversation?.pinnedTransaction ?? null;
+  }
+
   // Free-text questions that are genuinely listing-shaped (e.g. "quais imóveis vocês tem") get a
   // best-effort structured `listings` array using filters inferred from the visitor's own text
   // (rental vs purchase, item type) — same strict grounding discipline as the scripted
@@ -784,9 +807,11 @@ export class ChatService {
   // the business genuinely has inventory, retry once unfiltered before giving up.
   private async resolveBrowsingListings(
     businessId: string,
+    conversationId: string,
     niche: string,
     visitorText: string,
     chunkText: string,
+    pinnedTransaction: string | null,
   ): Promise<ListingItem[] | undefined> {
     // Referent-only follow-ups ("Qual o valor e quantos quartos tem desse imóvel?") must never be
     // hijacked into the generic listing-cards browse path, even though they contain item/intent
@@ -796,13 +821,28 @@ export class ChatService {
     if (this.flow.isReferentOnlyFollowUp(visitorText)) return undefined;
     if (!this.flow.isListingQuery(visitorText, chunkText)) return undefined;
 
+    // A listing already pinned for this conversation ("Selecionar e continuar") means the visitor
+    // has a specific item in focus — a short follow-up that happens to also match the generic
+    // listing-query keywords (e.g. "Quando está disponível para entrar?" matches "disponível")
+    // must NOT re-trigger the full browse carousel; it should fall through to the existing
+    // context-listing RAG path instead, which already answers grounded on that specific listing.
+    // Only an EXPLICIT reset signal (genuinely new item type, new filter, or "ver outras opções"
+    // phrasing) is allowed to break out of the pinned listing and run a fresh generic browse —
+    // see hasBrowsingResetSignal's own comment for the full heuristic and the conservative
+    // "favor falling through to pinned listing" default this intentionally keeps.
+    const pinnedListingId = await this.resolveContextListing(businessId, conversationId);
+    if (pinnedListingId) {
+      const pinnedSummary = await this.listingsService.getContextSummaryForChat(businessId, pinnedListingId);
+      if (!this.flow.hasBrowsingResetSignal(visitorText, pinnedSummary)) return undefined;
+    }
+
     // Free text has no structured filter params the way the scripted flow does — if the business
     // has real extracted inventory, ground on that directly (most-recently-updated active
     // listings) rather than re-extracting from retrieved chunks every time. Only fall back to the
     // LLM-chunk extraction path for businesses with zero rows (new/never-extracted).
     const hasListings = await this.listingsService.hasAnyListings(businessId);
     if (hasListings) {
-      const filters = await this.flow.listingFiltersForText(businessId, niche, visitorText);
+      const filters = await this.flow.listingFiltersForText(businessId, niche, visitorText, pinnedTransaction);
       const dbListings = await this.listingsService.queryForChat(businessId, filters, 6);
       if (dbListings.length > 0) return dbListings;
       const unfilteredListings = await this.listingsService.queryForChat(businessId, {}, 6);
@@ -987,12 +1027,24 @@ export class ChatService {
       retrievalQueryText,
     );
     const preliminaryChunkTextForBrowsing = preliminaryChunks.map((c) => c.content).join("\n\n").slice(0, 4000);
+    // Persists (or reads back) this conversation's explicit rental/purchase intent BEFORE
+    // resolving browsing listings, so a keyword-less follow-up ("Quais imóveis disponíveis?")
+    // after an earlier "Quero alugar" still carries the rental filter instead of mixing aluguel
+    // and venda listings together.
+    const pinnedTransaction = await this.syncPinnedTransaction(businessId, conversationId, visitorText);
     // Real listings live in the structured Listing table, not in document chunks — a browsing
     // question ("gostaria de ver os imóveis") can legitimately score below the chunk-relevance
     // floor (there's no document chunk that textually matches generic browsing phrasing) even
     // though the business has real inventory to show. Check this BEFORE the zero-chunk abstention
     // below, or a real browsing query gets abstained before ever reaching resolveBrowsingListings.
-    const earlyBrowsingListings = await this.resolveBrowsingListings(businessId, niche, visitorText, preliminaryChunkTextForBrowsing);
+    const earlyBrowsingListings = await this.resolveBrowsingListings(
+      businessId,
+      conversationId,
+      niche,
+      visitorText,
+      preliminaryChunkTextForBrowsing,
+      pinnedTransaction,
+    );
 
     // Zero retrieved chunks means there's nothing to ground the model on — never send an empty-context
     // prompt and hope it abstains on its own, that's how it hallucinates confidently. This check
@@ -1319,11 +1371,21 @@ export class ChatService {
       visitorText,
     );
     const preliminaryChunkTextForBrowsing = preliminaryChunks.map((c) => c.content).join("\n\n").slice(0, 4000);
+    // Same pinnedTransaction sync as generateAnswer's equivalent block above — streaming
+    // counterpart, see there for the full reasoning.
+    const streamPinnedTransaction = await this.syncPinnedTransaction(businessId, conversationId, visitorText);
     // Real listings live in the structured Listing table, not in document chunks — a browsing
     // question can legitimately score below the chunk-relevance floor even though the business has
     // real inventory. Check this BEFORE the zero-chunk abstention, or a real browsing query gets
     // abstained before ever reaching resolveBrowsingListings.
-    const earlyBrowsingListings = await this.resolveBrowsingListings(businessId, niche, visitorText, preliminaryChunkTextForBrowsing);
+    const earlyBrowsingListings = await this.resolveBrowsingListings(
+      businessId,
+      conversationId,
+      niche,
+      visitorText,
+      preliminaryChunkTextForBrowsing,
+      streamPinnedTransaction,
+    );
 
     // Only resolved here (not eagerly above like generateAnswer's retrievalQueryText) — needed by
     // the discovery-turn exemption's "no context listing attached" condition just below.

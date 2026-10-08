@@ -57,14 +57,18 @@ function Gallery({ title, photos }: { title: string; photos: string[] }) {
       >
         {photos.map((photo, i) =>
           failed[i] ? null : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={`${photo}-${i}`}
-              src={photo}
-              alt={title}
-              className="h-56 w-full flex-none snap-start object-cover"
-              onError={() => setFailed((prev) => ({ ...prev, [i]: true }))}
-            />
+            // Fixed aspect-ratio box (rather than a fixed pixel height) + object-cover so the
+            // hero image scales cleanly across any viewport width instead of looking
+            // stretched/cropped oddly on narrow or wide screens.
+            <div key={`${photo}-${i}`} className="aspect-[4/3] w-full flex-none snap-start overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={photo}
+                alt={title}
+                className="h-full w-full object-cover"
+                onError={() => setFailed((prev) => ({ ...prev, [i]: true }))}
+              />
+            </div>
           ),
         )}
       </div>
@@ -178,7 +182,7 @@ export function ListingDetailOverlay({ listing, onClose }: { listing: Listing; o
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 block rounded-full bg-accent px-4 py-3 text-center text-sm font-medium text-white"
+                className="mt-4 inline-block w-auto max-w-xs rounded-full bg-accent px-6 py-3 text-center text-sm font-medium text-white"
               >
                 Ver no site da Allure
               </a>

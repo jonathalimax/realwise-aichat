@@ -1315,6 +1315,20 @@ export class FlowService {
     };
   }
 
+  // Keyword-only extraction of the explicit transaction intent ("aluguel"/"venda") from a single
+  // message's raw text — split out of listingFiltersForText so ChatService can also call this
+  // directly to decide whether THIS turn states an explicit intent that should overwrite the
+  // conversation's pinnedTransaction (explicit current-message keyword always wins over the
+  // stored one, never the reverse).
+  extractTransactionKeyword(visitorText: string): "aluguel" | "venda" | undefined {
+    const normalized = normalize(visitorText);
+    const rentalWords = ["aluguel", "alugar", "locacao", "locar", "alugo", "aluga"];
+    const purchaseWords = ["comprar", "compra", "venda", "vender", "comprando"];
+    if (rentalWords.some((w) => normalized.includes(w))) return "aluguel";
+    if (purchaseWords.some((w) => normalized.includes(w))) return "venda";
+    return undefined;
+  }
+
   // Derives a best-effort filters object straight from a free-text browsing question (e.g.
   // "quais imóveis vocês tem para alugar") for ChatService's RAG path — routes through the same
   // chatFiltersFor() mapping the scripted "resultados" node already uses, so the two paths never
@@ -1323,16 +1337,25 @@ export class FlowService {
   // listingType value that doesn't exist for this business would just produce an empty result and
   // regress to zero cards instead of the broader "show something" fallback. Deliberately leaves
   // neighborhood/price out of this pass — free text has no reliable signal for those yet.
-  async listingFiltersForText(businessId: string, niche: string, visitorText: string): Promise<ChatQueryFilters> {
+  // `pinnedTransaction`, when given, is the conversation's previously stated rental/purchase
+  // intent (Conversation.pinnedTransaction) — used as a fallback ONLY when this exact message has
+  // no explicit rental/purchase keyword of its own, so a keyword-less follow-up ("Quais imóveis
+  // disponíveis?") after an earlier "Quero alugar" still carries the rental filter instead of
+  // silently showing both aluguel and venda listings mixed together.
+  async listingFiltersForText(
+    businessId: string,
+    niche: string,
+    visitorText: string,
+    pinnedTransaction?: string | null,
+  ): Promise<ChatQueryFilters> {
     const normalized = normalize(visitorText);
     const params: Record<string, unknown> = {};
 
-    const rentalWords = ["aluguel", "alugar", "locacao", "locar", "alugo", "aluga"];
-    const purchaseWords = ["comprar", "compra", "venda", "vender", "comprando"];
-    if (rentalWords.some((w) => normalized.includes(w))) {
-      params.modo = "aluguel";
-    } else if (purchaseWords.some((w) => normalized.includes(w))) {
-      params.modo = "venda";
+    const explicitModo = this.extractTransactionKeyword(visitorText);
+    if (explicitModo) {
+      params.modo = explicitModo;
+    } else if (pinnedTransaction === "aluguel" || pinnedTransaction === "venda") {
+      params.modo = pinnedTransaction;
     }
 
     const dbTypes = await this.listingsService.distinctListingTypes(businessId);
@@ -1441,6 +1464,51 @@ export class FlowService {
     const demonstratives = /\b(desse|deste|dessa|desta|nesse|neste|nessa|nesta|nela|nele|esse|este|essa|esta|aquele|aquela|mesmo|mesma)\b/;
     const itemWords = /\b(imovel|imoveis|casa|casas|apartamento|apartamentos|carro|carros|veiculo|veiculos)\b/;
     return demonstratives.test(normalized) && itemWords.test(normalized);
+  }
+
+  // Cheap keyword heuristic used by ChatService.resolveBrowsingListings when a listing is already
+  // pinned for this conversation (Conversation.pinnedListingId) — decides whether THIS message is
+  // an explicit signal to abandon that pinned listing and run a fresh generic browse instead of
+  // falling through to the pinned-listing context/RAG answer. Deliberately conservative: when
+  // ambiguous, this returns false (no reset), because the safer default here is the one the bug
+  // report asks for — a short follow-up about the pinned listing ("Quando está disponível para
+  // entrar?") must NOT re-trigger the generic carousel. Three explicit reset signals:
+  // 1. An explicit "see other options" browsing-reset phrase ("outras opções", "ver mais",
+  //    "outras alternativas", "quero ver outros/outras").
+  // 2. A genuinely NEW distinct item-type word in this message that differs from the pinned
+  //    listing's own item-type word (e.g. pinned listing is an "apartamento" but the message says
+  //    "casa") — a same-type mention (or no item word at all) is not a reset.
+  // 3. An explicit neighborhood/price/bedroom filter word that isn't already part of the pinned
+  //    listing's own context summary — left conservative/best-effort since free text has no
+  //    reliable structured signal for this, same caveat listingFiltersForText already documents.
+  hasBrowsingResetSignal(visitorText: string, pinnedListingContextSummary: string | null): boolean {
+    const normalized = normalize(visitorText);
+
+    const resetPhrases = [
+      "outras opcoes", "outras alternativas", "ver mais", "ver outros", "ver outras",
+      "quero ver outros", "quero ver outras", "mostra outras", "mostre outras",
+    ];
+    if (resetPhrases.some((p) => normalized.includes(p))) return true;
+
+    const itemWords = [
+      "imovel", "imoveis", "casa", "casas", "apartamento", "apartamentos", "carro", "carros", "veiculo", "veiculos",
+      "kitnet", "studio", "sobrado", "cobertura", "sala", "loja", "terreno", "apto", "galpao", "chacara",
+    ];
+    const mentionedItemWords = itemWords.filter((w) => normalized.includes(w));
+    if (mentionedItemWords.length > 0) {
+      const normalizedPinnedSummary = normalize(pinnedListingContextSummary ?? "");
+      // A new item word is only a reset signal if it's NOT also present in the pinned listing's
+      // own summary (title/type) — otherwise a message that merely repeats the pinned listing's
+      // own type ("esse apartamento") would be falsely treated as switching to a new item type.
+      const hasGenuinelyNewItemWord = mentionedItemWords.some((w) => !normalizedPinnedSummary.includes(w));
+      if (hasGenuinelyNewItemWord) return true;
+    }
+
+    const filterWords = ["bairro", "regiao", "preco", "valor maximo", "ate r$", "quartos", "dormitorios"];
+    const hasNewFilterWord = filterWords.some((w) => normalized.includes(w) && !normalize(pinnedListingContextSummary ?? "").includes(w));
+    if (hasNewFilterWord) return true;
+
+    return false;
   }
 
   // Cheap keyword heuristic for free-text chat messages that are genuinely asking for photos

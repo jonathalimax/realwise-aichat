@@ -57,58 +57,64 @@ function ListingCard({
   onSelect?: (listing: Listing) => void;
 }) {
   const imageUrl = safeHttpUrl(listing.imageUrl);
-  const url = safeHttpUrl(listing.url);
   const [imageFailed, setImageFailed] = useState(false);
   return (
     <Card className="flex h-[23rem] w-56 shrink-0 flex-col overflow-hidden">
-      <button
-        type="button"
-        onClick={() => onOpen(listing)}
-        className="flex flex-1 w-full flex-col overflow-hidden text-left active:scale-[0.98] transition-transform"
-      >
-        <div className="flex h-32 w-full shrink-0 items-center justify-center bg-border/40">
-          {imageUrl && !imageFailed ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imageUrl}
-              alt={listing.title}
-              className="h-32 w-full object-cover"
-              onError={() => setImageFailed(true)}
-            />
-          ) : (
-            <span className="text-3xl" aria-hidden>
-              🏠
-            </span>
-          )}
-        </div>
-        <CardContent className="flex flex-1 flex-col p-3">
-          <div className="line-clamp-2 text-sm font-semibold text-ink">{listing.title}</div>
-          {listing.price && <div className="mt-1 text-sm font-semibold text-accent">{listing.price}</div>}
-          {listing.description && <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{listing.description}</p>}
-        </CardContent>
-      </button>
-      {/* Footer row lives outside the main clickable card button so "Selecionar e continuar" can
-          sit next to "Ver anúncio" without either tap target swallowing the other. */}
-      <div className="flex items-center gap-2 px-3 pb-3 pt-1">
-        {/* Always reserve this pill's footprint, even with no real url, so every card in the
-            carousel lines up — an invisible spacer keeps the exact same box without offering a
-            dead link. */}
-        <span
-          className={`flex-1 rounded-full px-3 py-1.5 text-center text-xs font-medium ${
-            url ? "bg-accent text-white" : "invisible"
-          }`}
+      {/* flex-col + h-full here (rather than relying on the button below being flex-1) so the
+          footer row below is pinned to the bottom via mt-auto regardless of how much vertical
+          space the title/price/description block actually ends up using — every card in a
+          carousel row lines its buttons up at the same height even when text length differs. */}
+      <div className="flex h-full flex-col">
+        <button
+          type="button"
+          onClick={() => onOpen(listing)}
+          className="flex w-full flex-col overflow-hidden text-left active:scale-[0.98] transition-transform"
         >
-          Ver anúncio
-        </span>
-        {listing.id && onSelect && (
+          <div className="flex h-32 w-full shrink-0 items-center justify-center bg-border/40">
+            {imageUrl && !imageFailed ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={imageUrl}
+                alt={listing.title}
+                className="h-32 w-full object-cover"
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <span className="text-3xl" aria-hidden>
+                🏠
+              </span>
+            )}
+          </div>
+          <CardContent className="flex flex-col p-3">
+            <div className="line-clamp-2 text-sm font-semibold text-ink">{listing.title}</div>
+            {listing.price && <div className="mt-1 text-sm font-semibold text-accent">{listing.price}</div>}
+            {listing.description && <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{listing.description}</p>}
+          </CardContent>
+        </button>
+        {/* Footer row lives outside the main clickable card button so "Selecionar" can sit next to
+            "Ver anúncio" without either tap target swallowing the other — mt-auto pins it to the
+            bottom of the h-full flex column above regardless of content length. "Ver anúncio" is
+            a real button wired to the same onOpen the rest of the card uses, whether or not a
+            photo is present — its destination never depends on image presence, only on whether we
+            have anything worth opening (listing itself, always true here). */}
+        <div className="mt-auto flex items-center gap-2 px-3 pb-3 pt-1">
           <button
             type="button"
-            onClick={() => onSelect(listing)}
-            className="flex-1 rounded-full border border-accent px-2 py-1.5 text-center text-xs font-medium text-accent active:scale-[0.98] transition-transform"
+            onClick={() => onOpen(listing)}
+            className="flex-1 rounded-full bg-accent px-3 py-1.5 text-center text-xs font-medium text-white active:scale-[0.98] transition-transform"
           >
-            Selecionar e continuar
+            Ver anúncio
           </button>
-        )}
+          {listing.id && onSelect && (
+            <button
+              type="button"
+              onClick={() => onSelect(listing)}
+              className="flex-1 rounded-full border border-accent px-2 py-1.5 text-center text-xs font-medium text-accent active:scale-[0.98] transition-transform"
+            >
+              Selecionar
+            </button>
+          )}
+        </div>
       </div>
     </Card>
   );
@@ -775,7 +781,7 @@ export function ChatScreen({
     }
   }
 
-  // "Selecionar e continuar" — pins the listing server-side, then sends a natural message
+  // "Selecionar" — pins the listing server-side, then sends a natural message
   // through the existing send flow so the visitor sees a conversational transition and gets an
   // immediate acknowledging response grounded on that specific listing.
   async function handleSelectListing(listing: Listing) {

@@ -42,37 +42,42 @@ function PreviewCard({ listing }: { listing: any }) {
 
   return (
     <div className="flex h-[23rem] w-56 shrink-0 flex-col overflow-hidden rounded-card border border-border bg-surface">
-      <div className="flex flex-1 w-full flex-col overflow-hidden text-left">
-        <div className="flex h-32 w-full shrink-0 items-center justify-center bg-border/40">
-          {imageUrl && !imageFailed ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imageUrl}
-              alt={listing.title}
-              className="h-32 w-full object-cover"
-              onError={() => setImageFailed(true)}
-            />
-          ) : (
-            <span className="text-3xl" aria-hidden>
-              🏠
-            </span>
-          )}
+      {/* flex-col h-full + mt-auto on the footer below, mirroring ChatScreen.tsx's ListingCard,
+          so the "Ver anúncio" row always lines up at the same height regardless of content
+          length. */}
+      <div className="flex h-full flex-col">
+        <div className="flex w-full flex-col overflow-hidden text-left">
+          <div className="flex h-32 w-full shrink-0 items-center justify-center bg-border/40">
+            {imageUrl && !imageFailed ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={imageUrl}
+                alt={listing.title}
+                className="h-32 w-full object-cover"
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <span className="text-3xl" aria-hidden>
+                🏠
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col p-3">
+            <div className="line-clamp-2 text-sm font-semibold text-ink">{listing.title}</div>
+            {price && <div className="mt-1 text-sm font-semibold text-accent">{price}</div>}
+            {listing.description && <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{listing.description}</p>}
+          </div>
         </div>
-        <div className="flex flex-1 flex-col p-3">
-          <div className="line-clamp-2 text-sm font-semibold text-ink">{listing.title}</div>
-          {price && <div className="mt-1 text-sm font-semibold text-accent">{price}</div>}
-          {listing.description && <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{listing.description}</p>}
+        <div className="mt-auto flex items-center gap-2 px-3 pb-3 pt-1">
+          <span
+            className={cn(
+              "flex-1 rounded-full px-3 py-1.5 text-center text-xs font-medium",
+              url ? "bg-accent text-white" : "invisible",
+            )}
+          >
+            Ver anúncio
+          </span>
         </div>
-      </div>
-      <div className="flex items-center gap-2 px-3 pb-3 pt-1">
-        <span
-          className={cn(
-            "flex-1 rounded-full px-3 py-1.5 text-center text-xs font-medium",
-            url ? "bg-accent text-white" : "invisible",
-          )}
-        >
-          Ver anúncio
-        </span>
       </div>
     </div>
   );
