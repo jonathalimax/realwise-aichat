@@ -94,13 +94,35 @@ jobs:
             exit 1
           fi
           DB_URL=$(docker exec "$API_CONTAINER" printenv DATABASE_URL)
-          NETWORK=$(docker inspect "$API_CONTAINER" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' | tr ' ' '\n' | grep -v '^$' | head -1)
+          # The api container is attached to multiple docker networks, but only one of them
+          # actually routes to the postgres container -- which one is NOT guaranteed to be first
+          # in `docker inspect`'s network map (Go map iteration order is unspecified/randomized
+          # per-process), so picking "the first network" is a real, intermittent failure mode
+          # (observed directly: P1001 "Can't reach database server" on an otherwise-correct run).
+          # Instead: connect the migration container to EVERY network the api container is on, so
+          # whichever one actually reaches postgres always works, regardless of ordering.
+          NETWORKS=$(docker inspect "$API_CONTAINER" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' | tr ' ' '\n' | grep -v '^$')
+          if [ -z "$NETWORKS" ]; then
+            echo "Could not resolve any docker network for $API_CONTAINER." >&2
+            exit 1
+          fi
 
-          docker run --rm --network "$NETWORK" -v /root/migrate-tmp:/app -w /app \
+          FIRST_NETWORK=$(echo "$NETWORKS" | head -1)
+          docker create --name db-migrate-runner --network "$FIRST_NETWORK" \
+            -v /root/migrate-tmp:/app -w /app \
             -e DATABASE_URL="$DB_URL" node:20-alpine \
             sh -c "npm install -g prisma@6.19.3 >/dev/null 2>&1 && prisma migrate deploy"
+          echo "$NETWORKS" | tail -n +2 | while read -r net; do
+            [ -n "$net" ] && docker network connect "$net" db-migrate-runner
+          done
+          set +e
+          docker start -a db-migrate-runner
+          MIGRATE_EXIT=$?
+          set -e
+          docker rm -f db-migrate-runner >/dev/null 2>&1 || true
 
           rm -rf /root/migrate-tmp
+          exit $MIGRATE_EXIT
           REMOTE
 
   deploy:
