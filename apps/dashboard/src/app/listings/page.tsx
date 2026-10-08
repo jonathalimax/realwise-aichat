@@ -14,8 +14,9 @@ function statusBadgeVariant(status: string) {
     case "active":
       return "positive" as const;
     case "sold":
+      return "tertiary" as const;
     case "rented":
-      return "neutral" as const;
+      return "secondary" as const;
     default:
       return "warning" as const;
   }

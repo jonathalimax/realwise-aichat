@@ -27,6 +27,12 @@ export default {
         "negative-soft": "rgb(var(--negative-soft) / <alpha-value>)",
         warning: "rgb(var(--warning) / <alpha-value>)",
         "warning-soft": "rgb(var(--warning-soft) / <alpha-value>)",
+        secondary: "rgb(var(--secondary) / <alpha-value>)",
+        "secondary-soft": "rgb(var(--secondary-soft) / <alpha-value>)",
+        "secondary-ink": "rgb(var(--secondary-ink) / <alpha-value>)",
+        tertiary: "rgb(var(--tertiary) / <alpha-value>)",
+        "tertiary-soft": "rgb(var(--tertiary-soft) / <alpha-value>)",
+        "tertiary-ink": "rgb(var(--tertiary-ink) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],

@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --bg: 232 230 224;
-  --bg-2: 221 218 210;
+  --bg: 255 255 255;
+  --bg-2: 255 252 250;
   --surface: 255 255 255;
-  --surface-sunken: 243 241 235;
-  --border: 215 211 201;
-  --border-strong: 197 192 179;
+  --surface-sunken: 255 250 248;
+  --border: 221 206 193;
+  --border-strong: 205 188 173;
   --ink: 14 43 34;
   --ink-soft: 69 84 76;
   --muted: 132 140 132;
@@ -24,6 +24,12 @@
   --negative-soft: 251 234 228;
   --warning: 184 134 43;
   --warning-soft: 247 238 214;
+  --secondary: 247 168 140;
+  --secondary-soft: 253 232 224;
+  --secondary-ink: 140 69 48;
+  --tertiary: 168 187 240;
+  --tertiary-soft: 228 233 251;
+  --tertiary-ink: 56 67 125;
 }
 
 .dark {
@@ -48,6 +54,12 @@
   --negative-soft: 58 36 30;
   --warning: 224 189 112;
   --warning-soft: 58 49 27;
+  --secondary: 230 140 110;
+  --secondary-soft: 58 36 30;
+  --secondary-ink: 247 198 181;
+  --tertiary: 150 170 235;
+  --tertiary-soft: 30 36 58;
+  --tertiary-ink: 210 217 248;
 }
 
 @layer base {

@@ -26,8 +26,8 @@ const STATUS_LABEL: Record<string, string> = {
   closed: "Encerrada",
 };
 
-const STATUS_VARIANT: Record<string, "neutral" | "positive" | "negative" | "warning"> = {
-  active: "neutral",
+const STATUS_VARIANT: Record<string, "neutral" | "positive" | "negative" | "warning" | "tertiary"> = {
+  active: "tertiary",
   idle: "neutral",
   escalated: "warning",
   closed: "neutral",

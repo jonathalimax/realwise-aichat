@@ -11,6 +11,8 @@ const badgeVariants = cva("inline-flex items-center rounded-full px-2.5 py-0.5 t
       negative: "bg-negative-soft text-negative",
       warning: "bg-warning-soft text-warning",
       accent: "bg-accent-soft text-accent-ink",
+      secondary: "bg-secondary-soft text-secondary-ink",
+      tertiary: "bg-tertiary-soft text-tertiary-ink",
       trendUp: "gap-1 rounded-pill border border-border text-positive",
       trendDown: "gap-1 rounded-pill border border-border text-negative",
       trendFlat: "gap-1 rounded-pill border border-border text-ink-soft",

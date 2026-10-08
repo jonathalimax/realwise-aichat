@@ -4,14 +4,14 @@
 
 /* light is default here — chat is a widget embedded in a business's brand context.
    .dark vars stay wired for a future per-business theme toggle, but <html> never gets the class.
-   This palette is deliberately airier/warmer than admin/dashboard's greige — a pale, slightly
-   warm-tinted off-white rather than a flat canvas, per the fintech-dashboard + light-messenger
-   reference direction. */
+   Updated to a pure-white base (matching the admin/dashboard palette refinement) instead of the
+   warm off-white used in the earlier pass — the tenant's own brandColor (--tenant-accent below)
+   now carries the "warmth"/personality per business, so the house canvas stays neutral-white. */
 :root {
-  --bg: 250 248 243;
-  --bg-2: 243 240 232;
+  --bg: 255 255 255;
+  --bg-2: 255 252 250;
   --surface: 255 255 255;
-  --border: 231 227 217;
+  --border: 221 206 193;
   --ink: 20 36 30;
   --ink-soft: 86 98 90;
   --muted: 150 156 146;
@@ -27,6 +27,15 @@
   --negative-soft: 251 234 228;
   --warning: 184 134 43;
   --warning-soft: 247 238 214;
+  /* Secondary/tertiary pastel accents, added for sparing use in neutral/non-branded chrome
+     (system messages, timestamps, non-branded badges) only — the tenant's --tenant-accent
+     below remains the dominant brand color story for this widget, these are a light touch. */
+  --secondary: 247 168 140;
+  --secondary-soft: 253 232 224;
+  --secondary-ink: 140 69 48;
+  --tertiary: 168 187 240;
+  --tertiary-soft: 228 233 251;
+  --tertiary-ink: 56 67 125;
   /* Per-tenant brand accent — overridden inline (see ChatScreen.tsx) with business.brandColor;
      falls back to the design-system accent green above when a tenant hasn't set one. Kept as a
      bare hex/rgb() value (not an rgb()-triple like the tokens above) since it's consumed directly
@@ -52,6 +61,12 @@
   --positive-soft: 29 51 36;
   --negative: 227 134 114;
   --negative-soft: 58 36 30;
+  --secondary: 230 140 110;
+  --secondary-soft: 58 36 30;
+  --secondary-ink: 247 198 181;
+  --tertiary: 150 170 235;
+  --tertiary-soft: 30 36 58;
+  --tertiary-ink: 210 217 248;
   --warning: 224 189 112;
   --warning-soft: 58 49 27;
 }
