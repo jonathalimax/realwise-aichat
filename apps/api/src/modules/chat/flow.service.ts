@@ -543,6 +543,10 @@ export class FlowService {
         // CPU inference on a RAG-grounded prompt routinely exceeds the default 25s used for short
         // chip/chat calls — this path was silently timing out and falling through to blank text.
         timeoutMs: 60000,
+        // Default (512) was tuned against qwen's terser output and truncates mid-sentence on
+        // GLM's more verbose answers (confirmed live). 1024 covers a full multi-listing prose
+        // answer with real headroom.
+        maxTokens: 1024,
       });
       return { message: result.text };
     } catch {

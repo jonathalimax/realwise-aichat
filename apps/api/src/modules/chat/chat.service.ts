@@ -1131,6 +1131,10 @@ export class ChatService {
         systemPrompt,
         prompt,
         temperature: conversationalMode ? 0.3 : 0.1,
+        // Default (512) was tuned against qwen's terser output and truncates mid-sentence on
+        // GLM's more verbose answers (confirmed live: a two-listing description cut off at
+        // "**S..."). 1024 covers a full multi-listing prose answer with real headroom.
+        maxTokens: 1024,
       });
       // Quick replies are parsed/stripped BEFORE any hallucination-guard check runs, so the guards
       // always see clean prose and never the sentinel line itself. Gated on conversationalMode so
@@ -1503,7 +1507,11 @@ export class ChatService {
     let streamFailedWithNoMeaningfulText = false;
     try {
       gatewayResult = await generateFromGatewayStream(
-        { purpose: "chat", businessId, systemPrompt, prompt, temperature: conversationalMode ? 0.3 : 0.1 },
+        // Default (512) was tuned against qwen's terser output and truncates mid-sentence on
+        // GLM's more verbose answers (confirmed live: a two-listing description cut off at
+        // "**S..."). 1024 covers a full multi-listing prose answer with real headroom. This is
+        // the real visitor-facing streaming path.
+        { purpose: "chat", businessId, systemPrompt, prompt, temperature: conversationalMode ? 0.3 : 0.1, maxTokens: 1024 },
         (delta) => {
           fullText += delta;
           if (!conversationalMode) {
