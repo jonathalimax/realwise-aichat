@@ -101,7 +101,7 @@ export default function HomePage() {
           </CardAction>
           <CardDescription>Conversas e leads novos por dia.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           <ActivityChart data={timeseries} />
         </CardContent>
       </Card>

@@ -49,7 +49,7 @@ export default function AdminSettingsPage() {
             sozinho — ex.: um pedido de suporte humano da RealWise.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 pt-0">
           <div>
             <Label>Número de WhatsApp (com DDI e DDD)</Label>
             <Input

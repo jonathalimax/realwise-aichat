@@ -83,7 +83,7 @@ export default function ConversationsPage() {
             <CardHeader>
               <CardTitle>Por tipo de resposta</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <CardContent className="grid grid-cols-2 gap-3 pt-0 sm:grid-cols-4">
               <div>
                 <div className="text-xs text-ink-soft">Fluxo guiado</div>
                 <div className="text-xl font-semibold text-ink">{data.bySource.fixed_flow}</div>
@@ -107,7 +107,7 @@ export default function ConversationsPage() {
             <CardHeader>
               <CardTitle>Por cliente</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-0">
               {data.perBusiness.length === 0 ? (
                 <p className="text-center text-ink-soft">Nenhuma conversa neste período.</p>
               ) : (

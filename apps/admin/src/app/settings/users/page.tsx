@@ -67,7 +67,7 @@ export default function AdminUsersPage() {
           <CardTitle>Novo administrador</CardTitle>
           <CardDescription>Adiciona um acesso ao painel admin via email e senha.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 pt-0">
           <div>
             <Label>Email</Label>
             <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@realwise.com.br" className="mt-1" />
@@ -113,7 +113,7 @@ export default function AdminUsersPage() {
           <CardTitle>Administradores atuais</CardTitle>
           <CardDescription>{users.length} conta(s) com acesso ao painel admin.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           <Table>
             <TableHeader>
               <TableRow>

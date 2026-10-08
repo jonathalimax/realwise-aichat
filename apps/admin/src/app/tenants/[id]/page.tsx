@@ -113,7 +113,7 @@ export default function TenantDetailPage() {
             <CardTitle>Composição da confiança</CardTitle>
             <CardDescription>Como cada componente contribui para o score de prontidão.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <ConfidenceBreakdownChart breakdown={breakdown} />
           </CardContent>
         </Card>

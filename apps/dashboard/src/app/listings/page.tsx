@@ -108,7 +108,7 @@ export default function ListingsPage() {
             nova extração.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 pt-0">
           {listings.length === 0 && (
             <p className="rounded-lg border border-border bg-bg-2 px-4 py-3 text-sm text-ink-soft">
               Nenhum anúncio encontrado ainda. Anúncios são extraídos automaticamente dos seus documentos.{" "}

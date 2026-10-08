@@ -130,7 +130,7 @@ export default function DisponibilidadePage() {
             <CardTitle>Horários recorrentes — {APPOINTMENT_TYPES.find((t) => t.value === activeType)?.label}</CardTitle>
             <CardDescription>Dias e horários em que a Clara pode oferecer agendamento deste tipo.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+          <CardContent className="flex flex-col gap-4 pt-0">
             {activeType === "visita_local" && (
               <div>
                 <label className="mb-1 block text-xs font-semibold text-ink-soft">
@@ -226,7 +226,7 @@ export default function DisponibilidadePage() {
             <CardTitle>Dias bloqueados</CardTitle>
             <CardDescription>Datas em que nada fica disponível para agendamento, independente das regras acima.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+          <CardContent className="flex flex-col gap-4 pt-0">
             <div className="flex items-center gap-2">
               <Input type="date" value={blackoutDate} onChange={(e) => setBlackoutDate(e.target.value)} className="flex-1" />
               <Button size="sm" onClick={addBlackout}>

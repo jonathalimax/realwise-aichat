@@ -13,7 +13,7 @@ export function TrialEndedGate() {
         <CardHeader>
           <CardTitle>Seu período de teste terminou</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           <p className="mb-5 text-sm text-ink-soft">
             Para continuar usando a Realwise — Leads, Analytics, Base de conhecimento e Agenda — escolha um plano.
           </p>

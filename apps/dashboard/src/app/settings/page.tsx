@@ -99,7 +99,7 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle>Comportamento da Clara</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 pt-0">
           <div>
             <Label>Instruções personalizadas</Label>
             <Textarea
@@ -132,7 +132,7 @@ export default function SettingsPage() {
             Usada nas simulações de financiamento do chat. Deixe em branco para usar a taxa padrão da plataforma.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 pt-0">
           <div>
             <Label>Taxa de juros mensal (%)</Label>
             <Input
@@ -160,7 +160,7 @@ export default function SettingsPage() {
             precisa manter o site em dia.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>URL do site</Label>

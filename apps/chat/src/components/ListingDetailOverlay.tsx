@@ -140,7 +140,7 @@ export function ListingDetailOverlay({ listing, onClose }: { listing: Listing; o
     <>
       <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} aria-hidden="true" />
       <div
-        className={`fixed inset-x-0 bottom-0 z-50 flex h-[92dvh] flex-col rounded-t-card bg-bg transition-transform duration-300 ${
+        className={`fixed inset-x-0 bottom-0 z-50 flex h-[92dvh] flex-col rounded-t-card bg-bg shadow-[0_-8px_24px_rgba(20,24,21,0.12)] transition-transform duration-300 ${
           mounted ? "translate-y-0" : "translate-y-full"
         }`}
       >
@@ -182,7 +182,7 @@ export function ListingDetailOverlay({ listing, onClose }: { listing: Listing; o
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 inline-block w-auto max-w-xs rounded-full bg-accent px-6 py-3 text-center text-sm font-medium text-white"
+                className="tenant-accent-bg mt-4 inline-block w-auto max-w-xs rounded-full px-6 py-3 text-center text-sm font-medium text-white shadow-sm"
               >
                 Ver no site da Allure
               </a>

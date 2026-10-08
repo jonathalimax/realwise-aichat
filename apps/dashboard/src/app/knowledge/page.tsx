@@ -101,7 +101,7 @@ export default function KnowledgePage() {
           <CardTitle>Documentos</CardTitle>
           <CardDescription>Tudo que a Clara usa para responder seus clientes.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 pt-0">
           <input type="file" onChange={handleFileUpload} className="text-sm" />
           <Textarea
             value={pastedText}
@@ -127,7 +127,7 @@ export default function KnowledgePage() {
           <CardTitle>Conversar com a Clara</CardTitle>
           <CardDescription>Ela já sabe o que está nos documentos — só vai perguntar o que falta.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           <InterviewChat onFieldFilled={refresh} prefill={correctionTarget ?? undefined} prefillNonce={correctionNonce} />
         </CardContent>
       </Card>
@@ -137,7 +137,7 @@ export default function KnowledgePage() {
           <CardTitle>Informações salvas</CardTitle>
           <CardDescription>Confira o que a Clara sabe sobre o negócio e corrija se algo estiver errado.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 pt-0">
           {profile?.template?.fields.map((f: any) => {
             const value = profile.profile?.data?.[f.key] ?? "";
             const approved = profile.profile?.fieldStatus?.[f.key]?.approvedByOwner;
@@ -211,7 +211,7 @@ export default function KnowledgePage() {
           <CardTitle>Perguntas não respondidas</CardTitle>
           <CardDescription>Assuntos que clientes perguntaram e a Clara ainda não sabe responder.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-2">
+        <CardContent className="flex flex-col gap-2 pt-0">
           {unanswered.map((q) => (
             <div key={q.id} className="rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm">
               <div className="text-ink">{q.questionText}</div>
@@ -226,7 +226,7 @@ export default function KnowledgePage() {
         <CardHeader>
           <CardTitle>Medidor de prontidão</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 pt-0">
           <div className="rounded-card border border-border bg-bg-2 p-5 text-center">
             <div className="font-mono text-3xl text-ink">{business.confidenceScore}%</div>
             <div className="text-xs text-ink-soft">

@@ -3,17 +3,20 @@
 @tailwind utilities;
 
 /* light is default here — chat is a widget embedded in a business's brand context.
-   .dark vars stay wired for a future per-business theme toggle, but <html> never gets the class. */
+   .dark vars stay wired for a future per-business theme toggle, but <html> never gets the class.
+   This palette is deliberately airier/warmer than admin/dashboard's greige — a pale, slightly
+   warm-tinted off-white rather than a flat canvas, per the fintech-dashboard + light-messenger
+   reference direction. */
 :root {
-  --bg: 232 230 224;
-  --bg-2: 221 218 210;
+  --bg: 250 248 243;
+  --bg-2: 243 240 232;
   --surface: 255 255 255;
-  --border: 215 211 201;
-  --ink: 14 43 34;
-  --ink-soft: 69 84 76;
-  --muted: 132 140 132;
+  --border: 231 227 217;
+  --ink: 20 36 30;
+  --ink-soft: 86 98 90;
+  --muted: 150 156 146;
   --accent: 11 77 56;
-  --accent-soft: 220 238 228;
+  --accent-soft: 223 240 230;
   --accent-ink: 7 49 40;
   --lime: 215 242 107;
   --lime-soft: 243 250 217;
@@ -24,6 +27,11 @@
   --negative-soft: 251 234 228;
   --warning: 184 134 43;
   --warning-soft: 247 238 214;
+  /* Per-tenant brand accent — overridden inline (see ChatScreen.tsx) with business.brandColor;
+     falls back to the design-system accent green above when a tenant hasn't set one. Kept as a
+     bare hex/rgb() value (not an rgb()-triple like the tokens above) since it's consumed directly
+     by color-mix() below rather than through the rgb(var(..) / <alpha>) Tailwind color pattern. */
+  --tenant-accent: #0b4d38;
 }
 
 .dark {
@@ -51,5 +59,35 @@
 @layer base {
   body {
     @apply bg-bg text-ink font-sans antialiased;
+  }
+}
+
+@layer components {
+  /* Glass treatment for listing/simulation cards — semi-transparent surface + blur instead of a
+     flat bordered card. Falls back gracefully where backdrop-filter isn't supported (the
+     semi-transparent background alone still reads fine against the light --bg canvas). */
+  .glass-card {
+    background: color-mix(in srgb, rgb(var(--surface)) 72%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid color-mix(in srgb, rgb(var(--surface)) 60%, transparent);
+    box-shadow: 0 8px 24px rgba(20, 24, 21, 0.08);
+  }
+
+  /* Tenant-brand utilities — consume the --tenant-accent custom property set inline in
+     ChatScreen.tsx from business.brandColor (falling back to the default accent green above).
+     tenant-bubble derives a pale TINT via color-mix() rather than using the raw brand color at
+     full strength, which would be too strong/dark for the new light bubble aesthetic. */
+  .tenant-accent-bg {
+    background: var(--tenant-accent);
+  }
+  .tenant-accent-text {
+    color: var(--tenant-accent);
+  }
+  .tenant-accent-border {
+    border-color: var(--tenant-accent);
+  }
+  .tenant-bubble {
+    background: color-mix(in srgb, var(--tenant-accent) 14%, white);
   }
 }

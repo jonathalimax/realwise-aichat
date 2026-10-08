@@ -36,6 +36,23 @@ function generateReferenceCode(): string {
   return `AP-${randomBytes(5).toString("hex").toUpperCase()}`;
 }
 
+// priceCents is the normalized source of truth (always numeric, always cents) — prefer it over
+// priceText, which is whatever raw string the source site happened to use (plain "650000.00",
+// Brazilian "1770,00", etc.) and renders inconsistently when shown verbatim to visitors. Mirrors
+// the admin app's own ListingsSection.tsx formatPrice helper.
+export function formatListingPrice(
+  priceCents: number | null | undefined,
+  pricePeriod: string | null | undefined,
+  priceText: string | null | undefined,
+): string | undefined {
+  if (typeof priceCents === "number") {
+    return `R$ ${(priceCents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}${
+      pricePeriod ? ` / ${pricePeriod}` : ""
+    }`;
+  }
+  return priceText ?? undefined;
+}
+
 // Explicit allowlist of owner-settable fields. Anything not listed here (businessId, id,
 // dedupKey, referenceCode, manuallyCreated, createdAt, updatedAt, extractedAt,
 // lastSeenInSourceAt, overriddenFields, deletedAt, etc.) must stay system-controlled and is
@@ -240,6 +257,8 @@ export class ListingsService {
     id: string;
     title: string;
     priceText?: string | null;
+    priceCents?: number | null;
+    pricePeriod?: string | null;
     description?: string | null;
     url?: string | null;
     transaction?: string | null;
@@ -250,10 +269,11 @@ export class ListingsService {
       .map((image) => safeHttpUrl(image.url))
       .filter((imageUrl): imageUrl is string => Boolean(imageUrl));
     const imageUrl = images[0];
+    const price = formatListingPrice(row.priceCents, row.pricePeriod, row.priceText);
     return {
       id: row.id,
       title: row.title,
-      ...(row.priceText ? { price: row.priceText } : {}),
+      ...(price ? { price } : {}),
       ...(row.description ? { description: row.description } : {}),
       ...(url ? { url } : {}),
       ...(imageUrl ? { imageUrl } : {}),
@@ -277,13 +297,16 @@ export class ListingsService {
     return listing.images
       .map((image) => safeHttpUrl(image.url))
       .filter((imageUrl): imageUrl is string => Boolean(imageUrl))
-      .map((imageUrl) => ({
-        id: listing.id,
-        title: listing.title,
-        ...(listing.priceText ? { price: listing.priceText } : {}),
-        ...(url ? { url } : {}),
-        imageUrl,
-      }));
+      .map((imageUrl) => {
+        const price = formatListingPrice(listing.priceCents, listing.pricePeriod, listing.priceText);
+        return {
+          id: listing.id,
+          title: listing.title,
+          ...(price ? { price } : {}),
+          ...(url ? { url } : {}),
+          imageUrl,
+        };
+      });
   }
 
   // Common Portuguese stopwords dropped when extracting "significant" title tokens below — short/
@@ -329,6 +352,8 @@ export class ListingsService {
         title: true,
         referenceCode: true,
         priceText: true,
+        priceCents: true,
+        pricePeriod: true,
         description: true,
         url: true,
         neighborhood: true,

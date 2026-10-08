@@ -59,7 +59,7 @@ export function SimulationCard({
   const isSac = breakdown.system === "sac";
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-surface p-4">
+    <div className="glass-card mt-2 rounded-card p-4">
       <div className="mb-2 text-sm font-semibold text-ink">Simulação de financiamento</div>
       <Row label="Valor" value={formatBRL(breakdown.principalCents + breakdown.downPaymentCents)} />
       <Row

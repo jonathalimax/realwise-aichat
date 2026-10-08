@@ -101,7 +101,7 @@ function ListingCard({
           <button
             type="button"
             onClick={() => onOpen(listing)}
-            className="flex-1 rounded-full bg-accent px-3 py-1.5 text-center text-xs font-medium text-white active:scale-[0.98] transition-transform"
+            className="tenant-accent-bg flex-1 rounded-full px-3 py-1.5 text-center text-xs font-medium text-white shadow-sm active:scale-[0.98] transition-transform"
           >
             Ver anúncio
           </button>
@@ -109,7 +109,7 @@ function ListingCard({
             <button
               type="button"
               onClick={() => onSelect(listing)}
-              className="flex-1 rounded-full border border-accent px-2 py-1.5 text-center text-xs font-medium text-accent active:scale-[0.98] transition-transform"
+              className="tenant-accent-border tenant-accent-text flex-1 rounded-full border bg-surface px-2 py-1.5 text-center text-xs font-medium active:scale-[0.98] transition-transform"
             >
               Selecionar
             </button>
@@ -194,7 +194,7 @@ function WhatsappHandoffCard({ url }: { url: string }) {
         href={safeUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="block rounded-b-card bg-accent px-3 py-2 text-center text-xs font-medium text-white"
+        className="tenant-accent-bg block rounded-b-card px-3 py-2 text-center text-xs font-medium text-white"
       >
         Abrir WhatsApp
       </a>
@@ -232,7 +232,7 @@ function BusinessAvatar({
       <img
         src={logoUrl}
         alt={name}
-        className="h-10 w-10 flex-none rounded-card object-cover"
+        className="h-10 w-10 flex-none rounded-card object-cover shadow-sm"
         onError={() => setLogoFailed(true)}
       />
     );
@@ -243,16 +243,16 @@ function BusinessAvatar({
       <img
         src="/clara-avatar.jpg"
         alt={personaName}
-        className="h-10 w-10 flex-none rounded-card object-cover"
+        className="h-10 w-10 flex-none rounded-card object-cover shadow-sm"
         onError={() => setClaraFailed(true)}
       />
     );
   }
+  // No logo, no persona photo available — falls back to the initial-letter badge, now sharing
+  // the same --tenant-accent custom property (set on the page wrapper in ChatScreen below) as
+  // every other brand-colored surface instead of its own separate inline style/fallback value.
   return (
-    <div
-      className="flex h-10 w-10 flex-none items-center justify-center rounded-card font-serif font-bold"
-      style={{ background: brandColor ?? "#1F5F52", color: "#fff" }}
-    >
+    <div className="tenant-accent-bg flex h-10 w-10 flex-none items-center justify-center rounded-card font-serif font-bold text-white shadow-sm">
       {name?.[0] ?? "R"}
     </div>
   );
@@ -859,8 +859,16 @@ export function ChatScreen({
   }
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-bg">
-      <header className="flex flex-none items-center gap-3 border-b border-border bg-bg px-4 py-3">
+    // --tenant-accent is set here (inline, since it's a dynamic per-tenant value) from
+    // business.brandColor, falling back to the design-system accent green defined in
+    // globals.css when the tenant hasn't set one. Every brand-colored surface below (avatar
+    // badge, visitor bubble tint, send/primary buttons) reads this same custom property instead
+    // of each carrying its own separate inline style.
+    <div
+      className="flex h-dvh flex-col overflow-hidden bg-bg"
+      style={business.brandColor ? ({ "--tenant-accent": business.brandColor } as React.CSSProperties) : undefined}
+    >
+      <header className="flex flex-none items-center gap-3 border-b border-border bg-bg/80 px-4 py-3 backdrop-blur-md">
         <BusinessAvatar
           name={business.name}
           logoUrl={business.logoUrl}
@@ -893,10 +901,10 @@ export function ChatScreen({
             <div
               className={
                 m.role === "visitor"
-                  ? "rounded-2xl rounded-br-sm bg-accent px-4 py-3 text-sm text-white break-words"
+                  ? "tenant-bubble rounded-3xl rounded-br-lg px-4 py-3 text-sm text-ink break-words"
                   : m.role === "owner"
-                    ? "rounded-2xl rounded-bl-sm border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-ink break-words"
-                    : "rounded-2xl rounded-bl-sm bg-surface px-4 py-3 text-sm text-ink break-words"
+                    ? "rounded-3xl rounded-bl-lg border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-ink break-words shadow-sm"
+                    : "rounded-3xl rounded-bl-lg bg-surface px-4 py-3 text-sm text-ink break-words shadow-sm"
               }
             >
               <MessageContent text={m.content} />
@@ -929,7 +937,7 @@ export function ChatScreen({
           <div
             role="status"
             aria-live="polite"
-            className="flex max-w-[85%] items-center gap-2 rounded-2xl rounded-bl-sm bg-surface px-4 py-3"
+            className="flex max-w-[85%] items-center gap-2 rounded-3xl rounded-bl-lg bg-surface px-4 py-3 shadow-sm"
           >
             <span className="text-sm text-ink-soft">
               {thinkingStage === 0
@@ -1022,7 +1030,7 @@ export function ChatScreen({
               variant="outline"
               size="sm"
               onClick={() => handleBubbleTap(bubble)}
-              className="h-auto min-h-11 rounded-full bg-surface py-2 font-normal"
+              className="h-auto min-h-11 rounded-full bg-surface py-2 font-normal shadow-sm"
             >
               {bubble.label}
             </Button>
@@ -1041,7 +1049,7 @@ export function ChatScreen({
                 setSuggestions([]);
                 handleSend(label);
               }}
-              className="h-auto min-h-11 rounded-full bg-surface py-2 font-normal"
+              className="h-auto min-h-11 rounded-full bg-surface py-2 font-normal shadow-sm"
             >
               {label}
             </Button>
@@ -1054,7 +1062,7 @@ export function ChatScreen({
           e.preventDefault();
           handleSend(input);
         }}
-        className="flex flex-none items-center gap-2 border-t border-border bg-bg px-4 py-3"
+        className="flex flex-none items-center gap-2 border-t border-border bg-bg/80 px-4 py-3 backdrop-blur-md"
       >
         <Input
           variant="pill"

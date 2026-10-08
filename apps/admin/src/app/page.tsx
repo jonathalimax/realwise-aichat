@@ -194,7 +194,7 @@ export default function TenantsPage() {
           <CardTitle>Custo de extração automática</CardTitle>
           <CardDescription>Janela de {range} dias — pipeline de scraping em segundo plano vs. extração na rota do chat.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               label={`Custo extração (${range}d)`}
@@ -239,7 +239,7 @@ export default function TenantsPage() {
             conversa individual não é possível hoje porque o log de chamadas de LLM não guarda o conversationId.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard
               label={`Custo de conversas (${conversationRange}d)`}
@@ -383,7 +383,7 @@ export default function TenantsPage() {
             </CardAction>
             <CardDescription>Volume diário de conversas iniciadas em todos os clientes.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <ActivityChart data={timeseries} />
           </CardContent>
         </Card>
@@ -392,7 +392,7 @@ export default function TenantsPage() {
             <CardTitle>Distribuição de confiança</CardTitle>
             <CardDescription>Quantos negócios estão em cada faixa de prontidão.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <ConfidenceDistributionChart data={distribution} />
           </CardContent>
         </Card>

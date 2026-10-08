@@ -123,7 +123,7 @@ function AssistantChat() {
           <CardTitle>Conversar</CardTitle>
           <CardDescription>Ele só responde sobre o seu negócio, usando ferramentas restritas — nunca escreve nada sem sua confirmação.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 pt-0">
           <div className="flex max-h-96 min-h-48 flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-bg-2 p-3">
             {messages.length === 0 && (
               <p className="text-sm text-ink-soft">

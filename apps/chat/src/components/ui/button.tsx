@@ -11,10 +11,10 @@ const buttonVariants = cva(
       // to clear it, so a tapped bubble/button stays visually "selected" until the next unrelated
       // tap. Plain `hover:` would make every tap look stuck on mobile, which is the entire chat UI.
       variant: {
-        default: "rounded-lg bg-accent text-white [@media(hover:hover)]:hover:opacity-90",
-        outline: "rounded-lg border border-border text-ink-soft [@media(hover:hover)]:hover:bg-bg-2",
-        ghost: "rounded-lg text-ink-soft [@media(hover:hover)]:hover:bg-bg-2",
-        round: "rounded-full bg-accent text-white [@media(hover:hover)]:hover:opacity-90",
+        default: "rounded-full tenant-accent-bg text-white shadow-sm [@media(hover:hover)]:hover:opacity-90",
+        outline: "rounded-full border border-border bg-surface text-ink-soft [@media(hover:hover)]:hover:bg-bg-2",
+        ghost: "rounded-full text-ink-soft [@media(hover:hover)]:hover:bg-bg-2",
+        round: "rounded-full tenant-accent-bg text-white shadow-sm [@media(hover:hover)]:hover:opacity-90",
       },
       size: {
         default: "h-9 px-4 text-sm",

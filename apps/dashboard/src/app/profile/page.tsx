@@ -107,7 +107,7 @@ export default function ProfilePage() {
         <CardHeader>
           <CardTitle>Sobre o negócio</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 pt-0">
           <Input
             value={business.name}
             onChange={(e) => setBusiness({ ...business, name: e.target.value })}
@@ -146,7 +146,7 @@ export default function ProfilePage() {
           <CardTitle>WhatsApp para escalonamento</CardTitle>
           <CardDescription>Necessário para o chat conseguir passar um cliente para um atendente humano.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 pt-0">
           <div className="flex flex-wrap gap-2">
             <Input value={waLabel} onChange={(e) => setWaLabel(e.target.value)} placeholder="Label" className="w-full sm:w-32" />
             <Input

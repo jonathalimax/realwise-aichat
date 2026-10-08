@@ -8,7 +8,7 @@ import { generateFromGateway } from "../../inference/gateway-client";
 import { retrieveRelevantChunks } from "./knowledge-retrieval";
 import { safeHttpUrl } from "../../common/safe-http-url";
 import { sendEmail, escapeHtml } from "../../common/email";
-import { ListingsService, ChatQueryFilters } from "../listings/listings.service";
+import { ListingsService, ChatQueryFilters, formatListingPrice } from "../listings/listings.service";
 import { AnalyticsService } from "../analytics/analytics.service";
 import { BookingsService } from "../bookings/bookings.service";
 import { AvailabilityService } from "../bookings/availability.service";
@@ -776,7 +776,8 @@ export class FlowService {
       if (brandModel) parts.push(brandModel);
       if (listing.year) parts.push(String(listing.year));
       if (listing.mileageKm != null) parts.push(`${listing.mileageKm.toLocaleString("pt-BR")} km`);
-      if (listing.priceText) parts.push(listing.priceText);
+      const vehiclePrice = formatListingPrice(listing.priceCents, listing.pricePeriod, listing.priceText);
+      if (vehiclePrice) parts.push(vehiclePrice);
     } else {
       const locationParts = [listing.neighborhood, listing.city].filter(Boolean).join(", ");
       const typeLocation = [listing.listingType, locationParts].filter(Boolean).join(" em ");
@@ -785,7 +786,8 @@ export class FlowService {
       if (listing.bedrooms != null) parts.push(`${listing.bedrooms} quarto${listing.bedrooms === 1 ? "" : "s"}`);
       if (listing.areaM2 != null) parts.push(`${listing.areaM2} m²`);
       if (listing.parkingSpots != null) parts.push(`${listing.parkingSpots} vaga${listing.parkingSpots === 1 ? "" : "s"}`);
-      if (listing.priceText) parts.push(listing.priceText);
+      const propertyPrice = formatListingPrice(listing.priceCents, listing.pricePeriod, listing.priceText);
+      if (propertyPrice) parts.push(propertyPrice);
     }
 
     const message = `${parts.length > 0 ? parts.join(" — ") : listing.title}. O que você quer ver?`;
@@ -794,13 +796,14 @@ export class FlowService {
       .filter((img): img is string => Boolean(img));
     const image = images[0];
     const url = safeHttpUrl(listing.url ?? undefined);
+    const detailPrice = formatListingPrice(listing.priceCents, listing.pricePeriod, listing.priceText);
     return {
       message,
       listings: [
         {
           id: listing.id,
           title: listing.title,
-          ...(listing.priceText ? { price: listing.priceText } : {}),
+          ...(detailPrice ? { price: detailPrice } : {}),
           ...(url ? { url } : {}),
           ...(image ? { imageUrl: image } : {}),
           ...(images.length ? { images } : {}),

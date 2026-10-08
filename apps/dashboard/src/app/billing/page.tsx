@@ -53,7 +53,7 @@ export default function BillingPage() {
             <CardHeader>
               <CardTitle>{plan.name}</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-0">
               <div className="mb-4 font-mono text-xl text-ink">R$ {(plan.priceBrlCents / 100).toFixed(2)}/mês</div>
               <Button className="w-full" onClick={() => choosePlan(plan.code)}>
                 Escolher
