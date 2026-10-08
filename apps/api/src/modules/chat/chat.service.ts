@@ -646,15 +646,22 @@ export class ChatService {
     // A short follow-up ("para entrada") that's really a one-line answer to the bot's OWN previous
     // question carries almost no topical signal on its own — retrieval against visitorText alone
     // then misses genuinely relevant shared-knowledge chunks (e.g. financing basics) that a human
-    // reading the recent history would obviously connect to. 30 chars is a deliberately small
-    // threshold (short enough that a real, substantive question essentially never falls under it)
-    // so this augmentation only kicks in for low-signal replies, never dilutes a normal query with
-    // stale context. recentMessages is already fetched above (desc order) for the prompt's own
-    // history string, so no extra DB round-trip is needed — just reuse the 2 most recent prior
-    // turns, oldest-first, as extra retrieval context.
+    // reading the recent history would obviously connect to. recentMessages is already fetched
+    // above (desc order) for the prompt's own history string, so no extra DB round-trip is needed
+    // — just reuse the 2 most recent prior turns, oldest-first, as extra retrieval context.
+    //
+    // Character length alone is NOT a safe proxy for "low-signal" — confirmed live regression:
+    // "Qual o valor do condomínio?" is only 27 chars but is a complete, specific, self-contained
+    // question; augmenting it with unrelated earlier-turn history skewed retrieval toward a
+    // different topic's chunk (the model answered about income-to-rent ratio instead of condo
+    // fee). A message ending in "?" is virtually always a real question asked on its own terms —
+    // low-signal fragments like "para entrada"/"sim"/"depende do imóvel" don't end in "?". Require
+    // BOTH short AND not a direct question before augmenting with history.
     const SHORT_MESSAGE_RETRIEVAL_THRESHOLD = 30;
+    const trimmedVisitorText = visitorText.trim();
+    const looksLikeSelfContainedQuestion = /\?\s*$/.test(trimmedVisitorText);
     const recentHistoryForRetrieval =
-      visitorText.trim().length < SHORT_MESSAGE_RETRIEVAL_THRESHOLD
+      trimmedVisitorText.length < SHORT_MESSAGE_RETRIEVAL_THRESHOLD && !looksLikeSelfContainedQuestion
         ? recentMessages.slice(0, 2).reverse().map((m) => m.content).join(" ")
         : "";
 
