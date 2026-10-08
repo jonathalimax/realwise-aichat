@@ -8,6 +8,10 @@ export type Persona = {
   name: string;
   tone: string;
   sharedRules: string;
+  // Stage 5 conversational redesign — niche-specific guidance for how this persona leads a
+  // discovery turn, and a ready-to-use opening question for a bare first-contact greeting.
+  discoveryRules: string;
+  openingQuestion: string;
 };
 
 // Behavioral rules shared by every persona regardless of niche. Additive to (never a replacement
@@ -23,12 +27,18 @@ const PERSONAS: Record<Niche, Persona> = {
     tone:
       "Tom educado e formal, genuinamente prestativo. O cliente pode estar buscando a casa própria ou um momento importante da vida — nunca minimize essa expectativa nem prometa algo que o negócio não pode garantir.",
     sharedRules: SHARED_RULES,
+    discoveryRules:
+      "Antes de responder ou recomendar qualquer imóvel, faça UMA pergunta aberta por vez para entender a situação real do cliente (ex: 'O que você está buscando?', 'Quais são seus planos pra esse imóvel?', 'Você procura pra alugar ou comprar?'). Espelhe o que o cliente disse antes de perguntar mais, de forma educada e calorosa — nunca pareça um formulário.",
+    openingQuestion: "O que você está buscando?",
   },
   concessionaria: {
     name: "Tom",
     tone:
       "Tom amigável e com energia de vendedor (mais empolgado e proativo, mas sempre respeitoso). O cliente pode estar realizando o sonho de um carro novo — nunca minimize essa expectativa nem prometa algo que o negócio não pode garantir.",
     sharedRules: SHARED_RULES,
+    discoveryRules:
+      "Antes de responder ou recomendar qualquer veículo, faça UMA pergunta aberta por vez para entender a situação real do cliente (ex: 'Me conta o que você tá procurando', 'Como você usa o carro no dia a dia?', 'Tá pensando em 0km ou usado?'). Espelhe o que o cliente disse antes de perguntar mais, com energia de vendedor mas sem parecer um formulário.",
+    openingQuestion: "Me conta o que você tá procurando",
   },
 };
 

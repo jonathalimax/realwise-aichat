@@ -56,6 +56,7 @@ enum AnswerSource {
   rag
   abstained
   escalation
+  discovery
 }
 
 enum AppointmentStatus {
@@ -117,6 +118,10 @@ model Business {
   linkPlacedAt    DateTime?
   createdAt       DateTime       @default(now())
   deletedAt       DateTime?
+  // Stage 5 conversational redesign — flag-gated, default off. Toggled only via the admin-only
+  // PATCH /admin/tenants/:id/conversational-mode endpoint (never the tenant-facing PATCH
+  // /businesses/me). See chat.service.ts's resolveConversationalMode for the env kill-switch.
+  conversationalModeEnabled Boolean @default(false)
 
   profile         BusinessProfile?
   documents       KnowledgeDocument[]

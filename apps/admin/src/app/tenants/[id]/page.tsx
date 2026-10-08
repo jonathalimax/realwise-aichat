@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { getTenantDetail, getTenantKnowledge, suspendTenant } from "../../../lib/api";
+import { getTenantDetail, getTenantKnowledge, suspendTenant, setConversationalMode } from "../../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../../components/ui/card";
 import { Badge, statusToBadgeVariant } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
@@ -49,13 +49,22 @@ export default function TenantDetailPage() {
           <h1 className="break-words font-serif text-2xl text-ink">{tenant.name || tenant.slug}</h1>
           <Badge variant={statusToBadgeVariant(tenant.status)}>{tenant.status}</Badge>
         </div>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => suspendTenant(tenant.id).then(() => location.reload())}
-        >
-          Suspender
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setConversationalMode(tenant.id, !tenant.conversationalModeEnabled).then(() => location.reload())}
+          >
+            {tenant.conversationalModeEnabled ? "Desativar modo conversa" : "Ativar modo conversa"}
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => suspendTenant(tenant.id).then(() => location.reload())}
+          >
+            Suspender
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

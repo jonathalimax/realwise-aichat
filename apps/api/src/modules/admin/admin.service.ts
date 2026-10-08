@@ -225,6 +225,15 @@ export class AdminService {
     return this.prisma.client.business.findUnique({ where: { id: businessId } });
   }
 
+  // Stage 5 conversational redesign — admin-only toggle (never exposed via the tenant-facing
+  // PATCH /businesses/me). Mirrors overrideConfidenceThreshold's admin-only pattern above.
+  async setConversationalMode(businessId: string, enabled: boolean) {
+    if (typeof enabled !== "boolean") {
+      throw new BadRequestException("enabled must be a boolean");
+    }
+    return this.prisma.client.business.update({ where: { id: businessId }, data: { conversationalModeEnabled: enabled } });
+  }
+
   async suspendTenant(businessId: string) {
     return this.prisma.client.business.update({ where: { id: businessId }, data: { status: "suspended" } });
   }
@@ -425,7 +434,7 @@ export class AdminService {
       select: { businessId: true, answerSource: true, latencyMs: true, feedback: true, flagged: true, createdAt: true },
     });
 
-    const bySource = { fixed_flow: 0, rag: 0, abstained: 0, escalation: 0, none: 0 };
+    const bySource = { fixed_flow: 0, rag: 0, abstained: 0, escalation: 0, discovery: 0, none: 0 };
     const latencies: number[] = [];
     const perBusiness = new Map<
       string,

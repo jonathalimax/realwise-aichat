@@ -758,6 +758,13 @@ export function ChatScreen({
       if (!result?.escalated && result?.flow?.bubbles?.length) {
         setBubbles(result.flow.bubbles);
         setSuggestions([]);
+      } else if (!result?.escalated && result?.conversationalMode) {
+        // This was an LLM/conversational turn, not a flow-bubble turn — clear any bubbles left
+        // over from an earlier scripted turn so the suggestions renderer below (gated on
+        // `bubbles.length === 0`) isn't permanently blocked once conversational mode suppresses
+        // bubbles after first contact. Gated on conversationalMode so flag-off tenants keep the
+        // pre-existing behavior of never clearing bubbles on a non-flow LLM turn.
+        setBubbles([]);
       }
     } catch {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "Tive um problema para responder — tenta de novo em instantes." }]);

@@ -1717,7 +1717,19 @@ export class FlowService {
     return conversation;
   }
 
-  private async emit(businessId: string, conversationId: string, niche: string, nodeId: string, params: Record<string, unknown>): Promise<FlowSnapshot> {
+  private async emit(
+    businessId: string,
+    conversationId: string,
+    niche: string,
+    nodeId: string,
+    params: Record<string, unknown>,
+    // Stage 5 conversational redesign opts — `conversationalModeEnabled` mirrors however the
+    // business row is already fetched by the caller (start()/advance() both already have it in
+    // scope), and `firstContact` is `!conversation.flowNodeId` computed by start() before the
+    // flowNodeId bootstrap write; advance() always passes false. When conversationalModeEnabled
+    // is false (the default), this has zero effect — byte-identical to today's behavior.
+    opts?: { firstContact?: boolean; conversationalModeEnabled?: boolean },
+  ): Promise<FlowSnapshot> {
     const flow = this.flowFor(niche);
     const node = flow.nodes[nodeId] ?? flow.nodes[flow.start];
     const { message, listings, whatsappUrl, bubblesOverride } = await this.resolveMessage(businessId, conversationId, node, params);
@@ -1774,9 +1786,20 @@ export class FlowService {
     const depth = this.depthMap(niche)[node.id] ?? Infinity;
     const policy = exempt ? "full" : this.bubblePolicy(node, depth);
 
+    // Stage 5 conversational redesign: once conversational mode is on AND this isn't the
+    // conversation's first contact, every scripted bubble prompt is suppressed EXCEPT the booking
+    // day/period/time slot-picker bubbles — those are live calendar data, not scripted menu
+    // prompts, so they stay exempt from this gate. This override takes priority over both the
+    // `exempt` (dynamic-options) logic above and any per-node `bubbleMode: "full"`. When the flag
+    // is off (the default) or this IS first contact, `policy` passes through unchanged below —
+    // byte-identical to today's behavior.
+    const isBookingSlotNode = BOOKING_DAY_NODE_IDS.has(node.id) || BOOKING_PERIOD_NODE_IDS.has(node.id) || BOOKING_TIME_NODE_IDS.has(node.id);
+    const suppressForConversationalMode = !!opts?.conversationalModeEnabled && !opts?.firstContact && !isBookingSlotNode;
+    const effectivePolicy: "full" | "none" = suppressForConversationalMode ? "none" : policy;
+
     let finalBubbles: FlowBubble[];
     let hiddenBubbles: FlowBubble[] | undefined;
-    if (policy === "none") {
+    if (effectivePolicy === "none") {
       finalBubbles = [];
       hiddenBubbles = resolvedBubbles;
     } else {
@@ -1977,8 +2000,13 @@ export class FlowService {
     const conversation = await this.currentState(conversationId);
     const nodeId = conversation.flowNodeId ?? flow.start;
     const params = (conversation.flowParams as Record<string, unknown>) ?? {};
+    // Computed BEFORE the flowNodeId bootstrap write below, per the plan's exact condition.
+    const firstContact = !conversation.flowNodeId;
 
-    const snapshot = await this.emit(businessId, conversationId, business.niche, nodeId, params);
+    const snapshot = await this.emit(businessId, conversationId, business.niche, nodeId, params, {
+      firstContact,
+      conversationalModeEnabled: business.conversationalModeEnabled,
+    });
 
     if (!conversation.flowNodeId) {
       await this.prisma.client.conversation.update({
@@ -2030,7 +2058,12 @@ export class FlowService {
         .catch(() => {});
     }
 
-    const nextSnapshot = await this.emit(businessId, conversationId, business.niche, goto, mergedParams);
+    // advance() is never the conversation's first contact (start() owns that), so this always
+    // passes firstContact: false.
+    const nextSnapshot = await this.emit(businessId, conversationId, business.niche, goto, mergedParams, {
+      firstContact: false,
+      conversationalModeEnabled: business.conversationalModeEnabled,
+    });
 
     const nextHistory = currentSnapshot ? [...history, currentSnapshot].slice(-MAX_FLOW_HISTORY) : history;
 

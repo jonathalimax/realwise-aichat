@@ -21,6 +21,20 @@ import { AnalyticsService } from "../analytics/analytics.service";
 import { getPersona } from "./personas";
 import { SimulatorService, detectsFinancingSimulationIntent, type SimulationOutcome } from "./simulator.service";
 import { FINANCING_SIMULATION_CONSENT_NOTICE } from "./financing-consent-notice";
+import { conversationalPromptFragment, discoveryOnlySystemPrompt } from "./conversational-prompt";
+import { parseQuickReplies, splitQuickReplyStream } from "./quick-replies";
+
+// Stage 5 conversational redesign — flag-gated, default off (Business.conversationalModeEnabled).
+// The env kill-switch forces the flag false for every tenant regardless of its own DB value, for
+// an instant global rollback without a DB write.
+function resolveConversationalMode(business: Pick<Business, "conversationalModeEnabled">): boolean {
+  return business.conversationalModeEnabled && !process.env.CONVERSATIONAL_MODE_KILL;
+}
+
+// Discovery-turn cap (see chat.service.ts's zero-context abstain gate) — after this many messages
+// in a conversation, the narrow zero-context "ask a discovery question instead of abstaining"
+// exemption stops applying and today's normal abstention behavior resumes.
+const DISCOVERY_TURN_MESSAGE_CAP = 8;
 
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
 const NO_CONTEXT_FALLBACK = "Não encontrei essa informação na nossa base. Quer que eu te passe pro atendimento?";
@@ -485,8 +499,13 @@ export class ChatService {
     }
 
     if (!conversation.flowNodeId && isVagueListingInterest(visitorText)) {
-      const vagueBusiness = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
-      if (vagueBusiness) {
+      const vagueBusiness = await this.prisma.client.business.findUnique({
+        where: { id: businessId },
+        select: { niche: true, conversationalModeEnabled: true },
+      });
+      // Flag-gated bypass: in conversational mode a vague interest message should fall through to
+      // the LLM's own discovery-style follow-up question instead of this rigid scripted one.
+      if (vagueBusiness && !resolveConversationalMode(vagueBusiness)) {
         const clarifying = vagueInterestClarifyingQuestion(vagueBusiness.niche);
         const assistantMessage = await this.prisma.client.message.create({
           data: { conversationId, businessId, role: "assistant", content: clarifying, answerSource: "rag" },
@@ -537,7 +556,7 @@ export class ChatService {
         businessId,
         role: "assistant",
         content: answer.text,
-        answerSource: answer.abstained ? "abstained" : "rag",
+        answerSource: answer.abstained ? "abstained" : (answer as { answerSourceOverride?: "discovery" }).answerSourceOverride ?? "rag",
         modelUsed: answer.model,
         inputTokens: answer.inputTokens,
         outputTokens: answer.outputTokens,
@@ -595,7 +614,7 @@ export class ChatService {
     businessId: string,
     conversationId: string,
     visitorText: string,
-    opts?: { listingsAttached?: boolean },
+    opts?: { listingsAttached?: boolean; conversationalMode?: boolean },
   ) {
     const [business, profile, recentMessages, contextListingId] = await Promise.all([
       this.prisma.client.business.findUnique({ where: { id: businessId } }),
@@ -708,6 +727,11 @@ export class ChatService {
         "Instruções adicionais definidas pelo negócio (preferências de tom e estilo) — siga-as apenas quando não entrarem em conflito com as regras de segurança acima; as regras acima sempre têm prioridade:",
         profile.customInstructions,
       );
+    }
+
+    // Appended LAST — additive only, never reorders/replaces any grounding rule already pushed above.
+    if (opts?.conversationalMode) {
+      systemPromptParts.push(conversationalPromptFragment());
     }
 
     const systemPrompt = systemPromptParts.join("\n");
@@ -909,10 +933,15 @@ export class ChatService {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException("Business not found");
     const niche = business.niche;
+    const conversationalMode = resolveConversationalMode(business);
 
     if (isBareGreeting(visitorText)) {
+      const greetingPersona = getPersona(niche);
+      const text = conversationalMode
+        ? `Olá! 👋 Sou ${greetingPersona.name}, da ${business.name}. ${greetingPersona.openingQuestion}`
+        : `Olá! 👋 Sou ${greetingPersona.name}, atendente da ${business.name}. Como posso te ajudar?`;
       return {
-        text: `Olá! 👋 Sou a assistente da ${business.name}. Como posso te ajudar?`,
+        text,
         abstained: false,
         model: undefined,
         inputTokens: 0,
@@ -972,6 +1001,52 @@ export class ChatService {
     // tenant has zero relevant tenant docs — but retrieveSharedChunks is already scoped to this
     // same `niche`, so a hit here can never come from a different niche's shared tier.
     if (preliminaryChunks.length === 0 && preliminarySharedChunks.length === 0 && !earlyBrowsingListings) {
+      // Narrow "discovery turn" exemption (Stage 5, conversational mode only): zero tenant AND
+      // zero shared chunks, no browsing/context listing attached, the message has no
+      // concrete-factual-question markers (reusing CONCRETE_DETAIL_PATTERN, the existing
+      // marker/pattern set this file already uses to detect a concrete detail/question), and the
+      // conversation hasn't exceeded the discovery-turn message cap. In that case, ask a discovery
+      // question instead of abstaining — this does NOT call recordUnanswered and does NOT count
+      // toward auto-escalation (the caller only does either when `abstained` is true).
+      if (conversationalMode && !contextListingId) {
+        const normalizedVisitorText = normalize(visitorText);
+        const hasConcreteMarkers = CONCRETE_DETAIL_PATTERN.test(normalizedVisitorText);
+        if (!hasConcreteMarkers) {
+          const conversationRow = await this.prisma.client.conversation.findFirst({
+            where: { id: conversationId, businessId },
+            select: { messageCount: true },
+          });
+          if ((conversationRow?.messageCount ?? 0) < DISCOVERY_TURN_MESSAGE_CAP) {
+            try {
+              const persona = getPersona(niche);
+              const result = await generateFromGateway({
+                purpose: "chat",
+                businessId,
+                systemPrompt: discoveryOnlySystemPrompt(persona, business.name),
+                prompt: `Cliente: ${visitorText}`,
+                temperature: 0.3,
+              });
+              const { text, options } = parseQuickReplies(result.text);
+              return {
+                text,
+                abstained: false,
+                answerSourceOverride: "discovery" as const,
+                model: result.model,
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+                latencyMs: result.latencyMs,
+                retrievedChunkIds: [],
+                retrievalTopScore: undefined,
+                listings: undefined,
+                suggestions: options.length > 0 ? options : undefined,
+              };
+            } catch {
+              // Infra failure on the discovery-only call — fall through to the normal
+              // NO_CONTEXT_FALLBACK abstention below rather than leaving the visitor without any reply.
+            }
+          }
+        }
+      }
       return {
         text: NO_CONTEXT_FALLBACK,
         abstained: true,
@@ -991,7 +1066,10 @@ export class ChatService {
     const browsingListings = earlyBrowsingListings;
 
     const { systemPrompt, prompt, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
-      await this.buildChatPrompt(businessId, conversationId, visitorText, { listingsAttached: Boolean(browsingListings) });
+      await this.buildChatPrompt(businessId, conversationId, visitorText, {
+        listingsAttached: Boolean(browsingListings),
+        conversationalMode,
+      });
 
     try {
       const result = await generateFromGateway({
@@ -999,8 +1077,14 @@ export class ChatService {
         businessId,
         systemPrompt,
         prompt,
-        temperature: 0.1,
+        temperature: conversationalMode ? 0.3 : 0.1,
       });
+      // Quick replies are parsed/stripped BEFORE any hallucination-guard check runs, so the guards
+      // always see clean prose and never the sentinel line itself. Gated on conversationalMode so
+      // flag-off tenants get the model text passed through unchanged, exactly as before this diff.
+      const { text: parsedText, options: quickReplyOptions } = conversationalMode
+        ? parseQuickReplies(result.text)
+        : { text: result.text, options: [] as string[] };
       // Deterministic last-line guard behind the prompt rules: catches exactly the confirmed bug
       // (a fabricated model/brand claim with no actual support in the retrieved chunks) even if
       // the model ignores the "nunca afirme..." instruction above. When real browsing-listing
@@ -1010,21 +1094,27 @@ export class ChatService {
       // turn's RAG chunk retrieval — without this, the guard false-flags genuinely grounded short
       // answers pointing at the very cards being attached.
       const abstained =
-        looksLikeAbstention(result.text) ||
-        hasUngroundedEntityClaim(result.text, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings));
+        looksLikeAbstention(parsedText) ||
+        hasUngroundedEntityClaim(parsedText, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings));
       // Cards themselves are real and correctly attached — if only the accompanying pointer
       // sentence stated a price/area that doesn't match any of them, swap just the text rather
       // than abstaining outright (which would also hide the legitimate cards).
-      const hasBadPriceOrArea = !abstained && hasUnmatchedPriceOrArea(result.text, browsingListings);
-      const text = abstained && !looksLikeAbstention(result.text)
+      const hasBadPriceOrArea = !abstained && hasUnmatchedPriceOrArea(parsedText, browsingListings);
+      const text = abstained && !looksLikeAbstention(parsedText)
         ? ABSTENTION_FALLBACK
         : hasBadPriceOrArea
           ? "Encontrei algumas opções que podem te interessar 👇"
-          : result.text;
+          : parsedText;
       const listings = abstained
         ? undefined
         : browsingListings ?? (await this.resolveMentionedListing(businessId, visitorText, text));
-      const suggestions = abstained ? undefined : this.buildSuggestions(niche, listings);
+      // Precedence: model-provided quick-reply options > existing buildSuggestions() listing-based
+      // suggestions > undefined when abstained.
+      const suggestions = abstained
+        ? undefined
+        : quickReplyOptions.length > 0
+          ? quickReplyOptions
+          : this.buildSuggestions(niche, listings);
       return {
         text,
         abstained,
@@ -1138,17 +1228,24 @@ export class ChatService {
       return { message: assistantMessage, escalated: false, flow: flowResult };
     }
 
-    if (!conversation.flowNodeId && isVagueListingInterest(visitorText)) {
+    const conversationalMode = resolveConversationalMode(business);
+
+    // Flag-gated bypass: in conversational mode a vague interest message falls through to the
+    // LLM's own discovery-style follow-up question instead of this rigid scripted one.
+    if (!conversation.flowNodeId && isVagueListingInterest(visitorText) && !conversationalMode) {
       const clarifying = vagueInterestClarifyingQuestion(niche);
       onDelta(clarifying);
       const assistantMessage = await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: clarifying, answerSource: "rag" },
       });
-      return { message: assistantMessage, escalated: false };
+      return { message: assistantMessage, escalated: false, conversationalMode };
     }
 
     if (isBareGreeting(visitorText)) {
-      const greeting = `Olá! 👋 Sou a assistente da ${business.name}. Como posso te ajudar?`;
+      const greetingPersona = getPersona(business.niche);
+      const greeting = conversationalMode
+        ? `Olá! 👋 Sou ${greetingPersona.name}, da ${business.name}. ${greetingPersona.openingQuestion}`
+        : `Olá! 👋 Sou ${greetingPersona.name}, atendente da ${business.name}. Como posso te ajudar?`;
       onDelta(greeting);
       const assistantMessage = await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: greeting, answerSource: "rag" },
@@ -1157,7 +1254,7 @@ export class ChatService {
         where: { id: conversationId },
         data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
       });
-      return { message: assistantMessage, escalated: false };
+      return { message: assistantMessage, escalated: false, conversationalMode };
     }
 
     const photoRequest = await this.resolvePhotoRequest(businessId, conversationId, visitorText);
@@ -1178,7 +1275,7 @@ export class ChatService {
         where: { id: conversationId },
         data: { lastMessageAt: new Date(), messageCount: { increment: 2 } },
       });
-      return { message: assistantMessage, escalated: false };
+      return { message: assistantMessage, escalated: false, conversationalMode };
     }
 
     const streamSimulation = await this.resolveFinancingSimulation(businessId, conversationId, niche, visitorText);
@@ -1210,6 +1307,7 @@ export class ChatService {
       return {
         message: assistantMessage,
         escalated: false,
+        conversationalMode,
         ...(streamSimulation.kind === "result" ? { listings: streamSimulation.matchedListings } : {}),
       };
     }
@@ -1227,10 +1325,80 @@ export class ChatService {
     // abstained before ever reaching resolveBrowsingListings.
     const earlyBrowsingListings = await this.resolveBrowsingListings(businessId, niche, visitorText, preliminaryChunkTextForBrowsing);
 
+    // Only resolved here (not eagerly above like generateAnswer's retrievalQueryText) — needed by
+    // the discovery-turn exemption's "no context listing attached" condition just below.
+    const streamContextListingId = conversationalMode ? await this.resolveContextListing(businessId, conversationId) : null;
+
     // Zero retrieved chunks means there's nothing to ground the model on — this check runs before
     // everything else, unless a browsing-listing match was already found above. Shared
     // (niche-gated) chunks count too, same reasoning as generateAnswer's equivalent check.
     if (preliminaryChunks.length === 0 && preliminarySharedChunks.length === 0 && !earlyBrowsingListings) {
+      // Narrow "discovery turn" exemption — same conditions/reasoning as generateAnswer's
+      // equivalent check (see there for the full comment); streaming counterpart.
+      if (conversationalMode && !streamContextListingId) {
+        const normalizedVisitorText = normalize(visitorText);
+        const hasConcreteMarkers = CONCRETE_DETAIL_PATTERN.test(normalizedVisitorText);
+        if (!hasConcreteMarkers && conversation.messageCount < DISCOVERY_TURN_MESSAGE_CAP) {
+          try {
+            const persona = getPersona(niche);
+            let discoveryFullText = "";
+            let discoveryHeld = "";
+            let discoveryEmittedLength = 0;
+            const discoveryResult = await generateFromGatewayStream(
+              {
+                purpose: "chat",
+                businessId,
+                systemPrompt: discoveryOnlySystemPrompt(persona, business.name),
+                prompt: `Cliente: ${visitorText}`,
+                temperature: 0.3,
+              },
+              (delta) => {
+                discoveryFullText += delta;
+                discoveryHeld += delta;
+                const { safeToEmit, held } = splitQuickReplyStream(discoveryHeld);
+                if (safeToEmit) {
+                  onDelta(safeToEmit);
+                  discoveryEmittedLength += safeToEmit.length;
+                }
+                discoveryHeld = held;
+              },
+              signal,
+            );
+            const { text: discoveryText, options: discoveryOptions } = parseQuickReplies(discoveryFullText);
+            if (discoveryText.length > discoveryEmittedLength) {
+              onDelta(discoveryText.slice(discoveryEmittedLength));
+            }
+            const assistantMessage = await this.prisma.client.message.create({
+              data: {
+                conversationId,
+                businessId,
+                role: "assistant",
+                content: discoveryText,
+                answerSource: "discovery",
+                modelUsed: discoveryResult.model,
+                inputTokens: discoveryResult.inputTokens,
+                outputTokens: discoveryResult.outputTokens,
+                latencyMs: discoveryResult.latencyMs,
+              },
+            });
+            await this.prisma.client.conversation.update({
+              where: { id: conversationId },
+              data: { lastMessageAt: new Date(), messageCount: { increment: 2 }, llmTurns: { increment: 1 } },
+            });
+            this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
+            return {
+              message: assistantMessage,
+              escalated: false,
+              conversationalMode,
+              suggestions: discoveryOptions.length > 0 ? discoveryOptions : undefined,
+            };
+          } catch {
+            // Infra failure on the discovery-only call — fall through to the normal
+            // NO_CONTEXT_FALLBACK abstention below rather than leaving the visitor without a reply.
+          }
+        }
+      }
+
       onDelta(NO_CONTEXT_FALLBACK);
       const assistantMessage = await this.prisma.client.message.create({
         data: { conversationId, businessId, role: "assistant", content: NO_CONTEXT_FALLBACK, answerSource: "abstained" },
@@ -1248,9 +1416,10 @@ export class ChatService {
           escalated: escalation.escalated,
           whatsappUrl: escalation.whatsappUrl,
           referenceCode: escalation.referenceCode,
+          conversationalMode,
         };
       }
-      return { message: assistantMessage, escalated: false };
+      return { message: assistantMessage, escalated: false, conversationalMode };
     }
 
     // Already resolved above (needed before the zero-chunk abstention check) — reuse it rather
@@ -1258,18 +1427,39 @@ export class ChatService {
     const browsingListings = earlyBrowsingListings;
 
     const { systemPrompt, prompt, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText } =
-      await this.buildChatPrompt(businessId, conversationId, visitorText, { listingsAttached: Boolean(browsingListings) });
+      await this.buildChatPrompt(businessId, conversationId, visitorText, {
+        listingsAttached: Boolean(browsingListings),
+        conversationalMode,
+      });
 
     let fullText = "";
+    let heldBuffer = "";
+    let emittedLength = 0;
     let gatewayResult;
     let streamFailed = false;
     let streamFailedWithNoMeaningfulText = false;
     try {
       gatewayResult = await generateFromGatewayStream(
-        { purpose: "chat", businessId, systemPrompt, prompt, temperature: 0.1 },
+        { purpose: "chat", businessId, systemPrompt, prompt, temperature: conversationalMode ? 0.3 : 0.1 },
         (delta) => {
           fullText += delta;
-          onDelta(delta);
+          if (!conversationalMode) {
+            // Flag off: pass text straight through exactly as before this diff, with zero
+            // buffering/holdback behavior change.
+            onDelta(delta);
+            emittedLength += delta.length;
+            return;
+          }
+          // Quick replies are held back from the visitor until confirmed not-a-sentinel (or the
+          // full sentinel line arrives) — see quick-replies.ts. Never let a partial "[[OPC..."
+          // leak to the visitor mid-stream.
+          heldBuffer += delta;
+          const { safeToEmit, held } = splitQuickReplyStream(heldBuffer);
+          if (safeToEmit) {
+            onDelta(safeToEmit);
+            emittedLength += safeToEmit.length;
+          }
+          heldBuffer = held;
         },
         signal,
       );
@@ -1308,23 +1498,43 @@ export class ChatService {
     // Text is already on the wire by this point (see note above) — a bad price/area can't be
     // un-sent, but marking the persisted record lets it surface in "Perguntas não respondidas"
     // the same way the entity-claim guard's catches already do.
+    // Quick replies are parsed/stripped from the fully accumulated text BEFORE any
+    // hallucination-guard check runs below, so the guards always see clean prose, never the
+    // sentinel. On a stream failure, fullText is already the plain interrupted/fallback text with
+    // no sentinel, so there's nothing to parse — skip straight to it.
+    const { text: parsedText, options: quickReplyOptions } = streamFailed || !conversationalMode
+      ? { text: fullText, options: [] as string[] }
+      : parseQuickReplies(fullText);
+    // Flush anything that was held back mid-stream (see splitQuickReplyStream above) but turned
+    // out NOT to be part of a real sentinel — the visitor must still see it. The real sentinel
+    // line itself (if any) is excluded from parsedText and is never flushed.
+    if (!streamFailed && parsedText.length > emittedLength) {
+      onDelta(parsedText.slice(emittedLength));
+    }
+
     const abstained = streamFailed
       ? streamFailedWithNoMeaningfulText
-      : looksLikeAbstention(fullText) ||
-        hasUngroundedEntityClaim(fullText, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings)) ||
-        hasUnmatchedPriceOrArea(fullText, browsingListings);
+      : looksLikeAbstention(parsedText) ||
+        hasUngroundedEntityClaim(parsedText, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings)) ||
+        hasUnmatchedPriceOrArea(parsedText, browsingListings);
 
     const listings = abstained
       ? undefined
-      : browsingListings ?? (await this.resolveMentionedListing(businessId, visitorText, fullText));
-    const suggestions = abstained ? undefined : this.buildSuggestions(niche, listings);
+      : browsingListings ?? (await this.resolveMentionedListing(businessId, visitorText, parsedText));
+    // Precedence: model-provided quick-reply options > existing buildSuggestions() listing-based
+    // suggestions > undefined when abstained.
+    const suggestions = abstained
+      ? undefined
+      : quickReplyOptions.length > 0
+        ? quickReplyOptions
+        : this.buildSuggestions(niche, listings);
 
     const assistantMessage = await this.prisma.client.message.create({
       data: {
         conversationId,
         businessId,
         role: "assistant",
-        content: fullText,
+        content: parsedText,
         answerSource: abstained ? "abstained" : "rag",
         modelUsed: gatewayResult.model,
         inputTokens: gatewayResult.inputTokens,
@@ -1353,7 +1563,14 @@ export class ChatService {
       }
     }
 
-    return { message: assistantMessage, escalated: autoEscalation?.escalated ?? false, listings, suggestions, ...(autoEscalation ?? {}) };
+    return {
+      message: assistantMessage,
+      escalated: autoEscalation?.escalated ?? false,
+      listings,
+      suggestions,
+      conversationalMode,
+      ...(autoEscalation ?? {}),
+    };
   }
 
   private readonly ALLOWED_SERVICES = new Set(["Visita ao imóvel", "Test-drive"]);

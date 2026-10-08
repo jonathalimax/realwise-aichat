@@ -23,6 +23,8 @@ export const getTenantDocumentMarkdown = (id: string, documentId: string) =>
 export const getTenantListings = (id: string, limit?: number, offset?: number) =>
   request(`/admin/tenants/${id}/listings?limit=${limit ?? 50}&offset=${offset ?? 0}`);
 export const suspendTenant = (id: string) => request(`/admin/tenants/${id}/suspend`, { method: "POST" });
+export const setConversationalMode = (id: string, enabled: boolean) =>
+  request(`/admin/tenants/${id}/conversational-mode`, { method: "PATCH", body: JSON.stringify({ enabled }) });
 export const bulkSuspendTenants = (ids: string[]) =>
   request("/admin/tenants/bulk-suspend", { method: "PATCH", body: JSON.stringify({ ids }) });
 export const getGlobalMetrics = () => request("/admin/metrics");

@@ -51,6 +51,11 @@ export class AdminController {
     return this.admin.overrideConfidenceThreshold(id, threshold);
   }
 
+  @Patch("tenants/:id/conversational-mode")
+  setConversationalMode(@Param("id") id: string, @Body("enabled") enabled: boolean) {
+    return this.admin.setConversationalMode(id, enabled);
+  }
+
   @Post("tenants/:id/suspend")
   suspend(@Param("id") id: string) {
     return this.admin.suspendTenant(id);
