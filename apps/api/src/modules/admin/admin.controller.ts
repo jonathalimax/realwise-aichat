@@ -81,6 +81,31 @@ export class AdminController {
     return this.admin.extractionCostMetrics(parseDays(days));
   }
 
+  @Get("metrics/conversation-cost")
+  conversationCost(
+    @Query("businessId") businessId?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("sortBy") sortBy?: string,
+    @Query("sortOrder") sortOrder?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
+  ) {
+    const parsedLimit = Number(limit);
+    const parsedOffset = Number(offset);
+    const parsedFrom = from ? new Date(from) : undefined;
+    const parsedTo = to ? new Date(to) : undefined;
+    return this.admin.conversationCostMetrics({
+      businessId,
+      from: parsedFrom && !Number.isNaN(parsedFrom.getTime()) ? parsedFrom : undefined,
+      to: parsedTo && !Number.isNaN(parsedTo.getTime()) ? parsedTo : undefined,
+      sortBy: sortBy === "cost" || sortBy === "tokens" || sortBy === "date" ? sortBy : undefined,
+      sortOrder: sortOrder === "asc" || sortOrder === "desc" ? sortOrder : undefined,
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : undefined,
+      offset: Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : undefined,
+    });
+  }
+
   @Get("metrics/confidence-distribution")
   confidenceDistribution() {
     return this.admin.confidenceDistribution();

@@ -401,6 +401,112 @@ export class AdminService {
     };
   }
 
+  // Real conversation-answering spend, as distinct from extractionCostMetrics' pipeline/chatPath
+  // split above. Only purpose="chat" is included — chat.service.ts never actually emits "chips" or
+  // "summary" LlmCallLog rows today (those purposes exist in gateway-client.ts's type union but are
+  // unused call sites as of this writing), so including them would be speculative, not real cost.
+  //
+  // Grain: LlmCallLog has no conversationId (only businessId) and no other model links a call back
+  // to a specific Conversation row, so true per-conversation cost isn't trackable with the current
+  // schema. This aggregates at business+day grain instead, which still supports filtering by client,
+  // filtering/ranging by date, and sorting — a future migration adding conversationId to LlmCallLog
+  // would be needed for true per-conversation rows.
+  async conversationCostMetrics(params: {
+    businessId?: string;
+    from?: Date;
+    to?: Date;
+    sortBy?: "cost" | "date" | "tokens";
+    sortOrder?: "asc" | "desc";
+    limit?: number;
+    offset?: number;
+  }) {
+    const { businessId, from, to } = params;
+    const sortBy = params.sortBy ?? "date";
+    const sortOrder = params.sortOrder ?? "desc";
+    const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+    const offset = Math.max(params.offset ?? 0, 0);
+
+    const calls = await this.prisma.client.llmCallLog.findMany({
+      where: {
+        purpose: "chat",
+        ...(businessId ? { businessId } : {}),
+        ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+      },
+      select: {
+        businessId: true,
+        provider: true,
+        model: true,
+        inputTokens: true,
+        outputTokens: true,
+        error: true,
+        createdAt: true,
+      },
+    });
+
+    type Group = { businessId: string; date: string; costUsd: number; tokens: number; calls: number; failedCalls: number };
+    const groups = new Map<string, Group>();
+    let totalCostUsd = 0;
+    let totalTokens = 0;
+    let totalCalls = 0;
+
+    for (const call of calls) {
+      if (!call.businessId) continue;
+      const date = call.createdAt.toISOString().slice(0, 10);
+      const key = `${call.businessId}:${date}`;
+      const group = groups.get(key) ?? { businessId: call.businessId, date, costUsd: 0, tokens: 0, calls: 0, failedCalls: 0 };
+      group.calls++;
+      totalCalls++;
+      const tokens = call.inputTokens + call.outputTokens;
+      group.tokens += tokens;
+      totalTokens += tokens;
+      if (call.error !== null) {
+        group.failedCalls++;
+      } else {
+        const cost = estimateCostUsd(call.provider, call.model, call.inputTokens, call.outputTokens);
+        group.costUsd += cost;
+        totalCostUsd += cost;
+      }
+      groups.set(key, group);
+    }
+
+    const businessIds = [...new Set([...groups.values()].map((g) => g.businessId))];
+    const businesses = businessIds.length
+      ? await this.prisma.client.business.findMany({ where: { id: { in: businessIds } }, select: { id: true, name: true } })
+      : [];
+    const nameById = new Map(businesses.map((b) => [b.id, b.name]));
+
+    const rows = [...groups.values()].map((g) => ({
+      businessId: g.businessId,
+      businessName: nameById.get(g.businessId) ?? "—",
+      date: g.date,
+      costUsd: g.costUsd,
+      tokens: g.tokens,
+      calls: g.calls,
+      failedCalls: g.failedCalls,
+    }));
+
+    const sorted = rows.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "cost") cmp = a.costUsd - b.costUsd;
+      else if (sortBy === "tokens") cmp = a.tokens - b.tokens;
+      else cmp = a.date.localeCompare(b.date);
+      return sortOrder === "asc" ? cmp : -cmp;
+    });
+
+    const total = sorted.length;
+    const page = sorted.slice(offset, offset + limit);
+
+    return {
+      totalCostUsd,
+      totalTokens,
+      totalCalls,
+      total,
+      limit,
+      offset,
+      rows: page,
+    };
+  }
+
   async confidenceDistribution() {
     const businesses = await this.prisma.client.business.findMany({
       where: { deletedAt: null },

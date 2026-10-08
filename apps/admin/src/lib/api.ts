@@ -32,6 +32,25 @@ export const getMetricsTimeseries = (days?: number) => request(`/admin/metrics/t
 export const getConfidenceDistribution = () => request("/admin/metrics/confidence-distribution");
 export const getExtractionCostMetrics = (days?: number) =>
   request(`/admin/metrics/extraction-cost${days ? `?days=${days}` : ""}`);
+export const getConversationCostMetrics = (params: {
+  businessId?: string;
+  from?: string;
+  to?: string;
+  sortBy?: "cost" | "date" | "tokens";
+  sortOrder?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}) => {
+  const search = new URLSearchParams();
+  if (params.businessId) search.set("businessId", params.businessId);
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
+  if (params.sortBy) search.set("sortBy", params.sortBy);
+  if (params.sortOrder) search.set("sortOrder", params.sortOrder);
+  search.set("limit", String(params.limit ?? 50));
+  search.set("offset", String(params.offset ?? 0));
+  return request(`/admin/metrics/conversation-cost?${search.toString()}`);
+};
 export const getConversationInsights = (days?: number) =>
   request(`/admin/conversations/insights${days ? `?days=${days}` : ""}`);
 export const getConversationProblemCases = (params: {
