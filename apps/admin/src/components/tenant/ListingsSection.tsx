@@ -5,6 +5,7 @@ import { getTenantListings } from "../../lib/api";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../ui/table";
+import { ListingPreview } from "./ListingPreview";
 
 const PAGE_SIZE = 50;
 
@@ -42,6 +43,7 @@ export function ListingsSection({ tenantId }: { tenantId: string }) {
   const [total, setTotal] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [previewListing, setPreviewListing] = useState<any | null>(null);
 
   async function loadPage(nextOffset: number) {
     setLoading(true);
@@ -87,7 +89,11 @@ export function ListingsSection({ tenantId }: { tenantId: string }) {
           </TableHeader>
           <TableBody>
             {listings.map((listing) => (
-              <TableRow key={listing.id}>
+              <TableRow
+                key={listing.id}
+                className="cursor-pointer hover:bg-surface"
+                onClick={() => setPreviewListing(listing)}
+              >
                 <TableCell className="break-words">{listing.referenceCode}</TableCell>
                 <TableCell className="break-words">
                   {listing.title}
@@ -125,7 +131,11 @@ export function ListingsSection({ tenantId }: { tenantId: string }) {
 
       <div className="flex flex-col gap-2 lg:hidden">
         {listings.map((listing) => (
-          <div key={listing.id} className="rounded-lg border border-border bg-bg-2 p-3">
+          <div
+            key={listing.id}
+            className="cursor-pointer rounded-lg border border-border bg-bg-2 p-3"
+            onClick={() => setPreviewListing(listing)}
+          >
             <div className="break-words font-semibold text-ink">{listing.title}</div>
             <div className="text-xs text-ink-soft">{listing.referenceCode}</div>
             <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
@@ -182,6 +192,14 @@ export function ListingsSection({ tenantId }: { tenantId: string }) {
           {loading ? "Carregando…" : "Carregar mais"}
         </Button>
       )}
+
+      <ListingPreview
+        listing={previewListing}
+        open={previewListing !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewListing(null);
+        }}
+      />
     </div>
   );
 }

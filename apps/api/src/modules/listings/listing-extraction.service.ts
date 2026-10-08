@@ -72,6 +72,7 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
     '{ "title": string, "code": string, "description": string, "price": string, "url": string, "addressLine": string, "neighborhood": string, "city": string, "state": string, "listingType": string, "transaction": "aluguel"|"venda", "bedrooms": number, "parkingSpots": number, "areaM2": number, "brand": string, "model": string, "year": number, "mileageKm": number, "images": string[] }',
     "Regras: nunca invente um item ou valor de campo que não apareça explicitamente no texto. Se um campo não aparecer no texto para aquele item, OMITA o campo (nunca invente um placeholder).",
     "NUNCA trate texto de carregamento, erro ou estado vazio da página como conteúdo real — se o valor de um campo contiver algo como 'Carregando...', 'Loading...', 'Aguarde', 'Consulte', 'undefined', 'null', 'R$ ???.???.???,00', '--', 'Preço a definir' ou uma sequência de '?' no lugar dos números, OMITA esse campo (e se nem o título for conteúdo real, não inclua o item).",
+    "'description' deve ser um texto corrido, bem pontuado e fácil de ler, usando apenas informações presentes no texto original — remova quebras de linha excessivas, repetições e qualquer rodapé de contato/telefone/CRECI que não seja parte da descrição do imóvel/veículo em si, mas nunca invente ou reescreva o conteúdo além de normalizar a formatação.",
     "'transaction' só deve ser preenchido se o texto disser explicitamente aluguel ou venda.",
     "'city'/'state' só devem ser preenchidos se citados explicitamente no texto daquele item.",
     // A short literal token (e.g. "AP139") is a much easier copy task for the model than an array
@@ -210,7 +211,7 @@ function mapStructuredDataToListing(raw: Record<string, unknown>, documentId: st
 
   return {
     title,
-    description: parseRealStr(flat.description),
+    description: cleanDescription(parseRealStr(flat.description)),
     priceText,
     priceCents,
     url: pageUrl ?? url,
@@ -420,6 +421,74 @@ function parseRealStr(value: unknown): string | undefined {
   return PLACEHOLDER_VALUE_PATTERN.test(str) ? undefined : str;
 }
 
+// A handful of common HTML entities that occasionally slip through a scrape's text extraction
+// (parseRealStr only trims/coerces — it never decodes entities).
+const HTML_ENTITY_MAP: Record<string, string> = {
+  "&nbsp;": " ",
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+  "&apos;": "'",
+};
+
+// Trailing "Leia mais"/"Ver mais"/ellipsis truncation markers some source sites append to a
+// listing's teaser text before the full description, plus a final line that's clearly footer
+// boilerplate (a bare phone number, WhatsApp mention, or "Entre em contato"/CRECI line) rather
+// than real listing content. Deliberately conservative — only ever drops a LAST line that fully
+// matches one of these shapes, never touches text in the middle of the description.
+const TRAILING_READ_MORE_PATTERN = /\s*(?:leia mais|ver mais|veja mais)\.*\s*$/i;
+const TRAILING_ELLIPSIS_PATTERN = /\s*\.{3,}\s*$/;
+const FOOTER_LINE_PATTERN =
+  /^(?:\(?\d{2}\)?[\s.-]?\d{4,5}[\s.-]?\d{4}|whats ?app:?.*|entre em contato.*|fale com a gente.*|creci[\s:.-]*\d+.*|contato:.*)$/i;
+
+// Deterministic cleanup applied to every raw description captured from either extraction path
+// (structured JSON-LD mapping and LLM window extraction) — collapses scraping whitespace noise
+// and strips a short list of known scraping artifacts, without rewriting or restructuring the
+// actual listing content.
+function cleanDescription(raw?: string): string | undefined {
+  if (!raw) return undefined;
+
+  let text = raw;
+  for (const [entity, replacement] of Object.entries(HTML_ENTITY_MAP)) {
+    text = text.split(entity).join(replacement);
+  }
+
+  // Normalize line breaks, trim each line, collapse runs of blank lines into a single blank
+  // line (so paragraph breaks survive), and collapse horizontal whitespace within a line.
+  const lines = text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim());
+
+  const collapsedLines: string[] = [];
+  for (const line of lines) {
+    if (line === "" && collapsedLines[collapsedLines.length - 1] === "") continue;
+    collapsedLines.push(line);
+  }
+  while (collapsedLines.length > 0 && collapsedLines[0] === "") collapsedLines.shift();
+  while (collapsedLines.length > 0 && collapsedLines[collapsedLines.length - 1] === "") collapsedLines.pop();
+
+  // Drop a trailing footer-boilerplate line (phone/WhatsApp/CRECI/"entre em contato") — but only
+  // the very last non-empty line, so real content mentioning a phone mid-description survives.
+  while (collapsedLines.length > 0) {
+    const lastLine = collapsedLines[collapsedLines.length - 1];
+    if (lastLine !== "" && FOOTER_LINE_PATTERN.test(lastLine)) {
+      collapsedLines.pop();
+      while (collapsedLines.length > 0 && collapsedLines[collapsedLines.length - 1] === "") collapsedLines.pop();
+      continue;
+    }
+    break;
+  }
+
+  let cleaned = collapsedLines.join("\n").replace(/\n{3,}/g, "\n\n");
+  cleaned = cleaned.replace(TRAILING_READ_MORE_PATTERN, "").replace(TRAILING_ELLIPSIS_PATTERN, "");
+  cleaned = cleaned.trim();
+
+  return cleaned || undefined;
+}
+
 function parseTransaction(value: unknown): string | undefined {
   const str = parseStr(value)?.toLowerCase();
   return str === "aluguel" || str === "venda" ? str : undefined;
@@ -586,7 +655,7 @@ export class ListingExtractionService {
             // VENDA TERRENO" instead of "243") despite the instruction — take only the leading
             // alphanumeric/hyphen token so it matches the keys extractImagesByCodeProximity builds.
             code: parseStr(rawItem.code)?.toUpperCase().match(/^[A-Z0-9-]+/)?.[0],
-            description: parseRealStr(rawItem.description),
+            description: cleanDescription(parseRealStr(rawItem.description)),
             priceText,
             priceCents: parsedPrice?.priceCents,
             pricePeriod: parsedPrice?.pricePeriod,
