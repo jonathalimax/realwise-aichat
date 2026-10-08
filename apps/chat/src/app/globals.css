@@ -82,11 +82,11 @@
      flat bordered card. Falls back gracefully where backdrop-filter isn't supported (the
      semi-transparent background alone still reads fine against the light --bg canvas). */
   .glass-card {
-    background: color-mix(in srgb, rgb(var(--surface)) 72%, transparent);
+    background: color-mix(in srgb, rgb(var(--surface)) 96%, transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid color-mix(in srgb, rgb(var(--surface)) 60%, transparent);
-    box-shadow: 0 8px 24px rgba(20, 24, 21, 0.08);
+    border: 1px solid color-mix(in srgb, rgb(var(--border)) 60%, transparent);
+    box-shadow: 0 4px 12px rgba(20, 24, 21, 0.06);
   }
 
   /* Tenant-brand utilities — consume the --tenant-accent custom property set inline in
