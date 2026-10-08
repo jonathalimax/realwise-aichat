@@ -15,8 +15,8 @@
   --ink: 20 36 30;
   --ink-soft: 86 98 90;
   --muted: 150 156 146;
-  --accent: 11 77 56;
-  --accent-soft: 223 240 230;
+  --accent: 21 128 61;
+  --accent-soft: 220 243 230;
   --accent-ink: 7 49 40;
   --lime: 215 242 107;
   --lime-soft: 243 250 217;
@@ -27,20 +27,20 @@
   --negative-soft: 251 234 228;
   --warning: 184 134 43;
   --warning-soft: 247 238 214;
-  /* Secondary/tertiary pastel accents, added for sparing use in neutral/non-branded chrome
+  /* Secondary/tertiary vivid accents, added for sparing use in neutral/non-branded chrome
      (system messages, timestamps, non-branded badges) only — the tenant's --tenant-accent
      below remains the dominant brand color story for this widget, these are a light touch. */
-  --secondary: 247 168 140;
-  --secondary-soft: 253 232 224;
-  --secondary-ink: 140 69 48;
-  --tertiary: 168 187 240;
-  --tertiary-soft: 228 233 251;
-  --tertiary-ink: 56 67 125;
+  --secondary: 255 99 72;
+  --secondary-soft: 255 228 221;
+  --secondary-ink: 168 48 27;
+  --tertiary: 124 111 240;
+  --tertiary-soft: 231 229 253;
+  --tertiary-ink: 72 56 184;
   /* Per-tenant brand accent — overridden inline (see ChatScreen.tsx) with business.brandColor;
      falls back to the design-system accent green above when a tenant hasn't set one. Kept as a
      bare hex/rgb() value (not an rgb()-triple like the tokens above) since it's consumed directly
      by color-mix() below rather than through the rgb(var(..) / <alpha>) Tailwind color pattern. */
-  --tenant-accent: #0b4d38;
+  --tenant-accent: #15803d;
 }
 
 .dark {
@@ -61,12 +61,12 @@
   --positive-soft: 29 51 36;
   --negative: 227 134 114;
   --negative-soft: 58 36 30;
-  --secondary: 230 140 110;
+  --secondary: 255 138 115;
   --secondary-soft: 58 36 30;
-  --secondary-ink: 247 198 181;
-  --tertiary: 150 170 235;
+  --secondary-ink: 255 205 190;
+  --tertiary: 160 150 245;
   --tertiary-soft: 30 36 58;
-  --tertiary-ink: 210 217 248;
+  --tertiary-ink: 214 209 252;
   --warning: 224 189 112;
   --warning-soft: 58 49 27;
 }

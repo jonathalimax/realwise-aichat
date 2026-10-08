@@ -25,16 +25,16 @@ export function ActivityChart({ data }: { data: Point[] }) {
             <stop offset="95%" stopColor="rgb(var(--accent))" stopOpacity={0.02} />
           </linearGradient>
           <linearGradient id="leadsFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="rgb(var(--lime-ink))" stopOpacity={0.4} />
-            <stop offset="95%" stopColor="rgb(var(--lime-ink))" stopOpacity={0.02} />
+            <stop offset="5%" stopColor="rgb(var(--tertiary))" stopOpacity={0.4} />
+            <stop offset="95%" stopColor="rgb(var(--tertiary))" stopOpacity={0.02} />
           </linearGradient>
           <linearGradient id="apptFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="rgb(var(--warning))" stopOpacity={0.4} />
             <stop offset="95%" stopColor="rgb(var(--warning))" stopOpacity={0.02} />
           </linearGradient>
           <linearGradient id="linkFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="rgb(var(--muted))" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="rgb(var(--muted))" stopOpacity={0.02} />
+            <stop offset="5%" stopColor="rgb(var(--secondary))" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="rgb(var(--secondary))" stopOpacity={0.02} />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" vertical={false} />
@@ -49,9 +49,9 @@ export function ActivityChart({ data }: { data: Point[] }) {
         <Tooltip content={<ChartTooltipContent labelFormatter={(label) => formatDate(String(label))} />} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Area type="natural" dataKey="conversations" name="Conversas" stroke="rgb(var(--accent))" strokeWidth={2} fill="url(#convFill)" />
-        <Area type="natural" dataKey="leads" name="Leads" stroke="rgb(var(--lime-ink))" strokeWidth={2} fill="url(#leadsFill)" />
+        <Area type="natural" dataKey="leads" name="Leads" stroke="rgb(var(--tertiary))" strokeWidth={2} fill="url(#leadsFill)" />
         <Area type="natural" dataKey="appointments" name="Agendamentos" stroke="rgb(var(--warning))" strokeWidth={2} fill="url(#apptFill)" />
-        <Area type="natural" dataKey="linkOpens" name="Aberturas do link" stroke="rgb(var(--muted))" strokeWidth={2} fill="url(#linkFill)" />
+        <Area type="natural" dataKey="linkOpens" name="Aberturas do link" stroke="rgb(var(--secondary))" strokeWidth={2} fill="url(#linkFill)" />
       </AreaChart>
     </ResponsiveContainer>
   );

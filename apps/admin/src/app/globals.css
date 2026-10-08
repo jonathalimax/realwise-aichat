@@ -12,8 +12,8 @@
   --ink: 14 43 34;
   --ink-soft: 69 84 76;
   --muted: 132 140 132;
-  --accent: 11 77 56;
-  --accent-soft: 220 238 228;
+  --accent: 21 128 61;
+  --accent-soft: 220 243 230;
   --accent-ink: 7 49 40;
   --lime: 215 242 107;
   --lime-soft: 243 250 217;
@@ -24,12 +24,12 @@
   --negative-soft: 251 234 228;
   --warning: 184 134 43;
   --warning-soft: 247 238 214;
-  --secondary: 247 168 140;
-  --secondary-soft: 253 232 224;
-  --secondary-ink: 140 69 48;
-  --tertiary: 168 187 240;
-  --tertiary-soft: 228 233 251;
-  --tertiary-ink: 56 67 125;
+  --secondary: 255 99 72;
+  --secondary-soft: 255 228 221;
+  --secondary-ink: 168 48 27;
+  --tertiary: 124 111 240;
+  --tertiary-soft: 231 229 253;
+  --tertiary-ink: 72 56 184;
 }
 
 .dark {
@@ -54,12 +54,12 @@
   --negative-soft: 58 36 30;
   --warning: 224 189 112;
   --warning-soft: 58 49 27;
-  --secondary: 230 140 110;
+  --secondary: 255 138 115;
   --secondary-soft: 58 36 30;
-  --secondary-ink: 247 198 181;
-  --tertiary: 150 170 235;
+  --secondary-ink: 255 205 190;
+  --tertiary: 160 150 245;
   --tertiary-soft: 30 36 58;
-  --tertiary-ink: 210 217 248;
+  --tertiary-ink: 214 209 252;
 }
 
 @layer base {

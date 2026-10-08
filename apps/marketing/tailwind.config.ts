@@ -28,6 +28,12 @@ export default {
         "negative-soft": light.negativeSoft,
         warning: light.warning,
         "warning-soft": light.warningSoft,
+        secondary: light.secondary,
+        "secondary-soft": light.secondarySoft,
+        "secondary-ink": light.secondaryInk,
+        tertiary: light.tertiary,
+        "tertiary-soft": light.tertiarySoft,
+        "tertiary-ink": light.tertiaryInk,
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],

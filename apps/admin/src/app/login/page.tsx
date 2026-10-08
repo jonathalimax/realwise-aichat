@@ -33,7 +33,7 @@ export default function AdminLoginPage() {
       <div className="hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-between bg-ink px-12 py-10 text-bg">
         <span className="font-serif text-xl font-bold text-bg">Realwise · Admin</span>
         <p className="max-w-sm font-serif text-2xl leading-[1.2] text-bg/80">
-          Acesso <em className="italic text-[#0B4D38]">interno</em> à plataforma.
+          Acesso <em className="italic text-[#15803D]">interno</em> à plataforma.
         </p>
       </div>
 
