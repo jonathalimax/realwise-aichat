@@ -28,6 +28,7 @@ import {
   DEFAULT_LATE_PAYMENT_INTEREST_PERCENT,
 } from "./flow-calculators";
 import { getPersona } from "./personas";
+import { parseMoneyToCents } from "./simulator.service";
 
 // Scripted nodes that are supposed to hand the visitor off to a real human WhatsApp number —
 // their flow-JSON message templates have placeholders ({numero}, {espera}) that nothing ever
@@ -181,6 +182,33 @@ const SYNONYMS: Record<string, string[]> = {
   proprietario: ["proprietario", "anunciar"],
   atendente: ["atendente", "humano", "pessoa"],
 };
+
+// Same shape as simulator.service.ts's own money-matching pattern (kept local/duplicated rather
+// than exported from there, since that pattern isn't exported and this file already has its own
+// MONEY-adjacent helpers below) — matches "R$ 150.000", "150.000,00", "150 mil", "150k".
+const MONEY_PATTERN = /r\$\s?[\d.,]+\s?(?:mil|k)?|\b\d+(?:[.,]\d+)?\s?(?:mil|k)\b|\b\d{1,3}(?:\.\d{3})+(?:,\d+)?\b/i;
+
+// pt-BR cue words that signal a stated amount is a CEILING ("orçamento de", "até", "no máximo")
+// rather than some other unrelated number in the message — checked against the accent-stripped
+// `normalize()` output so "até"/"orçamento" match regardless of accent rendering.
+const BUDGET_CEILING_CUES = ["orcamento", "ate", "no maximo", "maximo de", "gastar ate", "budget"];
+
+// Extracts a price CEILING (in cents, matching ChatQueryFilters.priceMax's unit — see
+// faixaToPriceRange above, whose own bucket boundaries are already in cents) from free text
+// stating budget/purchasing-power interest (e.g. "orçamento de R$ 150.000,00", "até R$150 mil",
+// "no máximo 150000"). Reuses simulator.service.ts's own parseMoneyToCents so the thousands/
+// decimal/ "mil"/"k" disambiguation logic never drifts between the financing simulator and this
+// listing-browse path. Deliberately conservative: a bare monetary mention with NO budget cue word
+// nearby (e.g. "o imóvel X custa R$ 150.000") is NOT treated as a ceiling here — that's just a
+// mentioned price, not the visitor's own stated limit.
+function extractBudgetCeilingCents(visitorText: string): number | null {
+  const normalized = normalize(visitorText);
+  const hasCeilingCue = BUDGET_CEILING_CUES.some((cue) => normalized.includes(cue));
+  if (!hasCeilingCue) return null;
+  const match = visitorText.match(MONEY_PATTERN);
+  if (!match) return null;
+  return parseMoneyToCents(match[0]);
+}
 
 function normalize(text: string): string {
   return text
@@ -1362,7 +1390,18 @@ export class FlowService {
     const matchedType = dbTypes.find((t) => normalized.includes(normalize(t)));
     if (matchedType) params.tipo = matchedType;
 
-    return this.chatFiltersFor(niche, params);
+    const filters = this.chatFiltersFor(niche, params);
+
+    // chatFiltersFor only ever derives priceMax from a scripted "faixa" bucket param, which free
+    // text never sets — a budget ceiling stated directly in the visitor's own words ("orçamento de
+    // R$ 150.000") must still reach queryForChat, otherwise it's silently dropped and the browse
+    // path returns listings with no price constraint at all (the exact bug this guards against).
+    const priceMaxCents = extractBudgetCeilingCents(visitorText);
+    if (priceMaxCents != null && filters.priceMax == null) {
+      filters.priceMax = priceMaxCents;
+    }
+
+    return filters;
   }
 
   // Asks the model for strictly-grounded structured listing items instead of prose — same
@@ -1438,6 +1477,21 @@ export class FlowService {
     const hasItemWord = itemWords.some((w) => normalized.includes(w));
     const hasIntentWord = intentWords.some((w) => normalized.includes(w));
     if (hasItemWord && hasIntentWord) return true;
+
+    // A visitor stating a budget/price ceiling together with SOME buying/renting signal word is
+    // unambiguously browse-intent in this product's context (real estate/vehicle niche), even when
+    // the exact message has no literal item word (e.g. "orçamento de R$ 150.000 pra comprar algo").
+    // Conservative on purpose: still requires an explicit buying/renting/interest word alongside
+    // the budget cue, so an unrelated bare "R$ X" mention doesn't hijack this path. Messages that
+    // trigger the financing simulator are already short-circuited BEFORE this classifier ever runs
+    // (detectsFinancingSimulationIntent, checked earlier in ChatService's call order), so a
+    // "simular financiamento de R$150.000" message never reaches here in the first place.
+    const buyingSignalWords = [
+      "comprar", "compra", "comprando", "alugar", "aluguel", "locacao", "locar",
+      "interessado", "interessada", "procuro", "quero", "orcamento",
+    ];
+    const hasBuyingSignalWord = buyingSignalWords.some((w) => normalized.includes(w));
+    if (hasBuyingSignalWord && extractBudgetCeilingCents(visitorText) != null) return true;
     // The chunk-text fallback below exists so item-only follow-ups ("me mostre os disponíveis",
     // the item itself named a few turns back) still count as a listing query — but "tem",
     // "quero", "procuro", "busco", "preciso" are so generic they match almost any message

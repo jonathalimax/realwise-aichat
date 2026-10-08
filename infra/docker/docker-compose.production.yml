@@ -26,6 +26,14 @@ services:
       - traefik.http.routers.realwise-api.tls=true
       - traefik.http.routers.realwise-api.tls.certresolver=letsencrypt
       - traefik.http.services.realwise-api.loadbalancer.server.port=3006
+      # Docker's own HEALTHCHECK above only informs Coolify/docker ps -- Traefik's docker provider
+      # does NOT consult it for routing eligibility. Without this, Traefik can keep a dead/stuck
+      # backend in its router pool (confirmed live: two separate incidents where this exact gap
+      # caused every request to hang until the proxy was manually restarted). This makes Traefik
+      # itself actively probe and evict an unresponsive backend from the pool.
+      - traefik.http.services.realwise-api.loadbalancer.healthcheck.path=/api/health
+      - traefik.http.services.realwise-api.loadbalancer.healthcheck.interval=10s
+      - traefik.http.services.realwise-api.loadbalancer.healthcheck.timeout=5s
 
   worker:
     image: ghcr.io/jonathalimax/realwise-worker:latest
@@ -88,6 +96,9 @@ services:
       - traefik.http.routers.realwise-chat.tls=true
       - traefik.http.routers.realwise-chat.tls.certresolver=letsencrypt
       - traefik.http.services.realwise-chat.loadbalancer.server.port=3000
+      - traefik.http.services.realwise-chat.loadbalancer.healthcheck.path=/
+      - traefik.http.services.realwise-chat.loadbalancer.healthcheck.interval=10s
+      - traefik.http.services.realwise-chat.loadbalancer.healthcheck.timeout=5s
 
   dashboard:
     image: ghcr.io/jonathalimax/realwise-dashboard:latest
@@ -106,6 +117,9 @@ services:
       - traefik.http.routers.realwise-dashboard.tls=true
       - traefik.http.routers.realwise-dashboard.tls.certresolver=letsencrypt
       - traefik.http.services.realwise-dashboard.loadbalancer.server.port=3000
+      - traefik.http.services.realwise-dashboard.loadbalancer.healthcheck.path=/
+      - traefik.http.services.realwise-dashboard.loadbalancer.healthcheck.interval=10s
+      - traefik.http.services.realwise-dashboard.loadbalancer.healthcheck.timeout=5s
 
   admin:
     image: ghcr.io/jonathalimax/realwise-admin:latest
@@ -124,6 +138,9 @@ services:
       - traefik.http.routers.realwise-admin.tls=true
       - traefik.http.routers.realwise-admin.tls.certresolver=letsencrypt
       - traefik.http.services.realwise-admin.loadbalancer.server.port=3000
+      - traefik.http.services.realwise-admin.loadbalancer.healthcheck.path=/
+      - traefik.http.services.realwise-admin.loadbalancer.healthcheck.interval=10s
+      - traefik.http.services.realwise-admin.loadbalancer.healthcheck.timeout=5s
 
   marketing:
     image: ghcr.io/jonathalimax/realwise-marketing:latest
@@ -143,6 +160,9 @@ services:
       - traefik.http.routers.realwise-marketing.tls=true
       - traefik.http.routers.realwise-marketing.tls.certresolver=letsencrypt
       - traefik.http.services.realwise-marketing.loadbalancer.server.port=3000
+      - traefik.http.services.realwise-marketing.loadbalancer.healthcheck.path=/
+      - traefik.http.services.realwise-marketing.loadbalancer.healthcheck.interval=10s
+      - traefik.http.services.realwise-marketing.loadbalancer.healthcheck.timeout=5s
       - traefik.http.routers.realwise-marketing.priority=1
       - traefik.http.routers.realwise-marketing-http.rule=Host(`aichat.realwise.com.br`)
       - traefik.http.routers.realwise-marketing-http.entrypoints=http

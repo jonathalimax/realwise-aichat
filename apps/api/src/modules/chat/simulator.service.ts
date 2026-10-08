@@ -65,7 +65,7 @@ export function detectsFinancingSimulationIntent(text: string, _niche: Niche): b
 
 // Parses a single pt-BR monetary expression into integer cents. Supports "R$ 400.000",
 // "400.000,50", "400 mil", "400k". Returns null when nothing parseable is found.
-function parseMoneyToCents(raw: string): number | null {
+export function parseMoneyToCents(raw: string): number | null {
   let text = raw.trim().toLowerCase();
   text = text.replace(/^r\$\s?/, "");
 
