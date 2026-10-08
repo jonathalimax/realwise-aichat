@@ -16,6 +16,7 @@ async function main() {
       features: { analytics: "basic", calendarSync: false, branding: false, customDomain: false, prioritySupport: false },
       stripeSetupPriceId: "price_1UMGJrRo53xwsjMq3nSGDjUb",
       isActive: true,
+      llmMonthlyBudgetUsdCents: 500,
     },
     create: {
       code: "essencial",
@@ -28,6 +29,7 @@ async function main() {
       features: { analytics: "basic", calendarSync: false, branding: false, customDomain: false, prioritySupport: false },
       stripePriceId: "price_1ULfqwRo53xwsjMqTLbkA197",
       stripeSetupPriceId: "price_1UMGJrRo53xwsjMq3nSGDjUb",
+      llmMonthlyBudgetUsdCents: 500,
     },
   });
 
@@ -44,6 +46,7 @@ async function main() {
       stripePriceId: "price_1UM9NXRo53xwsjMqll4VKSKN",
       stripeSetupPriceId: "price_1UM9NYRo53xwsjMqcR8Mx3h0",
       isActive: true,
+      llmMonthlyBudgetUsdCents: 2500,
     },
     create: {
       code: "profissional",
@@ -56,6 +59,7 @@ async function main() {
       features: { analytics: "full", calendarSync: true, branding: true, customDomain: true, prioritySupport: true },
       stripePriceId: "price_1UM9NXRo53xwsjMqll4VKSKN",
       stripeSetupPriceId: "price_1UM9NYRo53xwsjMqcR8Mx3h0",
+      llmMonthlyBudgetUsdCents: 2500,
     },
   });
 
@@ -63,7 +67,7 @@ async function main() {
   // deleted, so existing subscribers on this plan (if any) keep a valid foreign-key reference.
   await prisma.plan.upsert({
     where: { code: "studio" },
-    update: { isActive: false },
+    update: { isActive: false, llmMonthlyBudgetUsdCents: 3500 },
     create: {
       code: "studio",
       name: "Studio",
@@ -76,6 +80,7 @@ async function main() {
       stripePriceId: "price_1ULfr1Ro53xwsjMq2jtiANbN",
       stripeSetupPriceId: "price_1ULfr2Ro53xwsjMqAPh14Ywo",
       isActive: false,
+      llmMonthlyBudgetUsdCents: 3500,
     },
   });
 

@@ -31,6 +31,8 @@ export const setConversationalMode = (id: string, enabled: boolean) =>
   request(`/admin/tenants/${id}/conversational-mode`, { method: "PATCH", body: JSON.stringify({ enabled }) });
 export const bulkSuspendTenants = (ids: string[]) =>
   request("/admin/tenants/bulk-suspend", { method: "PATCH", body: JSON.stringify({ ids }) });
+export const setLlmBudget = (id: string, llmMonthlyBudgetUsdCents: number | null) =>
+  request(`/admin/tenants/${id}/llm-budget`, { method: "PATCH", body: JSON.stringify({ llmMonthlyBudgetUsdCents }) });
 export const getGlobalMetrics = () => request("/admin/metrics");
 export const getMetricsTimeseries = (days?: number) => request(`/admin/metrics/timeseries${days ? `?days=${days}` : ""}`);
 export const getConfidenceDistribution = () => request("/admin/metrics/confidence-distribution");

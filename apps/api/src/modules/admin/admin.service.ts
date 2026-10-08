@@ -2,9 +2,41 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { nicheTemplates, questionForField } from "@realwise/profile-schema";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
-import { estimateCostUsd } from "./model-pricing";
+import { estimateCostUsd } from "@realwise/shared";
 import { ListingsService, type ListingItem } from "../listings/listings.service";
 import { getPersona } from "../chat/personas";
+
+// Mirrors the resolution order in apps/inference-gateway/src/budget.ts (Business override -> Plan
+// threshold -> this default) and its DEFAULT_LLM_MONTHLY_BUDGET_USD_CENTS constant, kept in sync by
+// hand since the gateway and the admin API are separate deployables without a shared runtime module
+// for this specific value.
+const DEFAULT_LLM_MONTHLY_BUDGET_USD_CENTS = 500;
+const MANAGED_MODEL = process.env.MANAGED_MODEL ?? "qwen/qwen-2.5-7b-instruct";
+const MANAGED_MODEL_CHAT = process.env.MANAGED_MODEL_CHAT ?? "z-ai/glm-4.7-flash";
+
+// Same local-midnight-in-tenant-timezone math as apps/inference-gateway/src/budget.ts's
+// monthStartUtcForTimezone — duplicated here for the same cross-deployable reason as the default
+// budget constant above.
+function monthStartUtcForTimezone(tz: string, now: Date): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
+  const year = Number(get("year"));
+  const month = Number(get("month"));
+  const hour = Number(get("hour")) % 24;
+  const localAsUtc = Date.UTC(year, month - 1, 1, 0, 0, 0);
+  const localNowAsUtc = Date.UTC(year, month - 1, Number(get("day")), hour, Number(get("minute")), Number(get("second")));
+  const offsetMs = localNowAsUtc - now.getTime();
+  return new Date(localAsUtc - offsetMs);
+}
 
 // Mirrors ABSTENTION_FALLBACK/NO_CONTEXT_FALLBACK in chat.service.ts. Duplicated locally rather
 // than imported across modules so admin stays independent of the chat module's internals — if
@@ -83,11 +115,46 @@ export class AdminService {
       }),
       this.usageByBusinessLast7d(),
     ]);
-    return tenants.map((t) => ({
-      ...t,
-      tokensUsed7d: usage.get(t.id)?.tokens ?? 0,
-      costUsd7d: usage.get(t.id)?.costUsd ?? 0,
-    }));
+
+    // Batched month-to-date spend lookup for the "Modelo ativo" column — one query covering every
+    // tenant's local calendar month (using the earliest possible month-start across all timezones),
+    // then grouped/filtered per tenant in memory by each tenant's own local month-start.
+    const now = new Date();
+    const lookbackStart = (() => {
+      const d = new Date(now);
+      d.setUTCDate(1);
+      d.setUTCDate(d.getUTCDate() - 1); // 1 day of slack for timezones ahead of UTC
+      return d;
+    })();
+    const calls = await this.prisma.client.llmCallLog.findMany({
+      where: { createdAt: { gte: lookbackStart }, businessId: { not: null } },
+      select: { businessId: true, provider: true, model: true, inputTokens: true, outputTokens: true, createdAt: true },
+    });
+    const callsByBusiness = new Map<string, typeof calls>();
+    for (const call of calls) {
+      if (!call.businessId) continue;
+      const arr = callsByBusiness.get(call.businessId) ?? [];
+      arr.push(call);
+      callsByBusiness.set(call.businessId, arr);
+    }
+
+    return tenants.map((t) => {
+      const threshold =
+        t.llmMonthlyBudgetUsdCents ?? t.subscription?.plan?.llmMonthlyBudgetUsdCents ?? DEFAULT_LLM_MONTHLY_BUDGET_USD_CENTS;
+      const monthStart = monthStartUtcForTimezone(t.timezone, now);
+      const monthCalls = (callsByBusiness.get(t.id) ?? []).filter((c) => c.createdAt >= monthStart);
+      const monthToDateUsdCents = monthCalls.reduce(
+        (sum, c) => sum + estimateCostUsd(c.provider, c.model, c.inputTokens, c.outputTokens) * 100,
+        0,
+      );
+      const activeChatModel = monthToDateUsdCents >= threshold ? MANAGED_MODEL : MANAGED_MODEL_CHAT;
+      return {
+        ...t,
+        tokensUsed7d: usage.get(t.id)?.tokens ?? 0,
+        costUsd7d: usage.get(t.id)?.costUsd ?? 0,
+        activeChatModel,
+      };
+    });
   }
 
   async tenantDetail(businessId: string) {
@@ -96,8 +163,62 @@ export class AdminService {
       include: { profile: true, subscription: { include: { plan: true } } },
     });
     if (!business) throw new NotFoundException("Tenant not found");
-    const usage = await this.usageByBusinessLast7d();
-    return { ...business, tokensUsed7d: usage.get(businessId)?.tokens ?? 0, costUsd7d: usage.get(businessId)?.costUsd ?? 0 };
+    const [usage, llmBudget] = await Promise.all([this.usageByBusinessLast7d(), this.llmBudgetStatus(businessId)]);
+    return {
+      ...business,
+      tokensUsed7d: usage.get(businessId)?.tokens ?? 0,
+      costUsd7d: usage.get(businessId)?.costUsd ?? 0,
+      llmBudget,
+    };
+  }
+
+  // Resolution order mirrors apps/inference-gateway/src/budget.ts: Business override -> Plan
+  // threshold -> DEFAULT_LLM_MONTHLY_BUDGET_USD_CENTS. Read-only reporting for the admin UI — the
+  // gateway's own in-memory cache is the source of truth for the live downgrade decision.
+  async llmBudgetStatus(businessId: string) {
+    const business = await this.prisma.client.business.findUnique({
+      where: { id: businessId },
+      select: {
+        timezone: true,
+        llmMonthlyBudgetUsdCents: true,
+        subscription: { select: { plan: { select: { code: true, llmMonthlyBudgetUsdCents: true } } } },
+      },
+    });
+    if (!business) throw new NotFoundException("Tenant not found");
+
+    const tier = business.subscription?.plan?.code ?? "essencial";
+    const planThreshold = business.subscription?.plan?.llmMonthlyBudgetUsdCents;
+    const source: "override" | "plan" | "default" =
+      business.llmMonthlyBudgetUsdCents != null ? "override" : planThreshold != null ? "plan" : "default";
+    const thresholdUsdCents = business.llmMonthlyBudgetUsdCents ?? planThreshold ?? DEFAULT_LLM_MONTHLY_BUDGET_USD_CENTS;
+
+    const now = new Date();
+    const monthStartsAt = monthStartUtcForTimezone(business.timezone, now);
+    const calls = await this.prisma.client.llmCallLog.findMany({
+      where: { businessId, createdAt: { gte: monthStartsAt } },
+      select: { provider: true, model: true, inputTokens: true, outputTokens: true },
+    });
+    const monthToDateUsd = calls.reduce(
+      (sum, c) => sum + estimateCostUsd(c.provider, c.model, c.inputTokens, c.outputTokens),
+      0,
+    );
+    const activeChatModel = monthToDateUsd * 100 >= thresholdUsdCents ? MANAGED_MODEL : MANAGED_MODEL_CHAT;
+
+    return { tier, thresholdUsdCents, source, monthToDateUsd, activeChatModel, monthStartsAt };
+  }
+
+  async setLlmBudgetOverride(businessId: string, llmMonthlyBudgetUsdCents: number | null) {
+    if (llmMonthlyBudgetUsdCents !== null) {
+      if (!Number.isFinite(llmMonthlyBudgetUsdCents) || llmMonthlyBudgetUsdCents < 0 || llmMonthlyBudgetUsdCents > 100000) {
+        throw new BadRequestException("llmMonthlyBudgetUsdCents must be between 0 and 100000, or null to clear the override");
+      }
+    }
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    if (!business) throw new NotFoundException("Tenant not found");
+    return this.prisma.client.business.update({
+      where: { id: businessId },
+      data: { llmMonthlyBudgetUsdCents },
+    });
   }
 
   async tenantKnowledge(businessId: string) {

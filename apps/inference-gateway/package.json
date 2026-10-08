@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "fastify": "^5.1.0",
-    "@realwise/db": "workspace:*"
+    "@realwise/db": "workspace:*",
+    "@realwise/shared": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

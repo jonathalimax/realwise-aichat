@@ -67,6 +67,11 @@ export class AdminController {
     return this.admin.overrideConfidenceThreshold(id, threshold);
   }
 
+  @Patch("tenants/:id/llm-budget")
+  setLlmBudget(@Param("id") id: string, @Body("llmMonthlyBudgetUsdCents") llmMonthlyBudgetUsdCents: number | null) {
+    return this.admin.setLlmBudgetOverride(id, llmMonthlyBudgetUsdCents);
+  }
+
   @Patch("tenants/:id/conversational-mode")
   setConversationalMode(@Param("id") id: string, @Body("enabled") enabled: boolean) {
     return this.admin.setConversationalMode(id, enabled);

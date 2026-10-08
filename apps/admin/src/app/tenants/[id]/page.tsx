@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { getTenantDetail, getTenantKnowledge, suspendTenant, setConversationalMode } from "../../../lib/api";
+import { getTenantDetail, getTenantKnowledge, suspendTenant, setConversationalMode, setLlmBudget } from "../../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../../components/ui/card";
 import { Badge, statusToBadgeVariant } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
 import { StatCard } from "../../../components/ui/stat-card";
+import { Input } from "../../../components/ui/input";
 import { SegmentedControl } from "../../../components/ui/segmented";
 import { ConfidenceBreakdownChart } from "../../../components/charts/ConfidenceBreakdownChart";
 import { ProfileFieldsSection } from "../../../components/tenant/ProfileFieldsSection";
@@ -31,6 +32,8 @@ export default function TenantDetailPage() {
   const [tenant, setTenant] = useState<any>(null);
   const [knowledge, setKnowledge] = useState<any>(null);
   const [section, setSection] = useState<(typeof SECTION_OPTIONS)[number]["value"]>("profile");
+  const [budgetOverrideInput, setBudgetOverrideInput] = useState("");
+  const [savingBudget, setSavingBudget] = useState(false);
 
   useEffect(() => {
     getTenantDetail(params.id).then(setTenant).catch(() => {});
@@ -39,6 +42,26 @@ export default function TenantDetailPage() {
   useEffect(() => {
     getTenantKnowledge(params.id).then(setKnowledge).catch(() => {});
   }, [params.id]);
+
+  useEffect(() => {
+    if (tenant) {
+      setBudgetOverrideInput(tenant.llmMonthlyBudgetUsdCents != null ? String(tenant.llmMonthlyBudgetUsdCents) : "");
+    }
+  }, [tenant]);
+
+  function handleSaveBudgetOverride() {
+    const trimmed = budgetOverrideInput.trim();
+    const value = trimmed === "" ? null : Number(trimmed);
+    if (value !== null && (!Number.isFinite(value) || value < 0 || value > 100000)) {
+      alert("Informe um valor entre 0 e 100000 centavos (USD), ou deixe vazio para herdar do plano.");
+      return;
+    }
+    setSavingBudget(true);
+    setLlmBudget(tenant.id, value)
+      .then(() => getTenantDetail(params.id))
+      .then(setTenant)
+      .finally(() => setSavingBudget(false));
+  }
 
   if (!tenant) return <p className="text-ink-soft">Carregando…</p>;
 
@@ -168,6 +191,66 @@ export default function TenantDetailPage() {
                     <div className="text-ink-soft">Criado em</div>
                     <div className="break-words text-ink">
                       {tenant.createdAt ? new Date(tenant.createdAt).toLocaleString("pt-BR") : "—"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">Orçamento de LLM</div>
+                <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+                  <div>
+                    <div className="text-ink-soft">Plano</div>
+                    <div className="break-words text-ink">{tenant.llmBudget?.tier ?? "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-ink-soft">Limite mensal efetivo</div>
+                    <div className="break-words text-ink">
+                      {tenant.llmBudget ? `$${(tenant.llmBudget.thresholdUsdCents / 100).toFixed(2)}` : "—"}{" "}
+                      <span className="text-ink-soft">
+                        (
+                        {tenant.llmBudget?.source === "override"
+                          ? "override manual"
+                          : tenant.llmBudget?.source === "plan"
+                            ? "herdado do plano"
+                            : "padrão"}
+                        )
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-ink-soft">Gasto no mês</div>
+                    <div className="break-words text-ink">{formatCostUsd(tenant.llmBudget?.monthToDateUsd ?? 0)}</div>
+                  </div>
+                  <div>
+                    <div className="text-ink-soft">Modelo de chat ativo</div>
+                    <div className="break-words text-ink">
+                      {tenant.llmBudget?.activeChatModel?.includes("glm") ? "GLM (padrão)" : "Qwen (econômico)"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-ink-soft">Reinicia em</div>
+                    <div className="break-words text-ink">
+                      {tenant.llmBudget?.monthStartsAt
+                        ? new Date(
+                            new Date(tenant.llmBudget.monthStartsAt).setMonth(new Date(tenant.llmBudget.monthStartsAt).getMonth() + 1),
+                          ).toLocaleDateString("pt-BR")
+                        : "—"}
+                    </div>
+                  </div>
+                  <div className="col-span-2 sm:col-span-2">
+                    <div className="text-ink-soft">Override manual (centavos USD, vazio = herdar do plano)</div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100000}
+                        value={budgetOverrideInput}
+                        onChange={(e) => setBudgetOverrideInput(e.target.value)}
+                        placeholder="ex: 2500"
+                      />
+                      <Button size="sm" disabled={savingBudget} onClick={handleSaveBudgetOverride}>
+                        {savingBudget ? "Salvando…" : "Salvar"}
+                      </Button>
                     </div>
                   </div>
                 </div>

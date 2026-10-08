@@ -1,8 +1,13 @@
 import type { GenerateRequest, GenerateResult, InferenceProvider } from "../types";
+import { isOverMonthlyBudget } from "../budget";
 
 const MANAGED_API_URL = process.env.MANAGED_API_URL ?? "https://openrouter.ai/api/v1/chat/completions";
 const MANAGED_API_KEY = process.env.MANAGED_API_KEY;
 const MANAGED_MODEL = process.env.MANAGED_MODEL ?? "qwen/qwen-2.5-7b-instruct";
+// Default chat-answering model — automatically downgraded back to MANAGED_MODEL per-tenant once
+// the tenant's month-to-date LLM spend crosses their plan-tier (or admin-override) budget cap.
+// See ../budget.ts for the resolution/caching logic.
+const MANAGED_MODEL_CHAT = process.env.MANAGED_MODEL_CHAT ?? "z-ai/glm-4.7-flash";
 // Tried qwen-2.5-72b-instruct here for listing_extraction's images-array problem — reverted.
 // Confirmed via direct, isolated test calls: qwen-2.5-72b-instruct + the required
 // `provider: { zdr: true, data_collection: "deny" }` routing (see generate() below — this is a
@@ -14,8 +19,13 @@ const MANAGED_MODEL = process.env.MANAGED_MODEL ?? "qwen/qwen-2.5-7b-instruct";
 // identified — override via env if testing a different candidate.
 const MANAGED_MODEL_LISTING_EXTRACTION = process.env.MANAGED_MODEL_LISTING_EXTRACTION ?? MANAGED_MODEL;
 
-function modelForPurpose(purpose: GenerateRequest["purpose"]): string {
-  return purpose === "listing_extraction" ? MANAGED_MODEL_LISTING_EXTRACTION : MANAGED_MODEL;
+async function modelForPurpose(purpose: GenerateRequest["purpose"], businessId?: string): Promise<string> {
+  if (purpose === "listing_extraction") return MANAGED_MODEL_LISTING_EXTRACTION;
+  if (purpose === "chat") {
+    if (!businessId || (await isOverMonthlyBudget(businessId))) return MANAGED_MODEL;
+    return MANAGED_MODEL_CHAT;
+  }
+  return MANAGED_MODEL;
 }
 
 // Simple in-memory circuit breaker: when the provider returns a definitive, non-retryable
@@ -43,7 +53,7 @@ export class ManagedProvider implements InferenceProvider {
   async generate(req: GenerateRequest): Promise<GenerateResult> {
     if (!MANAGED_API_KEY) throw new Error("MANAGED_API_KEY not configured");
     const start = Date.now();
-    const model = modelForPurpose(req.purpose);
+    const model = await modelForPurpose(req.purpose, req.businessId);
 
     const res = await fetch(MANAGED_API_URL, {
       method: "POST",
@@ -68,7 +78,9 @@ export class ManagedProvider implements InferenceProvider {
       // confirmed live: 20s timed out on the very first real run after switching models. 45s
       // covers the slower model's real latency while staying well inside the 60s per-window
       // ceiling listing-extraction.service.ts is tuned around.
-      signal: AbortSignal.timeout(req.purpose === "listing_extraction" ? 45000 : 20000),
+      signal: AbortSignal.timeout(
+        req.purpose === "listing_extraction" ? 45000 : model === MANAGED_MODEL_CHAT ? 35000 : 20000,
+      ),
     });
 
     if (!res.ok) {

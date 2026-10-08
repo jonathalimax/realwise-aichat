@@ -436,6 +436,7 @@ export default function TenantsPage() {
                       {sortByCost && <span className="text-[10px]">{sortByCost === "desc" ? "▼" : "▲"}</span>}
                     </button>
                   </TableHead>
+                  <TableHead>Modelo ativo</TableHead>
                   <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>
@@ -462,6 +463,9 @@ export default function TenantsPage() {
                       <TableCell className="text-ink-soft">{t.subscription?.plan?.name ?? "—"}</TableCell>
                       <TableCell className="font-mono">{t.confidenceScore}%</TableCell>
                       <TableCell className="text-ink-soft">{formatCostUsd(t.costUsd7d ?? 0)}</TableCell>
+                      <TableCell className="text-ink-soft">
+                        {t.activeChatModel?.includes("glm") ? "GLM" : "Qwen"}
+                      </TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

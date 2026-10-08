@@ -102,6 +102,7 @@ model Business {
   timezone        String         @default("America/Sao_Paulo")
   defaultSlotDurationMinutes Int @default(60)
   financingRatePercent Float? // monthly percent (e.g. 1.8); null = use the niche default in flow-calculators.ts
+  llmMonthlyBudgetUsdCents Int? // null = inherit from plan, see resolution order in apps/inference-gateway/src/budget.ts
   address         String?
   websiteUrl      String?
   websiteContentHash String?
@@ -153,6 +154,10 @@ model Plan {
   stripePriceId       String
   stripeSetupPriceId  String
   isActive            Boolean @default(true)
+  // Per-plan monthly cap (USD cents) on LLM spend before chat answering downgrades back to the
+  // cheaper managed model for the rest of the calendar month; null = use the hardcoded default in
+  // apps/inference-gateway/src/budget.ts. Business.llmMonthlyBudgetUsdCents overrides this per-tenant.
+  llmMonthlyBudgetUsdCents Int?
 
   subscriptions       Subscription[]
 }
@@ -497,10 +502,12 @@ model LlmCallLog {
   inputTokens      Int
   outputTokens     Int
   latencyMs        Int
-  costEstimateCents Int?
+  costEstimateMicroCents Int?
   cachedPrefixHit  Boolean  @default(false)
   error            String?
   createdAt        DateTime @default(now())
+
+  @@index([businessId, createdAt])
 }
 
 // Generic per-business notification mechanism — not quota-specific in shape, so any future

@@ -1,6 +1,8 @@
 import { prisma } from "@realwise/db";
+import { estimateCostUsd } from "@realwise/shared";
 import { OllamaProvider } from "./providers/ollama";
 import { ManagedProvider } from "./providers/managed";
+import { recordSpend } from "./budget";
 import type { GenerateRequest, GenerateResult } from "./types";
 
 const selfHosted = new OllamaProvider();
@@ -46,6 +48,10 @@ export async function routeGenerate(req: GenerateRequest): Promise<GenerateResul
 }
 
 export async function logCall(req: GenerateRequest, result: GenerateResult | null, error?: string) {
+  const usdCents = result
+    ? estimateCostUsd(result.provider, result.model, result.inputTokens, result.outputTokens) * 100
+    : 0;
+
   await prisma.llmCallLog.create({
     data: {
       businessId: req.businessId,
@@ -55,7 +61,12 @@ export async function logCall(req: GenerateRequest, result: GenerateResult | nul
       inputTokens: result?.inputTokens ?? 0,
       outputTokens: result?.outputTokens ?? 0,
       latencyMs: result?.latencyMs ?? 0,
+      costEstimateMicroCents: Math.round(usdCents * 1_000_000),
       error,
     },
   });
+
+  if (req.businessId && result) {
+    recordSpend(req.businessId, usdCents);
+  }
 }
