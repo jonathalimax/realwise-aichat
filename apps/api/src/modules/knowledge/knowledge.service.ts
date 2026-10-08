@@ -12,7 +12,14 @@ export class KnowledgeService {
   constructor(private readonly prisma: PrismaService, private readonly ingestionQueue: DocumentIngestionQueue) {}
 
   async listDocuments(businessId: string) {
-    return this.prisma.client.knowledgeDocument.findMany({ where: { businessId }, orderBy: { createdAt: "desc" } });
+    // Exclude "website_sync" documents — those are internal artifacts created by the
+    // listing-extraction worker (one per crawled page, used as RAG source material) rather
+    // than something the business owner uploaded or pasted. Owners have no reason to see,
+    // edit, or remove them here.
+    return this.prisma.client.knowledgeDocument.findMany({
+      where: { businessId, source: { not: "website_sync" } },
+      orderBy: { createdAt: "desc" },
+    });
   }
 
   private storageKeyFor(businessId: string, filename: string) {

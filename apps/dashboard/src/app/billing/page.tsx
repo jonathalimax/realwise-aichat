@@ -63,7 +63,7 @@ export default function BillingPage() {
         ))}
       </div>
       <button onClick={managePlan} className="mt-6 text-sm text-accent underline">
-        Gerenciar assinatura atual
+        Gerenciar assinatura
       </button>
       {error && <p className="mt-3 text-sm text-negative">{error}</p>}
     </div>

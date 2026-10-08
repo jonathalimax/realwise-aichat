@@ -90,8 +90,14 @@ export function InterviewChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill, prefillNonce]);
 
+  // requestAnimationFrame ensures this runs after layout settles (matches the pattern in
+  // apps/chat/src/components/ChatScreen.tsx) — scrolling before the new message/bubble has
+  // actually painted causes a visible jump/correction once layout catches up.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const frame = requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [messages, sending, uploadStatus, uploadError]);
 
   async function handleSend() {

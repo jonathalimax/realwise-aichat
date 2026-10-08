@@ -46,13 +46,10 @@ export default function InboxPage() {
   const liveAttentionSeenRef = useRef<Set<string>>(new Set());
   const hasLoadedOnceRef = useRef(false);
 
-  useEffect(() => {
-    try {
-      setMuted(localStorage.getItem(MUTE_STORAGE_KEY) === "1");
-    } catch {
-      // localStorage can be unavailable (e.g. private mode) — default to unmuted.
-    }
-  }, []);
+  // Sound always defaults to ON on page load — intentionally not restored from
+  // MUTE_STORAGE_KEY here, so a mute from a previous visit never silently carries over.
+  // toggleMuted still persists the in-session choice below, for parity/debugging, but it's
+  // not read back on mount.
 
   function toggleMuted() {
     const next = !muted;
@@ -111,6 +108,19 @@ export default function InboxPage() {
       // Silent refresh — don't disrupt the UI on transient poll failures.
     }
   }
+
+  // On first load, default to "Precisam de resposta" only if it actually has results —
+  // otherwise there's nothing to triage there and "Todas" is the more useful default.
+  useEffect(() => {
+    getInboxConversations("escalated")
+      .then((data) => {
+        if (!data || data.length === 0) setFilter("all");
+      })
+      .catch(() => {
+        // Ignore — keep the default filter and let the normal refresh/poll below surface errors.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     refresh();
