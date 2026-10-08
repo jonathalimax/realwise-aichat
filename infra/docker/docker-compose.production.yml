@@ -112,9 +112,6 @@ services:
       - traefik.http.routers.realwise-dashboard.tls=true
       - traefik.http.routers.realwise-dashboard.tls.certresolver=letsencrypt
       - traefik.http.services.realwise-dashboard.loadbalancer.server.port=3000
-      - traefik.http.services.realwise-dashboard.loadbalancer.healthcheck.path=/
-      - traefik.http.services.realwise-dashboard.loadbalancer.healthcheck.interval=10s
-      - traefik.http.services.realwise-dashboard.loadbalancer.healthcheck.timeout=5s
 
   admin:
     image: ghcr.io/jonathalimax/realwise-admin:latest
@@ -133,9 +130,6 @@ services:
       - traefik.http.routers.realwise-admin.tls=true
       - traefik.http.routers.realwise-admin.tls.certresolver=letsencrypt
       - traefik.http.services.realwise-admin.loadbalancer.server.port=3000
-      - traefik.http.services.realwise-admin.loadbalancer.healthcheck.path=/
-      - traefik.http.services.realwise-admin.loadbalancer.healthcheck.interval=10s
-      - traefik.http.services.realwise-admin.loadbalancer.healthcheck.timeout=5s
 
   marketing:
     image: ghcr.io/jonathalimax/realwise-marketing:latest
