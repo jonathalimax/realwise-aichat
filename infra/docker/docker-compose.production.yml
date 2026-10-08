@@ -14,7 +14,7 @@ services:
     # this checks for any non-5xx response (any valid HTTP response, including a 404 on a path
     # with no handler, proves the server is actually listening and answering).
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3006/api', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3006/api/health', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5

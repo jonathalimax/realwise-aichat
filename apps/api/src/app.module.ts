@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { PrismaModule } from "./prisma/prisma.module";
+import { HealthController } from "./modules/health/health.controller";
 import { AuthModule } from "./modules/auth/auth.module";
 import { BusinessesModule } from "./modules/businesses/businesses.module";
 import { OnboardingModule } from "./modules/onboarding/onboarding.module";
@@ -45,5 +46,6 @@ import { PushModule } from "./modules/push/push.module";
     InboxModule,
     PushModule,
   ],
+  controllers: [HealthController],
 })
 export class AppModule {}
