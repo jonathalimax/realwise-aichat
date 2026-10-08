@@ -9,12 +9,15 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from ".
 const PAGE_SIZE = 50;
 
 function formatPrice(listing: any) {
-  if (listing.priceText) return listing.priceText;
+  // priceCents is the normalized source of truth (always numeric, always cents) — prefer it over
+  // priceText, which is whatever raw string the source site happened to use (plain "650000.00",
+  // Brazilian "1770,00", etc.) and renders inconsistently in this table when shown verbatim.
   if (typeof listing.priceCents === "number") {
     return `R$ ${(listing.priceCents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}${
       listing.pricePeriod ? ` / ${listing.pricePeriod}` : ""
     }`;
   }
+  if (listing.priceText) return listing.priceText;
   return "—";
 }
 
