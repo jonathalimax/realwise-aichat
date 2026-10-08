@@ -643,7 +643,24 @@ export class ChatService {
       ? await this.listingsService.getContextSummaryForChat(businessId, contextListingId)
       : null;
 
-    const retrieveText = contextListingSummary ? `${visitorText} ${contextListingSummary}` : visitorText;
+    // A short follow-up ("para entrada") that's really a one-line answer to the bot's OWN previous
+    // question carries almost no topical signal on its own — retrieval against visitorText alone
+    // then misses genuinely relevant shared-knowledge chunks (e.g. financing basics) that a human
+    // reading the recent history would obviously connect to. 30 chars is a deliberately small
+    // threshold (short enough that a real, substantive question essentially never falls under it)
+    // so this augmentation only kicks in for low-signal replies, never dilutes a normal query with
+    // stale context. recentMessages is already fetched above (desc order) for the prompt's own
+    // history string, so no extra DB round-trip is needed — just reuse the 2 most recent prior
+    // turns, oldest-first, as extra retrieval context.
+    const SHORT_MESSAGE_RETRIEVAL_THRESHOLD = 30;
+    const recentHistoryForRetrieval =
+      visitorText.trim().length < SHORT_MESSAGE_RETRIEVAL_THRESHOLD
+        ? recentMessages.slice(0, 2).reverse().map((m) => m.content).join(" ")
+        : "";
+
+    // Composes with (never replaces) the existing pinned-listing augmentation below — both can
+    // apply at once, e.g. a short follow-up about a pinned listing's financing.
+    const retrieveText = [recentHistoryForRetrieval, visitorText, contextListingSummary].filter(Boolean).join(" ");
     const { tenant: retrievedChunks, shared: sharedChunks } = await retrieveChunksForChat(
       this.prisma,
       businessId,
@@ -860,7 +877,16 @@ export class ChatService {
   // identified by the visitor message + generated answer together. Only called when
   // resolveBrowsingListings found nothing.
   private async resolveMentionedListing(businessId: string, visitorText: string, answerText: string): Promise<ListingItem[] | undefined> {
-    const mentioned = await this.listingsService.findMentionedForChat(businessId, `${visitorText}\n${answerText}`, 1);
+    // Was hardcoded to 1 — but findMentionedForChat's ambiguity guard returns [] (not a best
+    // guess) whenever matches.length exceeds this limit, so a prose answer that legitimately
+    // mentions several distinct listings (e.g. "here are 4 options: ...") got ZERO cards attached
+    // instead of one. Raised to 6 to match resolveBrowsingListings' own cap (queryForChat(..., 6)),
+    // so this fallback can surface the same max number of cards the primary browse path already
+    // allows. Matching itself is unchanged (still requires referenceCode, full title-token overlap,
+    // or neighborhood+listingType together) — widening the limit only changes how many
+    // simultaneously-matched listings are accepted before giving up, not how permissive each
+    // individual match is.
+    const mentioned = await this.listingsService.findMentionedForChat(businessId, `${visitorText}\n${answerText}`, 6);
     return mentioned.length > 0 ? mentioned : undefined;
   }
 
