@@ -110,6 +110,23 @@ export default function TenantDetailPage() {
                     <div className="break-words text-ink">{tenant.slug ?? "—"}</div>
                   </div>
                   <div>
+                    <div className="text-ink-soft">Link do cliente</div>
+                    <div className="break-words text-ink">
+                      {tenant.slug ? (
+                        <a
+                          href={`${process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005"}/${tenant.slug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline hover:text-ink-soft"
+                        >
+                          Abrir chat
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </div>
+                  </div>
+                  <div>
                     <div className="text-ink-soft">Telefone</div>
                     <div className="break-words text-ink">{tenant.phone ?? "—"}</div>
                   </div>
