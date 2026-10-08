@@ -14,6 +14,7 @@ import { Button } from "../../components/ui/button";
 import { Textarea } from "../../components/ui/textarea";
 import { SegmentedControl } from "../../components/ui/segmented";
 import { playAlertSound } from "../../lib/alert-sound";
+import { MessageMirror } from "../../components/MessageMirror";
 
 const MUTE_STORAGE_KEY = "inbox-alert-muted";
 const POLL_INTERVAL_MS = 15000;
@@ -297,27 +298,25 @@ export default function InboxPage() {
               <>
                 <div className="flex-1 overflow-y-auto pr-1">
                   <div className="flex flex-col gap-2">
-                    {thread.messages.map((m: any) => (
-                      <div
-                        key={m.id}
-                        className={`flex ${m.role === "owner" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-                            m.role === "owner"
-                              ? "bg-accent text-white"
-                              : m.role === "assistant"
-                                ? "bg-accent-soft text-ink"
-                                : "bg-surface text-ink"
-                          }`}
-                        >
-                          {m.role === "assistant" && (
-                            <div className="mb-0.5 text-[0.65rem] font-semibold uppercase text-accent-ink">Clara</div>
-                          )}
-                          <div className="whitespace-pre-wrap">{m.content}</div>
+                    {thread.messages.map((m: any) =>
+                      m.role === "assistant" ? (
+                        <div key={m.id} className="flex justify-start">
+                          <div className="max-w-[85%]">
+                            <MessageMirror message={m} personaName={thread.personaName ?? "Assistente"} niche={thread.niche} />
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ) : (
+                        <div key={m.id} className={`flex ${m.role === "owner" ? "justify-end" : "justify-start"}`}>
+                          <div
+                            className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
+                              m.role === "owner" ? "bg-accent text-white" : "bg-surface text-ink"
+                            }`}
+                          >
+                            <div className="whitespace-pre-wrap">{m.content}</div>
+                          </div>
+                        </div>
+                      ),
+                    )}
                     <div ref={threadEndRef} />
                   </div>
                 </div>

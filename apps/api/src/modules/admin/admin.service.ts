@@ -3,6 +3,8 @@ import { nicheTemplates, questionForField } from "@realwise/profile-schema";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
 import { estimateCostUsd } from "./model-pricing";
+import { ListingsService, type ListingItem } from "../listings/listings.service";
+import { getPersona } from "../chat/personas";
 
 // Mirrors ABSTENTION_FALLBACK/NO_CONTEXT_FALLBACK in chat.service.ts. Duplicated locally rather
 // than imported across modules so admin stays independent of the chat module's internals — if
@@ -50,7 +52,10 @@ function categorizeProblemMessage(m: ProblemCaseMessageShape): ProblemCaseCatego
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly listingsService: ListingsService,
+  ) {}
 
   // Grouped by businessId so callers can attach per-tenant tokens/cost without an N+1 query per tenant.
   private async usageByBusinessLast7d(): Promise<Map<string, { tokens: number; costUsd: number }>> {
@@ -218,6 +223,80 @@ export class AdminService {
     ]);
 
     return { listings, total, deletedCount };
+  }
+
+  // Lightweight list for the tenant detail page's "Conversas" tab — mirrors InboxService's own
+  // listConversations shape (id, timestamps, status, referenceCode, message count) rather than
+  // inventing a different one, since this is the same underlying Conversation table.
+  async tenantConversations(businessId: string, limit = 50, offset = 0) {
+    const clampedLimit = Math.min(Math.max(limit, 1), 200);
+    const clampedOffset = Math.max(offset, 0);
+
+    const [conversations, total] = await Promise.all([
+      this.prisma.client.conversation.findMany({
+        where: { businessId },
+        orderBy: { lastMessageAt: "desc" },
+        take: clampedLimit,
+        skip: clampedOffset,
+        include: { lead: { select: { id: true, name: true, phone: true } } },
+      }),
+      this.prisma.client.conversation.count({ where: { businessId } }),
+    ]);
+
+    return {
+      conversations: conversations.map((c) => ({
+        id: c.id,
+        status: c.status,
+        startedAt: c.startedAt,
+        lastMessageAt: c.lastMessageAt,
+        escalatedAt: c.escalatedAt,
+        referenceCode: c.referenceCode,
+        messageCount: c.messageCount,
+        lead: c.lead,
+      })),
+      total,
+    };
+  }
+
+  // Full-fidelity replay for a single conversation, exactly mirroring ChatService.getHistory's
+  // listing rehydration (resolve Message.listingIds against the live Listing table in one batched
+  // lookup) so the admin "mirror" view reflects what the visitor actually saw — the same
+  // listingIds-based re-hydration InboxService.getThread now also uses for the dashboard inbox.
+  async tenantConversationThread(businessId: string, conversationId: string) {
+    const conversation = await this.prisma.client.conversation.findFirst({
+      where: { id: conversationId, businessId },
+      include: { business: { select: { niche: true, name: true } } },
+    });
+    if (!conversation) throw new NotFoundException("Conversation not found");
+
+    const messages = await this.prisma.client.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const allListingIds = [...new Set(messages.flatMap((m) => m.listingIds))];
+    const listingsById = new Map(
+      allListingIds.length > 0
+        ? (await this.listingsService.findByIdsForChat(businessId, allListingIds)).map((l) => [l.id as string, l])
+        : [],
+    );
+    const messagesWithListings = messages.map((m) => {
+      if (m.listingIds.length === 0) return m;
+      const listings = m.listingIds.map((id) => listingsById.get(id)).filter((l): l is ListingItem => Boolean(l));
+      return listings.length > 0 ? { ...m, listings } : m;
+    });
+
+    return {
+      id: conversation.id,
+      status: conversation.status,
+      referenceCode: conversation.referenceCode,
+      startedAt: conversation.startedAt,
+      lastMessageAt: conversation.lastMessageAt,
+      personaName: getPersona(conversation.business.niche).name,
+      niche: conversation.business.niche,
+      businessName: conversation.business.name,
+      messages: messagesWithListings,
+    };
   }
 
   async overrideConfidenceThreshold(businessId: string, _threshold: number) {

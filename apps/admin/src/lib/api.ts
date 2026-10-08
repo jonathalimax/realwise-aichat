@@ -22,6 +22,10 @@ export const getTenantDocumentMarkdown = (id: string, documentId: string) =>
   request(`/admin/tenants/${id}/documents/${documentId}/markdown`);
 export const getTenantListings = (id: string, limit?: number, offset?: number) =>
   request(`/admin/tenants/${id}/listings?limit=${limit ?? 50}&offset=${offset ?? 0}`);
+export const getTenantConversations = (id: string, limit?: number, offset?: number) =>
+  request(`/admin/tenants/${id}/conversations?limit=${limit ?? 50}&offset=${offset ?? 0}`);
+export const getTenantConversationThread = (id: string, conversationId: string) =>
+  request(`/admin/tenants/${id}/conversations/${conversationId}`);
 export const suspendTenant = (id: string) => request(`/admin/tenants/${id}/suspend`, { method: "POST" });
 export const setConversationalMode = (id: string, enabled: boolean) =>
   request(`/admin/tenants/${id}/conversational-mode`, { method: "PATCH", body: JSON.stringify({ enabled }) });

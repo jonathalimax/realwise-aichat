@@ -46,6 +46,22 @@ export class AdminController {
     );
   }
 
+  @Get("tenants/:id/conversations")
+  tenantConversations(@Param("id") id: string, @Query("limit") limit?: string, @Query("offset") offset?: string) {
+    const parsedLimit = Number(limit);
+    const parsedOffset = Number(offset);
+    return this.admin.tenantConversations(
+      id,
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 200) : 50,
+      Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0,
+    );
+  }
+
+  @Get("tenants/:id/conversations/:conversationId")
+  tenantConversationThread(@Param("id") id: string, @Param("conversationId") conversationId: string) {
+    return this.admin.tenantConversationThread(id, conversationId);
+  }
+
   @Patch("tenants/:id/confidence-threshold")
   overrideThreshold(@Param("id") id: string, @Body("threshold") threshold: number) {
     return this.admin.overrideConfidenceThreshold(id, threshold);

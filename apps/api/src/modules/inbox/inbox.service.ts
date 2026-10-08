@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { PrismaService } from "../../prisma/prisma.service";
 import { PushService } from "../push/push.service";
 import { ChatService } from "../chat/chat.service";
+import { ListingsService, type ListingItem } from "../listings/listings.service";
+import { getPersona } from "../chat/personas";
 
 // Visitor is considered "live" (actively polling the chat, will see the owner's reply within a
 // few seconds via the existing poll loop) if they were seen more recently than this — in which
@@ -18,6 +20,7 @@ export class InboxService {
     private readonly prisma: PrismaService,
     private readonly push: PushService,
     private readonly chat: ChatService,
+    private readonly listingsService: ListingsService,
   ) {}
 
   async listConversations(businessId: string, filter?: "all" | "escalated") {
@@ -61,12 +64,31 @@ export class InboxService {
   }
 
   async getThread(businessId: string, conversationId: string) {
-    const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
+    const conversation = await this.prisma.client.conversation.findFirst({
+      where: { id: conversationId, businessId },
+      include: { business: { select: { niche: true } } },
+    });
     if (!conversation) throw new NotFoundException("Conversation not found");
 
     const messages = await this.prisma.client.message.findMany({
       where: { conversationId },
       orderBy: { createdAt: "asc" },
+    });
+
+    // Re-hydrate listing cards attached to past turns (Message.listingIds) against the live
+    // Listing table, same batched-lookup pattern ChatService.getHistory uses to replay a
+    // conversation to the visitor — this is the "mirror what the visitor saw" requirement applied
+    // to the owner's inbox thread view.
+    const allListingIds = [...new Set(messages.flatMap((m) => m.listingIds))];
+    const listingsById = new Map(
+      allListingIds.length > 0
+        ? (await this.listingsService.findByIdsForChat(businessId, allListingIds)).map((l) => [l.id as string, l])
+        : [],
+    );
+    const messagesWithListings = messages.map((m) => {
+      if (m.listingIds.length === 0) return m;
+      const listings = m.listingIds.map((id) => listingsById.get(id)).filter((l): l is ListingItem => Boolean(l));
+      return listings.length > 0 ? { ...m, listings } : m;
     });
 
     return {
@@ -76,7 +98,13 @@ export class InboxService {
       referenceCode: conversation.referenceCode,
       visitorOnline: isVisitorLive(conversation.lastVisitorSeenAt),
       escalationReason: conversation.flowNodeId === "callback_ok" ? "callback" : null,
-      messages,
+      // The real assistant label the visitor saw (persona name), so the owner's mirror view never
+      // hardcodes "Clara" for a tenant whose persona is actually "Tom" (concessionaria). `niche` is
+      // also surfaced so MessageMirror's financing-simulation card picks the right
+      // vehicles/imóveis copy, same as SimulationCard.tsx does in the live chat.
+      personaName: getPersona(conversation.business.niche).name,
+      niche: conversation.business.niche,
+      messages: messagesWithListings,
     };
   }
 

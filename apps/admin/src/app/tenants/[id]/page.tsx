@@ -12,11 +12,13 @@ import { ConfidenceBreakdownChart } from "../../../components/charts/ConfidenceB
 import { ProfileFieldsSection } from "../../../components/tenant/ProfileFieldsSection";
 import { KnowledgeBaseSection } from "../../../components/tenant/KnowledgeBaseSection";
 import { ListingsSection } from "../../../components/tenant/ListingsSection";
+import { ConversationsSection } from "../../../components/tenant/ConversationsSection";
 
 const SECTION_OPTIONS = [
   { label: "Perfil do negócio", value: "profile" },
   { label: "Base de conhecimento", value: "knowledge" },
   { label: "Catálogo de anúncios", value: "listings" },
+  { label: "Conversas", value: "conversations" },
 ] as const;
 
 // Light-traffic costs are often sub-cent — fixed .toFixed(2) would show "$0.00" for real non-zero usage.
@@ -185,6 +187,7 @@ export default function TenantDetailPage() {
               <p className="text-ink-soft">Carregando…</p>
             ))}
           {section === "listings" && <ListingsSection tenantId={tenant.id} />}
+          {section === "conversations" && <ConversationsSection tenantId={tenant.id} />}
         </CardContent>
       </Card>
     </div>
