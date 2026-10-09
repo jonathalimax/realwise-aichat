@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hides the native up/down spinner on number inputs -- used where we want a plain numeric
+   field (e.g. duration/capacity pickers) without the cramped +/- arrows crowding the border. */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spinner {
+  -moz-appearance: textfield;
+}
+
 :root {
   --bg: 255 255 255;
   --bg-2: 255 252 250;

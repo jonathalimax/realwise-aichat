@@ -42,7 +42,7 @@ export default function DisponibilidadePage() {
   const [loading, setLoading] = useState(true);
   const [activeType, setActiveType] = useState<AppointmentType>("presencial");
 
-  const [weekday, setWeekday] = useState(1);
+  const [weekdays, setWeekdays] = useState<number[]>([1]);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("18:00");
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(60);
@@ -69,17 +69,26 @@ export default function DisponibilidadePage() {
   );
   const blackoutRules = useMemo(() => rules.filter((r) => r.kind === "exception" && r.isBlocked), [rules]);
 
+  function toggleWeekday(value: number) {
+    setWeekdays((prev) => (prev.includes(value) ? prev.filter((w) => w !== value) : [...prev, value]));
+  }
+
   async function addRule() {
-    await upsertAvailabilityRule({
-      appointmentType: activeType,
-      weekday,
-      startTime,
-      endTime,
-      slotDurationMinutes,
-      capacity,
-      listingId: activeType === "visita_local" && listingId ? listingId : null,
-      kind: "recurring",
-    });
+    if (weekdays.length === 0) return;
+    await Promise.all(
+      weekdays.map((weekday) =>
+        upsertAvailabilityRule({
+          appointmentType: activeType,
+          weekday,
+          startTime,
+          endTime,
+          slotDurationMinutes,
+          capacity,
+          listingId: activeType === "visita_local" && listingId ? listingId : null,
+          kind: "recurring",
+        }),
+      ),
+    );
     refresh();
   }
 
@@ -151,39 +160,59 @@ export default function DisponibilidadePage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <select
-                value={weekday}
-                onChange={(e) => setWeekday(Number(e.target.value))}
-                className="col-span-2 rounded-lg border border-border bg-bg-2 px-3 py-2 text-sm text-ink outline-none focus:border-ink/40 sm:col-span-1"
-              >
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-ink-soft">Dias da semana</label>
+              <div className="flex flex-wrap gap-1.5">
                 {WEEKDAYS.map((w) => (
-                  <option key={w.value} value={w.value}>
-                    {w.label}
-                  </option>
+                  <button
+                    key={w.value}
+                    type="button"
+                    onClick={() => toggleWeekday(w.value)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      weekdays.includes(w.value)
+                        ? "bg-accent text-white"
+                        : "border border-border text-ink-soft hover:bg-bg-2"
+                    }`}
+                  >
+                    {w.label.slice(0, 3)}
+                  </button>
                 ))}
-              </select>
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-              <Input
-                type="number"
-                min={15}
-                step={15}
-                value={slotDurationMinutes}
-                onChange={(e) => setSlotDurationMinutes(Number(e.target.value))}
-                placeholder="Minutos"
-              />
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="text-xs font-semibold text-ink-soft">Capacidade por horário</label>
-              <Input
-                type="number"
-                min={1}
-                value={capacity}
-                onChange={(e) => setCapacity(Number(e.target.value))}
-                className="w-20"
-              />
-              <Button size="sm" onClick={addRule} className="ml-auto">
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-ink-soft">Início</label>
+                <Input type="time" step={60} lang="en-GB" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-ink-soft">Fim</label>
+                <Input type="time" step={60} lang="en-GB" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-ink-soft">Duração (min)</label>
+                <Input
+                  type="number"
+                  min={15}
+                  step={15}
+                  value={slotDurationMinutes}
+                  onChange={(e) => setSlotDurationMinutes(Number(e.target.value))}
+                  className="no-spinner"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-ink-soft">Capacidade por horário</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={capacity}
+                  onChange={(e) => setCapacity(Number(e.target.value))}
+                  className="no-spinner w-20"
+                />
+              </div>
+              <Button size="sm" onClick={addRule} className="ml-auto" disabled={weekdays.length === 0}>
                 <Plus className="h-4 w-4" /> Adicionar
               </Button>
             </div>
