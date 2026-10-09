@@ -593,7 +593,7 @@ export class FlowService {
        <p>Veja a conversa e responda no painel: Conversas.</p>`,
     );
 
-    return { message: "Toque no botão abaixo para continuar no WhatsApp com um atendente ✅", whatsappUrl };
+    return { message: "Me passa seu WhatsApp no campo abaixo que um atendente já te chama ✅", whatsappUrl };
   }
 
   // "callback_ok" — the visitor asked to be called back instead of using WhatsApp. No input node

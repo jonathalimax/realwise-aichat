@@ -47,8 +47,9 @@ export class AuthController {
   @Post("visitor/identify")
   async identifyVisitor(
     @Body("businessSlug") businessSlug: string,
-    @Body("name") name: string,
+    @Body("name") name: string | undefined,
     @Body("phone") phone: string,
+    @Body("email") email: string | undefined,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
@@ -59,8 +60,16 @@ export class AuthController {
     const anonCookieKey = Object.keys(req.cookies ?? {}).find((k) => k.startsWith("rw_visitor_anon_"));
     const anonToken = anonCookieKey ? req.cookies[anonCookieKey] : undefined;
 
-    const { token, lead } = await this.auth.identifyVisitor(businessSlug, name, phone, req.ip ?? "", req.headers["user-agent"] ?? "", anonToken);
+    const { token, lead } = await this.auth.identifyVisitor(
+      businessSlug,
+      name,
+      phone,
+      req.ip ?? "",
+      req.headers["user-agent"] ?? "",
+      anonToken,
+      email,
+    );
     res.cookie("rw_visitor_session", token, SESSION_COOKIE_OPTIONS);
-    return { lead };
+    return { lead: { id: lead.id } };
   }
 }

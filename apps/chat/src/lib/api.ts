@@ -139,10 +139,10 @@ export async function getAvailableSlots(businessId: string, date?: string): Prom
   return result.slots ?? null;
 }
 
-export function identifyVisitor(businessSlug: string, name: string, phone: string): Promise<{ lead: any }> {
+export function identifyVisitor(businessSlug: string, name: string | null, phone: string, email?: string): Promise<{ lead: { id: string } }> {
   return request(`/auth/visitor/identify`, {
     method: "POST",
-    body: JSON.stringify({ businessSlug, name, phone }),
+    body: JSON.stringify({ businessSlug, name, phone, ...(email ? { email } : {}) }),
   });
 }
 

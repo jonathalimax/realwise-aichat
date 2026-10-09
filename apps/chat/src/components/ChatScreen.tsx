@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import { maskBrPhone } from "@realwise/shared";
+import { maskBrPhone, digitsOnly } from "@realwise/shared";
 import {
   getBusiness,
   startConversation,
@@ -125,6 +125,7 @@ function ListingCard({
 // via ResizeObserver, to keep this simple.
 const LISTING_CARD_STEP_PX = 224 + 8; // w-56 (14rem=224px) + gap-2 (8px)
 const MAX_VISIBLE_DOTS = 8;
+const BOOKING_EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export function ListingCards({
   listings,
@@ -174,30 +175,75 @@ export function ListingCards({
   );
 }
 
-// Real human handoff — a tappable card rather than auto-opening WhatsApp, so the visitor
-// consciously chooses to leave the chat instead of being redirected without warning.
-function WhatsappHandoffCard({ url }: { url: string }) {
-  const safeUrl = safeHttpUrl(url);
-  if (!safeUrl) return null;
+// Captures the visitor's WhatsApp number inline instead of handing off to an external wa.me
+// link — the business calls the visitor back, so the chat stays mounted and no navigation
+// away from the widget ever happens.
+function WhatsappCaptureCard({
+  onSubmit,
+  businessName,
+}: {
+  onSubmit: (phone: string) => Promise<void>;
+  businessName: string;
+}) {
+  const [phone, setPhone] = useState("");
+  const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const canSubmit = digitsOnly(phone).length === 10 || digitsOnly(phone).length === 11;
+
+  async function handleSubmit() {
+    if (!canSubmit) return;
+    setStatus("saving");
+    try {
+      await onSubmit(phone);
+      setStatus("done");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  if (status === "done") {
+    return (
+      <Card className="w-64">
+        <CardContent className="p-3">
+          <span className="text-2xl" aria-hidden>
+            💬
+          </span>
+          <div className="mt-1 text-sm font-semibold text-ink">Agradecemos! Vamos te chamar no WhatsApp em breve.</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-64">
-      <CardContent className="flex items-center gap-3 p-3">
+      <CardContent className="p-3">
         <span className="text-2xl" aria-hidden>
           💬
         </span>
-        <div className="flex-1">
-          <div className="text-sm font-semibold text-ink">Continuar no WhatsApp</div>
-          <div className="text-xs text-ink-soft">Toque para falar com um atendente</div>
-        </div>
+        <div className="mt-1 text-sm font-semibold text-ink">Receber contato no WhatsApp</div>
+        <div className="text-xs text-ink-soft">Deixe seu número que a gente te chama</div>
+        <Input
+          value={phone}
+          onChange={(e) => setPhone(maskBrPhone(e.target.value))}
+          placeholder="(11) 91234-5678"
+          type="tel"
+          inputMode="numeric"
+          className="mt-2"
+        />
+        {status === "error" && (
+          <p className="mt-1 text-xs text-negative">Não consegui salvar seu número — tenta de novo.</p>
+        )}
+        <p className="mt-2 text-[0.7rem] text-ink-soft">
+          Ao enviar, você concorda em compartilhar seu telefone com {businessName} para este atendimento.
+        </p>
+        <Button
+          type="button"
+          disabled={!canSubmit || status === "saving"}
+          onClick={handleSubmit}
+          className="tenant-accent-bg mt-2 w-full"
+        >
+          Enviar
+        </Button>
       </CardContent>
-      <a
-        href={safeUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="tenant-accent-bg block rounded-b-card px-3 py-2 text-center text-xs font-medium text-white"
-      >
-        Abrir WhatsApp
-      </a>
     </Card>
   );
 }
@@ -316,6 +362,98 @@ function mergeServerMessages(prev: Message[], serverMessages: any[]): Message[] 
   return [...prev, ...newOnes];
 }
 
+type Slot = { start: string; end: string };
+
+// Groups the backend's flat, ascending-order slot list by calendar day so the picker can show
+// one tappable day row (with a count) followed by that day's individual time chips, instead of
+// one giant flat wrap of buttons once more than a handful of slots come back.
+function groupSlotsByDay(slots: Slot[]): { dayKey: string; label: string; weekday: string; slots: Slot[] }[] {
+  const groups = new Map<string, Slot[]>();
+  for (const slot of slots) {
+    const dayKey = new Date(slot.start).toLocaleDateString("pt-BR");
+    const existing = groups.get(dayKey);
+    if (existing) existing.push(slot);
+    else groups.set(dayKey, [slot]);
+  }
+  return Array.from(groups.entries()).map(([dayKey, daySlots]) => {
+    const sample = new Date(daySlots[0].start);
+    return {
+      dayKey,
+      label: sample.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+      weekday: sample.toLocaleDateString("pt-BR", { weekday: "short" }),
+      slots: daySlots,
+    };
+  });
+}
+
+// Day/time grouped slot picker — replaces the old flat wrap of every slot as its own button,
+// which became unreadable once a connected calendar returned more than a few options.
+function SlotPicker({
+  slots,
+  selected,
+  onSelect,
+}: {
+  slots: Slot[];
+  selected: Slot | null;
+  onSelect: (s: Slot) => void;
+}) {
+  const days = groupSlotsByDay(slots);
+  const [activeDayKey, setActiveDayKey] = useState(days[0]?.dayKey ?? "");
+
+  useEffect(() => {
+    setActiveDayKey(groupSlotsByDay(slots)[0]?.dayKey ?? "");
+  }, [slots]);
+
+  const activeDay = days.find((d) => d.dayKey === activeDayKey) ?? days[0];
+
+  return (
+    <div>
+      <div className="flex w-full scroll-smooth snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1">
+        {days.map((day) => {
+          const isActive = day.dayKey === activeDay?.dayKey;
+          return (
+            <button
+              key={day.dayKey}
+              type="button"
+              onClick={() => setActiveDayKey(day.dayKey)}
+              className={
+                isActive
+                  ? "tenant-accent-bg shrink-0 snap-start rounded-card border px-3 py-2 text-center text-white active:scale-[0.98] transition-transform"
+                  : "tenant-accent-border tenant-accent-text shrink-0 snap-start rounded-card border bg-surface px-3 py-2 text-center active:scale-[0.98] transition-transform"
+              }
+            >
+              <div className="text-[0.65rem] uppercase text-ink-soft">{day.weekday}</div>
+              <div className="text-sm font-semibold">{day.label}</div>
+              <div className="text-[0.65rem]">{day.slots.length} horários</div>
+            </button>
+          );
+        })}
+      </div>
+      {activeDay && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {activeDay.slots.map((slot) => {
+            const isSelected = selected?.start === slot.start;
+            return (
+              <button
+                key={slot.start}
+                type="button"
+                onClick={() => onSelect(slot)}
+                className={
+                  isSelected
+                    ? "tenant-accent-bg rounded-card border px-3 py-2 text-center text-white active:scale-[0.98] transition-transform"
+                    : "tenant-accent-border tenant-accent-text rounded-card border bg-surface px-3 py-2 text-center active:scale-[0.98] transition-transform"
+                }
+              >
+                {new Date(slot.start).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ChatScreen({
   slug,
   resumeConversationId,
@@ -337,6 +475,9 @@ export function ChatScreen({
   const [bookingTime, setBookingTime] = useState("");
   const [bookingName, setBookingName] = useState("");
   const [bookingPhone, setBookingPhone] = useState("");
+  const [bookingEmail, setBookingEmail] = useState("");
+  const [leadCaptured, setLeadCaptured] = useState(false);
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [availableSlots, setAvailableSlots] = useState<{ start: string; end: string }[] | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ start: string; end: string } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -437,6 +578,7 @@ export function ChatScreen({
         }
         setMessages(restoredMessages);
         setConversationStatus(history.conversation?.status ?? null);
+        setLeadCaptured(Boolean(history.conversation?.hasLead));
         if (history.flowSnapshot) {
           // Never repaint stale bubbles on refresh after escalation — a human took over, so the
           // old scripted-flow bubbles no longer apply.
@@ -683,6 +825,8 @@ export function ChatScreen({
       try {
         await ensureConversation();
         setShowBooking(true);
+        setAvailableSlots(null);
+        setSelectedSlot(null);
         // null means no calendar connected — the booking card falls back to free-text date/time inputs.
         await getAvailableSlots(business.id).then(setAvailableSlots).catch(() => setAvailableSlots(null));
       } finally {
@@ -756,9 +900,8 @@ export function ChatScreen({
         setConversationStatus("escalated");
       }
       if (result?.escalated && result?.whatsappUrl) {
-        // Attach whatsappUrl to the message so WhatsappHandoffCard always renders a tappable card —
-        // the visitor must explicitly tap "Abrir WhatsApp" on that card to leave the chat; this is
-        // the only place WhatsApp opens, never automatically.
+        // Attach whatsappUrl to the message so WhatsappCaptureCard renders inline — the visitor
+        // leaves their number here instead of navigating out to wa.me; the business calls back.
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, whatsappUrl: result.whatsappUrl } : m)));
       }
       if (!result?.escalated && result?.flow?.bubbles?.length) {
@@ -824,17 +967,64 @@ export function ChatScreen({
     }
   }
 
+  async function handleCaptureWhatsapp(phone: string) {
+    await identifyVisitor(slug, null, phone);
+    setLeadCaptured(true);
+  }
+
   async function confirmBooking() {
-    if (!conversationId || !bookingName || !bookingPhone) return;
+    if (!conversationId || !bookingName || !bookingPhone || !bookingEmail) return;
     const usingSlots = Array.isArray(availableSlots) && availableSlots.length > 0;
     if (usingSlots && !selectedSlot) return;
     if (!usingSlots && (!bookingDate || !bookingTime)) return;
+    const phoneDigits = digitsOnly(bookingPhone).length;
+    if (phoneDigits !== 10 && phoneDigits !== 11) return;
+    if (!BOOKING_EMAIL_PATTERN.test(bookingEmail.trim())) return;
 
-    await identifyVisitor(slug, bookingName, bookingPhone);
     const startsAt = usingSlots ? new Date(selectedSlot!.start) : new Date(`${bookingDate}T${bookingTime}:00`);
     const endsAt = usingSlots ? new Date(selectedSlot!.end) : new Date(startsAt.getTime() + 30 * 60 * 1000);
     const serviceName = business.niche === "imobiliaria" ? "Visita ao imóvel" : "Test-drive";
-    await bookAppointment(business.id, conversationId, serviceName, startsAt.toISOString(), endsAt.toISOString());
+    setBookingSubmitting(true);
+    // identifyVisitor 400s on a malformed email/phone — that's a client input problem, not a
+    // slot capacity race, so it must not clear the selected slot or trigger a slot re-fetch
+    // (which would otherwise hide the real cause behind the generic "ocupado" message). Only a
+    // failure from bookAppointment itself (after identify already succeeded) is a real race.
+    try {
+      await identifyVisitor(slug, bookingName, bookingPhone, bookingEmail);
+    } catch (err) {
+      const status = (err as { status?: number })?.status;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextMessageId(),
+          role: "assistant",
+          content:
+            typeof status === "number" && status >= 400 && status < 500
+              ? "Verifica seu e-mail e telefone e tenta de novo."
+              : "Não consegui confirmar seus dados — tenta de novo.",
+        },
+      ]);
+      setBookingSubmitting(false);
+      return;
+    }
+    try {
+      await bookAppointment(business.id, conversationId, serviceName, startsAt.toISOString(), endsAt.toISOString());
+      setLeadCaptured(true);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextMessageId(),
+          role: "assistant",
+          content: "Não consegui confirmar esse horário — ele pode ter sido ocupado. Escolhe outro?",
+        },
+      ]);
+      getAvailableSlots(business.id).then(setAvailableSlots).catch(() => setAvailableSlots(null));
+      setSelectedSlot(null);
+      setBookingSubmitting(false);
+      return;
+    }
+    setBookingSubmitting(false);
     setMessages((prev) => [
       ...prev,
       {
@@ -845,6 +1035,7 @@ export function ChatScreen({
     ]);
     setShowBooking(false);
     setSelectedSlot(null);
+    setBookingEmail("");
   }
 
   if (!business) {
@@ -925,9 +1116,9 @@ export function ChatScreen({
                 </div>
               )
             )}
-            {m.whatsappUrl && (
+            {m.whatsappUrl && !leadCaptured && (
               <div className="mt-2">
-                <WhatsappHandoffCard url={m.whatsappUrl} />
+                <WhatsappCaptureCard onSubmit={handleCaptureWhatsapp} businessName={business.name} />
               </div>
             )}
           </div>
@@ -959,19 +1150,15 @@ export function ChatScreen({
                 Agendar {business.niche === "imobiliaria" ? "visita" : "test-drive"}
               </div>
               {Array.isArray(availableSlots) && availableSlots.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {availableSlots.map((slot) => (
-                    <Button
-                      key={slot.start}
-                      type="button"
-                      size="sm"
-                      variant={selectedSlot?.start === slot.start ? "default" : "outline"}
-                      onClick={() => setSelectedSlot(slot)}
-                    >
-                      {new Date(slot.start).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}{" "}
-                      {new Date(slot.start).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                    </Button>
-                  ))}
+                <SlotPicker slots={availableSlots} selected={selectedSlot} onSelect={setSelectedSlot} />
+              ) : Array.isArray(availableSlots) ? (
+                <div>
+                  <p className="text-sm text-ink-soft">
+                    Não tenho horários abertos nos próximos 14 dias — me conta qual dia funciona pra você?
+                  </p>
+                  <Button type="button" variant="outline" className="mt-2 w-full" onClick={() => setShowBooking(false)}>
+                    Fechar
+                  </Button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -979,26 +1166,46 @@ export function ChatScreen({
                   <Input type="time" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="flex-1" />
                 </div>
               )}
-              <Input
-                value={bookingName}
-                onChange={(e) => setBookingName(e.target.value)}
-                placeholder="Seu nome"
-                className="mt-2"
-              />
-              <Input
-                value={bookingPhone}
-                onChange={(e) => setBookingPhone(maskBrPhone(e.target.value))}
-                placeholder="(11) 99999-9999"
-                type="tel"
-                inputMode="numeric"
-                className="mt-2"
-              />
-              <p className="mt-2 text-[0.7rem] text-ink-soft">
-                Ao confirmar, você concorda em compartilhar esses dados com {business.name} para este atendimento.
-              </p>
-              <Button onClick={confirmBooking} className="mt-2 w-full">
-                Confirmar
-              </Button>
+              {!(Array.isArray(availableSlots) && availableSlots.length === 0) && (
+                <>
+                  <Input
+                    value={bookingName}
+                    onChange={(e) => setBookingName(e.target.value)}
+                    placeholder="Seu nome"
+                    className="mt-2"
+                  />
+                  <Input
+                    value={bookingEmail}
+                    onChange={(e) => setBookingEmail(e.target.value)}
+                    placeholder="seu@email.com"
+                    type="email"
+                    inputMode="email"
+                    className="mt-2"
+                  />
+                  {bookingEmail.length > 0 && !BOOKING_EMAIL_PATTERN.test(bookingEmail.trim()) && (
+                    <p className="mt-1 text-xs text-negative">Digite um e-mail válido.</p>
+                  )}
+                  <Input
+                    value={bookingPhone}
+                    onChange={(e) => setBookingPhone(maskBrPhone(e.target.value))}
+                    placeholder="(11) 99999-9999"
+                    type="tel"
+                    inputMode="numeric"
+                    className="mt-2"
+                  />
+                  <p className="mt-2 text-[0.7rem] text-ink-soft">
+                    Ao confirmar, você concorda em compartilhar seu nome, e-mail e telefone com {business.name} para este
+                    atendimento.
+                  </p>
+                  <Button
+                    onClick={confirmBooking}
+                    disabled={bookingSubmitting || (bookingEmail.length > 0 && !BOOKING_EMAIL_PATTERN.test(bookingEmail.trim()))}
+                    className="mt-2 w-full"
+                  >
+                    {bookingSubmitting ? "Confirmando…" : "Confirmar"}
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         )}

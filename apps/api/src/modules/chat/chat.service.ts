@@ -393,6 +393,7 @@ export class ChatService {
         visitorToken: conversation.visitorToken,
         status: conversation.status,
         resumeToken: conversation.resumeToken,
+        hasLead: Boolean(conversation.leadId),
       },
       messages: messagesWithListings,
       flowSnapshot: conversation.flowSnapshot ?? null,
@@ -1892,7 +1893,13 @@ export class ChatService {
     });
 
     const assistantMessage = await this.prisma.client.message.create({
-      data: { conversationId, businessId, role: "assistant", content: "Vou te passar pra uma pessoa do time.", answerSource: "escalation" },
+      data: {
+        conversationId,
+        businessId,
+        role: "assistant",
+        content: "Vou te passar pra uma pessoa do time. Me confirma seu WhatsApp abaixo que já te chamamos.",
+        answerSource: "escalation",
+      },
     });
 
     this.notifyOwner(

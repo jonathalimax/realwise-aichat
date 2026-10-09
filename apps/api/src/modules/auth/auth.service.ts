@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { Injectable, BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { verifyPhoneIdToken, normalizePhone, signBusinessSession, signVisitorSession, signAdminSession } from "@realwise/auth";
 import { createHash } from "crypto";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
 
-const CONSENT_TEXT_VERSION = "2026-01";
+const CONSENT_TEXT_VERSION = "2026-02";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 @Injectable()
 export class AuthService {
@@ -45,9 +46,26 @@ export class AuthService {
     return { token, business, isNew };
   }
 
-  async identifyVisitor(businessSlug: string, name: string, phone: string, ip: string, userAgent: string, anonVisitorToken?: string) {
+  async identifyVisitor(
+    businessSlug: string,
+    name: string | null | undefined,
+    phone: string,
+    ip: string,
+    userAgent: string,
+    anonVisitorToken?: string,
+    email?: string | null,
+  ) {
     const business = await this.prisma.client.business.findUnique({ where: { slug: businessSlug } });
     if (!business) throw new NotFoundException("Business not found");
+
+    const cleanName = name?.trim() || null;
+    const cleanEmail = email?.trim().toLowerCase() || null;
+    if (cleanEmail && cleanEmail.length > 254) {
+      throw new BadRequestException("Invalid email");
+    }
+    if (cleanEmail && !EMAIL_PATTERN.test(cleanEmail)) {
+      throw new BadRequestException("Invalid email");
+    }
 
     const phoneNormalized = normalizePhone(phone);
     // Phone is not OTP-verified here (low-friction-by-design, see plan §14.4) — so on a match
@@ -59,10 +77,14 @@ export class AuthService {
     const lead = existingLead
       ? await this.prisma.client.lead.update({
           where: { id: existingLead.id },
-          data: { lastSeenAt: new Date(), sessionCount: { increment: 1 } },
+          data: {
+            lastSeenAt: new Date(),
+            sessionCount: { increment: 1 },
+            ...(cleanEmail && !existingLead.email ? { email: cleanEmail } : {}),
+          },
         })
       : await this.prisma.client.lead.create({
-          data: { businessId: business.id, name, phone, phoneNormalized },
+          data: { businessId: business.id, name: cleanName, phone, phoneNormalized, ...(cleanEmail ? { email: cleanEmail } : {}) },
         });
 
     await this.prisma.client.consentRecord.create({
@@ -84,7 +106,7 @@ export class AuthService {
       });
     }
 
-    const token = await signVisitorSession({ businessId: business.id, leadId: lead.id, phoneNumber: phoneNormalized, name });
+    const token = await signVisitorSession({ businessId: business.id, leadId: lead.id, phoneNumber: phoneNormalized, name: cleanName ?? undefined });
     return { token, lead };
   }
 
