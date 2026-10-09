@@ -1074,20 +1074,27 @@ export function ChatScreen({
         </div>
       </header>
 
-      <main className="flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 py-4">
-        {messages.map((m) => (
+      <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
+        {messages.map((m, i) => {
+          const isFirstInGroup = i === 0 || messages[i - 1].role !== m.role;
+          return (
           <div
             key={m.id}
             className={
-              m.role === "visitor"
+              (isFirstInGroup ? "mt-3" : "mt-1") +
+              " " +
+              (m.role === "visitor"
                 ? "ml-auto max-w-[80%]"
                 : m.listings?.length || m.simulationData
                   ? "max-w-full"
-                  : "max-w-[85%]"
+                  : "max-w-[85%]")
             }
           >
-            {m.role === "owner" && (
+            {isFirstInGroup && m.role === "owner" && (
               <div className="mb-1 text-xs font-semibold text-accent">{business.name}</div>
+            )}
+            {isFirstInGroup && m.role === "assistant" && (
+              <div className="mb-1 text-xs font-semibold text-ink-soft">{getPersonaName(business.niche)}</div>
             )}
             <div
               className={
@@ -1122,13 +1129,14 @@ export function ChatScreen({
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
 
         {sending && (
           <div
             role="status"
             aria-live="polite"
-            className="flex max-w-[85%] items-center gap-2 rounded-3xl rounded-bl-lg bg-surface px-4 py-3 shadow-sm"
+            className="mt-3 flex max-w-[85%] items-center gap-2 rounded-3xl rounded-bl-lg bg-surface px-4 py-3 shadow-sm"
           >
             <span className="text-sm text-ink-soft">
               {thinkingStage === 0
@@ -1144,7 +1152,7 @@ export function ChatScreen({
         )}
 
         {showBooking && (
-          <Card className="max-w-[90%]">
+          <Card className="mt-3 max-w-[90%]">
             <CardContent className="p-4">
               <div className="mb-2 text-xs uppercase tracking-wide text-ink-soft">
                 Agendar {business.niche === "imobiliaria" ? "visita" : "test-drive"}
@@ -1210,14 +1218,14 @@ export function ChatScreen({
           </Card>
         )}
         {pollCapped && conversationStatus === "escalated" && (
-          <div className="flex justify-center">
+          <div className="mt-3 flex justify-center">
             <Button type="button" variant="outline" size="sm" onClick={handleManualRefresh}>
               Atualizar
             </Button>
           </div>
         )}
         {pushPrompt === "asking" && (
-          <div className="flex justify-center gap-2">
+          <div className="mt-3 flex justify-center gap-2">
             <Button type="button" size="sm" onClick={() => handlePushChoice(true)}>
               Sim
             </Button>
@@ -1269,13 +1277,13 @@ export function ChatScreen({
           e.preventDefault();
           handleSend(input);
         }}
-        className="flex flex-none items-center gap-2 border-t border-border bg-bg/80 px-4 py-3 backdrop-blur-md"
+        className="flex flex-none items-center gap-2 bg-bg/80 px-4 py-3 shadow-[0_-10px_20px_-16px_rgba(20,24,21,0.18)] backdrop-blur-md"
       >
         <Input
           variant="pill"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Escreva sua pergunta…"
+          placeholder="Escreva sua mensagem…"
           className="flex-1"
         />
         <Button type="submit" variant="round" size="icon" disabled={sending || busy} className="rounded-full">

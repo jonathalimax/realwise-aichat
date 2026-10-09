@@ -82,9 +82,9 @@
      flat bordered card. Falls back gracefully where backdrop-filter isn't supported (the
      semi-transparent background alone still reads fine against the light --bg canvas). */
   .glass-card {
-    background: color-mix(in srgb, rgb(var(--surface)) 96%, transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: color-mix(in srgb, rgb(var(--surface)) 85%, transparent);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border: 1px solid color-mix(in srgb, rgb(var(--border)) 60%, transparent);
     box-shadow: 0 4px 12px rgba(20, 24, 21, 0.06);
   }
@@ -108,21 +108,21 @@
   .ai-bubble {
     background: linear-gradient(
       135deg,
-      color-mix(in srgb, rgb(var(--secondary)) 32%, transparent),
-      color-mix(in srgb, rgb(var(--secondary)) 6%, transparent)
+      color-mix(in srgb, rgb(var(--secondary)) 14%, transparent),
+      color-mix(in srgb, rgb(var(--secondary)) 3%, transparent)
     );
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid color-mix(in srgb, rgb(var(--secondary)) 25%, transparent);
+    border: 1px solid color-mix(in srgb, rgb(var(--secondary)) 14%, transparent);
   }
   .tenant-bubble {
     background: linear-gradient(
       135deg,
-      color-mix(in srgb, var(--tenant-accent) 38%, transparent),
-      color-mix(in srgb, var(--tenant-accent) 8%, transparent)
+      color-mix(in srgb, var(--tenant-accent) 18%, transparent),
+      color-mix(in srgb, var(--tenant-accent) 4%, transparent)
     );
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid color-mix(in srgb, var(--tenant-accent) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--tenant-accent) 16%, transparent);
   }
 }
