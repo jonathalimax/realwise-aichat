@@ -42,7 +42,9 @@ export default function InboxPage() {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [muted, setMuted] = useState(false);
-  const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const messageListRef = useRef<HTMLDivElement | null>(null);
+  const lastThreadIdRef = useRef<string | null>(null);
+  const lastMessageCountRef = useRef(0);
   const liveAttentionSeenRef = useRef<Set<string>>(new Set());
   const hasLoadedOnceRef = useRef(false);
 
@@ -131,15 +133,42 @@ export default function InboxPage() {
 
   async function selectConversation(id: string) {
     setSelectedId(id);
+    // Clear the previously loaded thread synchronously so there's no render where `selectedId`
+    // points at the new conversation while `thread` still holds the old one's data — the
+    // scroll effect below keys identity off `thread.id`, not `selectedId`, specifically to avoid
+    // that desync window.
+    setThread(null);
     const data = await getInboxThread(id);
     setThread(data);
     await markInboxRead(id);
     setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, unread: false } : c)));
   }
 
+  // Container-only scrolling (never scrollIntoView, which would also scroll the outer page
+  // <main>) — an identity change (conversation switch/open) snaps the thread's own scrollbar to
+  // the bottom instantly; a message-count increase within the same conversation scrolls smoothly.
+  // Mirrors the requestAnimationFrame pattern in InterviewChat.tsx.
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [thread?.messages?.length]);
+    const identityKey = thread?.id ?? null;
+    const count = thread?.messages?.length ?? 0;
+    const isNewConversation = identityKey !== lastThreadIdRef.current;
+    const frame = requestAnimationFrame(() => {
+      const el = messageListRef.current;
+      if (!el) return;
+      if (isNewConversation) {
+        el.scrollTop = el.scrollHeight;
+      } else if (count > lastMessageCountRef.current) {
+        el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      }
+      // Refs only advance after real DOM scroll work above actually ran — if the element isn't
+      // mounted yet (e.g. first-ever open, while `thread` is still null) this frame no-ops via
+      // the guard above and bookkeeping is left untouched, so the next real frame still sees it
+      // as "new conversation" and snaps instead of incorrectly scrolling smoothly.
+      lastThreadIdRef.current = identityKey;
+      lastMessageCountRef.current = count;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [thread?.id, thread?.messages?.length]);
 
   async function handleSend() {
     if (!selectedId || !text.trim() || sending) return;
@@ -221,7 +250,7 @@ export default function InboxPage() {
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
+      <div className="grid gap-5 lg:grid-cols-[320px_1fr] xl:grid-cols-[340px_1fr]">
         <div className="flex flex-col gap-3">
           {liveAttentionConversations.length > 0 && (
             <div className="flex flex-col gap-2">
@@ -306,12 +335,12 @@ export default function InboxPage() {
               </div>
             ) : (
               <>
-                <div className="flex-1 overflow-y-auto pr-1">
+                <div ref={messageListRef} className="flex-1 overflow-y-auto pr-1">
                   <div className="flex flex-col gap-2">
                     {thread.messages.map((m: any) =>
                       m.role === "assistant" ? (
                         <div key={m.id} className="flex justify-start">
-                          <div className="max-w-[85%]">
+                          <div className="max-w-[92%]">
                             <MessageMirror message={m} personaName={thread.personaName ?? "Assistente"} niche={thread.niche} />
                           </div>
                         </div>
@@ -327,7 +356,6 @@ export default function InboxPage() {
                         </div>
                       ),
                     )}
-                    <div ref={threadEndRef} />
                   </div>
                 </div>
 

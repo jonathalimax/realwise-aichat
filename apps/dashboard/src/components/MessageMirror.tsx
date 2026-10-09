@@ -201,10 +201,14 @@ function ListingCard({ listing }: { listing: MirrorListing }) {
   const url = safeHttpUrl(listing.url);
   const [imageFailed, setImageFailed] = useState(false);
   return (
-    <div className="flex h-[23rem] w-56 shrink-0 flex-col overflow-hidden rounded-card border border-border bg-surface">
+    <div
+      className="flex h-[23rem] w-56 shrink-0 flex-col overflow-hidden rounded-card border bg-surface shadow-card"
+      style={{ borderColor: "color-mix(in srgb, rgb(var(--border)) 60%, transparent)" }}
+    >
       {/* flex-col h-full + mt-auto on the footer below, mirroring ChatScreen.tsx's ListingCard,
           so the "Ver anúncio" row always lines up at the same height regardless of content
-          length. */}
+          length. Border tint + rounded-card echo chat's glass-card treatment (not an exact
+          shadow/blur match — dashboard uses the flatter shadow-card token, no backdrop blur). */}
       <div className="flex h-full flex-col">
         <div className="flex w-full flex-col overflow-hidden text-left">
           <div className="flex h-32 w-full shrink-0 items-center justify-center bg-border/40">
@@ -224,7 +228,7 @@ function ListingCard({ listing }: { listing: MirrorListing }) {
           </div>
           <div className="flex flex-col p-3">
             <div className="line-clamp-2 text-sm font-semibold text-ink">{listing.title}</div>
-            {listing.price && <div className="mt-1 text-sm font-semibold text-accent">{listing.price}</div>}
+            {listing.price && <div className="mt-1 text-sm font-bold text-accent">{listing.price}</div>}
             {listing.description && <p className="mt-1 line-clamp-3 text-xs text-ink-soft">{listing.description}</p>}
           </div>
         </div>
@@ -234,7 +238,7 @@ function ListingCard({ listing }: { listing: MirrorListing }) {
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 rounded-full bg-accent px-3 py-1.5 text-center text-xs font-medium text-white"
+              className="flex-1 rounded-full bg-accent px-3 py-1.5 text-center text-xs font-medium text-white shadow-sm"
             >
               Ver anúncio
             </a>
