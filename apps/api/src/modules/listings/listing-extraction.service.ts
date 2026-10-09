@@ -1036,6 +1036,38 @@ export class ListingExtractionService {
     });
     retired = sweepResult.count;
 
+    // Cross-document image fallback: some sites render a listing's own detail page client-side
+    // (our crawler, which doesn't execute JS, then only ever sees a "Carregando..."/loading
+    // shell with no real content), while the SAME reference code and its photos also appear on a
+    // server-rendered grid/search page crawled elsewhere on the same site. The per-window
+    // association above (extractImagesByCodeProximity) only looks at the window a listing's own
+    // text came from, so it misses this case entirely — confirmed live on a real tenant where the
+    // detail page was an empty shell but a 14K-char grid page carried the same code next to real
+    // "Foto:" lines. This pass gives every still-imageless listing one more chance against every
+    // OTHER page crawled for this business before giving up.
+    const stillImageless = await this.prisma.client.listing.findMany({
+      where: { businessId, status: "active", images: { none: {} } },
+      select: { id: true, referenceCode: true },
+    });
+    if (stillImageless.length > 0) {
+      const documents = await this.prisma.client.knowledgeDocument.findMany({
+        where: { businessId, source: "website_sync", status: "processed" },
+        select: { extractedMarkdown: true },
+      });
+      for (const listing of stillImageless) {
+        if (!listing.referenceCode) continue;
+        for (const doc of documents) {
+          if (!doc.extractedMarkdown) continue;
+          const codeToImages = extractImagesByCodeProximity(doc.extractedMarkdown);
+          const images = codeToImages.get(listing.referenceCode);
+          if (images && images.length > 0) {
+            await this.createImages(listing.id, images);
+            break;
+          }
+        }
+      }
+    }
+
     return { created, updated, retired };
   }
 
