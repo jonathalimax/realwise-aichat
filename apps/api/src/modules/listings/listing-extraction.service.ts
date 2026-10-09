@@ -93,6 +93,15 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
     // and the model tends to drop the whole images field defensively.
     "Atenção a um padrão comum: quando o MESMO título/código/preço se repete várias vezes no texto, cada repetição seguida de uma 'Foto:' diferente, isso é a galeria de fotos de UM ÚNICO item (não itens duplicados) — colete TODAS essas URLs de Foto: distintas no campo \"images\" desse item, mesmo que sejam 10, 20 ou mais. Não crie itens repetidos para o mesmo anúncio e não descarte o campo \"images\" por causa da repetição.",
     "'url' só deve vir de um link real no formato [texto](url) ou de uma URL http(s) explícita no texto daquele item, copiada caractere por caractere exatamente como aparece no texto — NUNCA construa, monte ou infira uma URL a partir de um código de referência, slug ou padrão observado em outras URLs, e NUNCA use um link de navegação/home do site como se fosse a URL do item.",
+    // Confirmed real-world failure mode (Allure's /busca grid page): in a dense list of several
+    // items, the model sometimes attached the url of an ADJACENT item to the wrong title/code —
+    // e.g. item "APARTAMENTO NOVO PRÓXIMO AO PARQUE BACACHERI" (code AP-xxx) ended up with the
+    // url belonging to a completely different apartment a few lines away. This is a worse outcome
+    // than simply omitting 'url' — a wrong link sends a visitor to someone else's listing. The
+    // instruction above ("copie do texto daquele item") wasn't specific enough to stop cross-item
+    // bleed in a tightly packed grid, so this spells out the actual failure mode and the safe
+    // default.
+    "Em listas densas com vários itens próximos (ex: uma página de grade/busca com vários cards seguidos), SÓ atribua uma URL a um item se ela estiver inequivocamente dentro do bloco de texto DAQUELE item específico (mesmo título/código/preço) — nunca pegue emprestada a URL de um item vizinho só porque está perto no texto, mesmo que pareça plausível. Na dúvida sobre a qual item uma URL pertence, OMITA o campo 'url' para esse item em vez de arriscar atribuí-la ao item errado — enviar um link errado é pior do que não ter link nenhum.",
     "Se nenhum item real e distinto puder ser identificado no trecho, responda com um array vazio [].",
     "IMPORTANTE: use EXATAMENTE os nomes de campos em inglês especificados acima (title, price, addressLine, etc) — nunca traduza as chaves do JSON para português.",
     "O VALOR de 'listingType' deve usar obrigatoriamente um destes termos em português, conforme o tipo de anúncio:",
