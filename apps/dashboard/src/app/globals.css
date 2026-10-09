@@ -98,9 +98,9 @@
     border: 1px solid color-mix(in srgb, rgb(var(--accent)) 16%, transparent);
   }
   .mirror-owner-bubble {
-    background: color-mix(in srgb, rgb(var(--tertiary)) 14%, transparent);
+    background: color-mix(in srgb, rgb(var(--secondary)) 20%, transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid color-mix(in srgb, rgb(var(--tertiary)) 20%, transparent);
+    border: 1px solid color-mix(in srgb, rgb(var(--secondary)) 28%, transparent);
   }
 }

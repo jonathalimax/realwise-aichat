@@ -117,13 +117,14 @@
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid color-mix(in srgb, var(--tenant-accent) 16%, transparent);
   }
-  /* Owner (human) replies get their own flat tint, distinct from both the AI's coral tint and
-     the visitor's brand-color tint, using the app accent token — makes it visually clear who's
-     talking once a conversation has been handed back to a human. */
+  /* Owner (human) replies stay in the same coral family as the AI's bubble (both sit on the
+     "business side" of the conversation, left-aligned, opposite the visitor) rather than reading
+     close to the visitor's own green tint — just a stronger/darker version of the same secondary
+     tone so the two are still distinguishable at a glance, with the sender label doing the rest. */
   .owner-bubble {
-    background: color-mix(in srgb, rgb(var(--accent)) 14%, transparent);
+    background: color-mix(in srgb, rgb(var(--secondary)) 20%, transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid color-mix(in srgb, rgb(var(--accent)) 20%, transparent);
+    border: 1px solid color-mix(in srgb, rgb(var(--secondary)) 28%, transparent);
   }
 }

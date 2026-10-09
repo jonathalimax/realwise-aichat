@@ -72,7 +72,7 @@ const SYSTEM_PROMPT_TEMPLATE = (businessName: string) =>
     '{ "title": string, "code": string, "description": string, "price": string, "url": string, "addressLine": string, "neighborhood": string, "city": string, "state": string, "listingType": string, "transaction": "aluguel"|"venda", "bedrooms": number, "parkingSpots": number, "areaM2": number, "brand": string, "model": string, "year": number, "mileageKm": number, "images": string[] }',
     "Regras: nunca invente um item ou valor de campo que não apareça explicitamente no texto. Se um campo não aparecer no texto para aquele item, OMITA o campo (nunca invente um placeholder).",
     "NUNCA trate texto de carregamento, erro ou estado vazio da página como conteúdo real — se o valor de um campo contiver algo como 'Carregando...', 'Loading...', 'Aguarde', 'Consulte', 'undefined', 'null', 'R$ ???.???.???,00', '--', 'Preço a definir' ou uma sequência de '?' no lugar dos números, OMITA esse campo (e se nem o título for conteúdo real, não inclua o item).",
-    "'description' deve ser um texto corrido, bem pontuado e fácil de ler, usando apenas informações presentes no texto original — remova quebras de linha excessivas, repetições e qualquer rodapé de contato/telefone/CRECI que não seja parte da descrição do imóvel/veículo em si, mas nunca invente ou reescreva o conteúdo além de normalizar a formatação.",
+    "'description' deve ser bem pontuada, fácil de ler e usar apenas informações presentes no texto original — remova quebras de linha excessivas/aleatórias, repetições e qualquer rodapé de contato/telefone/CRECI que não seja parte da descrição do imóvel/veículo em si, mas nunca invente ou reescreva o conteúdo além de normalizar a formatação. Quando o texto original mudar de assunto (ex: de um cômodo/pavimento para outro, de características gerais para uma observação final), separe com uma quebra de linha dupla (\\n\\n) em vez de um texto corrido único — não force tudo em um único parágrafo.",
     "'transaction' só deve ser preenchido se o texto disser explicitamente aluguel ou venda.",
     "'city'/'state' só devem ser preenchidos se citados explicitamente no texto daquele item.",
     // A short literal token (e.g. "AP139") is a much easier copy task for the model than an array
@@ -366,6 +366,31 @@ const EXPLICIT_CODE_PATTERN = /\b(?:ref(?:er[eê]ncia)?|c[oó]d(?:igo)?)\.?:?\s*
 function findExplicitReferenceCode(sourceText: string): string | undefined {
   const match = sourceText.match(EXPLICIT_CODE_PATTERN);
   return match ? match[1].toUpperCase() : undefined;
+}
+
+// Fallback for when the model's cleaned-up title/description strips the "Cód: X" boilerplate
+// text entirely (it's instructed to), leaving findExplicitReferenceCode() with nothing to match
+// even though the item's real code is still visible as the trailing path segment on its own
+// detail-page URL (Vista CRM and similar platforms consistently end a listing URL in its code,
+// e.g. ".../apartamento-tingui-curitiba-pr-2-quartos-56.98m2-AP139"). Without this, a listing
+// whose code wasn't caught in its own text fell back to a content-hash-derived synthetic code —
+// which is deterministic per dedupKey but NOT per listing identity, so a different chunk/run that
+// DID capture the real code created a second row for the same URL that the image-association
+// pass could never match a photo to (it only ever matches on the real code).
+function findReferenceCodeFromUrl(url?: string | null): string | undefined {
+  if (!url) return undefined;
+  try {
+    const lastSegment = new URL(url).pathname.split("/").filter(Boolean).pop();
+    if (!lastSegment) return undefined;
+    const lastToken = lastSegment.split("-").pop();
+    if (!lastToken) return undefined;
+    // Must look like a real short alphanumeric code with at least one digit — excludes plain
+    // descriptive words (e.g. "quartos") and decimal area tokens (e.g. "72.22m2", which contains
+    // a "." the pattern below rejects).
+    return /^[a-z0-9]{2,12}$/i.test(lastToken) && /\d/.test(lastToken) ? lastToken.toUpperCase() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // Deterministic alternative to asking the LLM to associate photos with items — confirmed via
@@ -799,7 +824,10 @@ export class ListingExtractionService {
       // Only trust an explicit code found within THIS item's own extracted text (title/
       // description) — searching the whole combined document would match the same code for
       // every item. Resolve it BEFORE computing the dedupKey so a stable code can feed in.
-      const explicitCode = findExplicitReferenceCode(`${item.title} ${item.description ?? ""}`);
+      // Falls back to the code embedded in the item's own detail-page URL when the model's
+      // cleaned-up text no longer carries it — see findReferenceCodeFromUrl's comment.
+      const explicitCode =
+        findExplicitReferenceCode(`${item.title} ${item.description ?? ""}`) ?? findReferenceCodeFromUrl(item.pageUrl);
       const dedupKey = computeDedupKey(item, explicitCode);
 
       let existing = candidates.find((candidate) => candidate.dedupKey === dedupKey) ?? null;

@@ -1030,13 +1030,19 @@ export function ChatScreen({
   }
 
   async function confirmBooking() {
-    if (!conversationId || !bookingName || !bookingPhone || !bookingEmail) return;
+    // Once a lead is already linked to this conversation (WhatsApp capture, or an earlier
+    // booking), the visitor's contact info is already on file — the form below hides those
+    // fields entirely in that case, so don't require/re-submit them here either.
+    if (!conversationId) return;
+    if (!leadCaptured && (!bookingName || !bookingPhone || !bookingEmail)) return;
     const usingSlots = Array.isArray(availableSlots) && availableSlots.length > 0;
     if (usingSlots && !selectedSlot) return;
     if (!usingSlots && (!bookingDate || !bookingTime)) return;
-    const phoneDigits = digitsOnly(bookingPhone).length;
-    if (phoneDigits !== 10 && phoneDigits !== 11) return;
-    if (!BOOKING_EMAIL_PATTERN.test(bookingEmail.trim())) return;
+    if (!leadCaptured) {
+      const phoneDigits = digitsOnly(bookingPhone).length;
+      if (phoneDigits !== 10 && phoneDigits !== 11) return;
+      if (!BOOKING_EMAIL_PATTERN.test(bookingEmail.trim())) return;
+    }
 
     const startsAt = usingSlots ? new Date(selectedSlot!.start) : new Date(`${bookingDate}T${bookingTime}:00`);
     const endsAt = usingSlots ? new Date(selectedSlot!.end) : new Date(startsAt.getTime() + 30 * 60 * 1000);
@@ -1046,23 +1052,26 @@ export function ChatScreen({
     // slot capacity race, so it must not clear the selected slot or trigger a slot re-fetch
     // (which would otherwise hide the real cause behind the generic "ocupado" message). Only a
     // failure from bookAppointment itself (after identify already succeeded) is a real race.
-    try {
-      await identifyVisitor(slug, bookingName, bookingPhone, bookingEmail);
-    } catch (err) {
-      const status = (err as { status?: number })?.status;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: nextMessageId(),
-          role: "assistant",
-          content:
-            typeof status === "number" && status >= 400 && status < 500
-              ? "Verifica seu e-mail e telefone e tenta de novo."
-              : "Não consegui confirmar seus dados — tenta de novo.",
-        },
-      ]);
-      setBookingSubmitting(false);
-      return;
+    // Skipped entirely when the visitor's contact info is already on file — nothing new to submit.
+    if (!leadCaptured) {
+      try {
+        await identifyVisitor(slug, bookingName, bookingPhone, bookingEmail);
+      } catch (err) {
+        const status = (err as { status?: number })?.status;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: nextMessageId(),
+            role: "assistant",
+            content:
+              typeof status === "number" && status >= 400 && status < 500
+                ? "Verifica seu e-mail e telefone e tenta de novo."
+                : "Não consegui confirmar seus dados — tenta de novo.",
+          },
+        ]);
+        setBookingSubmitting(false);
+        return;
+      }
     }
     try {
       await bookAppointment(business.id, conversationId, serviceName, startsAt.toISOString(), endsAt.toISOString());
@@ -1171,17 +1180,19 @@ export function ChatScreen({
             {isFirstInGroup && m.role === "assistant" && (
               <div className="mb-1 text-xs font-semibold text-ink-soft">{getPersonaName(business.niche)}</div>
             )}
-            <div
-              className={
-                m.role === "visitor"
-                  ? "tenant-bubble rounded-3xl rounded-br-lg px-4 py-3 text-sm text-ink break-words"
-                  : m.role === "owner"
-                    ? "owner-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
-                    : "ai-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
-              }
-            >
-              <MessageContent text={m.content} />
-            </div>
+            {m.content.trim().length > 0 && (
+              <div
+                className={
+                  m.role === "visitor"
+                    ? "tenant-bubble rounded-3xl rounded-br-lg px-4 py-3 text-sm text-ink break-words"
+                    : m.role === "owner"
+                      ? "owner-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
+                      : "ai-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
+                }
+              >
+                <MessageContent text={m.content} />
+              </div>
+            )}
             {m.simulationData ? (
               <SimulationCard
                 data={m.simulationData}
@@ -1255,7 +1266,10 @@ export function ChatScreen({
                   <Input type="time" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="flex-1" />
                 </div>
               )}
-              {!(Array.isArray(availableSlots) && availableSlots.length === 0) && (
+              {/* Name/email/phone are only asked once per conversation -- once leadCaptured is
+                  true (WhatsApp capture earlier, or a prior booking), we already have contact
+                  info on file and skip straight to picking a slot + confirming. */}
+              {!(Array.isArray(availableSlots) && availableSlots.length === 0) && !leadCaptured && (
                 <>
                   <Input
                     value={bookingName}
@@ -1286,14 +1300,18 @@ export function ChatScreen({
                     Ao confirmar, você concorda em compartilhar seu nome, e-mail e telefone com {business.name} para este
                     atendimento.
                   </p>
-                  <Button
-                    onClick={confirmBooking}
-                    disabled={bookingSubmitting || (bookingEmail.length > 0 && !BOOKING_EMAIL_PATTERN.test(bookingEmail.trim()))}
-                    className="mt-2 w-full"
-                  >
-                    {bookingSubmitting ? "Confirmando…" : "Confirmar"}
-                  </Button>
                 </>
+              )}
+              {!(Array.isArray(availableSlots) && availableSlots.length === 0) && (
+                <Button
+                  onClick={confirmBooking}
+                  disabled={
+                    bookingSubmitting || (!leadCaptured && bookingEmail.length > 0 && !BOOKING_EMAIL_PATTERN.test(bookingEmail.trim()))
+                  }
+                  className="mt-2 w-full"
+                >
+                  {bookingSubmitting ? "Confirmando…" : "Confirmar"}
+                </Button>
               )}
             </CardContent>
           </Card>

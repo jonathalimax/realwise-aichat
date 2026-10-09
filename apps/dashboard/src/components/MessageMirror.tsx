@@ -354,9 +354,11 @@ export function MessageMirror({
 }) {
   return (
     <div className="max-w-full">
-      <div className="mirror-ai-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words">
-        <MessageContent text={message.content} />
-      </div>
+      {message.content.trim().length > 0 && (
+        <div className="mirror-ai-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words">
+          <MessageContent text={message.content} />
+        </div>
+      )}
       {message.simulationData ? (
         <SimulationCard data={message.simulationData} listings={message.listings} niche={niche} />
       ) : (

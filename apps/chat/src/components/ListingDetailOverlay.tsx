@@ -139,9 +139,13 @@ export function ListingDetailOverlay({ listing, onClose }: { listing: Listing; o
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} aria-hidden="true" />
+      {/* Mobile: edge-to-edge bottom sheet (swipe-to-dismiss). Desktop (sm+): a centered,
+          width-capped modal instead of a full-bleed sheet — unconstrained inset-x-0 looked
+          broken on wide viewports, with the gallery stretched across the entire browser width
+          instead of staying inside a reasonably sized dialog. */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-50 flex h-[92dvh] flex-col rounded-t-card bg-bg shadow-[0_-8px_24px_rgba(20,24,21,0.12)] transition-transform duration-300 ${
-          mounted ? "translate-y-0" : "translate-y-full"
+        className={`fixed inset-x-0 bottom-0 z-50 flex h-[92dvh] flex-col rounded-t-card bg-bg shadow-[0_-8px_24px_rgba(20,24,21,0.12)] transition-transform duration-300 sm:inset-x-0 sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:rounded-card sm:shadow-2xl ${
+          mounted ? "translate-y-0 sm:-translate-y-1/2" : "translate-y-full sm:-translate-y-1/2"
         }`}
       >
         <div
