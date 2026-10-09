@@ -131,7 +131,7 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
             </div>
             <div>
               <div className="font-mono text-4xl text-lime">2h</div>
-              <p className="mt-2 text-sm text-bg/70">é o tempo médio pra um lead esfriar. Quem responde em 5 minutos fecha mais — quem demora, perde pro concorrente.</p>
+              <p className="mt-2 text-sm text-bg/70">é o tempo médio pra um interessado esfriar. Quem responde em 5 minutos fecha mais — quem demora, perde pro concorrente.</p>
             </div>
             <div>
               <div className="font-mono text-4xl text-lime">R$ 3.500</div>
@@ -262,7 +262,7 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
         <Reveal>
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-ink font-serif text-xl font-bold text-bg">J</div>
           <p className="mt-5 text-ink-soft">
-            Eu sou o Jonatha. Construí a Realwise porque vi demais gente perdendo lead porque ninguém respondia a tempo — e porque todo chatbot que testei exigia que eu mesmo escrevesse as respostas do zero. Se quiser conversar antes de decidir, me chama direto.
+            Eu sou o Jonatha. Construí a Realwise porque vi demais gente perdendo interessado porque ninguém respondia a tempo — e porque todo chatbot que testei exigia que eu mesmo escrevesse as respostas do zero. Se quiser conversar antes de decidir, me chama direto.
           </p>
           <Pill href={WHATSAPP_URL} className="mx-auto mt-5 px-6 py-3">Falar comigo no WhatsApp</Pill>
         </Reveal>

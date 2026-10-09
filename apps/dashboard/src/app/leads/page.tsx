@@ -140,17 +140,17 @@ export default function LeadsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `leads-${Date.now()}.csv`;
+    link.download = `interessados-${Date.now()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
 
   return (
     <div>
-      <h1 className="mb-5 font-serif text-2xl text-ink">Leads</h1>
+      <h1 className="mb-5 font-serif text-2xl text-ink">Interessados</h1>
       {onlyIds && (
         <Badge variant="warning" className="mb-3">
-          Mostrando apenas leads esfriando
+          Mostrando apenas interessados esfriando
         </Badge>
       )}
       <Card>
@@ -158,7 +158,7 @@ export default function LeadsPage() {
           <DataTableToolbar
             filterValue={filter}
             onFilterChange={setFilter}
-            filterPlaceholder="Filtrar leads..."
+            filterPlaceholder="Filtrar interessados..."
             selectionCount={selected.size}
             filters={<FilterDropdown label="Temperatura" options={BAND_OPTIONS} selected={bands} onChange={setBands} />}
             actions={
@@ -170,7 +170,7 @@ export default function LeadsPage() {
             }
           />
           {filtered.length === 0 ? (
-            <p className="rounded-lg border border-border bg-bg-2 px-4 py-3 text-sm text-ink-soft">Nenhum lead encontrado.</p>
+            <p className="rounded-lg border border-border bg-bg-2 px-4 py-3 text-sm text-ink-soft">Nenhum interessado encontrado ainda.</p>
           ) : (
             <>
               <div className="hidden lg:block">
@@ -198,7 +198,7 @@ export default function LeadsPage() {
                       return (
                         <TableRow key={lead.id} data-state={selected.has(lead.id) ? "selected" : undefined}>
                           <TableCell>
-                            <Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggleOne(lead.id)} aria-label="Selecionar lead" />
+                            <Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggleOne(lead.id)} aria-label="Selecionar interessado" />
                           </TableCell>
                           <TableCell>{lead.name ?? "—"}</TableCell>
                           <TableCell className="font-mono">{lead.phone}</TableCell>
@@ -268,7 +268,7 @@ export default function LeadsPage() {
                     >
                       <div className="flex items-center gap-2">
                         <span className="-m-2 flex min-h-11 min-w-11 items-center justify-center p-2">
-                          <Checkbox checked={isSelected} onCheckedChange={() => toggleOne(lead.id)} aria-label="Selecionar lead" />
+                          <Checkbox checked={isSelected} onCheckedChange={() => toggleOne(lead.id)} aria-label="Selecionar interessado" />
                         </span>
                         <span className="flex-1 text-sm font-medium text-ink">{lead.name ?? "—"}</span>
                         <Badge variant={BAND_VARIANT[lead.scoreBand]} className="gap-1">

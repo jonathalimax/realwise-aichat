@@ -57,7 +57,7 @@ export const NICHES: Record<string, NicheConfig> = {
       { from: "bot", text: "Aceitamos sim! Fiador ou seguro fiança, você escolhe." },
     ],
     solutionCard2Title: "Agenda a visita sozinha, sem ida e volta",
-    solutionCard2Desc: "Cada conversa vira um lead com nota de temperatura. Você abre o painel e já sabe quem chamar primeiro.",
+    solutionCard2Desc: "Cada conversa vira um interessado com nota de temperatura. Você abre o painel e já sabe quem chamar primeiro.",
     solutionCard2Messages: [
       { from: "user", text: "Qual horário funciona pra visita?" },
       { from: "bot", text: "Sábado de manhã" },
@@ -93,7 +93,7 @@ export const NICHES: Record<string, NicheConfig> = {
       { from: "bot", text: "A partir de R$ 8.900. Quer que eu simule com seu carro na troca?" },
     ],
     solutionCard2Title: "Agenda o test-drive sozinha, sem ida e volta",
-    solutionCard2Desc: "Cada conversa vira um lead com nota de temperatura. Você abre o painel e já sabe quem chamar primeiro.",
+    solutionCard2Desc: "Cada conversa vira um interessado com nota de temperatura. Você abre o painel e já sabe quem chamar primeiro.",
     solutionCard2Messages: [
       { from: "user", text: "Posso ver o carro hoje à tarde?" },
       { from: "bot", text: "Consigo às 15h ou 17h" },
@@ -130,7 +130,7 @@ export const NICHES: Record<string, NicheConfig> = {
       { from: "bot", text: "É bem tolerável, a maioria descreve como um desconforto leve. Posso te explicar o pós-procedimento também." },
     ],
     solutionCard2Title: "Agenda a avaliação sozinha, sem ida e volta",
-    solutionCard2Desc: "Cada conversa vira um lead com nota de temperatura. Você abre o painel e já sabe quem chamar primeiro.",
+    solutionCard2Desc: "Cada conversa vira um interessado com nota de temperatura. Você abre o painel e já sabe quem chamar primeiro.",
     solutionCard2Messages: [
       { from: "user", text: "Tem horário pra essa semana?" },
       { from: "bot", text: "Quinta às 14h ou sexta às 10h" },

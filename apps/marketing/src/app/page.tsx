@@ -54,7 +54,7 @@ export default function MarketingHome() {
         </Reveal>
         <Reveal delay={100}>
           <p className="mx-auto mt-6 max-w-lg text-base text-ink-soft md:text-lg">
-            Agenda sozinha e só te chama no WhatsApp quando o lead está pronto pra fechar.
+            Agenda sozinha e só te chama no WhatsApp quando o interessado está pronto pra fechar.
           </p>
         </Reveal>
         <Reveal delay={200}>
@@ -164,14 +164,14 @@ export default function MarketingHome() {
                 <div className="flex flex-col gap-2 px-3 py-3">
                   <div className="ml-auto max-w-[85%] rounded-xl rounded-br-sm bg-accent px-3 py-2 text-[0.72rem] text-white">Quero fechar hoje, pode ser?</div>
                   <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-bg-2 px-3 py-2 text-[0.72rem]">Claro! Vou te passar direto pro WhatsApp.</div>
-                  <span className="ml-auto rounded-full bg-lime px-2.5 py-1 text-[0.62rem] font-semibold text-lime-ink">🔥 Lead quente</span>
+                  <span className="ml-auto rounded-full bg-lime px-2.5 py-1 text-[0.62rem] font-semibold text-lime-ink">🔥 Interessado quente</span>
                 </div>
                 <div className="flex items-center gap-2 border-t border-border px-3 py-2">
                   <div className="flex-1 rounded-full bg-bg-2 px-3 py-1.5 text-[0.62rem] text-muted">Escreva sua pergunta…</div>
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-[0.6rem] text-bg">➤</div>
                 </div>
               </div>
-              <h3 className="font-serif text-lg text-ink">Só te chama quando o lead está quente</h3>
+              <h3 className="font-serif text-lg text-ink">Só te chama quando o interessado está quente</h3>
               <p className="mt-2 text-sm text-ink-soft">Seu WhatsApp não vira caixa de spam — só recebe quem já está pronto pra decidir.</p>
             </div>
           </div>
@@ -216,7 +216,7 @@ export default function MarketingHome() {
               { title: "Agenda sem ida e volta", desc: "Marca visita, test-drive ou avaliação direto no chat, sem sair pra outro app.", path: "M10 8h28a2 2 0 012 2v28a2 2 0 01-2 2H10a2 2 0 01-2-2V10a2 2 0 012-2zM8 18h32M16 4v8M32 4v8M18 26l4 4 8-8" },
               { title: "Te chama na hora certa", desc: "Quando o cliente quer falar com você, ela já abre o WhatsApp com a conversa pronta.", path: "M24 4a10 10 0 00-10 10c0 7 10 18 10 18s10-11 10-18A10 10 0 0024 4zm0 14a4 4 0 110-8 4 4 0 010 8z" },
               { title: "Nunca inventa resposta", desc: "Se não sabe algo, admite e te chama — nunca chuta preço ou prazo pro seu cliente.", path: "M24 42a18 18 0 100-36 18 18 0 000 36zM24 24V10M24 24l10 6" },
-              { title: "Pergunte sobre seus leads", desc: "Pergunte sobre leads, métricas ou sua base em português simples — ela só edita seu perfil com sua aprovação.", path: "M8 8h32v24H18l-6 6v-6H8zM16 16h16M16 22h10" },
+              { title: "Pergunte sobre seus interessados", desc: "Pergunte sobre interessados, métricas ou sua base em português simples — ela só edita seu perfil com sua aprovação.", path: "M8 8h32v24H18l-6 6v-6H8zM16 16h16M16 22h10" },
               { title: "Sincroniza com sua agenda", desc: "Pra quem usa Google Calendar, os horários livres já aparecem certos — sem checar duas agendas.", path: "M10 8h28a2 2 0 012 2v28a2 2 0 01-2 2H10a2 2 0 01-2-2V10a2 2 0 012-2zM8 18h32M16 4v8M32 4v8M18 30l4 4 10-10" },
             ].map((cap) => (
               <div key={cap.title} className="group flex flex-col items-center text-center">
@@ -283,7 +283,7 @@ export default function MarketingHome() {
         <Reveal>
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-ink font-serif text-xl font-bold text-bg">J</div>
           <p className="mt-5 text-ink-soft">
-            Eu sou o Jonatha. Construí a Realwise porque vi demais gente perdendo lead porque ninguém respondia a tempo — e porque todo chatbot que testei exigia que eu mesmo escrevesse as respostas do zero. Se quiser conversar antes de decidir, me chama direto.
+            Eu sou o Jonatha. Construí a Realwise porque vi demais gente perdendo interessado porque ninguém respondia a tempo — e porque todo chatbot que testei exigia que eu mesmo escrevesse as respostas do zero. Se quiser conversar antes de decidir, me chama direto.
           </p>
           <Pill href={WHATSAPP_URL} className="mx-auto mt-5 px-6 py-3">Falar comigo no WhatsApp</Pill>
         </Reveal>

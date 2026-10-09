@@ -15,7 +15,7 @@ export function TrialEndedGate() {
         </CardHeader>
         <CardContent className="pt-0">
           <p className="mb-5 text-sm text-ink-soft">
-            Para continuar usando a Realwise — Leads, Analytics, Base de conhecimento e Agenda — escolha um plano.
+            Para continuar usando a Realwise — Interessados, Analytics, Base de conhecimento e Agenda — escolha um plano.
           </p>
           <Button className="w-full" onClick={() => router.push("/billing")}>
             Assinar um plano

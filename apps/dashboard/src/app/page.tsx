@@ -16,7 +16,7 @@ import { InsightCard } from "../components/InsightCard";
 
 const STATS = [
   { key: "conversations7d", label: "Conversas 7d" },
-  { key: "leadsTotal", label: "Leads" },
+  { key: "leadsTotal", label: "Interessados" },
   { key: "appointmentsTotal", label: "Agendamentos" },
   { key: "linkOpens7d", label: "Aberturas do link 7d" },
 ] as const;
@@ -112,7 +112,7 @@ export default function HomePage() {
             {insights.coolingLeads.count > 0 ? (
               <InsightCard
                 icon={<Snowflake className="h-5 w-5" />}
-                headline={`${insights.coolingLeads.count} ${insights.coolingLeads.count === 1 ? "lead esfriando" : "leads esfriando"}`}
+                headline={`${insights.coolingLeads.count} ${insights.coolingLeads.count === 1 ? "interessado esfriando" : "interessados esfriando"}`}
                 description="Quentes ou mornos, sumidos há mais de 24h e sem agendamento ou retorno registrado — vale um contato direto."
                 ctaLabel="Ver leads esfriando"
                 ctaHref={`/leads?ids=${insights.coolingLeads.leadIds.join(",")}`}
@@ -120,7 +120,7 @@ export default function HomePage() {
             ) : (
               <InsightCard
                 icon={<CheckCircle2 className="h-5 w-5" />}
-                headline="Nenhum lead esfriando agora"
+                headline="Nenhum interessado esfriando agora"
                 description="Todos os leads quentes e mornos seguem com acompanhamento em dia. Ótimo trabalho!"
               />
             )}

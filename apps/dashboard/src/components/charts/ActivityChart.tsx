@@ -49,7 +49,7 @@ export function ActivityChart({ data }: { data: Point[] }) {
         <Tooltip content={<ChartTooltipContent labelFormatter={(label) => formatDate(String(label))} />} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Area type="natural" dataKey="conversations" name="Conversas" stroke="rgb(var(--accent))" strokeWidth={2} fill="url(#convFill)" />
-        <Area type="natural" dataKey="leads" name="Leads" stroke="rgb(var(--tertiary))" strokeWidth={2} fill="url(#leadsFill)" />
+        <Area type="natural" dataKey="leads" name="Interessados" stroke="rgb(var(--tertiary))" strokeWidth={2} fill="url(#leadsFill)" />
         <Area type="natural" dataKey="appointments" name="Agendamentos" stroke="rgb(var(--warning))" strokeWidth={2} fill="url(#apptFill)" />
         <Area type="natural" dataKey="linkOpens" name="Aberturas do link" stroke="rgb(var(--secondary))" strokeWidth={2} fill="url(#linkFill)" />
       </AreaChart>
