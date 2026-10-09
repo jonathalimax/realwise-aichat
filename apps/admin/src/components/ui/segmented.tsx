@@ -12,10 +12,10 @@ export function Segmented({ className, ...props }: HTMLAttributes<HTMLDivElement
   );
 }
 
-const segmentedItemVariants = cva("rounded-pill px-3 py-1 text-xs font-medium transition-colors", {
+const segmentedItemVariants = cva("rounded-pill px-3 py-1 text-xs font-semibold transition-colors", {
   variants: {
     selected: {
-      true: "bg-surface text-ink shadow-card",
+      true: "bg-accent text-white shadow-card",
       false: "text-ink-soft hover:text-ink",
     },
   },
