@@ -230,12 +230,6 @@ export interface CrawledPage {
   structuredData: Record<string, unknown>[];
 }
 
-// Below this, a plain-fetch extraction whose source HTML is much larger is treated as
-// "suspiciously empty" — a decent heuristic for a client-side-rendered page where the initial
-// HTML is mostly an empty app shell and the real content only appears after JS runs.
-const CSR_FALLBACK_MIN_TEXT_CHARS = 2000;
-const CSR_FALLBACK_MIN_HTML_RATIO = 10;
-
 // A real browser executes page JS, follows redirects, and fetches subresources — any of which
 // could target an internal/private address (SSRF), and a DNS answer can legitimately differ
 // between this check and the moment Chromium actually connects (DNS rebinding). safeFetch/
@@ -250,15 +244,16 @@ async function assertRequestIsPublic(requestUrl: string): Promise<boolean> {
   }
 }
 
-// Lazily imported — only paid for (and only requires the Chromium binary to be installed) on
-// the rare page that actually trips the CSR heuristic below, not on every crawled page.
-async function renderWithPlaywright(url: string): Promise<string | null> {
+// Takes an already-launched Browser (one per crawl, not one per page) — this is now called for
+// every page rather than a rare CSR-shell fallback, and launching a fresh Chromium process per
+// page (each ~hundreds of ms + real memory) would make a 20-40 page crawl far slower/heavier
+// than necessary. The caller owns the browser's lifecycle (fetchWebsiteText launches once,
+// closes once at the end of the crawl via try/finally).
+async function renderWithPlaywright(browser: import("playwright").Browser, url: string): Promise<string | null> {
   try {
     await assertPublicHttpUrl(url);
-    const { chromium } = await import("playwright");
-    const browser = await chromium.launch();
+    const page = await browser.newPage({ userAgent: "RealwiseBot/1.0 (+https://realwise.com.br)" });
     try {
-      const page = await browser.newPage({ userAgent: "RealwiseBot/1.0 (+https://realwise.com.br)" });
       // Re-validate every navigation/subresource/redirect target the page makes, not just the
       // entry URL — blocks in-page JS/redirects from reaching internal services.
       await page.route("**/*", async (route) => {
@@ -269,10 +264,10 @@ async function renderWithPlaywright(url: string): Promise<string | null> {
       await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
       return await page.content();
     } finally {
-      await browser.close();
+      await page.close();
     }
   } catch {
-    return null; // Chromium missing/crashed/timed out/blocked — fall back to whatever plain-fetch got
+    return null; // SSRF-blocked, crashed, or timed out — fall back to plain fetch
   }
 }
 
@@ -282,7 +277,22 @@ export interface FetchWebsiteResult {
   pagesVisited: number;
 }
 
-async function fetchAndExtract(url: string): Promise<{ title: string; text: string; links: string[]; structuredData: Record<string, unknown>[] } | null> {
+// Playwright (full JS execution) is now the PRIMARY path — a plain fetch, even when it returns
+// a normal 200, silently under-extracts any client-rendered page (no visible failure to detect,
+// just quietly thinner content), which is exactly the failure mode that produced duplicate/
+// imageless listings for real tenants. Plain fetch + cheerio is kept only as the fallback for
+// when Chromium itself fails (SSRF-blocked target, crashed/timed out, or not installed) — still
+// far better than no content at all, just no longer the default.
+async function fetchAndExtract(
+  browser: import("playwright").Browser | null,
+  url: string,
+): Promise<{ title: string; text: string; links: string[]; structuredData: Record<string, unknown>[] } | null> {
+  const renderedHtml = browser ? await renderWithPlaywright(browser, url) : null;
+  if (renderedHtml) {
+    const extracted = extractPage(renderedHtml, url);
+    if (extracted.text.length > 0) return extracted;
+  }
+
   let res: Response;
   try {
     res = await safeFetch(url);
@@ -291,21 +301,7 @@ async function fetchAndExtract(url: string): Promise<{ title: string; text: stri
   }
   if (!res.ok || !(res.headers.get("content-type") ?? "").includes("html")) return null;
   const html = await res.text();
-  const extracted = extractPage(html, url);
-
-  // Only pay for a headless render as a fallback — rendering every page is slow and resource
-  // heavy, so this only fires when plain-fetch's result looks like an empty CSR app shell.
-  const looksSuspiciouslyEmpty =
-    extracted.text.length < CSR_FALLBACK_MIN_TEXT_CHARS && html.length > extracted.text.length * CSR_FALLBACK_MIN_HTML_RATIO;
-  if (looksSuspiciouslyEmpty) {
-    const renderedHtml = await renderWithPlaywright(url);
-    if (renderedHtml) {
-      const renderedExtracted = extractPage(renderedHtml, url);
-      if (renderedExtracted.text.length > extracted.text.length) return renderedExtracted;
-    }
-  }
-
-  return extracted;
+  return extractPage(html, url);
 }
 
 export async function fetchWebsiteText(seedUrl: string): Promise<FetchWebsiteResult> {
@@ -318,53 +314,68 @@ export async function fetchWebsiteText(seedUrl: string): Promise<FetchWebsiteRes
   let totalChars = 0;
   const visited = new Set<string>();
 
-  const sitemapUrls = await discoverFromSitemaps(origin, robots);
+  // One browser per crawl (not per page) — launched lazily here so a Chromium failure degrades
+  // the WHOLE crawl to plain-fetch-only (still functional, just thinner on client-rendered
+  // pages) rather than only the one page that happened to trip a launch race.
+  let browser: import("playwright").Browser | null = null;
+  try {
+    const { chromium } = await import("playwright");
+    browser = await chromium.launch();
+  } catch {
+    browser = null;
+  }
 
-  if (sitemapUrls.length >= 5) {
-    for (const url of sitemapUrls) {
-      if (visited.size >= MAX_PAGES) break;
-      if (Date.now() >= deadline || totalChars >= MAX_TOTAL_CHARS) break;
-      const key = normalizeForDedup(url);
-      if (visited.has(key)) continue;
-      visited.add(key);
-      if (!robots.isAllowed(new URL(url).pathname)) continue;
+  try {
+    const sitemapUrls = await discoverFromSitemaps(origin, robots);
 
-      const extracted = await fetchAndExtract(url);
-      if (extracted?.text) {
-        pages.push({ url, title: extracted.title, text: extracted.text, structuredData: extracted.structuredData });
-        totalChars += extracted.text.length;
+    if (sitemapUrls.length >= 5) {
+      for (const url of sitemapUrls) {
+        if (visited.size >= MAX_PAGES) break;
+        if (Date.now() >= deadline || totalChars >= MAX_TOTAL_CHARS) break;
+        const key = normalizeForDedup(url);
+        if (visited.has(key)) continue;
+        visited.add(key);
+        if (!robots.isAllowed(new URL(url).pathname)) continue;
+
+        const extracted = await fetchAndExtract(browser, url);
+        if (extracted?.text) {
+          pages.push({ url, title: extracted.title, text: extracted.text, structuredData: extracted.structuredData });
+          totalChars += extracted.text.length;
+        }
+        if (visited.size < sitemapUrls.length) await sleep(crawlDelayMs);
       }
-      if (visited.size < sitemapUrls.length) await sleep(crawlDelayMs);
-    }
-  } else {
-    const queue: { url: string; depth: number }[] = [{ url: seedUrl, depth: 0 }];
+    } else {
+      const queue: { url: string; depth: number }[] = [{ url: seedUrl, depth: 0 }];
 
-    while (queue.length > 0 && visited.size < MAX_PAGES) {
-      if (Date.now() >= deadline || totalChars >= MAX_TOTAL_CHARS) break;
-      const { url, depth } = queue.shift()!;
-      const key = normalizeForDedup(url);
-      if (visited.has(key)) continue;
-      visited.add(key);
+      while (queue.length > 0 && visited.size < MAX_PAGES) {
+        if (Date.now() >= deadline || totalChars >= MAX_TOTAL_CHARS) break;
+        const { url, depth } = queue.shift()!;
+        const key = normalizeForDedup(url);
+        if (visited.has(key)) continue;
+        visited.add(key);
 
-      if (!robots.isAllowed(new URL(url).pathname)) continue;
+        if (!robots.isAllowed(new URL(url).pathname)) continue;
 
-      const extracted = await fetchAndExtract(url);
-      if (extracted?.text) {
-        pages.push({ url, title: extracted.title, text: extracted.text, structuredData: extracted.structuredData });
-        totalChars += extracted.text.length;
-      }
+        const extracted = await fetchAndExtract(browser, url);
+        if (extracted?.text) {
+          pages.push({ url, title: extracted.title, text: extracted.text, structuredData: extracted.structuredData });
+          totalChars += extracted.text.length;
+        }
 
-      if (extracted && depth < MAX_DEPTH) {
-        for (const link of extracted.links) {
-          const linkKey = normalizeForDedup(link);
-          if (!visited.has(linkKey) && queue.length + visited.size < MAX_PAGES) {
-            queue.push({ url: link, depth: depth + 1 });
+        if (extracted && depth < MAX_DEPTH) {
+          for (const link of extracted.links) {
+            const linkKey = normalizeForDedup(link);
+            if (!visited.has(linkKey) && queue.length + visited.size < MAX_PAGES) {
+              queue.push({ url: link, depth: depth + 1 });
+            }
           }
         }
-      }
 
-      if (queue.length > 0) await sleep(crawlDelayMs);
+        if (queue.length > 0) await sleep(crawlDelayMs);
+      }
     }
+  } finally {
+    if (browser) await browser.close().catch(() => {});
   }
 
   const contentHash = createHash("sha256")
