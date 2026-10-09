@@ -8,8 +8,8 @@
    warm off-white used in the earlier pass — the tenant's own brandColor (--tenant-accent below)
    now carries the "warmth"/personality per business, so the house canvas stays neutral-white. */
 :root {
-  --bg: 255 255 255;
-  --bg-2: 255 252 250;
+  --bg: 242 248 244;
+  --bg-2: 236 245 239;
   --surface: 255 255 255;
   --border: 221 206 193;
   --ink: 20 36 30;
