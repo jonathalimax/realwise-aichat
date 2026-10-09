@@ -827,7 +827,14 @@ export class ListingExtractionService {
       // Falls back to the code embedded in the item's own detail-page URL when the model's
       // cleaned-up text no longer carries it — see findReferenceCodeFromUrl's comment.
       const explicitCode =
-        findExplicitReferenceCode(`${item.title} ${item.description ?? ""}`) ?? findReferenceCodeFromUrl(item.pageUrl);
+        findExplicitReferenceCode(`${item.title} ${item.description ?? ""}`) ??
+        // item.url (the model-extracted "this item's own detail link", used for "Ver anúncio")
+        // is populated even for items extracted from a grid/search page's text — item.pageUrl
+        // (the page actually crawled) is only set for genuine single-listing detail pages, so it
+        // stays blank for exactly the items this fallback most needs to help. Try both: the
+        // model's own per-item url first, falling back to the crawled page's url.
+        findReferenceCodeFromUrl(item.url) ??
+        findReferenceCodeFromUrl(item.pageUrl);
       const dedupKey = computeDedupKey(item, explicitCode);
 
       let existing = candidates.find((candidate) => candidate.dedupKey === dedupKey) ?? null;
