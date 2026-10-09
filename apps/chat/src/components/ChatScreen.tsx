@@ -1095,7 +1095,7 @@ export function ChatScreen({
                   ? "tenant-bubble rounded-3xl rounded-br-lg px-4 py-3 text-sm text-ink break-words"
                   : m.role === "owner"
                     ? "rounded-3xl rounded-bl-lg border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-ink break-words shadow-sm"
-                    : "rounded-3xl rounded-bl-lg bg-surface px-4 py-3 text-sm text-ink break-words shadow-sm"
+                    : "ai-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
               }
             >
               <MessageContent text={m.content} />

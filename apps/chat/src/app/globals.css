@@ -8,8 +8,8 @@
    warm off-white used in the earlier pass — the tenant's own brandColor (--tenant-accent below)
    now carries the "warmth"/personality per business, so the house canvas stays neutral-white. */
 :root {
-  --bg: 242 248 244;
-  --bg-2: 236 245 239;
+  --bg: 255 255 255;
+  --bg-2: 250 250 249;
   --surface: 255 255 255;
   --border: 221 206 193;
   --ink: 20 36 30;
@@ -102,7 +102,27 @@
   .tenant-accent-border {
     border-color: var(--tenant-accent);
   }
+  /* Translucent, gradient-tinted bubble treatments — glassy coral fading to clear for the AI's
+     replies, glassy green (the tenant's own brand color) fading to clear for the visitor's own
+     messages, both over backdrop-blur so they pick up a soft "glow" against the white canvas. */
+  .ai-bubble {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, rgb(var(--secondary)) 32%, transparent),
+      color-mix(in srgb, rgb(var(--secondary)) 6%, transparent)
+    );
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid color-mix(in srgb, rgb(var(--secondary)) 25%, transparent);
+  }
   .tenant-bubble {
-    background: color-mix(in srgb, var(--tenant-accent) 14%, white);
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--tenant-accent) 38%, transparent),
+      color-mix(in srgb, var(--tenant-accent) 8%, transparent)
+    );
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid color-mix(in srgb, var(--tenant-accent) 30%, transparent);
   }
 }
