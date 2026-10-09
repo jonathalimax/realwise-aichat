@@ -31,7 +31,7 @@ interface FlowBubble {
 
 interface Message {
   id: string;
-  role: "visitor" | "assistant" | "owner";
+  role: "visitor" | "assistant" | "owner" | "system";
   content: string;
   listings?: Listing[];
   whatsappUrl?: string | null;
@@ -39,6 +39,10 @@ interface Message {
   // instead of the plain text bubble when present. `listings` above already carries this turn's
   // budget-matched inventory (same Message.listingIds rehydration path as any other card turn).
   simulationData?: SimulationData;
+  // Set only on the locally-created confirmation bubble right after a successful bookAppointment
+  // call — rendered as BookingConfirmedCard below. History-rehydrated messages never get this
+  // field, so older/refreshed confirmations just show as plain text, which is fine.
+  booking?: { serviceName: string; startsAt: string };
   // Set only for messages that originated from a server fetch (history load or poll tick) —
   // used to dedup against locally-created optimistic bubbles, which never get this field.
   serverId?: string;
@@ -186,6 +190,7 @@ function WhatsappCaptureCard({
   businessName: string;
 }) {
   const [phone, setPhone] = useState("");
+  const [submittedPhone, setSubmittedPhone] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const canSubmit = digitsOnly(phone).length === 10 || digitsOnly(phone).length === 11;
 
@@ -194,6 +199,7 @@ function WhatsappCaptureCard({
     setStatus("saving");
     try {
       await onSubmit(phone);
+      setSubmittedPhone(phone);
       setStatus("done");
     } catch {
       setStatus("error");
@@ -207,7 +213,19 @@ function WhatsappCaptureCard({
           <span className="text-2xl" aria-hidden>
             💬
           </span>
-          <div className="mt-1 text-sm font-semibold text-ink">Agradecemos! Vamos te chamar no WhatsApp em breve.</div>
+          <div className="mt-1 text-sm font-semibold text-ink">{submittedPhone}</div>
+          <div className="text-xs text-ink-soft">Vamos te chamar no WhatsApp em breve.</div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setPhone(submittedPhone);
+              setStatus("idle");
+            }}
+            className="mt-2 w-full"
+          >
+            Alterar número
+          </Button>
         </CardContent>
       </Card>
     );
@@ -243,6 +261,40 @@ function WhatsappCaptureCard({
         >
           Enviar
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Shown inline right after a successful bookAppointment call, in the same spot ListingCards/
+// WhatsappCaptureCard render per-message. "Ver anúncio" only appears when the visitor explicitly
+// selected a listing earlier in the conversation (via ListingCard's "Selecionar" button) — there's
+// no other reliable pinned-listing reference at booking-confirmation time. No "Falar no WhatsApp"
+// affordance here: the public business payload the widget receives doesn't expose a WhatsApp
+// routing number (see businesses.service.ts's getBySlug), so there's no real number to link to.
+function BookingConfirmedCard({
+  booking,
+  listing,
+  onOpenListing,
+}: {
+  booking: { serviceName: string; startsAt: string };
+  listing: Listing | null;
+  onOpenListing: (listing: Listing) => void;
+}) {
+  const dateLabel = new Date(booking.startsAt).toLocaleString("pt-BR", { dateStyle: "long", timeStyle: "short" });
+  return (
+    <Card className="w-64">
+      <CardContent className="p-3">
+        <span className="text-2xl" aria-hidden>
+          ✅
+        </span>
+        <div className="mt-1 text-sm font-semibold text-ink">Agendado: {booking.serviceName}</div>
+        <div className="text-xs text-ink-soft">{dateLabel}</div>
+        {listing && (
+          <Button type="button" onClick={() => onOpenListing(listing)} className="tenant-accent-bg mt-2 w-full">
+            Ver anúncio
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
@@ -484,6 +536,10 @@ export function ChatScreen({
   const [flowRestored, setFlowRestored] = useState(false);
   const [thinkingStage, setThinkingStage] = useState<0 | 1>(0);
   const [activeListing, setActiveListing] = useState<Listing | null>(null);
+  // The visitor's last explicitly-"Selecionar"-ed listing — used by BookingConfirmedCard's
+  // "Ver anúncio" button, separate from activeListing (which only tracks the detail overlay's
+  // open/closed state and gets cleared again as soon as it's dismissed).
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [conversationStatus, setConversationStatus] = useState<string | null>(null);
   const [pollCapped, setPollCapped] = useState(false);
   const [pushPrompt, setPushPrompt] = useState<"hidden" | "asking" | "done">("hidden");
@@ -929,6 +985,7 @@ export function ChatScreen({
   // immediate acknowledging response grounded on that specific listing.
   async function handleSelectListing(listing: Listing) {
     if (!business || !listing.id) return;
+    setSelectedListing(listing);
     try {
       const convId = await ensureConversation();
       if (!convId) return;
@@ -1031,6 +1088,7 @@ export function ChatScreen({
         id: nextMessageId(),
         role: "assistant",
         content: `Agendado: ${serviceName} em ${startsAt.toLocaleDateString("pt-BR")} às ${startsAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. Vamos confirmar com você em breve.`,
+        booking: { serviceName, startsAt: startsAt.toISOString() },
       },
     ]);
     setShowBooking(false);
@@ -1077,19 +1135,36 @@ export function ChatScreen({
       <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
         {messages.map((m, i) => {
           const isFirstInGroup = i === 0 || messages[i - 1].role !== m.role;
+          const isFirstOwnerMessageEver = m.role === "owner" && !messages.slice(0, i).some((mm) => mm.role === "owner");
+          if (m.role === "system") {
+            return (
+              <div key={m.id} className="my-4 flex items-center gap-2 text-[0.7rem] font-medium text-ink-soft">
+                <span className="h-px flex-1 bg-border" />
+                <span>{m.content}</span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+            );
+          }
           return (
-          <div
-            key={m.id}
-            className={
-              (isFirstInGroup ? "mt-3" : "mt-1") +
-              " " +
-              (m.role === "visitor"
-                ? "ml-auto max-w-[80%]"
-                : m.listings?.length || m.simulationData
-                  ? "max-w-full"
-                  : "max-w-[85%]")
-            }
-          >
+          <div key={m.id}>
+            {isFirstOwnerMessageEver && (
+              <div className="my-4 flex items-center gap-2 text-[0.7rem] font-medium text-ink-soft">
+                <span className="h-px flex-1 bg-border" />
+                <span>{business.name} entrou na conversa</span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+            )}
+            <div
+              className={
+                (isFirstOwnerMessageEver ? "mt-0" : isFirstInGroup ? "mt-3" : "mt-1") +
+                " " +
+                (m.role === "visitor"
+                  ? "ml-auto max-w-[80%]"
+                  : m.listings?.length || m.simulationData
+                    ? "max-w-full"
+                    : "max-w-[85%]")
+              }
+            >
             {isFirstInGroup && m.role === "owner" && (
               <div className="mb-1 text-xs font-semibold text-accent">{business.name}</div>
             )}
@@ -1101,7 +1176,7 @@ export function ChatScreen({
                 m.role === "visitor"
                   ? "tenant-bubble rounded-3xl rounded-br-lg px-4 py-3 text-sm text-ink break-words"
                   : m.role === "owner"
-                    ? "rounded-3xl rounded-bl-lg border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-ink break-words shadow-sm"
+                    ? "owner-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
                     : "ai-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
               }
             >
@@ -1128,6 +1203,12 @@ export function ChatScreen({
                 <WhatsappCaptureCard onSubmit={handleCaptureWhatsapp} businessName={business.name} />
               </div>
             )}
+            {m.booking && (
+              <div className="mt-2">
+                <BookingConfirmedCard booking={m.booking} listing={selectedListing} onOpenListing={setActiveListing} />
+              </div>
+            )}
+            </div>
           </div>
           );
         })}

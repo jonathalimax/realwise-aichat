@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { buildWaMeLink, buildOwnerOutreachMessage } from "@realwise/shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { computeLeadScore, type LeadSignalInputs } from "./lead-scoring";
+import { resolveTopicFrom } from "../chat/escalation-topic";
 
 @Injectable()
 export class LeadsService {
@@ -102,7 +103,21 @@ export class LeadsService {
     ]);
     if (!lead || !business) throw new NotFoundException("Lead or business not found");
 
-    const message = buildOwnerOutreachMessage(lead.name ?? "", business.name, topic);
+    const latestConversation = await this.prisma.client.conversation.findFirst({
+      where: { leadId: lead.id, businessId },
+      orderBy: { lastMessageAt: "desc" },
+    });
+    let resolvedTopic: string | null = null;
+    if (latestConversation) {
+      const recentVisitorMessages = await this.prisma.client.message.findMany({
+        where: { conversationId: latestConversation.id, role: "visitor" },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      });
+      resolvedTopic = resolveTopicFrom(null, recentVisitorMessages.map((msg) => String(msg.content ?? "")));
+    }
+
+    const message = buildOwnerOutreachMessage(lead.name ?? "", business.name, resolvedTopic ?? topic);
     const url = buildWaMeLink(lead.phone, message);
 
     await this.prisma.client.lead.update({ where: { id: lead.id }, data: { whatsappContactedAt: new Date() } });

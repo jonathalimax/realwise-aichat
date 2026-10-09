@@ -105,6 +105,7 @@ export const getInboxThread = (id: string) => request(`/inbox/conversations/${id
 export const sendInboxMessage = (id: string, text: string) =>
   request(`/inbox/conversations/${id}/messages`, { method: "POST", body: JSON.stringify({ text }) });
 export const markInboxRead = (id: string) => request(`/inbox/conversations/${id}/read`, { method: "POST" });
+export const closeInboxConversation = (id: string) => request(`/inbox/conversations/${id}/close`, { method: "POST" });
 
 export const getListings = (filters?: { status?: string; listingType?: string }) => {
   const params = new URLSearchParams();

@@ -3,6 +3,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { sendEmail } from "../../common/email";
 import { buildIcs } from "../../common/ics";
 import { formatListingAddress, renderOwnerEmail, renderVisitorEmail } from "./booking-notifications";
+import { resolveTopicFrom } from "../chat/escalation-topic";
 import { AvailabilityService } from "./availability.service";
 import type { AppointmentType } from "@realwise/db";
 
@@ -141,6 +142,22 @@ export class BookingsService {
     const { business, lead, listing } = appointment;
     const address = appointment.locationAddress ?? formatListingAddress(listing) ?? business.address ?? undefined;
 
+    const routingNumber = await this.prisma.client.whatsappRoutingNumber.findFirst({
+      where: { businessId: business.id, isActive: true },
+      orderBy: { priority: "asc" },
+    });
+
+    const topic = appointment.conversationId
+      ? await (async () => {
+          const recentVisitorMessages = await this.prisma.client.message.findMany({
+            where: { conversationId: appointment.conversationId!, role: "visitor" },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+          });
+          return resolveTopicFrom(null, recentVisitorMessages.map((msg) => String(msg.content ?? "")));
+        })()
+      : undefined;
+
     const ics = buildIcs({
       uid: appointment.id,
       summary: appointment.serviceName,
@@ -164,6 +181,7 @@ export class BookingsService {
         startsAt: appointment.startsAt,
         listing,
         address,
+        topic,
       });
       await sendEmail(business.email, subject, html, [attachment]).catch(() => {});
     }
@@ -175,6 +193,7 @@ export class BookingsService {
         startsAt: appointment.startsAt,
         listing,
         address,
+        businessWhatsappPhone: routingNumber?.phone,
       });
       await sendEmail(lead.email, subject, html, [attachment]).catch(() => {});
     }

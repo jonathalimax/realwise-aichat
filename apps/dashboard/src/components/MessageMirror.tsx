@@ -354,8 +354,7 @@ export function MessageMirror({
 }) {
   return (
     <div className="max-w-full">
-      <div className="mb-1 text-xs font-semibold text-accent">{personaName}</div>
-      <div className="rounded-2xl rounded-bl-sm bg-surface px-4 py-3 text-sm text-ink break-words">
+      <div className="mirror-ai-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words">
         <MessageContent text={message.content} />
       </div>
       {message.simulationData ? (

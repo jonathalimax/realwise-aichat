@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
+import { buildWaMeLink, buildCustomerEscalationMessage, buildOwnerOutreachMessage, generateReferenceCode } from "@realwise/shared";
 import concessionariaFlow from "./flows/concessionaria.flow.json";
 import imobiliariaFlow from "./flows/imobiliaria.flow.json";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -8,6 +8,8 @@ import { generateFromGateway } from "../../inference/gateway-client";
 import { retrieveRelevantChunks } from "./knowledge-retrieval";
 import { safeHttpUrl } from "../../common/safe-http-url";
 import { sendEmail, escapeHtml } from "../../common/email";
+import { dashboardLink, renderEmailButton, renderWaButton } from "../../common/email-links";
+import { resolveTopicFrom } from "./escalation-topic";
 import { ListingsService, ChatQueryFilters, formatListingPrice } from "../listings/listings.service";
 import { AnalyticsService } from "../analytics/analytics.service";
 import { BookingsService } from "../bookings/bookings.service";
@@ -340,6 +342,19 @@ export class FlowService {
       .catch(() => {});
   }
 
+  // Resolves a real "Assunto" for the owner notification email from the conversation's recent
+  // visitor messages — same logic as ChatService's resolveEscalationTopic, just with no caller-
+  // supplied candidate string (the flow-driven escalation paths don't have one).
+  private async resolveTopic(conversationId: string): Promise<string | null> {
+    const recentVisitorMessages = await this.prisma.client.message.findMany({
+      where: { conversationId, role: "visitor" },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    });
+    const recentVisitorTexts = recentVisitorMessages.map((msg) => String(msg.content ?? ""));
+    return resolveTopicFrom(null, recentVisitorTexts);
+  }
+
   // Shared escalation write for the four flow-driven escalation paths below (resolveWhatsappHandoff,
   // resolveCallbackConfirm, resolveFinancingEscalation, resolveBookingFailureEscalation) — all of
   // these used to write `status: "escalated"` directly without bumping lastMessageAt/messageCount,
@@ -576,8 +591,9 @@ export class FlowService {
       return { message: "No momento não consigo te conectar direto no WhatsApp, mas um atendente vai te procurar em breve.", whatsappUrl: null };
     }
 
+    const topic = await this.resolveTopic(conversationId);
     const referenceCode = generateReferenceCode();
-    const waMessage = buildCustomerEscalationMessage(business.name, "Atendimento via chat", referenceCode);
+    const waMessage = buildCustomerEscalationMessage(business.name, topic, referenceCode);
     const whatsappUrl = buildWaMeLink(routingNumber.phone, waMessage);
 
     await this.markEscalated(businessId, conversationId, referenceCode, { escalationNumberId: routingNumber.id });
@@ -585,12 +601,27 @@ export class FlowService {
       data: { conversationId, businessId, role: "assistant", content: fallbackMessage.replace(PLACEHOLDER_PATTERN, "").trim(), answerSource: "escalation" },
     });
 
+    const conversation = await this.prisma.client.conversation.findUnique({
+      where: { id: conversationId },
+      include: { lead: true },
+    });
+    const leadPhone = conversation?.lead?.phone;
+    const waButton = leadPhone
+      ? renderWaButton(
+          leadPhone,
+          buildOwnerOutreachMessage(conversation?.lead?.name ?? "", business.name, topic ?? "o atendimento no chat"),
+          "Responder no WhatsApp",
+        )
+      : "";
+
     this.notifyOwner(
       businessId,
       "Pedido de atendimento",
       `<p>Um cliente pediu para falar com alguém do time via WhatsApp.</p>
+       <p><strong>Assunto:</strong> ${escapeHtml(topic ?? "Atendimento via chat")}</p>
        <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
-       <p>Veja a conversa e responda no painel: Conversas.</p>`,
+       ${waButton}
+       ${renderEmailButton("Abrir a conversa no painel", dashboardLink("/inbox"))}`,
     );
 
     return { message: "Me passa seu WhatsApp no campo abaixo que um atendente já te chama ✅", whatsappUrl };
@@ -621,13 +652,26 @@ export class FlowService {
         data: { conversationId, businessId, role: "assistant", content: message, answerSource: "escalation" },
       });
 
+      const topic = await this.resolveTopic(conversationId);
+      const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+      const waButton =
+        phone && business
+          ? renderWaButton(
+              phone,
+              buildOwnerOutreachMessage(conversation.lead?.name ?? "", business.name, topic ?? "o atendimento no chat"),
+              "Responder no WhatsApp",
+            )
+          : "";
+
       this.notifyOwner(
         businessId,
         "Pedido de ligação",
         `<p>Um cliente pediu para ser contatado por telefone em vez de WhatsApp.</p>
          ${phone ? `<p><strong>Telefone:</strong> ${escapeHtml(phone)}</p>` : ""}
+         <p><strong>Assunto:</strong> ${escapeHtml(topic ?? "Atendimento via chat")}</p>
          <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
-         <p>Veja a conversa e responda no painel: Conversas.</p>`,
+         ${waButton}
+         ${renderEmailButton("Abrir a conversa no painel", dashboardLink("/inbox"))}`,
       );
     }
 
@@ -640,7 +684,10 @@ export class FlowService {
   // a human actually follows up on the financing request, and renders the node's own honest
   // message unchanged (no placeholder substitution needed, it has none left).
   private async resolveFinancingEscalation(businessId: string, conversationId: string, message: string): Promise<{ message: string }> {
-    const conversation = await this.prisma.client.conversation.findUnique({ where: { id: conversationId } });
+    const conversation = await this.prisma.client.conversation.findUnique({
+      where: { id: conversationId },
+      include: { lead: true },
+    });
 
     if (conversation && conversation.status !== "escalated") {
       const referenceCode = generateReferenceCode();
@@ -649,12 +696,26 @@ export class FlowService {
         data: { conversationId, businessId, role: "assistant", content: message, answerSource: "escalation" },
       });
 
+      const topic = await this.resolveTopic(conversationId);
+      const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+      const leadPhone = conversation.lead?.phone;
+      const waButton =
+        leadPhone && business
+          ? renderWaButton(
+              leadPhone,
+              buildOwnerOutreachMessage(conversation.lead?.name ?? "", business.name, topic ?? "o atendimento no chat"),
+              "Responder no WhatsApp",
+            )
+          : "";
+
       this.notifyOwner(
         businessId,
         "Lead quente (financiamento)",
         `<p>Um cliente avançou até a etapa de aprovação de financiamento — este sistema não tem integração real de análise de crédito, então ele foi encaminhado para contato manual.</p>
+         <p><strong>Assunto:</strong> ${escapeHtml(topic ?? "Atendimento via chat")}</p>
          <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
-         <p>Veja a conversa e responda no painel: Conversas.</p>`,
+         ${waButton}
+         ${renderEmailButton("Abrir a conversa no painel", dashboardLink("/inbox"))}`,
       );
     }
 
@@ -677,7 +738,10 @@ export class FlowService {
       ? "Não consegui confirmar esse horário automaticamente — vou te colocar em contato com um vendedor para agendar manualmente."
       : "Não consegui confirmar esse horário automaticamente — vou te colocar em contato com um corretor para agendar manualmente.";
 
-    const conversation = await this.prisma.client.conversation.findUnique({ where: { id: conversationId } });
+    const conversation = await this.prisma.client.conversation.findUnique({
+      where: { id: conversationId },
+      include: { lead: true },
+    });
     if (conversation && conversation.status !== "escalated") {
       const referenceCode = generateReferenceCode();
       await this.markEscalated(businessId, conversationId, referenceCode);
@@ -685,12 +749,25 @@ export class FlowService {
         data: { conversationId, businessId, role: "assistant", content: message, answerSource: "escalation" },
       });
 
+      const topic = await this.resolveTopic(conversationId);
+      const leadPhone = conversation.lead?.phone;
+      const waButton =
+        leadPhone && business
+          ? renderWaButton(
+              leadPhone,
+              buildOwnerOutreachMessage(conversation.lead?.name ?? "", business.name, topic ?? "o atendimento no chat"),
+              "Responder no WhatsApp",
+            )
+          : "";
+
       this.notifyOwner(
         businessId,
         "Agendamento não confirmado — contato manual",
         `<p>Um cliente tentou agendar ${isConcessionaria ? "um test-drive" : "uma visita"} pelo chat, mas o horário não pôde ser confirmado automaticamente.</p>
+         <p><strong>Assunto:</strong> ${escapeHtml(topic ?? "Atendimento via chat")}</p>
          <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
-         <p>Veja a conversa e responda no painel: Conversas.</p>`,
+         ${waButton}
+         ${renderEmailButton("Abrir a conversa no painel", dashboardLink("/inbox"))}`,
       );
     }
 

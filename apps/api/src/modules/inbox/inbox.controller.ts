@@ -28,4 +28,9 @@ export class InboxController {
   markRead(@CurrentBusiness() session: BusinessSessionClaims, @Param("id") id: string) {
     return this.inbox.markRead(session.businessId, id);
   }
+
+  @Post("conversations/:id/close")
+  close(@CurrentBusiness() session: BusinessSessionClaims, @Param("id") id: string) {
+    return this.inbox.closeConversation(session.businessId, id);
+  }
 }

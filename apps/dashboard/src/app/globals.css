@@ -78,3 +78,29 @@
     @apply bg-bg text-ink font-sans antialiased;
   }
 }
+
+@layer components {
+  /* Mirrors apps/chat/src/app/globals.css's .ai-bubble/.tenant-bubble/.owner-bubble treatment
+     (flat color-mix tint + blur, no gradient) so the inbox conversation mirror reads as the same
+     chat UI the visitor actually sees, instead of the dashboard's own plain solid-color bubbles.
+     Visitor bubbles here use --accent (the platform's own brand color) rather than a per-tenant
+     value, since the dashboard has no equivalent of the widget's --tenant-accent override. */
+  .mirror-ai-bubble {
+    background: color-mix(in srgb, rgb(var(--secondary)) 9%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid color-mix(in srgb, rgb(var(--secondary)) 14%, transparent);
+  }
+  .mirror-visitor-bubble {
+    background: color-mix(in srgb, rgb(var(--accent)) 11%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid color-mix(in srgb, rgb(var(--accent)) 16%, transparent);
+  }
+  .mirror-owner-bubble {
+    background: color-mix(in srgb, rgb(var(--tertiary)) 14%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid color-mix(in srgb, rgb(var(--tertiary)) 20%, transparent);
+  }
+}

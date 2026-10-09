@@ -106,23 +106,24 @@
      replies, glassy green (the tenant's own brand color) fading to clear for the visitor's own
      messages, both over backdrop-blur so they pick up a soft "glow" against the white canvas. */
   .ai-bubble {
-    background: linear-gradient(
-      135deg,
-      color-mix(in srgb, rgb(var(--secondary)) 14%, transparent),
-      color-mix(in srgb, rgb(var(--secondary)) 3%, transparent)
-    );
+    background: color-mix(in srgb, rgb(var(--secondary)) 9%, transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid color-mix(in srgb, rgb(var(--secondary)) 14%, transparent);
   }
   .tenant-bubble {
-    background: linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--tenant-accent) 18%, transparent),
-      color-mix(in srgb, var(--tenant-accent) 4%, transparent)
-    );
+    background: color-mix(in srgb, var(--tenant-accent) 11%, transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid color-mix(in srgb, var(--tenant-accent) 16%, transparent);
+  }
+  /* Owner (human) replies get their own flat tint, distinct from both the AI's coral tint and
+     the visitor's brand-color tint, using the app accent token — makes it visually clear who's
+     talking once a conversation has been handed back to a human. */
+  .owner-bubble {
+    background: color-mix(in srgb, rgb(var(--accent)) 14%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid color-mix(in srgb, rgb(var(--accent)) 20%, transparent);
   }
 }

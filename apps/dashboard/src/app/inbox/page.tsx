@@ -6,6 +6,7 @@ import {
   getInboxThread,
   sendInboxMessage,
   markInboxRead,
+  closeInboxConversation,
   getLeadWhatsappLink,
 } from "../../lib/api";
 import { Card, CardContent } from "../../components/ui/card";
@@ -40,6 +41,7 @@ export default function InboxPage() {
   const [thread, setThread] = useState<any | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [muted, setMuted] = useState(false);
   const messageListRef = useRef<HTMLDivElement | null>(null);
@@ -71,9 +73,17 @@ export default function InboxPage() {
     }
   }
 
-  function notifyNewLiveAttention(list: any[]) {
+  // `silent` skips the sound/compare entirely and just re-baselines liveAttentionSeenRef against
+  // whatever the CURRENT filter shows. This matters because `getInboxConversations(filter)` only
+  // ever returns the filter-scoped subset — comparing that subset against a seen-set built under
+  // a DIFFERENT filter (e.g. switching from "Todas" to "Precisam de resposta") makes rows that
+  // were always there look "new" even though nothing actually changed, which was firing the
+  // alert sound on filter switches, after sending a reply, and after closing a conversation (all
+  // of which call refresh() for an unrelated reason). Only the background poll() — a tick where
+  // the filter is guaranteed unchanged since the last comparison — is allowed to actually alert.
+  function syncLiveAttention(list: any[], { silent }: { silent: boolean }) {
     const currentIds = new Set(list.filter((c) => c.needsLiveAttention).map((c) => c.id));
-    if (hasLoadedOnceRef.current) {
+    if (!silent && hasLoadedOnceRef.current) {
       let hasNew = false;
       for (const id of currentIds) {
         if (!liveAttentionSeenRef.current.has(id)) hasNew = true;
@@ -90,12 +100,12 @@ export default function InboxPage() {
     hasLoadedOnceRef.current = true;
   }
 
-  async function refresh() {
+  async function refresh(options?: { silent?: boolean }) {
     setLoading(true);
     try {
       const data = await getInboxConversations(filter);
       setConversations(data);
-      notifyNewLiveAttention(data);
+      syncLiveAttention(data, { silent: options?.silent ?? true });
     } finally {
       setLoading(false);
     }
@@ -105,7 +115,7 @@ export default function InboxPage() {
     try {
       const data = await getInboxConversations(filter);
       setConversations(data);
-      notifyNewLiveAttention(data);
+      syncLiveAttention(data, { silent: false });
     } catch {
       // Silent refresh — don't disrupt the UI on transient poll failures.
     }
@@ -186,6 +196,23 @@ export default function InboxPage() {
     }
   }
 
+  async function handleClose() {
+    if (!selectedId || closing) return;
+    setClosing(true);
+    try {
+      await closeInboxConversation(selectedId);
+      setThread((prev: any) => (prev ? { ...prev, status: "active" } : prev));
+      setConversations((prev) =>
+        prev.map((c) => (c.id === selectedId ? { ...c, status: "active", needsLiveAttention: false } : c)),
+      );
+      refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao encerrar atendimento.");
+    } finally {
+      setClosing(false);
+    }
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -244,7 +271,7 @@ export default function InboxPage() {
           <Button size="sm" variant="outline" onClick={toggleMuted}>
             {muted ? "Som desativado" : "Som ativado"}
           </Button>
-          <Button size="sm" variant="outline" onClick={refresh}>
+          <Button size="sm" variant="outline" onClick={() => refresh()}>
             Atualizar
           </Button>
         </div>
@@ -336,26 +363,60 @@ export default function InboxPage() {
             ) : (
               <>
                 <div ref={messageListRef} className="flex-1 overflow-y-auto pr-1">
-                  <div className="flex flex-col gap-2">
-                    {thread.messages.map((m: any) =>
-                      m.role === "assistant" ? (
-                        <div key={m.id} className="flex justify-start">
-                          <div className="max-w-[92%]">
-                            <MessageMirror message={m} personaName={thread.personaName ?? "Assistente"} niche={thread.niche} />
+                  {/* Mirrors the visitor-facing chat widget's own bubble styling (rounded-3xl,
+                      flat tinted blur, sender label only on the first message of a run) instead
+                      of the dashboard's own plain solid bubbles -- so the business sees the
+                      conversation exactly as the visitor experienced it. */}
+                  <div className="flex flex-col">
+                    {thread.messages.map((m: any, i: number) => {
+                      const isFirstInGroup = i === 0 || thread.messages[i - 1].role !== m.role;
+                      if (m.role === "system") {
+                        return (
+                          <div key={m.id} className="my-4 flex items-center gap-2 text-[0.7rem] font-medium text-ink-soft">
+                            <span className="h-px flex-1 bg-border" />
+                            <span>{m.content}</span>
+                            <span className="h-px flex-1 bg-border" />
+                          </div>
+                        );
+                      }
+                      if (m.role === "assistant") {
+                        return (
+                          <div key={m.id} className={(isFirstInGroup ? "mt-3" : "mt-1") + " flex justify-start"}>
+                            <div className="max-w-[92%]">
+                              {isFirstInGroup && (
+                                <div className="mb-1 text-xs font-semibold text-ink-soft">
+                                  {thread.personaName ?? "Assistente"}
+                                </div>
+                              )}
+                              <MessageMirror message={m} personaName={thread.personaName ?? "Assistente"} niche={thread.niche} />
+                            </div>
+                          </div>
+                        );
+                      }
+                      const isOwner = m.role === "owner";
+                      return (
+                        <div
+                          key={m.id}
+                          className={(isFirstInGroup ? "mt-3" : "mt-1") + ` flex ${isOwner ? "justify-end" : "justify-start"}`}
+                        >
+                          <div className={isOwner ? "ml-auto max-w-[80%] text-right" : "max-w-[80%]"}>
+                            {isFirstInGroup && (
+                              <div className="mb-1 text-xs font-semibold text-ink-soft">
+                                {isOwner ? "Você" : "Visitante"}
+                              </div>
+                            )}
+                            <div
+                              className={
+                                (isOwner ? "mirror-owner-bubble rounded-3xl rounded-br-lg" : "mirror-visitor-bubble rounded-3xl rounded-bl-lg") +
+                                " inline-block px-4 py-3 text-left text-sm text-ink break-words"
+                              }
+                            >
+                              <div className="whitespace-pre-wrap">{m.content}</div>
+                            </div>
                           </div>
                         </div>
-                      ) : (
-                        <div key={m.id} className={`flex ${m.role === "owner" ? "justify-end" : "justify-start"}`}>
-                          <div
-                            className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-                              m.role === "owner" ? "bg-accent text-white" : "bg-surface text-ink"
-                            }`}
-                          >
-                            <div className="whitespace-pre-wrap">{m.content}</div>
-                          </div>
-                        </div>
-                      ),
-                    )}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -378,6 +439,9 @@ export default function InboxPage() {
                       <div className="flex justify-end gap-2">
                         <Button size="sm" variant="outline" onClick={handleOpenWhatsapp} disabled={!selectedLeadId}>
                           Abrir WhatsApp
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleClose} disabled={closing}>
+                          Encerrar atendimento
                         </Button>
                         <Button size="sm" onClick={handleSend} disabled={sending || !text.trim()}>
                           Enviar

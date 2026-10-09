@@ -1,5 +1,7 @@
+import { buildOwnerOutreachMessage } from "@realwise/shared";
 import { escapeHtml } from "../../common/email";
 import { safeHttpUrl } from "../../common/safe-http-url";
+import { dashboardLink, renderEmailButton, renderWaButton } from "../../common/email-links";
 
 // Pure rendering helpers for booking confirmation emails — no DI, no Prisma, so the shapes below
 // are intentionally loose structural types rather than importing the full Prisma model types.
@@ -47,6 +49,7 @@ export interface OwnerEmailContext {
   startsAt: Date;
   listing?: ListingLike | null;
   address?: string | null;
+  topic?: string | null;
 }
 
 export interface VisitorEmailContext {
@@ -55,6 +58,7 @@ export interface VisitorEmailContext {
   startsAt: Date;
   listing?: ListingLike | null;
   address?: string | null;
+  businessWhatsappPhone?: string | null;
 }
 
 function renderListingBlock(listing: ListingLike | null | undefined): string {
@@ -79,6 +83,16 @@ export function renderOwnerEmail(ctx: OwnerEmailContext): { subject: string; htm
     ${renderListingBlock(ctx.listing)}
     ${address ? `<p><strong>Endereço:</strong> ${escapeHtml(address)}</p>` : ""}
     <p>O convite de calendário (.ics) está anexado a este e-mail.</p>
+    ${
+      ctx.lead?.phone
+        ? renderWaButton(
+            ctx.lead.phone,
+            buildOwnerOutreachMessage(leadName, ctx.business.name, ctx.topic ?? ctx.serviceName),
+            "Falar com o cliente no WhatsApp",
+          )
+        : ""
+    }
+    ${renderEmailButton("Ver no painel", dashboardLink("/agenda"))}
   `.trim();
 
   return { subject: `Novo agendamento: ${ctx.serviceName}`, html };
@@ -95,6 +109,11 @@ export function renderVisitorEmail(ctx: VisitorEmailContext): { subject: string;
     ${renderListingBlock(ctx.listing)}
     ${address ? `<p><strong>Endereço:</strong> ${escapeHtml(address)}</p>` : ""}
     <p>O convite de calendário (.ics) está anexado a este e-mail — basta abrir o anexo para adicionar ao seu calendário.</p>
+    ${renderWaButton(
+      ctx.businessWhatsappPhone,
+      `Oi! Confirmando meu agendamento de ${ctx.serviceName} com a ${ctx.business.name}.`,
+      "Falar no WhatsApp",
+    )}
   `.trim();
 
   return { subject: `Agendamento confirmado — ${ctx.business.name}`, html };

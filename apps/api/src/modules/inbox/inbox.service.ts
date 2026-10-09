@@ -117,6 +117,40 @@ export class InboxService {
     });
   }
 
+  async closeConversation(businessId: string, conversationId: string) {
+    const conversation = await this.prisma.client.conversation.findFirst({
+      where: { id: conversationId, businessId },
+      include: { business: { select: { niche: true, name: true } } },
+    });
+    if (!conversation) throw new NotFoundException("Conversation not found");
+
+    if (conversation.status !== "escalated") {
+      throw new BadRequestException("Só é possível encerrar conversas escaladas para atendimento humano.");
+    }
+
+    await this.prisma.client.message.create({
+      data: {
+        conversationId,
+        businessId,
+        role: "system",
+        content: `${conversation.business.name} encerrou o atendimento — ${getPersona(conversation.business.niche).name} voltou a responder por aqui.`,
+      },
+    });
+
+    await this.prisma.client.conversation.update({
+      where: { id: conversationId },
+      data: {
+        status: "active",
+        lastMessageAt: new Date(),
+        lastOwnerReplyAt: new Date(),
+        lastReadByOwnerAt: new Date(),
+        messageCount: { increment: 1 },
+      },
+    });
+
+    return { id: conversation.id, status: "active" };
+  }
+
   async sendOwnerMessage(businessId: string, conversationId: string, text: string) {
     const trimmed = text.trim();
     if (!trimmed || trimmed.length > 2000) {

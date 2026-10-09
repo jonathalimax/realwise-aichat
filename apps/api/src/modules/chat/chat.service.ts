@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "crypto";
-import { buildWaMeLink, buildCustomerEscalationMessage, generateReferenceCode } from "@realwise/shared";
+import { buildWaMeLink, buildCustomerEscalationMessage, buildOwnerOutreachMessage, generateReferenceCode } from "@realwise/shared";
 import { nicheTemplates } from "@realwise/profile-schema";
 import type { Business, Conversation } from "@realwise/db";
 import { Prisma } from "@realwise/db";
@@ -10,6 +10,7 @@ import { BookingsService } from "../bookings/bookings.service";
 import { retrieveChunksForChat } from "./knowledge-retrieval";
 import { CalendarService } from "../calendar/calendar.service";
 import { sendEmail, escapeHtml } from "../../common/email";
+import { dashboardLink, renderEmailButton, renderWaButton } from "../../common/email-links";
 import { FlowService } from "./flow.service";
 import { LeadsService } from "../leads/leads.service";
 import { AlertsService } from "../alerts/alerts.service";
@@ -23,6 +24,7 @@ import { SimulatorService, detectsFinancingSimulationIntent, type SimulationOutc
 import { FINANCING_SIMULATION_CONSENT_NOTICE } from "./financing-consent-notice";
 import { conversationalPromptFragment, discoveryOnlySystemPrompt } from "./conversational-prompt";
 import { parseQuickReplies, splitQuickReplyStream } from "./quick-replies";
+import { detectsEscalation, confirmsEscalation, resolveTopicFrom } from "./escalation-topic";
 
 // Stage 5 conversational redesign — flag-gated, default off (Business.conversationalModeEnabled).
 // The env kill-switch forces the flag false for every tenant regardless of its own DB value, for
@@ -44,29 +46,6 @@ const MIN_MEANINGFUL_TEXT_LENGTH = 20;
 const QUOTA_EXCEEDED_FALLBACK = (personaName: string) =>
   `No momento ${personaName} não está disponível — nossa equipe vai te responder em breve!`;
 
-const ESCALATION_KEYWORDS = [
-  "falar com atendente",
-  "falar com um atendente",
-  "falar com uma pessoa",
-  "falar com alguem",
-  "falar com humano",
-  "atendimento humano",
-  "pessoa de verdade",
-  "falar com vendedor",
-  "falar com corretor",
-  "quero um atendente",
-  "me transfere",
-  "transferir para",
-  "humano",
-  "atendente",
-  // Bare role nouns — the exact-phrase entries above miss extremely common natural insertions
-  // like "falar com UM corretor" or "falar com A pessoa", which don't literally contain "falar
-  // com corretor"/"falar com pessoa". Catching the role noun alone is safe here since almost any
-  // mention of wanting a "corretor"/"vendedor" in a chat context signals wanting a human.
-  "corretor",
-  "vendedor",
-];
-const AFFIRMATIVE_REPLIES = ["sim", "sim por favor", "pode", "pode ser", "claro", "quero", "por favor", "ok", "okay", "isso"];
 const ABSTENTION_MARKERS = [
   "não tenho essa informação",
   "não sei",
@@ -408,16 +387,6 @@ export class ChatService {
     return `${chatUrl}/${business.slug}?c=${conversation.id}&t=${conversation.resumeToken}`;
   }
 
-  private detectsEscalation(text: string): boolean {
-    const normalized = normalize(text);
-    return ESCALATION_KEYWORDS.some((kw) => normalized.includes(normalize(kw)));
-  }
-
-  private confirmsEscalation(text: string): boolean {
-    const normalized = text.trim().toLowerCase();
-    return AFFIRMATIVE_REPLIES.some((kw) => normalized === kw || normalized.startsWith(`${kw} `));
-  }
-
   // True when the reply currently being persisted is the SECOND consecutive abstention for this
   // conversation — i.e. the AI persona just failed to help twice in a row — so the caller can escalate
   // automatically instead of leaving the visitor stuck on repeated "não tenho essa informação"
@@ -458,7 +427,7 @@ export class ChatService {
       data: { conversationId, businessId, role: "visitor", content: visitorText },
     });
 
-    if (this.detectsEscalation(visitorText) || (offeredHandoff && this.confirmsEscalation(visitorText))) {
+    if (detectsEscalation(visitorText) || (offeredHandoff && confirmsEscalation(visitorText))) {
       return this.escalate(businessId, conversationId, visitorText);
     }
 
@@ -624,7 +593,7 @@ export class ChatService {
         // The current visitor turn's message was already persisted to the DB before this prompt
         // is built, and it's also appended explicitly below as the trailing "Cliente: ..." line —
         // excluding the single most recent row here avoids including it twice in the prompt.
-        where: { conversationId },
+        where: { conversationId, role: { not: "system" } },
         orderBy: { createdAt: "desc" },
         take: 10,
         skip: 1,
@@ -1274,7 +1243,7 @@ export class ChatService {
       data: { conversationId, businessId, role: "visitor", content: visitorText },
     });
 
-    if (this.detectsEscalation(visitorText) || (offeredHandoff && this.confirmsEscalation(visitorText))) {
+    if (detectsEscalation(visitorText) || (offeredHandoff && confirmsEscalation(visitorText))) {
       const result = await this.escalate(businessId, conversationId, visitorText);
       if (result.message) onDelta(result.message.content);
       return result;
@@ -1782,36 +1751,13 @@ export class ChatService {
   // deep-link prefill. Falls back to the most recent earlier visitor message that actually says
   // something substantive, so a real topic surfaces whenever one exists in the conversation.
   private async resolveEscalationTopic(conversationId: string, candidate: string): Promise<string | null> {
-    const isSubstantive = (text: string): boolean => {
-      const trimmed = text.trim();
-      if (trimmed.length < 8) return false;
-      const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
-      if (this.confirmsEscalation(trimmed) && wordCount <= 4) return false;
-      if (this.detectsEscalation(trimmed)) return false;
-      return true;
-    };
-
-    if (isSubstantive(candidate)) {
-      return candidate.trim().slice(0, 80);
-    }
-
     const recentVisitorMessages = await this.prisma.client.message.findMany({
       where: { conversationId, role: "visitor" },
       orderBy: { createdAt: "desc" },
       take: 10,
     });
-
-    const rejectedCandidate = candidate.trim();
-    for (const msg of recentVisitorMessages) {
-      const text = String(msg.content ?? "");
-      const trimmed = text.trim();
-      if (trimmed === rejectedCandidate) continue;
-      if (isSubstantive(trimmed)) {
-        return trimmed.slice(0, 80);
-      }
-    }
-
-    return null;
+    const recentVisitorTexts = recentVisitorMessages.map((msg) => String(msg.content ?? ""));
+    return resolveTopicFrom(candidate, recentVisitorTexts);
   }
 
   async escalate(businessId: string, conversationId: string, topic: string) {
@@ -1820,7 +1766,10 @@ export class ChatService {
 
     const resolvedTopic = await this.resolveEscalationTopic(conversationId, topic);
 
-    const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
+    const conversation = await this.prisma.client.conversation.findFirst({
+      where: { id: conversationId, businessId },
+      include: { lead: true },
+    });
 
     if (conversation?.status === "escalated") {
       // Idempotent: a conversation can only be escalated once. Re-escalating would mint a
@@ -1863,10 +1812,11 @@ export class ChatService {
 
       this.notifyOwner(
         businessId,
-        `Lead quente sem número de WhatsApp configurado — ${escapeHtml(business.name)}`,
+        `Lead quente sem número de WhatsApp configurado — ${business.name}`,
         `<p>Um cliente pediu para falar com alguém do time agora, mas <strong>nenhum número de WhatsApp ativo está configurado</strong>.</p>
          <p><strong>Assunto:</strong> ${escapeHtml(resolvedTopic ?? "Atendimento via chat")}</p>
-         <p>Configure um número de roteamento no painel para poder receber esses leads: Configurações.</p>`,
+         <p>Configure um número de roteamento no painel para poder receber esses leads: Configurações.</p>
+         ${renderEmailButton("Abrir a conversa no painel", dashboardLink("/inbox"))}`,
       );
 
       this.recomputeLeadScore(businessId, conversation?.leadId);
@@ -1902,13 +1852,23 @@ export class ChatService {
       },
     });
 
+    const leadPhone = conversation?.lead?.phone;
+    const waButton = leadPhone
+      ? renderWaButton(
+          leadPhone,
+          buildOwnerOutreachMessage(conversation?.lead?.name ?? "", business.name, resolvedTopic ?? "o atendimento no chat"),
+          "Responder no WhatsApp",
+        )
+      : "";
+
     this.notifyOwner(
       businessId,
-      `Lead quente — ${escapeHtml(business.name)}`,
+      `Lead quente — ${business.name}`,
       `<p>Um cliente pediu para falar com alguém do time agora.</p>
        <p><strong>Assunto:</strong> ${escapeHtml(resolvedTopic ?? "Atendimento via chat")}</p>
        <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
-       <p>Veja a conversa e responda no painel: Conversas.</p>`,
+       ${waButton}
+       ${renderEmailButton("Abrir a conversa no painel", dashboardLink("/inbox"))}`,
     );
 
     this.recomputeLeadScore(businessId, conversation?.leadId);
