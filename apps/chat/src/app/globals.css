@@ -102,29 +102,15 @@
   .tenant-accent-border {
     border-color: var(--tenant-accent);
   }
-  /* Translucent, gradient-tinted bubble treatments — glassy coral fading to clear for the AI's
-     replies, glassy green (the tenant's own brand color) fading to clear for the visitor's own
-     messages, both over backdrop-blur so they pick up a soft "glow" against the white canvas. */
-  .ai-bubble {
-    background: color-mix(in srgb, rgb(var(--secondary)) 9%, transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid color-mix(in srgb, rgb(var(--secondary)) 14%, transparent);
+  /* Business side (assistant + human owner): one shared, very soft brand tint. */
+  .business-bubble {
+    background: color-mix(in srgb, var(--tenant-accent) 6%, rgb(var(--surface)));
+    border: 1px solid color-mix(in srgb, var(--tenant-accent) 18%, rgb(var(--surface)));
   }
+  /* Visitor: luminance-aware tint precomputed in ChatScreen.tsx (tenantBubbleVars); the
+     color-mix fallback covers the default accent / unparseable brandColor. */
   .tenant-bubble {
-    background: color-mix(in srgb, var(--tenant-accent) 11%, transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid color-mix(in srgb, var(--tenant-accent) 16%, transparent);
-  }
-  /* Owner (human) replies stay in the same coral family as the AI's bubble (both sit on the
-     "business side" of the conversation, left-aligned, opposite the visitor) rather than reading
-     close to the visitor's own green tint — just a stronger/darker version of the same secondary
-     tone so the two are still distinguishable at a glance, with the sender label doing the rest. */
-  .owner-bubble {
-    background: color-mix(in srgb, rgb(var(--secondary)) 20%, transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid color-mix(in srgb, rgb(var(--secondary)) 28%, transparent);
+    background: var(--tenant-bubble-bg, color-mix(in srgb, var(--tenant-accent) 16%, rgb(var(--surface))));
+    border: 1px solid var(--tenant-bubble-border, color-mix(in srgb, var(--tenant-accent) 30%, rgb(var(--surface))));
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { maskBrPhone, digitsOnly } from "@realwise/shared";
 import {
   getBusiness,
@@ -360,6 +360,107 @@ let messageIdCounter = 0;
 function nextMessageId() {
   messageIdCounter += 1;
   return `m${messageIdCounter}`;
+}
+
+function parseHex(input: string): [number, number, number] | null {
+  const hex = input.trim().replace(/^#/, "");
+  if (/^[0-9a-f]{3}$/i.test(hex)) {
+    const [r, g, b] = hex.split("").map((c) => parseInt(c + c, 16));
+    return [r, g, b];
+  }
+  if (/^[0-9a-f]{6}$/i.test(hex)) {
+    return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
+  }
+  return null;
+}
+
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+function rgbToHsl([r, g, b]: [number, number, number]): [number, number, number] {
+  const rn = r / 255,
+    gn = g / 255,
+    bn = b / 255;
+  const max = Math.max(rn, gn, bn),
+    min = Math.min(rn, gn, bn);
+  let h = 0,
+    s = 0;
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case rn:
+        h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+        break;
+      case gn:
+        h = ((bn - rn) / d + 2) / 6;
+        break;
+      default:
+        h = ((rn - gn) / d + 4) / 6;
+        break;
+    }
+  }
+  return [h * 360, s * 100, l * 100];
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const sN = s / 100,
+    lN = l / 100;
+  const c = (1 - Math.abs(2 * lN - 1)) * sN;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = lN - c / 2;
+  let [r1, g1, b1] = [0, 0, 0];
+  if (h < 60) [r1, g1, b1] = [c, x, 0];
+  else if (h < 120) [r1, g1, b1] = [x, c, 0];
+  else if (h < 180) [r1, g1, b1] = [0, c, x];
+  else if (h < 240) [r1, g1, b1] = [0, x, c];
+  else if (h < 300) [r1, g1, b1] = [x, 0, c];
+  else [r1, g1, b1] = [c, 0, x];
+  return [Math.round((r1 + m) * 255), Math.round((g1 + m) * 255), Math.round((b1 + m) * 255)];
+}
+
+const LIGHT_BRAND_LUMINANCE_THRESHOLD = 0.45;
+const SHADE_TARGET_LUMINANCE = 0.4;
+
+// Visitor bubble tint needs to read as "a soft version of this tenant's brand color" for both
+// dark/saturated brand colors (simple light-tint mix works fine) and pale/light brand colors
+// (a light-tint mix would be indistinguishable from the background, so we instead compute a
+// darker shade of the same hue that still has enough contrast to read as a tinted bubble).
+function tenantBubbleVars(brandColor?: string | null): Record<string, string> {
+  if (!brandColor) return {};
+  const rgb = parseHex(brandColor);
+  if (!rgb) return {};
+  const luminance = relativeLuminance(rgb);
+
+  if (luminance <= LIGHT_BRAND_LUMINANCE_THRESHOLD) {
+    const [r, g, b] = rgb;
+    const mix = (c: number) => Math.round(c * 0.16 + 255 * 0.84);
+    const mixBorder = (c: number) => Math.round(c * 0.3 + 255 * 0.7);
+    return {
+      "--tenant-bubble-bg": `rgb(${mix(r)} ${mix(g)} ${mix(b)})`,
+      "--tenant-bubble-border": `rgb(${mixBorder(r)} ${mixBorder(g)} ${mixBorder(b)})`,
+    };
+  }
+
+  const [h, s] = rgbToHsl(rgb);
+  let l = 70;
+  // Step lightness down until the shade is dark enough to read as "a darker version of this
+  // light brand color" rather than another pale tint — floored so we never go near-black.
+  while (l > 25 && relativeLuminance(hslToRgb(h, s, l)) > SHADE_TARGET_LUMINANCE) {
+    l -= 1;
+  }
+  const bgRgb = hslToRgb(h, s, l);
+  const borderRgb = hslToRgb(h, s, Math.max(15, l - 8));
+  return {
+    "--tenant-bubble-bg": `rgb(${bgRgb[0]} ${bgRgb[1]} ${bgRgb[2]})`,
+    "--tenant-bubble-border": `rgb(${borderRgb[0]} ${borderRgb[1]} ${borderRgb[2]})`,
+  };
 }
 
 // The cookie the API also relies on to resume a conversation can fail cross-origin (chat on one
@@ -1105,6 +1206,14 @@ export function ChatScreen({
     setBookingEmail("");
   }
 
+  const tenantStyle = useMemo(
+    () =>
+      business?.brandColor
+        ? ({ "--tenant-accent": business.brandColor, ...tenantBubbleVars(business.brandColor) } as React.CSSProperties)
+        : undefined,
+    [business?.brandColor],
+  );
+
   if (!business) {
     if (businessNotFound) {
       return (
@@ -1121,11 +1230,9 @@ export function ChatScreen({
     // business.brandColor, falling back to the design-system accent green defined in
     // globals.css when the tenant hasn't set one. Every brand-colored surface below (avatar
     // badge, visitor bubble tint, send/primary buttons) reads this same custom property instead
-    // of each carrying its own separate inline style.
-    <div
-      className="flex h-dvh flex-col overflow-hidden bg-bg"
-      style={business.brandColor ? ({ "--tenant-accent": business.brandColor } as React.CSSProperties) : undefined}
-    >
+    // of each carrying its own separate inline style. --tenant-bubble-bg/-border are the
+    // luminance-aware visitor bubble tint computed once in tenantStyle above.
+    <div className="flex h-dvh flex-col overflow-hidden bg-bg" style={tenantStyle}>
       <header className="flex flex-none items-center gap-3 border-b border-border bg-bg/80 px-4 py-3 backdrop-blur-md">
         <BusinessAvatar
           name={business.name}
@@ -1185,9 +1292,7 @@ export function ChatScreen({
                 className={
                   m.role === "visitor"
                     ? "tenant-bubble rounded-3xl rounded-br-lg px-4 py-3 text-sm text-ink break-words"
-                    : m.role === "owner"
-                      ? "owner-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
-                      : "ai-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
+                    : "business-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
                 }
               >
                 <MessageContent text={m.content} />
@@ -1228,7 +1333,7 @@ export function ChatScreen({
           <div
             role="status"
             aria-live="polite"
-            className="mt-3 flex max-w-[85%] items-center gap-2 rounded-3xl rounded-bl-lg bg-surface px-4 py-3 shadow-sm"
+            className="mt-3 flex max-w-[85%] items-center gap-2"
           >
             <span className="text-sm text-ink-soft">
               {thinkingStage === 0
