@@ -1000,20 +1000,16 @@ export function ChatScreen({
     }
   }
 
-  // "Selecionar" toggles the listing in the conversation's server-side selection (multiple
-  // allowed). The server answers with a deterministic engagement message about THAT listing
+  // "Selecionar" picks THE listing for this conversation (one at a time: a new pick replaces the
+  // previous one; tapping the selected one again clears it). The server answers with a deterministic engagement message about THAT listing
   // (total cost, visit, financing, similar options) — it never re-sends the carousel, and every
   // later question ("qual o pacote total?") is answered about the selection.
   async function handleSelectListing(listing: Listing) {
     if (!business || !listing.id || isStreamingRef.current) return;
     const listingId = listing.id;
     const willSelect = !selectedIds.has(listingId);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (willSelect) next.add(listingId);
-      else next.delete(listingId);
-      return next;
-    });
+    const previousIds = selectedIds;
+    setSelectedIds(willSelect ? new Set([listingId]) : new Set());
     if (willSelect) {
       setSelectedListing(listing);
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: `Selecionei: ${listing.title}` }]);
@@ -1036,12 +1032,7 @@ export function ChatScreen({
       }
     } catch {
       // Roll back the optimistic toggle so the card never claims a selection the server lacks.
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        if (willSelect) next.delete(listingId);
-        else next.add(listingId);
-        return next;
-      });
+      setSelectedIds(previousIds);
       if (willSelect) {
         setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "Não consegui salvar sua seleção agora — tenta de novo em instantes." }]);
       }
@@ -1051,6 +1042,18 @@ export function ChatScreen({
       isStreamingRef.current = false;
     }
   }
+
+  // The listing behind the current selection, for the "Seu imóvel selecionado" bar. Looked up in
+  // the thread's listing cards (persisted with the history, so it survives a reload), falling
+  // back to the one just tapped.
+  const selectedListingView = useMemo<Listing | null>(() => {
+    if (selectedIds.size === 0) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const found = messages[i].listings?.find((l) => l.id && selectedIds.has(l.id));
+      if (found) return found;
+    }
+    return selectedListing?.id && selectedIds.has(selectedListing.id) ? selectedListing : null;
+  }, [messages, selectedIds, selectedListing]);
 
   async function handleBubbleTap(bubble: FlowBubble) {
     if (!business) return;
@@ -1285,6 +1288,34 @@ export function ChatScreen({
         )}
         <div ref={bottomRef} />
       </main>
+
+      {selectedListingView && !showBooking && (
+        <div className="flex flex-none items-center gap-3 px-4 pb-2" data-testid="selected-listing-bar">
+          <div className="tenant-accent-border flex min-w-0 flex-1 items-center gap-3 rounded-2xl border bg-surface px-3 py-2 shadow-sm">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">Seu imóvel selecionado</div>
+              <div className="truncate text-sm font-medium text-ink">{selectedListingView.title}</div>
+              {selectedListingView.price && <div className="text-xs font-semibold text-accent">{selectedListingView.price}</div>}
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveListing(selectedListingView)}
+              className="tenant-accent-bg min-h-9 rounded-full px-3 text-xs font-medium text-white active:scale-[0.98] transition-transform"
+            >
+              Ver
+            </button>
+            <button
+              type="button"
+              aria-label="Remover seleção"
+              onClick={() => handleSelectListing(selectedListingView)}
+              disabled={busy || sending}
+              className="min-h-9 min-w-9 rounded-full border border-border text-sm text-ink-soft active:scale-[0.98] disabled:opacity-50"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {bubbles.length > 0 && !showBooking && (
         <div className="flex flex-none flex-wrap gap-2 px-4 pb-2">

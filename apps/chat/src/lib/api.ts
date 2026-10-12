@@ -142,7 +142,7 @@ export function bookAppointment(
   });
 }
 
-// Select / unselect a listing card. Multiple selections are kept server-side and injected into
+// Select / unselect a listing card. One selection is kept server-side and injected into
 // every later answer, so "quanto fica o total?" is answered about the selection.
 export function setListingSelection(
   businessId: string,

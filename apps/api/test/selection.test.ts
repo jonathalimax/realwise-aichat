@@ -13,6 +13,7 @@ import {
   selectionPromptBlock,
   similarListingCriteria,
   toggleSelection,
+  transactionKind,
   type SelectedListingDetails,
 } from "../src/modules/chat/selection";
 
@@ -40,16 +41,47 @@ const sale: SelectedListingDetails = {
   description: "Condomínio fechado com 3 quartos de hóspedes.",
 };
 
-test("toggleSelection keeps most recent last, dedupes and caps", () => {
+test("toggleSelection keeps exactly one listing: a new pick replaces the old one", () => {
+  assert.equal(MAX_SELECTED_LISTINGS, 1);
   assert.deepEqual(toggleSelection([], "a", true), ["a"]);
-  assert.deepEqual(toggleSelection(["a", "b"], "a", true), ["b", "a"]);
-  assert.deepEqual(toggleSelection(["a", "b"], "a", false), ["b"]);
-  const many = Array.from({ length: MAX_SELECTED_LISTINGS }, (_, i) => `id${i}`);
-  const next = toggleSelection(many, "new", true);
-  assert.equal(next.length, MAX_SELECTED_LISTINGS);
-  assert.equal(next[next.length - 1], "new");
-  assert.ok(!next.includes("id0"));
+  assert.deepEqual(toggleSelection(["a"], "b", true), ["b"]);
+  assert.deepEqual(toggleSelection(["a", "b"], "b", true), ["b"]);
+  assert.deepEqual(toggleSelection(["a"], "a", false), []);
+  assert.deepEqual(toggleSelection(["a"], "zzz", false), ["a"]);
 });
+
+test("transactionKind only calls a listing rent/sale when it says so", () => {
+  assert.equal(transactionKind({ transaction: "aluguel" }), "rent");
+  assert.equal(transactionKind({ transaction: "Locação" }), "rent");
+  assert.equal(transactionKind({ transaction: "rent" }), "rent");
+  assert.equal(transactionKind({ transaction: "venda" }), "sale");
+  assert.equal(transactionKind({ transaction: "Compra" }), "sale");
+  assert.equal(transactionKind({ transaction: null, pricePeriod: "mês" }), "rent");
+  assert.equal(transactionKind({ transaction: null, pricePeriod: null }), "unknown");
+  assert.equal(transactionKind({ transaction: "venda e aluguel", pricePeriod: "mensal" }), "rent");
+});
+
+test("a listing that does not say sale gets no purchase simulation", () => {
+  const unknown = { ...sale, transaction: null, pricePeriod: null };
+  const pkg = buildCostPackage(unknown, OPTIONS);
+  assert.equal(pkg.kind, "unknown");
+  assert.equal(pkg.totalCents, null);
+  assert.ok(!pkg.lines.some((l) => /ITBI|Escritura/.test(l.label)));
+  const reply = buildCostPackageReply([pkg]);
+  assert.doesNotMatch(reply, /ITBI|financiamento/i);
+  const engagement = selectionEngagementReply(unknown, 1, "imobiliaria");
+  assert.ok(!engagement.suggestions.some((x) => /financiamento/i.test(x)));
+});
+
+test("rentals never offer or mention buying", () => {
+  const rentPkg = buildCostPackage(rental, OPTIONS);
+  assert.equal(rentPkg.kind, "rent");
+  assert.doesNotMatch(buildCostPackageReply([rentPkg]), /ITBI|financiamento|compra/i);
+  const engagement = selectionEngagementReply(rental, 1, "imobiliaria");
+  assert.ok(!engagement.suggestions.some((x) => /financiamento/i.test(x)));
+  assert.match(selectionPromptBlock([rental], [rentPkg]), /SOMENTE ALUGUEL/);
+});
+
 
 test("extractFeeFromDescription requires an explicit R$ amount", () => {
   assert.deepEqual(extractFeeFromDescription(rental.description, "condominio"), { cents: 45000, annual: false });
@@ -122,14 +154,12 @@ test("similarListingCriteria anchors on the most recent selection", () => {
   });
 });
 
-test("selection engagement adapts to rent vs buy and multiple selections", () => {
+test("selection engagement adapts to rent vs buy", () => {
   const rent = selectionEngagementReply(rental, 1, "imobiliaria");
   assert.ok(rent.suggestions.includes("Quanto fica o total por mês?"));
   assert.ok(rent.suggestions.includes("Agendar uma visita"));
   const buy = selectionEngagementReply(sale, 1, "imobiliaria");
   assert.ok(buy.suggestions.some((s) => s.startsWith("Simular financiamento de R$ 500.000")));
-  const multi = selectionEngagementReply(rental, 2, "imobiliaria");
-  assert.ok(multi.suggestions.includes("Comparar os selecionados"));
 });
 
 test("selection prompt block tells Clara not to resend the list", () => {
