@@ -308,6 +308,18 @@ model Conversation {
   // disponíveis?") still carries the previously stated rental/purchase intent instead of
   // dropping the transaction filter entirely.
   pinnedTransaction   String?
+  // Every listing the visitor explicitly tapped "Selecionar" on, most recent last (capped, see
+  // chat/selection.ts). Injected into Clara's prompt every turn so follow-ups ("quanto fica o
+  // total?") resolve against the selection instead of re-sending the browse carousel.
+  // pinnedListingId above stays in sync with the most recent entry for backward compatibility.
+  selectedListingIds  String[]            @default([])
+  // Raw engagement-state reducer input (see leads/engagement-summary.ts) — preferences gathered,
+  // per-listing interest, budget/finance signals, escalation/visit events.
+  engagementState     Json?
+  // Rendered, team-facing summary of engagementState (intent, ranked listings, what the visitor
+  // is waiting for, next suggested action) — shown in the dashboard inbox and copied to the Lead.
+  teamSummary         Json?
+  teamSummaryUpdatedAt DateTime?
 
   messages            Message[]
   appointments        Appointment[]
@@ -377,11 +389,27 @@ model Lead {
   lastDigestNotifiedAt DateTime?
   tags              String[]
   retentionDeleteAt DateTime?
+  // Lifecycle (see leads/lead-status.ts): new | contacted | visit_scheduled | negotiating |
+  // closed_won | closed_lost. Closed leads are retained (never deleted) for follow-up/upsell.
+  status            String          @default("new")
+  statusUpdatedAt   DateTime?
+  closedAt          DateTime?
+  // rent | buy | questions — latest intent observed across this lead's conversations.
+  intent            String?
+  // Listings the lead selected/showed interest in, ranked by interest (most interested first).
+  interestListingIds String[]       @default([])
+  // Copy of the latest conversation's team summary (survives the 12-month conversation purge).
+  summary           Json?
+  summaryUpdatedAt  DateTime?
+  // What the lead is waiting for (e.g. matching inventory, visit confirmation, team callback).
+  waitingFor        String?
+  sourceConversationId String?
 
   conversations     Conversation[]
   appointments      Appointment[]
 
   @@unique([businessId, phoneNormalized])
+  @@index([businessId, status])
 }
 
 model BookingSlot {

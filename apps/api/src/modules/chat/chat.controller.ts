@@ -146,6 +146,34 @@ export class ChatController {
     return this.chat.pinListing(businessId, conversationId, listingId);
   }
 
+  // Select / unselect a listing card ("Selecionar"). Multiple selections are allowed; the reply
+  // carries a deterministic engagement message + quick-reply suggestions.
+  @Post(":businessId/conversations/:conversationId/selection")
+  setSelection(
+    @Param("businessId") businessId: string,
+    @Param("conversationId") conversationId: string,
+    @Body("listingId") listingId: string,
+    @Body("selected") selected: unknown,
+    @Query("t") resumeToken: string | undefined,
+    @CurrentVisitor() visitor: VisitorContext,
+  ) {
+    if (!listingId || typeof listingId !== "string") throw new BadRequestException("listingId is required");
+    const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
+    return this.chat.setListingSelection(businessId, conversationId, listingId, selected !== false && selected !== "false", token, visitor.leadId, resumeToken);
+  }
+
+  // Schedule picker data: days the business attends -> open time slots per day.
+  @Get(":businessId/conversations/:conversationId/schedule")
+  schedule(
+    @Param("businessId") businessId: string,
+    @Param("conversationId") conversationId: string,
+    @Query("t") resumeToken: string | undefined,
+    @CurrentVisitor() visitor: VisitorContext,
+  ) {
+    const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
+    return this.chat.getScheduleOptions(businessId, conversationId, token, visitor.leadId, resumeToken);
+  }
+
   @Post(":businessId/conversations/:conversationId/book")
   book(
     @Param("businessId") businessId: string,
@@ -153,9 +181,16 @@ export class ChatController {
     @Body("serviceName") serviceName: string,
     @Body("startsAt") startsAt: string,
     @Body("endsAt") endsAt: string,
+    @Body("alternatives") alternatives: unknown,
     @CurrentVisitor() visitor: VisitorContext,
   ) {
+    if (typeof startsAt !== "string" || typeof endsAt !== "string") throw new BadRequestException("startsAt and endsAt are required");
     const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
-    return this.chat.bookAppointment(businessId, conversationId, visitor.leadId, serviceName, startsAt, endsAt, token);
+    const extra = Array.isArray(alternatives)
+      ? alternatives
+          .filter((a): a is { startsAt: string; endsAt: string } => Boolean(a) && typeof a.startsAt === "string" && typeof a.endsAt === "string")
+          .slice(0, 5)
+      : [];
+    return this.chat.bookAppointment(businessId, conversationId, visitor.leadId, serviceName, startsAt, endsAt, token, extra);
   }
 }

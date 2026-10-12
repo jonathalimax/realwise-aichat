@@ -25,6 +25,27 @@ import { FINANCING_SIMULATION_CONSENT_NOTICE } from "./financing-consent-notice"
 import { conversationalPromptFragment, discoveryOnlySystemPrompt } from "./conversational-prompt";
 import { parseQuickReplies, splitQuickReplyStream } from "./quick-replies";
 import { detectsEscalation, confirmsEscalation, resolveTopicFrom } from "./escalation-topic";
+import { TeamSummaryService } from "../leads/team-summary.service";
+import type { EngagementEvent } from "../leads/engagement-summary";
+import { AvailabilityService } from "../bookings/availability.service";
+import { groupSlotsByDay, resolveVisitAppointmentType, resolveVisitSelection } from "../bookings/slot-generation";
+import { DEFAULT_ITBI_PERCENT, DEFAULT_NOTARY_PERCENT, formatBRL } from "./flow-calculators";
+import {
+  buildComparisonReply,
+  buildCostPackage,
+  buildCostPackageReply,
+  isCompareRequest,
+  isCostPackageQuestion,
+  isRental,
+  isSimilarRequest,
+  selectionEngagementReply,
+  selectionPromptBlock,
+  similarListingCriteria,
+  toggleSelection,
+  type CostPackage,
+  type SelectedListingDetails,
+} from "./selection";
+import { detectIntent, extractPreferencesFromText, triagePromptFragment } from "./triage";
 
 // Stage 5 conversational redesign — flag-gated, default off (Business.conversationalModeEnabled).
 // The env kill-switch forces the flag false for every tenant regardless of its own DB value, for
@@ -38,8 +59,18 @@ function resolveConversationalMode(business: Pick<Business, "conversationalModeE
 // exemption stops applying and today's normal abstention behavior resumes.
 const DISCOVERY_TURN_MESSAGE_CAP = 8;
 
+// Infrastructure failures only (gateway timeout/error) — nothing was sent to the team, so this
+// must not claim it was.
 const ABSTENTION_FALLBACK = "Essa eu não tenho aqui. Quer que eu te passe pro atendimento?";
-const NO_CONTEXT_FALLBACK = "Não encontrei essa informação na nossa base. Quer que eu te passe pro atendimento?";
+// Genuine "I don't know" answers: the gap is recorded in the team summary (dashboard) and the
+// owner is emailed (see notifyTeamOfGap), so Clara can truthfully say the team was notified —
+// while still offering to keep helping.
+const GAP_FALLBACK =
+  "Essa eu não tenho aqui com certeza — já avisei nosso time e eles vão te responder o quanto antes. Enquanto isso, posso te ajudar com outra coisa?";
+const NO_CONTEXT_FALLBACK = GAP_FALLBACK;
+const GAP_STREAM_NOTE = "\n\nJá avisei nosso time sobre essa dúvida — eles vão te responder o quanto antes.";
+const GAP_NOTIFY_THROTTLE_MS = 30 * 60 * 1000;
+const FINANCING_INTEREST_PATTERN = /\b(financ\w*|fgts|parcel\w*|entrada|credito|emprestimo|consorcio)\b/;
 const STREAM_INTERRUPTED_NOTE = "\n\n(conexão interrompida — pergunte novamente se precisar de mais detalhes)";
 const MIN_MEANINGFUL_TEXT_LENGTH = 20;
 
@@ -57,6 +88,14 @@ const ABSTENTION_MARKERS = [
   "passar o atendimento",
   "colega humano",
 ];
+
+// "Sim" only means "escalate" when the previous reply actually OFFERED a handoff. The gap
+// fallback ("já avisei nosso time... posso te ajudar com outra coisa?") is also stored as
+// "abstained" but asks a different question, so a "sim, quero ver casas" must not escalate.
+function didOfferHandoff(message: { answerSource: string | null; content: string } | null | undefined): boolean {
+  if (!message || message.answerSource !== "abstained") return false;
+  return /te passe pro atendimento|passar o atendimento|passar (para|pro) (o )?time|colega humano|falar com (um|uma) (atendente|pessoa)/i.test(message.content);
+}
 
 function looksLikeAbstention(text: string): boolean {
   const normalized = text.toLowerCase();
@@ -191,7 +230,239 @@ export class ChatService {
     private readonly listingsService: ListingsService,
     private readonly analytics: AnalyticsService,
     private readonly simulator: SimulatorService,
+    private readonly teamSummary: TeamSummaryService,
+    private readonly availability: AvailabilityService,
   ) {}
+
+  // Fire-and-forget (TeamSummaryService.record never throws) — the team summary must never slow
+  // down or fail the visitor-facing reply.
+  private recordEngagement(businessId: string, conversationId: string, events: EngagementEvent[]) {
+    void this.teamSummary.record(businessId, conversationId, events);
+  }
+
+  // Engagement signals readable straight from what the visitor typed: rent/buy intent, filters
+  // they stated, budget, financing interest, and which selected listing a question is about.
+  private messageEngagementEvents(niche: string, visitorText: string, selectedIds: string[]): EngagementEvent[] {
+    const events: EngagementEvent[] = [];
+    const { transaction: _transaction, ...prefs } = extractPreferencesFromText(visitorText);
+    if (niche !== "concessionaria") {
+      const intent = detectIntent(visitorText);
+      if (intent) events.push({ type: "intent", intent });
+      if (Object.keys(prefs).length > 0) events.push({ type: "preferences", preferences: prefs });
+    } else if (typeof prefs.budgetMaxCents === "number") {
+      events.push({ type: "budget", cents: prefs.budgetMaxCents });
+    }
+    if (FINANCING_INTEREST_PATTERN.test(normalize(visitorText))) events.push({ type: "financing_interest" });
+    if (selectedIds.length > 0 && /\?\s*$/.test(visitorText.trim())) {
+      events.push({ type: "listing_question", listingIds: [selectedIds[selectedIds.length - 1]] });
+    }
+    return events;
+  }
+
+  private async selectedIdsFor(businessId: string, conversationId: string): Promise<string[]> {
+    const conversation = await this.prisma.client.conversation.findFirst({
+      where: { id: conversationId, businessId },
+      select: { selectedListingIds: true, pinnedListingId: true },
+    });
+    if (!conversation) return [];
+    if (conversation.selectedListingIds.length > 0) return conversation.selectedListingIds;
+    return conversation.pinnedListingId ? [conversation.pinnedListingId] : [];
+  }
+
+  // The visitor's selected listings (selection memory), oldest first / most recent last.
+  private async loadSelection(businessId: string, conversationId: string): Promise<SelectedListingDetails[]> {
+    const ids = await this.selectedIdsFor(businessId, conversationId);
+    return this.listingsService.getSelectionDetails(businessId, ids);
+  }
+
+  private costPackages(selection: SelectedListingDetails[]): CostPackage[] {
+    return selection.map((listing) => buildCostPackage(listing, { itbiPercent: DEFAULT_ITBI_PERCENT, notaryPercent: DEFAULT_NOTARY_PERCENT }));
+  }
+
+  // A question Clara couldn't answer: record it on the team summary (dashboard) and email the
+  // owner — throttled per conversation so a confused visitor doesn't flood the owner's inbox.
+  private notifyTeamOfGap(businessId: string, conversationId: string, questionText: string) {
+    this.recordEngagement(businessId, conversationId, [{ type: "question", text: questionText, answered: false }]);
+    (async () => {
+      const recent = await this.prisma.client.analyticsEvent.findFirst({
+        where: { businessId, conversationId, name: "unanswered_notified", occurredAt: { gte: new Date(Date.now() - GAP_NOTIFY_THROTTLE_MS) } },
+        select: { id: true },
+      });
+      if (recent) return;
+      await this.analytics.recordEvent(businessId, "unanswered_notified", {}, conversationId);
+      this.notifyOwner(
+        businessId,
+        "Pergunta sem resposta no chat",
+        `<p>Um cliente fez uma pergunta que a assistente não soube responder com segurança:</p>
+         <p><strong>Pergunta:</strong> ${escapeHtml(questionText.slice(0, 500))}</p>
+         <p>O cliente foi avisado de que o time vai responder o quanto antes. O resumo completo está no painel.</p>
+         ${renderEmailButton("Abrir a conversa no painel", dashboardLink("/inbox"))}`,
+      );
+    })().catch(() => {});
+  }
+
+  private async persistShortcutReply(
+    businessId: string,
+    conversationId: string,
+    reply: { text: string; listings?: ListingItem[] },
+  ) {
+    const message = await this.prisma.client.message.create({
+      data: {
+        conversationId,
+        businessId,
+        role: "assistant",
+        content: reply.text,
+        answerSource: "fixed_flow",
+        listingIds: (reply.listings ?? []).map((l) => l.id).filter((id): id is string => Boolean(id)),
+      },
+    });
+    await this.prisma.client.conversation.update({
+      where: { id: conversationId },
+      data: { lastMessageAt: new Date(), messageCount: { increment: 2 } },
+    });
+    return message;
+  }
+
+  // Deterministic answers on top of the visitor's selection — total cost package, comparison,
+  // similar options — so these never depend on the LLM re-identifying the listing (the old bug:
+  // "qual o pacote total?" right after "Selecionar" re-sent the whole carousel).
+  private async resolveSelectionShortcut(
+    businessId: string,
+    conversationId: string,
+    niche: string,
+    visitorText: string,
+  ): Promise<{ text: string; listings?: ListingItem[]; suggestions?: string[] } | null> {
+    if (niche === "concessionaria") return null;
+    const wantsCompare = isCompareRequest(visitorText);
+    const wantsCost = isCostPackageQuestion(visitorText);
+    const wantsSimilar = isSimilarRequest(visitorText);
+    if (!wantsCompare && !wantsCost && !wantsSimilar) return null;
+
+    const selection = await this.loadSelection(businessId, conversationId);
+    if (selection.length === 0) return null;
+    const recent = selection.slice(-3);
+    const latest = selection[selection.length - 1];
+
+    if (wantsCompare && selection.length >= 2) {
+      return {
+        text: buildComparisonReply(recent, this.costPackages(recent)),
+        suggestions: ["Quanto fica o total de cada um?", "Agendar uma visita"],
+      };
+    }
+
+    if (wantsCost) {
+      const suggestions = isRental(latest)
+        ? ["Agendar uma visita", "Ver imóveis parecidos"]
+        : [
+            ...(typeof latest.priceCents === "number" && latest.priceCents > 0 ? [`Simular financiamento de ${formatBRL(latest.priceCents)}`] : []),
+            "Agendar uma visita",
+          ];
+      return { text: buildCostPackageReply(this.costPackages(recent)), suggestions };
+    }
+
+    const criteria = similarListingCriteria(selection);
+    if (!criteria) return null;
+    const { excludeIds, ...strict } = criteria;
+    let similar = await this.listingsService.queryForChat(businessId, { ...strict, excludeIds }, 4);
+    if (similar.length === 0) {
+      // Relax to same transaction + bedrooms before giving up.
+      similar = await this.listingsService.queryForChat(
+        businessId,
+        { transaction: strict.transaction, bedroomsMin: strict.bedroomsMin, bedroomsMax: strict.bedroomsMax, excludeIds },
+        4,
+      );
+    }
+    if (similar.length > 0) {
+      return {
+        text: `Separei opções parecidas com **${latest.title}** 👇 Toque em "Selecionar" se alguma te interessar.`,
+        listings: similar,
+      };
+    }
+    this.recordEngagement(businessId, conversationId, [
+      {
+        type: "alert_requested",
+        preferences: {
+          ...(criteria.transaction === "aluguel" || criteria.transaction === "venda" ? { transaction: criteria.transaction } : {}),
+          ...(typeof latest.bedrooms === "number" ? { bedrooms: latest.bedrooms } : {}),
+          ...(latest.neighborhood ? { neighborhood: latest.neighborhood } : {}),
+        },
+      },
+    ]);
+    return {
+      text: `No momento não tenho outros imóveis parecidos com **${latest.title}** — já deixei anotado pro nosso time te avisar assim que entrar algo nesse perfil. Quer agendar uma visita a esse enquanto isso?`,
+      suggestions: ["Agendar uma visita"],
+    };
+  }
+
+  // "Selecionar" on a listing card. Multiple selections are kept (most recent last); the most
+  // recent one is also mirrored into pinnedListingId for the existing single-listing paths.
+  // Returns a deterministic engagement reply (no LLM) so the visitor gets an immediate, specific
+  // next step instead of the carousel again.
+  async setListingSelection(
+    businessId: string,
+    conversationId: string,
+    listingId: string,
+    selected: boolean,
+    visitorToken: string,
+    leadId?: string,
+    resumeToken?: string,
+  ) {
+    const { conversation } = await this.assertVisitorOwnsConversation(businessId, conversationId, visitorToken, leadId, resumeToken);
+    const [listing] = await this.listingsService.getSelectionDetails(businessId, [listingId]);
+    if (!listing) throw new NotFoundException("Listing not found");
+    if (selected && listing.status !== "active") throw new BadRequestException("Listing is no longer available");
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
+
+    const current = conversation.selectedListingIds.length > 0
+      ? conversation.selectedListingIds
+      : conversation.pinnedListingId
+        ? [conversation.pinnedListingId]
+        : [];
+    const selectedListingIds = toggleSelection(current, listingId, selected);
+    await this.prisma.client.conversation.update({
+      where: { id: conversationId },
+      data: { selectedListingIds, pinnedListingId: selectedListingIds[selectedListingIds.length - 1] ?? null },
+    });
+
+    this.recordEngagement(
+      businessId,
+      conversationId,
+      selected ? [{ type: "listing_selected", listingId, title: listing.title }] : [{ type: "listing_deselected", listingId }],
+    );
+    this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
+
+    if (!selected) return { selectedListingIds, message: null, suggestions: [] };
+
+    const reply = selectionEngagementReply(listing, selectedListingIds.length, business?.niche ?? "imobiliaria");
+    await this.prisma.client.message.create({
+      data: { conversationId, businessId, role: "visitor", content: `Selecionei: ${listing.title}` },
+    });
+    const message = await this.persistShortcutReply(businessId, conversationId, { text: reply.text });
+    return { selectedListingIds, message, suggestions: reply.suggestions };
+  }
+
+  // Day bubbles -> time slots for the chat schedule picker. Only days the business attends (from
+  // its configured availability) ever appear. `hasContact` tells the UI whether it still needs
+  // to ask name/email/WhatsApp (asked once per contact, never again).
+  async getScheduleOptions(businessId: string, conversationId: string, visitorToken: string, leadId?: string, resumeToken?: string) {
+    const { conversation } = await this.assertVisitorOwnsConversation(businessId, conversationId, visitorToken, leadId, resumeToken);
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { timezone: true } });
+    const selectedIds = await this.selectedIdsFor(businessId, conversationId);
+    const listingId = selectedIds[selectedIds.length - 1] ?? null;
+    const [listing] = listingId ? await this.listingsService.getSelectionDetails(businessId, [listingId]) : [];
+    const now = new Date();
+    const slots = await this.calendar.getAvailableSlots(businessId, { from: now, to: new Date(now.getTime() + 14 * 24 * 3600 * 1000) }, { listingId });
+    const hasContact = Boolean(conversation.leadId ?? leadId);
+    if (slots === null) return { configured: false, days: [], hasContact, listing: listing ? { id: listing.id, title: listing.title } : null };
+    const timezone = business?.timezone ?? "America/Sao_Paulo";
+    return {
+      configured: true,
+      timezone,
+      days: groupSlotsByDay(slots.map((s) => ({ startsAt: s.start, endsAt: s.end })), timezone),
+      hasContact,
+      listing: listing ? { id: listing.id, title: listing.title } : null,
+    };
+  }
 
   // Fire-and-forget, same pattern as notifyOwner — scoring must never slow down the visitor-facing response.
   private recomputeLeadScore(businessId: string, leadId?: string | null) {
@@ -373,6 +644,7 @@ export class ChatService {
         status: conversation.status,
         resumeToken: conversation.resumeToken,
         hasLead: Boolean(conversation.leadId),
+        selectedListingIds: conversation.selectedListingIds,
       },
       messages: messagesWithListings,
       flowSnapshot: conversation.flowSnapshot ?? null,
@@ -421,11 +693,19 @@ export class ChatService {
       where: { conversationId, role: "assistant" },
       orderBy: { createdAt: "desc" },
     });
-    const offeredHandoff = lastAssistantMessage?.answerSource === "abstained";
+    const offeredHandoff = didOfferHandoff(lastAssistantMessage);
 
     await this.prisma.client.message.create({
       data: { conversationId, businessId, role: "visitor", content: visitorText },
     });
+
+    const turnBusiness = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
+    const turnNiche = turnBusiness?.niche ?? "imobiliaria";
+    this.recordEngagement(
+      businessId,
+      conversationId,
+      this.messageEngagementEvents(turnNiche, visitorText, await this.selectedIdsFor(businessId, conversationId)),
+    );
 
     if (detectsEscalation(visitorText) || (offeredHandoff && confirmsEscalation(visitorText))) {
       return this.escalate(businessId, conversationId, visitorText);
@@ -445,6 +725,16 @@ export class ChatService {
       return { message: assistantMessage, escalated: false, flow: flowResult };
     }
 
+    // Assertive triage: a typed answer to the current triage question, or a typed rent/buy intent
+    // ("quero alugar uma casa") at the start, advances the triage deterministically.
+    const triageFlow =
+      (await this.flow.tryAdvanceTriageFromText(businessId, conversationId, visitorText)) ??
+      (await this.flow.startTriageFromText(businessId, conversationId, visitorText));
+    if (triageFlow) {
+      const assistantMessage = await this.persistFlowReply(businessId, conversationId, triageFlow);
+      return { message: assistantMessage, escalated: false, flow: triageFlow, listings: triageFlow.listings };
+    }
+
     // Free text matching one of the current node's own bubbles (e.g. typing "quero alugar" instead
     // of tapping "🏠 Quero alugar") advances the flow the same way the bubble tap would, at zero LLM cost.
     const bubbleMatch = await this.flow.matchFreeTextBubble(businessId, conversationId, visitorText);
@@ -456,16 +746,21 @@ export class ChatService {
       return { message: assistantMessage, escalated: false, flow: flowResult };
     }
 
-    if (!conversation.flowNodeId && isBookingIntent(visitorText)) {
-      const bookingBusiness = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
-      if (bookingBusiness) {
-        const dayNodeId = bookingBusiness.niche === "concessionaria" ? "agend_dia" : "visita_dia";
-        const flowResult = await this.flow.advance(businessId, conversationId, dayNodeId, {}, undefined, false);
-        const assistantMessage = await this.prisma.client.message.create({
-          data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
-        });
-        return { message: assistantMessage, escalated: false, flow: flowResult };
-      }
+    // Typed scheduling intent opens the real schedule picker (day -> time slots -> contact card)
+    // from anywhere in the conversation, not only before the scripted flow started.
+    if (isBookingIntent(visitorText)) {
+      const dayNodeId = turnNiche === "concessionaria" ? "agend_dia" : "visita_dia";
+      const flowResult = await this.flow.advance(businessId, conversationId, dayNodeId, {}, undefined, false);
+      const assistantMessage = await this.prisma.client.message.create({
+        data: { conversationId, businessId, role: "assistant", content: flowResult.message, answerSource: "fixed_flow" },
+      });
+      return { message: assistantMessage, escalated: false, flow: flowResult };
+    }
+
+    const selectionReply = await this.resolveSelectionShortcut(businessId, conversationId, turnNiche, visitorText);
+    if (selectionReply) {
+      const assistantMessage = await this.persistShortcutReply(businessId, conversationId, selectionReply);
+      return { message: assistantMessage, escalated: false, listings: selectionReply.listings, suggestions: selectionReply.suggestions };
     }
 
     if (!conversation.flowNodeId && isVagueListingInterest(visitorText)) {
@@ -537,8 +832,12 @@ export class ChatService {
       },
     });
     let autoEscalation: { escalated: boolean; whatsappUrl: string | null; referenceCode: string | null } | undefined;
+    if (!answer.abstained && /\?\s*$/.test(visitorText.trim())) {
+      this.recordEngagement(businessId, conversationId, [{ type: "question", text: visitorText, answered: true }]);
+    }
     if (answer.abstained && !answer.infraFailure) {
       this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
+      this.notifyTeamOfGap(businessId, conversationId, visitorText);
       if (await this.shouldAutoEscalate(conversationId)) {
         const escalation = await this.escalate(businessId, conversationId, visitorText);
         autoEscalation = { escalated: escalation.escalated, whatsappUrl: escalation.whatsappUrl, referenceCode: escalation.referenceCode };
@@ -558,6 +857,19 @@ export class ChatService {
       suggestions: answer.suggestions,
       ...(autoEscalation ?? {}),
     };
+  }
+
+  private async persistFlowReply(businessId: string, conversationId: string, flowResult: { message: string; listings?: ListingItem[] }) {
+    return this.prisma.client.message.create({
+      data: {
+        conversationId,
+        businessId,
+        role: "assistant",
+        content: flowResult.message,
+        answerSource: "fixed_flow",
+        listingIds: (flowResult.listings ?? []).map((l) => l.id).filter((id): id is string => Boolean(id)),
+      },
+    });
   }
 
   // Fallback used only when the profile has no cached human-written summary yet. A raw
@@ -612,6 +924,12 @@ export class ChatService {
     const contextListingSummary = contextListingId
       ? await this.listingsService.getContextSummaryForChat(businessId, contextListingId)
       : null;
+
+    // Selection memory: everything the visitor explicitly selected, with computed cost packages,
+    // injected every turn so Clara answers about the selection instead of re-listing inventory.
+    const selection = await this.loadSelection(businessId, conversationId);
+    const selectionBlock = selectionPromptBlock(selection, this.costPackages(selection));
+    const engagementState = await this.teamSummary.getState(businessId, conversationId);
 
     // A short follow-up ("para entrada") that's really a one-line answer to the bot's OWN previous
     // question carries almost no topical signal on its own — retrieval against visitorText alone
@@ -708,6 +1026,16 @@ export class ChatService {
       );
     }
 
+    if (selectionBlock) systemPromptParts.push(selectionBlock);
+
+    if (business.niche !== "concessionaria") {
+      systemPromptParts.push(triagePromptFragment(engagementState.intent ?? null, engagementState.preferences));
+    }
+    systemPromptParts.push(
+      "Engajamento: depois que o cliente escolher um imóvel/veículo, mantenha a conversa viva com no máximo UMA oferta leve por resposta (custo total, agendar visita, simular financiamento quando for compra, opções parecidas ou comparar os selecionados) — sem pressionar e sem repetir a mesma oferta.",
+      "Se o cliente pedir algo que você não consegue resolver, diga que vai passar para o time — nunca invente. O sistema avisa o time automaticamente nesses casos.",
+    );
+
     if (opts?.listingsAttached) {
       // Repeated as the LAST instruction (highest-recency weight for the model) — the earlier
       // generic markdown-formatting rule above explicitly allows "- " lists, which otherwise
@@ -746,7 +1074,7 @@ export class ChatService {
       // knowledge text is included here too (so a correct general/legal answer isn't false-flagged
       // as an ungrounded claim) — it deliberately stays OUT of retrievedChunkText/price-area
       // matching, which must keep comparing against this business's own listings only.
-      groundingAllowlistText: `${profileSummary} ${business.name} ${business.niche} ${contextListingSummary ?? ""} ${sharedChunkText}`,
+      groundingAllowlistText: `${profileSummary} ${business.name} ${business.niche} ${contextListingSummary ?? ""} ${sharedChunkText} ${selectionBlock}`,
     };
   }
 
@@ -815,6 +1143,8 @@ export class ChatService {
     // price/bedrooms. Let it fall through to normal RAG/prose answering instead.
     if (this.flow.isReferentOnlyFollowUp(visitorText)) return undefined;
     if (!this.flow.isListingQuery(visitorText, chunkText)) return undefined;
+    // Cost/"pacote" questions are about what the visitor already selected — never a new browse.
+    if (isCostPackageQuestion(visitorText) && (await this.selectedIdsFor(businessId, conversationId)).length > 0) return undefined;
 
     // A listing already pinned for this conversation ("Selecionar e continuar") means the visitor
     // has a specific item in focus — a short follow-up that happens to also match the generic
@@ -884,9 +1214,10 @@ export class ChatService {
     const belongsToBusiness = await this.listingsService.getContextSummaryForChat(businessId, listingId);
     if (!belongsToBusiness) throw new NotFoundException("Listing not found");
 
+    const current = conversation.selectedListingIds.length > 0 ? conversation.selectedListingIds : conversation.pinnedListingId ? [conversation.pinnedListingId] : [];
     return this.prisma.client.conversation.update({
       where: { id: conversationId },
-      data: { pinnedListingId: listingId },
+      data: { pinnedListingId: listingId, selectedListingIds: toggleSelection(current, listingId, true) },
     });
   }
 
@@ -1161,13 +1492,14 @@ export class ChatService {
       // than abstaining outright (which would also hide the legitimate cards).
       const hasBadPriceOrArea = !abstained && hasUnmatchedPriceOrArea(parsedText, browsingListings);
       const text = abstained && !looksLikeAbstention(parsedText)
-        ? ABSTENTION_FALLBACK
+        ? GAP_FALLBACK
         : hasBadPriceOrArea
           ? "Encontrei algumas opções que podem te interessar 👇"
           : parsedText;
+      const hasSelection = (await this.selectedIdsFor(businessId, conversationId)).length > 0;
       const listings = abstained
         ? undefined
-        : browsingListings ?? (await this.resolveMentionedListing(businessId, visitorText, text));
+        : browsingListings ?? (hasSelection ? undefined : await this.resolveMentionedListing(businessId, visitorText, text));
       // Precedence: model-provided quick-reply options > existing buildSuggestions() listing-based
       // suggestions > undefined when abstained.
       const suggestions = abstained
@@ -1237,11 +1569,18 @@ export class ChatService {
       where: { conversationId, role: "assistant" },
       orderBy: { createdAt: "desc" },
     });
-    const offeredHandoff = lastAssistantMessage?.answerSource === "abstained";
+    const offeredHandoff = didOfferHandoff(lastAssistantMessage);
 
     await this.prisma.client.message.create({
       data: { conversationId, businessId, role: "visitor", content: visitorText },
     });
+
+    const streamTurnBusiness = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
+    this.recordEngagement(
+      businessId,
+      conversationId,
+      this.messageEngagementEvents(streamTurnBusiness?.niche ?? "imobiliaria", visitorText, await this.selectedIdsFor(businessId, conversationId)),
+    );
 
     if (detectsEscalation(visitorText) || (offeredHandoff && confirmsEscalation(visitorText))) {
       const result = await this.escalate(businessId, conversationId, visitorText);
@@ -1262,6 +1601,16 @@ export class ChatService {
       return { message: assistantMessage, escalated: false, flow: flowResult };
     }
 
+    // Same deterministic triage short-circuit as sendMessage.
+    const streamTriageFlow =
+      (await this.flow.tryAdvanceTriageFromText(businessId, conversationId, visitorText)) ??
+      (await this.flow.startTriageFromText(businessId, conversationId, visitorText));
+    if (streamTriageFlow) {
+      const assistantMessage = await this.persistFlowReply(businessId, conversationId, streamTriageFlow);
+      onDelta(streamTriageFlow.message);
+      return { message: assistantMessage, escalated: false, flow: streamTriageFlow, listings: streamTriageFlow.listings };
+    }
+
     // Same free-text-matches-a-bubble short-circuit as sendMessage, so typed and tapped intents
     // behave identically and streaming never pays for an LLM call it doesn't need.
     const bubbleMatch = await this.flow.matchFreeTextBubble(businessId, conversationId, visitorText);
@@ -1278,7 +1627,7 @@ export class ChatService {
     if (!business) throw new NotFoundException("Business not found");
     const niche = business.niche;
 
-    if (!conversation.flowNodeId && isBookingIntent(visitorText)) {
+    if (isBookingIntent(visitorText)) {
       const dayNodeId = niche === "concessionaria" ? "agend_dia" : "visita_dia";
       const flowResult = await this.flow.advance(businessId, conversationId, dayNodeId, {}, undefined, false);
       const assistantMessage = await this.prisma.client.message.create({
@@ -1289,6 +1638,19 @@ export class ChatService {
     }
 
     const conversationalMode = resolveConversationalMode(business);
+
+    const streamSelectionReply = await this.resolveSelectionShortcut(businessId, conversationId, niche, visitorText);
+    if (streamSelectionReply) {
+      onDelta(streamSelectionReply.text);
+      const assistantMessage = await this.persistShortcutReply(businessId, conversationId, streamSelectionReply);
+      return {
+        message: assistantMessage,
+        escalated: false,
+        listings: streamSelectionReply.listings,
+        suggestions: streamSelectionReply.suggestions,
+        conversationalMode,
+      };
+    }
 
     // Flag-gated bypass: in conversational mode a vague interest message falls through to the
     // LLM's own discovery-style follow-up question instead of this rigid scripted one.
@@ -1479,6 +1841,7 @@ export class ChatService {
       });
       this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
       this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
+      this.notifyTeamOfGap(businessId, conversationId, visitorText);
       if (await this.shouldAutoEscalate(conversationId)) {
         const escalation = await this.escalate(businessId, conversationId, visitorText);
         return {
@@ -1592,9 +1955,10 @@ export class ChatService {
         hasUngroundedEntityClaim(parsedText, retrievedChunkText, this.listingsGroundingAllowlist(groundingAllowlistText, browsingListings)) ||
         hasUnmatchedPriceOrArea(parsedText, browsingListings);
 
+    const streamHasSelection = (await this.selectedIdsFor(businessId, conversationId)).length > 0;
     const listings = abstained
       ? undefined
-      : browsingListings ?? (await this.resolveMentionedListing(businessId, visitorText, parsedText));
+      : browsingListings ?? (streamHasSelection ? undefined : await this.resolveMentionedListing(businessId, visitorText, parsedText));
     // Precedence: model-provided quick-reply options > existing buildSuggestions() listing-based
     // suggestions > undefined when abstained.
     const suggestions = abstained
@@ -1603,12 +1967,21 @@ export class ChatService {
         ? quickReplyOptions
         : this.buildSuggestions(niche, listings);
 
+    // The (flagged) text is already on the wire; for a genuine gap, tell the visitor the team was
+    // notified (true: notifyTeamOfGap below records it on the dashboard + emails the owner).
+    const isGenuineGap = abstained && !streamFailedWithNoMeaningfulText && !streamFailed;
+    let finalText = parsedText;
+    if (isGenuineGap && !parsedText.includes("avisei nosso time")) {
+      onDelta(GAP_STREAM_NOTE);
+      finalText = `${parsedText}${GAP_STREAM_NOTE}`;
+    }
+
     const assistantMessage = await this.prisma.client.message.create({
       data: {
         conversationId,
         businessId,
         role: "assistant",
-        content: parsedText,
+        content: finalText,
         answerSource: abstained ? "abstained" : "rag",
         modelUsed: gatewayResult.model,
         inputTokens: gatewayResult.inputTokens,
@@ -1626,8 +1999,12 @@ export class ChatService {
     });
     this.recomputeLeadScore(businessId, conversation.leadId ?? leadId);
     let autoEscalation: { escalated: boolean; whatsappUrl: string | null; referenceCode: string | null } | undefined;
+    if (!abstained && /\?\s*$/.test(visitorText.trim())) {
+      this.recordEngagement(businessId, conversationId, [{ type: "question", text: visitorText, answered: true }]);
+    }
     if (abstained && !streamFailedWithNoMeaningfulText) {
       this.recordUnanswered(businessId, conversationId, assistantMessage.id, visitorText);
+      if (isGenuineGap) this.notifyTeamOfGap(businessId, conversationId, visitorText);
       // Don't re-stream/re-onDelta the escalation copy — the abstention text itself stays the
       // visible streamed reply; escalate()'s own assistant message follows it in history, and its
       // escalated/whatsappUrl/referenceCode fields are merged into this turn's final payload only.
@@ -1658,6 +2035,9 @@ export class ChatService {
     startsAt: string,
     endsAt: string,
     visitorToken: string,
+    // Extra date+time options the visitor also picked (schedule picker multi-select). The first
+    // (earliest) chosen option becomes the appointment; the rest are recorded for the team.
+    alternatives: { startsAt: string; endsAt: string }[] = [],
   ) {
     const conversation = await this.prisma.client.conversation.findFirst({ where: { id: conversationId, businessId } });
     if (!conversation) throw new NotFoundException("Conversation not found");
@@ -1669,35 +2049,73 @@ export class ChatService {
       throw new ForbiddenException("Invalid service name");
     }
 
-    const start = new Date(startsAt);
-    const end = new Date(endsAt);
+    const chosen = [{ startsAt, endsAt }, ...(Array.isArray(alternatives) ? alternatives.slice(0, 5) : [])].filter(
+      (slot): slot is { startsAt: string; endsAt: string } => Boolean(slot) && typeof slot.startsAt === "string" && typeof slot.endsAt === "string",
+    );
     const now = new Date();
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      throw new ForbiddenException("Invalid date");
-    }
-    if (start <= now) throw new ForbiddenException("Start time must be in the future");
-    if (end <= start || end.getTime() - start.getTime() > this.MAX_BOOKING_DURATION_MS) {
-      throw new ForbiddenException("Invalid appointment duration");
+    for (const slot of chosen) {
+      const slotStart = new Date(slot.startsAt);
+      const slotEnd = new Date(slot.endsAt);
+      if (Number.isNaN(slotStart.getTime()) || Number.isNaN(slotEnd.getTime())) throw new ForbiddenException("Invalid date");
+      if (slotStart <= now) throw new ForbiddenException("Start time must be in the future");
+      if (slotEnd <= slotStart || slotEnd.getTime() - slotStart.getTime() > this.MAX_BOOKING_DURATION_MS) {
+        throw new ForbiddenException("Invalid appointment duration");
+      }
     }
 
-    // Best-effort: resolve which listing was actually discussed in this conversation so the
-    // appointment (and its confirmation emails/ICS) can reference the right address/listing
-    // details — the same conservative single-match mechanism used elsewhere for listing cards.
-    // Ambiguous match → null; a resolution failure here must never block the booking itself.
-    let listingId: string | null = null;
-    try {
-      const recentMessages = await this.prisma.client.message.findMany({
-        where: { conversationId },
-        orderBy: { createdAt: "desc" },
-        take: 6,
-        select: { content: true },
-      });
-      const haystack = recentMessages.map((m) => m.content).join("\n");
-      const matched = await this.listingsService.findMentionedForChat(businessId, haystack, 1);
-      listingId = matched[0]?.id ?? null;
-    } catch {
-      listingId = null;
+    // The visitor's explicit selection decides which listing the visit is for; fall back to the
+    // conservative single-match mention heuristic only when nothing was selected.
+    const selectedIds = await this.selectedIdsFor(businessId, conversationId);
+    let listingId: string | null = selectedIds[selectedIds.length - 1] ?? null;
+    if (!listingId) {
+      try {
+        const recentMessages = await this.prisma.client.message.findMany({
+          where: { conversationId },
+          orderBy: { createdAt: "desc" },
+          take: 6,
+          select: { content: true },
+        });
+        const haystack = recentMessages.map((m) => m.content).join("\n");
+        const matched = await this.listingsService.findMentionedForChat(businessId, haystack, 1);
+        listingId = matched[0]?.id ?? null;
+      } catch {
+        listingId = null;
+      }
     }
+
+    // When real availability is configured, every chosen option must be one we actually offered.
+    let primary = { startsAt: new Date(startsAt).toISOString(), endsAt: new Date(endsAt).toISOString() };
+    let extraOptions: { startsAt: string; endsAt: string }[] = [];
+    const earliest = chosen.reduce((min, slot) => Math.min(min, new Date(slot.startsAt).getTime()), Infinity);
+    const offered = await this.calendar
+      .getAvailableSlots(businessId, { from: new Date(Math.min(earliest, now.getTime())), to: new Date(now.getTime() + 15 * 24 * 3600 * 1000) }, { listingId })
+      .catch(() => null);
+    // null = no availability configured (legacy free date/time) or a calendar error -> keep the old
+    // behavior; an empty list means availability IS configured but nothing is open -> reject.
+    if (offered) {
+      const resolved = resolveVisitSelection(chosen, offered.map((o) => ({ startsAt: o.start, endsAt: o.end })));
+      if (!resolved) {
+        const assistantMessage = await this.prisma.client.message.create({
+          data: {
+            conversationId,
+            businessId,
+            role: "assistant",
+            content: "Esse horário acabou de ficar indisponível — escolhe outro, por favor?",
+            answerSource: "fixed_flow",
+          },
+        });
+        return { message: assistantMessage, escalated: false, slotUnavailable: true };
+      }
+      primary = resolved.primary;
+      extraOptions = resolved.alternatives;
+    } else {
+      extraOptions = chosen.slice(1).map((slot) => ({ startsAt: new Date(slot.startsAt).toISOString(), endsAt: new Date(slot.endsAt).toISOString() }));
+    }
+
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { timezone: true } });
+    const timezone = business?.timezone ?? "America/Sao_Paulo";
+    const formatWhen = (iso: string) => new Date(iso).toLocaleString("pt-BR", { timeZone: timezone, dateStyle: "short", timeStyle: "short" });
+    const appointmentType = resolveVisitAppointmentType(await this.availability.configuredAppointmentTypes(businessId));
 
     let appointment;
     try {
@@ -1706,10 +2124,10 @@ export class ChatService {
         leadId,
         conversationId,
         serviceName,
-        new Date(startsAt),
-        new Date(endsAt),
+        new Date(primary.startsAt),
+        new Date(primary.endsAt),
         "chat",
-        undefined,
+        appointmentType,
         listingId,
       );
     } catch (err) {
@@ -1730,19 +2148,47 @@ export class ChatService {
       }
       throw err;
     }
+    if (extraOptions.length > 0) {
+      appointment = await this.prisma.client.appointment.update({
+        where: { id: appointment.id },
+        data: {
+          notes: [appointment.notes, `Outras opções de horário do cliente: ${extraOptions.map((o) => formatWhen(o.startsAt)).join("; ")}`]
+            .filter(Boolean)
+            .join("\n"),
+        },
+      });
+    }
     // Additive — pushes the appointment to Google Calendar if connected, never blocks booking if it isn't.
     this.calendar.createEvent(businessId, appointment).catch(() => {});
+
+    // The visitor identified (name/email/WhatsApp) for this booking — make sure the conversation is
+    // linked to that lead so the team summary and lead lifecycle follow it.
+    if (leadId && !conversation.leadId) {
+      await this.prisma.client.conversation.update({ where: { id: conversationId }, data: { leadId } }).catch(() => {});
+    }
+    const [listing] = listingId ? await this.listingsService.getSelectionDetails(businessId, [listingId]) : [];
+    this.recordEngagement(businessId, conversationId, [
+      {
+        type: "visit_scheduled",
+        startsAt: primary.startsAt,
+        alternatives: extraOptions.map((o) => o.startsAt),
+        listingId,
+        listingTitle: listing?.title ?? null,
+      },
+    ]);
+
+    const alternativesText = extraOptions.length > 0 ? ` Também anotei ${extraOptions.length === 1 ? "sua outra opção" : "suas outras opções"} (${extraOptions.map((o) => formatWhen(o.startsAt)).join(", ")}) caso o time precise ajustar.` : "";
     await this.prisma.client.message.create({
       data: {
         conversationId,
         businessId,
         role: "assistant",
-        content: `Agendado: ${serviceName} em ${new Date(startsAt).toLocaleString("pt-BR")}. Vamos confirmar com você em breve.`,
+        content: `Agendado: ${serviceName}${listing ? ` — ${listing.title}` : ""} em ${formatWhen(primary.startsAt)}. Vamos confirmar com você em breve.${alternativesText}`,
         answerSource: "fixed_flow",
       },
     });
     this.recomputeLeadScore(businessId, leadId ?? conversation.leadId);
-    return appointment;
+    return { ...appointment, alternatives: extraOptions, listing: listing ? { id: listing.id, title: listing.title } : null };
   }
 
   // The visitor text passed in as `topic` is frequently just a bare confirmation ("Sim") made
@@ -1765,6 +2211,7 @@ export class ChatService {
     if (!business) throw new NotFoundException("Business not found");
 
     const resolvedTopic = await this.resolveEscalationTopic(conversationId, topic);
+    this.recordEngagement(businessId, conversationId, [{ type: "escalation", topic: resolvedTopic }]);
 
     const conversation = await this.prisma.client.conversation.findFirst({
       where: { id: conversationId, businessId },
@@ -1805,7 +2252,8 @@ export class ChatService {
           conversationId,
           businessId,
           role: "assistant",
-          content: "Vou te colocar em contato com o nosso time o quanto antes.",
+          content:
+            "Avisei nosso time agora mesmo ✅ Eles vão entrar em contato com você o quanto antes. Enquanto isso, sigo por aqui — quer ver outras opções ou tirar mais alguma dúvida?",
           answerSource: "escalation",
         },
       });
@@ -1847,7 +2295,8 @@ export class ChatService {
         conversationId,
         businessId,
         role: "assistant",
-        content: "Vou te passar pra uma pessoa do time. Me confirma seu WhatsApp abaixo que já te chamamos.",
+        content:
+          "Avisei nosso time agora mesmo ✅ Eles vão falar com você o quanto antes — me confirma seu WhatsApp abaixo pra agilizar. Enquanto isso, sigo por aqui pra te ajudar no que precisar.",
         answerSource: "escalation",
       },
     });

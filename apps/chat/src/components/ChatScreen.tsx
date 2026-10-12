@@ -8,12 +8,10 @@ import {
   startConversation,
   getConversationHistory,
   streamMessage,
-  bookAppointment,
   identifyVisitor,
   startFlow,
   advanceFlow,
-  getAvailableSlots,
-  pinListing,
+  setListingSelection,
 } from "../lib/api";
 import { isPushSupported, enablePush } from "../lib/push";
 import { Button } from "./ui/button";
@@ -22,6 +20,7 @@ import { Card, CardContent } from "./ui/card";
 import { ListingDetailOverlay, safeHttpUrl, type Listing } from "./ListingDetailOverlay";
 import { MessageContent } from "./MessageContent";
 import { SimulationCard, type SimulationData } from "./SimulationCard";
+import { SchedulePicker, type BookedVisit } from "./SchedulePicker";
 
 interface FlowBubble {
   label: string;
@@ -42,7 +41,7 @@ interface Message {
   // Set only on the locally-created confirmation bubble right after a successful bookAppointment
   // call — rendered as BookingConfirmedCard below. History-rehydrated messages never get this
   // field, so older/refreshed confirmations just show as plain text, which is fine.
-  booking?: { serviceName: string; startsAt: string };
+  booking?: BookedVisit;
   // Set only for messages that originated from a server fetch (history load or poll tick) —
   // used to dedup against locally-created optimistic bubbles, which never get this field.
   serverId?: string;
@@ -55,10 +54,12 @@ function ListingCard({
   listing,
   onOpen,
   onSelect,
+  selected = false,
 }: {
   listing: Listing;
   onOpen: (listing: Listing) => void;
   onSelect?: (listing: Listing) => void;
+  selected?: boolean;
 }) {
   const imageUrl = safeHttpUrl(listing.imageUrl);
   const [imageFailed, setImageFailed] = useState(false);
@@ -112,10 +113,14 @@ function ListingCard({
           {listing.id && onSelect && (
             <button
               type="button"
+              aria-pressed={selected}
               onClick={() => onSelect(listing)}
-              className="tenant-accent-border tenant-accent-text flex-1 rounded-full border bg-surface px-2 py-1.5 text-center text-xs font-medium active:scale-[0.98] transition-transform"
+              className={
+                (selected ? "tenant-accent-bg text-white" : "tenant-accent-border tenant-accent-text bg-surface") +
+                " flex-1 rounded-full border px-2 py-1.5 text-center text-xs font-medium active:scale-[0.98] transition-transform"
+              }
             >
-              Selecionar
+              {selected ? "✓ Selecionado" : "Selecionar"}
             </button>
           )}
         </div>
@@ -129,16 +134,17 @@ function ListingCard({
 // via ResizeObserver, to keep this simple.
 const LISTING_CARD_STEP_PX = 224 + 8; // w-56 (14rem=224px) + gap-2 (8px)
 const MAX_VISIBLE_DOTS = 8;
-const BOOKING_EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export function ListingCards({
   listings,
   onOpen,
   onSelect,
+  selectedIds,
 }: {
   listings: Listing[];
   onOpen: (listing: Listing) => void;
   onSelect?: (listing: Listing) => void;
+  selectedIds?: ReadonlySet<string>;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -155,7 +161,12 @@ export function ListingCards({
       >
         {listings.map((listing, i) => (
           <div key={`${listing.title}-${i}`} className="snap-start">
-            <ListingCard listing={listing} onOpen={onOpen} onSelect={onSelect} />
+            <ListingCard
+              listing={listing}
+              onOpen={onOpen}
+              onSelect={onSelect}
+              selected={Boolean(listing.id && selectedIds?.has(listing.id))}
+            />
           </div>
         ))}
       </div>
@@ -277,11 +288,12 @@ function BookingConfirmedCard({
   listing,
   onOpenListing,
 }: {
-  booking: { serviceName: string; startsAt: string };
+  booking: BookedVisit;
   listing: Listing | null;
   onOpenListing: (listing: Listing) => void;
 }) {
-  const dateLabel = new Date(booking.startsAt).toLocaleString("pt-BR", { dateStyle: "long", timeStyle: "short" });
+  const format = (iso: string) => new Date(iso).toLocaleString("pt-BR", { dateStyle: "long", timeStyle: "short" });
+  const dateLabel = format(booking.startsAt);
   return (
     <Card className="w-64">
       <CardContent className="p-3">
@@ -289,7 +301,11 @@ function BookingConfirmedCard({
           ✅
         </span>
         <div className="mt-1 text-sm font-semibold text-ink">Agendado: {booking.serviceName}</div>
+        {booking.listingTitle && <div className="text-xs text-ink">{booking.listingTitle}</div>}
         <div className="text-xs text-ink-soft">{dateLabel}</div>
+        {booking.alternatives.length > 0 && (
+          <div className="mt-1 text-[0.7rem] text-ink-soft">Outras opções anotadas: {booking.alternatives.map(format).join(" · ")}</div>
+        )}
         {listing && (
           <Button type="button" onClick={() => onOpenListing(listing)} className="tenant-accent-bg mt-2 w-full">
             Ver anúncio
@@ -515,98 +531,6 @@ function mergeServerMessages(prev: Message[], serverMessages: any[]): Message[] 
   return [...prev, ...newOnes];
 }
 
-type Slot = { start: string; end: string };
-
-// Groups the backend's flat, ascending-order slot list by calendar day so the picker can show
-// one tappable day row (with a count) followed by that day's individual time chips, instead of
-// one giant flat wrap of buttons once more than a handful of slots come back.
-function groupSlotsByDay(slots: Slot[]): { dayKey: string; label: string; weekday: string; slots: Slot[] }[] {
-  const groups = new Map<string, Slot[]>();
-  for (const slot of slots) {
-    const dayKey = new Date(slot.start).toLocaleDateString("pt-BR");
-    const existing = groups.get(dayKey);
-    if (existing) existing.push(slot);
-    else groups.set(dayKey, [slot]);
-  }
-  return Array.from(groups.entries()).map(([dayKey, daySlots]) => {
-    const sample = new Date(daySlots[0].start);
-    return {
-      dayKey,
-      label: sample.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-      weekday: sample.toLocaleDateString("pt-BR", { weekday: "short" }),
-      slots: daySlots,
-    };
-  });
-}
-
-// Day/time grouped slot picker — replaces the old flat wrap of every slot as its own button,
-// which became unreadable once a connected calendar returned more than a few options.
-function SlotPicker({
-  slots,
-  selected,
-  onSelect,
-}: {
-  slots: Slot[];
-  selected: Slot | null;
-  onSelect: (s: Slot) => void;
-}) {
-  const days = groupSlotsByDay(slots);
-  const [activeDayKey, setActiveDayKey] = useState(days[0]?.dayKey ?? "");
-
-  useEffect(() => {
-    setActiveDayKey(groupSlotsByDay(slots)[0]?.dayKey ?? "");
-  }, [slots]);
-
-  const activeDay = days.find((d) => d.dayKey === activeDayKey) ?? days[0];
-
-  return (
-    <div>
-      <div className="flex w-full scroll-smooth snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1">
-        {days.map((day) => {
-          const isActive = day.dayKey === activeDay?.dayKey;
-          return (
-            <button
-              key={day.dayKey}
-              type="button"
-              onClick={() => setActiveDayKey(day.dayKey)}
-              className={
-                isActive
-                  ? "tenant-accent-bg shrink-0 snap-start rounded-card border px-3 py-2 text-center text-white active:scale-[0.98] transition-transform"
-                  : "tenant-accent-border tenant-accent-text shrink-0 snap-start rounded-card border bg-surface px-3 py-2 text-center active:scale-[0.98] transition-transform"
-              }
-            >
-              <div className="text-[0.65rem] uppercase text-ink-soft">{day.weekday}</div>
-              <div className="text-sm font-semibold">{day.label}</div>
-              <div className="text-[0.65rem]">{day.slots.length} horários</div>
-            </button>
-          );
-        })}
-      </div>
-      {activeDay && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {activeDay.slots.map((slot) => {
-            const isSelected = selected?.start === slot.start;
-            return (
-              <button
-                key={slot.start}
-                type="button"
-                onClick={() => onSelect(slot)}
-                className={
-                  isSelected
-                    ? "tenant-accent-bg rounded-card border px-3 py-2 text-center text-white active:scale-[0.98] transition-transform"
-                    : "tenant-accent-border tenant-accent-text rounded-card border bg-surface px-3 py-2 text-center active:scale-[0.98] transition-transform"
-                }
-              >
-                {new Date(slot.start).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function ChatScreen({
   slug,
   resumeConversationId,
@@ -624,15 +548,9 @@ export function ChatScreen({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
-  const [bookingDate, setBookingDate] = useState("");
-  const [bookingTime, setBookingTime] = useState("");
-  const [bookingName, setBookingName] = useState("");
-  const [bookingPhone, setBookingPhone] = useState("");
-  const [bookingEmail, setBookingEmail] = useState("");
   const [leadCaptured, setLeadCaptured] = useState(false);
-  const [bookingSubmitting, setBookingSubmitting] = useState(false);
-  const [availableSlots, setAvailableSlots] = useState<{ start: string; end: string }[] | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<{ start: string; end: string } | null>(null);
+  // Listings the visitor tapped "Selecionar" on (server-side selection memory, restored on reload).
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [flowRestored, setFlowRestored] = useState(false);
   const [thinkingStage, setThinkingStage] = useState<0 | 1>(0);
@@ -736,11 +654,14 @@ export function ChatScreen({
         setMessages(restoredMessages);
         setConversationStatus(history.conversation?.status ?? null);
         setLeadCaptured(Boolean(history.conversation?.hasLead));
+        setSelectedIds(new Set<string>(history.conversation?.selectedListingIds ?? []));
         if (history.flowSnapshot) {
           // Never repaint stale bubbles on refresh after escalation — a human took over, so the
           // old scripted-flow bubbles no longer apply.
           if (history.conversation?.status !== "escalated") {
             setBubbles(history.flowSnapshot.bubbles ?? []);
+            // Reload while the schedule picker was open: reopen it instead of a dead end.
+            if (history.flowSnapshot.ui === "schedule_picker") setShowBooking(true);
           }
           setSuggestions([]);
           setFlowRestored(true);
@@ -976,18 +897,13 @@ export function ChatScreen({
     if (text.toLowerCase().includes("agendar")) {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: text }]);
       setInput("");
-      setSending(true);
       setBusy(true);
       isStreamingRef.current = true;
       try {
         await ensureConversation();
+        // The schedule card loads the business's real days/time slots itself.
         setShowBooking(true);
-        setAvailableSlots(null);
-        setSelectedSlot(null);
-        // null means no calendar connected — the booking card falls back to free-text date/time inputs.
-        await getAvailableSlots(business.id).then(setAvailableSlots).catch(() => setAvailableSlots(null));
       } finally {
-        setSending(false);
         setBusy(false);
         isStreamingRef.current = false;
       }
@@ -1061,6 +977,9 @@ export function ChatScreen({
         // leaves their number here instead of navigating out to wa.me; the business calls back.
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, whatsappUrl: result.whatsappUrl } : m)));
       }
+      if (result?.flow?.ui === "schedule_picker") {
+        setShowBooking(true);
+      }
       if (!result?.escalated && result?.flow?.bubbles?.length) {
         setBubbles(result.flow.bubbles);
         setSuggestions([]);
@@ -1081,21 +1000,56 @@ export function ChatScreen({
     }
   }
 
-  // "Selecionar" — pins the listing server-side, then sends a natural message
-  // through the existing send flow so the visitor sees a conversational transition and gets an
-  // immediate acknowledging response grounded on that specific listing.
+  // "Selecionar" toggles the listing in the conversation's server-side selection (multiple
+  // allowed). The server answers with a deterministic engagement message about THAT listing
+  // (total cost, visit, financing, similar options) — it never re-sends the carousel, and every
+  // later question ("qual o pacote total?") is answered about the selection.
   async function handleSelectListing(listing: Listing) {
-    if (!business || !listing.id) return;
-    setSelectedListing(listing);
+    if (!business || !listing.id || isStreamingRef.current) return;
+    const listingId = listing.id;
+    const willSelect = !selectedIds.has(listingId);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (willSelect) next.add(listingId);
+      else next.delete(listingId);
+      return next;
+    });
+    if (willSelect) {
+      setSelectedListing(listing);
+      setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: `Selecionei: ${listing.title}` }]);
+      setSending(true);
+    }
+    setBusy(true);
+    isStreamingRef.current = true;
     try {
       const convId = await ensureConversation();
-      if (!convId) return;
-      await pinListing(business.id, convId, listing.id);
+      if (!convId) throw new Error("conversation_unavailable");
+      const result = await setListingSelection(business.id, convId, listingId, willSelect);
+      setSelectedIds(new Set(result.selectedListingIds));
+      if (result.message) {
+        setMessages((prev) => [
+          ...prev,
+          { id: result.message!.id, serverId: result.message!.id, role: "assistant", content: result.message!.content },
+        ]);
+        setBubbles([]);
+        setSuggestions(result.suggestions ?? []);
+      }
     } catch {
-      // Pin failing silently still lets the visitor send the follow-up text below — worst case
-      // it resolves via the existing message-history lookback instead of the explicit pin.
+      // Roll back the optimistic toggle so the card never claims a selection the server lacks.
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (willSelect) next.delete(listingId);
+        else next.add(listingId);
+        return next;
+      });
+      if (willSelect) {
+        setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "Não consegui salvar sua seleção agora — tenta de novo em instantes." }]);
+      }
+    } finally {
+      setSending(false);
+      setBusy(false);
+      isStreamingRef.current = false;
     }
-    handleSend(`Quero saber mais sobre ${listing.title}`);
   }
 
   async function handleBubbleTap(bubble: FlowBubble) {
@@ -1116,6 +1070,7 @@ export function ChatScreen({
         { id: nextMessageId(), role: "assistant", content: result.message, listings: result.listings, whatsappUrl: result.whatsappUrl },
       ]);
       setBubbles(result.bubbles ?? []);
+      if (result.ui === "schedule_picker") setShowBooking(true);
     } catch {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "Tive um problema para responder — tenta de novo em instantes." }]);
     } finally {
@@ -1130,80 +1085,29 @@ export function ChatScreen({
     setLeadCaptured(true);
   }
 
-  async function confirmBooking() {
-    // Once a lead is already linked to this conversation (WhatsApp capture, or an earlier
-    // booking), the visitor's contact info is already on file — the form below hides those
-    // fields entirely in that case, so don't require/re-submit them here either.
-    if (!conversationId) return;
-    if (!leadCaptured && (!bookingName || !bookingPhone || !bookingEmail)) return;
-    const usingSlots = Array.isArray(availableSlots) && availableSlots.length > 0;
-    if (usingSlots && !selectedSlot) return;
-    if (!usingSlots && (!bookingDate || !bookingTime)) return;
-    if (!leadCaptured) {
-      const phoneDigits = digitsOnly(bookingPhone).length;
-      if (phoneDigits !== 10 && phoneDigits !== 11) return;
-      if (!BOOKING_EMAIL_PATTERN.test(bookingEmail.trim())) return;
-    }
+  async function handleIdentifyForBooking(name: string, phone: string, email: string) {
+    await identifyVisitor(slug, name, phone, email);
+    setLeadCaptured(true);
+  }
 
-    const startsAt = usingSlots ? new Date(selectedSlot!.start) : new Date(`${bookingDate}T${bookingTime}:00`);
-    const endsAt = usingSlots ? new Date(selectedSlot!.end) : new Date(startsAt.getTime() + 30 * 60 * 1000);
-    const serviceName = business.niche === "imobiliaria" ? "Visita ao imóvel" : "Test-drive";
-    setBookingSubmitting(true);
-    // identifyVisitor 400s on a malformed email/phone — that's a client input problem, not a
-    // slot capacity race, so it must not clear the selected slot or trigger a slot re-fetch
-    // (which would otherwise hide the real cause behind the generic "ocupado" message). Only a
-    // failure from bookAppointment itself (after identify already succeeded) is a real race.
-    // Skipped entirely when the visitor's contact info is already on file — nothing new to submit.
-    if (!leadCaptured) {
-      try {
-        await identifyVisitor(slug, bookingName, bookingPhone, bookingEmail);
-      } catch (err) {
-        const status = (err as { status?: number })?.status;
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: nextMessageId(),
-            role: "assistant",
-            content:
-              typeof status === "number" && status >= 400 && status < 500
-                ? "Verifica seu e-mail e telefone e tenta de novo."
-                : "Não consegui confirmar seus dados — tenta de novo.",
-          },
-        ]);
-        setBookingSubmitting(false);
-        return;
-      }
-    }
-    try {
-      await bookAppointment(business.id, conversationId, serviceName, startsAt.toISOString(), endsAt.toISOString());
-      setLeadCaptured(true);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: nextMessageId(),
-          role: "assistant",
-          content: "Não consegui confirmar esse horário — ele pode ter sido ocupado. Escolhe outro?",
-        },
-      ]);
-      getAvailableSlots(business.id).then(setAvailableSlots).catch(() => setAvailableSlots(null));
-      setSelectedSlot(null);
-      setBookingSubmitting(false);
-      return;
-    }
-    setBookingSubmitting(false);
+  function handleBooked(visit: BookedVisit) {
+    setLeadCaptured(true);
+    setShowBooking(false);
+    const when = new Date(visit.startsAt);
     setMessages((prev) => [
       ...prev,
       {
         id: nextMessageId(),
         role: "assistant",
-        content: `Agendado: ${serviceName} em ${startsAt.toLocaleDateString("pt-BR")} às ${startsAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. Vamos confirmar com você em breve.`,
-        booking: { serviceName, startsAt: startsAt.toISOString() },
+        content: `Agendado: ${visit.serviceName}${visit.listingTitle ? ` — ${visit.listingTitle}` : ""} em ${when.toLocaleDateString("pt-BR")} às ${when.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. Vamos confirmar com você em breve.`,
+        booking: visit,
       },
     ]);
-    setShowBooking(false);
-    setSelectedSlot(null);
-    setBookingEmail("");
+    setSuggestions(["Quanto fica o total?", "Ver imóveis parecidos"]);
+  }
+
+  function handleBookingError(message: string) {
+    setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: message }]);
   }
 
   const tenantStyle = useMemo(
@@ -1305,12 +1209,13 @@ export function ChatScreen({
                 niche={business.niche}
                 onOpenListing={setActiveListing}
                 onSelectListing={handleSelectListing}
+                selectedIds={selectedIds}
               />
             ) : (
               m.listings &&
               m.listings.length > 0 && (
                 <div className="mt-2">
-                  <ListingCards listings={m.listings} onOpen={setActiveListing} onSelect={handleSelectListing} />
+                  <ListingCards listings={m.listings} onOpen={setActiveListing} onSelect={handleSelectListing} selectedIds={selectedIds} />
                 </div>
               )
             )}
@@ -1348,78 +1253,18 @@ export function ChatScreen({
           </div>
         )}
 
-        {showBooking && (
-          <Card className="mt-3 max-w-[90%]">
-            <CardContent className="p-4">
-              <div className="mb-2 text-xs uppercase tracking-wide text-ink-soft">
-                Agendar {business.niche === "imobiliaria" ? "visita" : "test-drive"}
-              </div>
-              {Array.isArray(availableSlots) && availableSlots.length > 0 ? (
-                <SlotPicker slots={availableSlots} selected={selectedSlot} onSelect={setSelectedSlot} />
-              ) : Array.isArray(availableSlots) ? (
-                <div>
-                  <p className="text-sm text-ink-soft">
-                    Não tenho horários abertos nos próximos 14 dias — me conta qual dia funciona pra você?
-                  </p>
-                  <Button type="button" variant="outline" className="mt-2 w-full" onClick={() => setShowBooking(false)}>
-                    Fechar
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <Input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="flex-1" />
-                  <Input type="time" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="flex-1" />
-                </div>
-              )}
-              {/* Name/email/phone are only asked once per conversation -- once leadCaptured is
-                  true (WhatsApp capture earlier, or a prior booking), we already have contact
-                  info on file and skip straight to picking a slot + confirming. */}
-              {!(Array.isArray(availableSlots) && availableSlots.length === 0) && !leadCaptured && (
-                <>
-                  <Input
-                    value={bookingName}
-                    onChange={(e) => setBookingName(e.target.value)}
-                    placeholder="Seu nome"
-                    className="mt-2"
-                  />
-                  <Input
-                    value={bookingEmail}
-                    onChange={(e) => setBookingEmail(e.target.value)}
-                    placeholder="seu@email.com"
-                    type="email"
-                    inputMode="email"
-                    className="mt-2"
-                  />
-                  {bookingEmail.length > 0 && !BOOKING_EMAIL_PATTERN.test(bookingEmail.trim()) && (
-                    <p className="mt-1 text-xs text-negative">Digite um e-mail válido.</p>
-                  )}
-                  <Input
-                    value={bookingPhone}
-                    onChange={(e) => setBookingPhone(maskBrPhone(e.target.value))}
-                    placeholder="(11) 99999-9999"
-                    type="tel"
-                    inputMode="numeric"
-                    className="mt-2"
-                  />
-                  <p className="mt-2 text-[0.7rem] text-ink-soft">
-                    Ao confirmar, você concorda em compartilhar seu nome, e-mail e telefone com {business.name} para este
-                    atendimento.
-                  </p>
-                </>
-              )}
-              {!(Array.isArray(availableSlots) && availableSlots.length === 0) && (
-                <Button
-                  onClick={confirmBooking}
-                  disabled={
-                    bookingSubmitting || (!leadCaptured && bookingEmail.length > 0 && !BOOKING_EMAIL_PATTERN.test(bookingEmail.trim()))
-                  }
-                  className="mt-2 w-full"
-                >
-                  {bookingSubmitting ? "Confirmando…" : "Confirmar"}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+        {showBooking && conversationId && (
+          <SchedulePicker
+            businessId={business.id}
+            conversationId={conversationId}
+            niche={business.niche}
+            businessName={business.name}
+            contactCaptured={leadCaptured}
+            onIdentify={handleIdentifyForBooking}
+            onBooked={handleBooked}
+            onClose={() => setShowBooking(false)}
+            onError={handleBookingError}
+          />
         )}
         {pollCapped && conversationStatus === "escalated" && (
           <div className="mt-3 flex justify-center">

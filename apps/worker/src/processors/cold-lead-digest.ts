@@ -32,6 +32,8 @@ export async function processColdLeadDigest() {
       where: {
         businessId: business.id,
         scoreBand: { in: ["hot", "warm"] },
+        // Closed (won/lost) leads are retained for follow-up but never nagged about as "cooling".
+        status: { notIn: ["closed_won", "closed_lost"] },
         lastSeenAt: { lte: since24h },
         appointments: { none: {} },
         conversations: { none: { escalatedAt: { not: null } } },

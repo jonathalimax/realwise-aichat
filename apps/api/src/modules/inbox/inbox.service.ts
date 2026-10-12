@@ -66,7 +66,10 @@ export class InboxService {
   async getThread(businessId: string, conversationId: string) {
     const conversation = await this.prisma.client.conversation.findFirst({
       where: { id: conversationId, businessId },
-      include: { business: { select: { niche: true } } },
+      include: {
+        business: { select: { niche: true } },
+        lead: { select: { id: true, name: true, phone: true, email: true, status: true, scoreBand: true, commitmentScore: true, scoreSignals: true } },
+      },
     });
     if (!conversation) throw new NotFoundException("Conversation not found");
 
@@ -105,6 +108,11 @@ export class InboxService {
       personaName: getPersona(conversation.business.niche).name,
       niche: conversation.business.niche,
       messages: messagesWithListings,
+      // Structured team-facing summary (intent, selected listings ranked by interest, preferences,
+      // budget/finance, what the visitor is waiting for, next suggested action) — see
+      // leads/engagement-summary.ts. Null until the first engagement event.
+      teamSummary: conversation.teamSummary ?? null,
+      lead: conversation.lead ?? null,
     };
   }
 
