@@ -3,6 +3,7 @@ import type { Niche } from "@realwise/db";
 import { ListingsService, type ListingItem } from "../listings/listings.service";
 import { FinancingRatesService, describeFinancingRateSource } from "./financing-rates.service";
 import { calculateVehicleFinancing, formatBRL, simulateFinancing, type AmortizationSystem, type FinancingSimulationResult } from "./flow-calculators";
+import { parseMoneyToCents } from "./money";
 
 // Same disclaimer string flow.service.ts already uses verbatim for every simulator output —
 // kept as a single literal here rather than exported/shared across modules, matching this
@@ -63,45 +64,9 @@ export function detectsFinancingSimulationIntent(text: string, _niche: Niche): b
   return true;
 }
 
-// Parses a single pt-BR monetary expression into integer cents. Supports "R$ 400.000",
-// "400.000,50", "400 mil", "400k". Returns null when nothing parseable is found.
-export function parseMoneyToCents(raw: string): number | null {
-  let text = raw.trim().toLowerCase();
-  text = text.replace(/^r\$\s?/, "");
-
-  let multiplier = 1;
-  if (/\bmil\b/.test(text)) {
-    multiplier = 1000;
-    text = text.replace(/\bmil\b/, "").trim();
-  } else if (/k$/.test(text)) {
-    multiplier = 1000;
-    text = text.replace(/k$/, "").trim();
-  }
-
-  // Disambiguate Brazilian "." (thousands) vs "," (decimal): if both present, "." is thousands
-  // and "," is decimal. If only "." present and followed by exactly 3 digits groups, treat as
-  // thousands separator (common "400.000"); otherwise treat as decimal.
-  let normalized = text;
-  const hasComma = normalized.includes(",");
-  const hasDot = normalized.includes(".");
-  if (hasComma && hasDot) {
-    normalized = normalized.replace(/\./g, "").replace(",", ".");
-  } else if (hasComma) {
-    normalized = normalized.replace(",", ".");
-  } else if (hasDot) {
-    // "400.000" (thousands) vs "400.5" (decimal) — a trailing group of exactly 3 digits after the
-    // last dot means it's a thousands separator, not a decimal fraction.
-    const parts = normalized.split(".");
-    const last = parts[parts.length - 1];
-    if (last.length === 3) {
-      normalized = parts.join("");
-    }
-  }
-
-  const value = parseFloat(normalized);
-  if (!Number.isFinite(value) || value <= 0) return null;
-  return Math.round(value * multiplier * 100);
-}
+// parseMoneyToCents lives in ./money (dependency-free so it can be unit-tested and shared with
+// the triage parser); re-exported here so existing importers keep working unchanged.
+export { parseMoneyToCents };
 
 // Finds the first standalone monetary expression in free text and returns its cents value.
 function extractFirstMoneyCents(text: string): number | null {

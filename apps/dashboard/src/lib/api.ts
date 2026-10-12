@@ -23,6 +23,10 @@ async function request(path: string, options?: RequestInit) {
 export const getMe = () => request("/businesses/me");
 export const getLeads = () => request("/leads");
 export const getLeadDetail = (id: string) => request(`/leads/${id}`);
+export const updateLeadStatus = (id: string, status: string) =>
+  request(`/leads/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+export const updateLeadNotes = (id: string, notes: string) =>
+  request(`/leads/${id}/notes`, { method: "PATCH", body: JSON.stringify({ notes }) });
 export const getLeadWhatsappLink = (id: string, topic: string) =>
   request(`/leads/${id}/whatsapp-link`, { method: "POST", body: JSON.stringify({ topic }) });
 export const getAnalyticsSummary = () => request("/analytics/summary");

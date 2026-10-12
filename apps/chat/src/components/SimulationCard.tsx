@@ -48,12 +48,14 @@ export function SimulationCard({
   niche,
   onOpenListing,
   onSelectListing,
+  selectedIds,
 }: {
   data: SimulationData;
   listings?: Listing[];
   niche?: string;
   onOpenListing: (listing: Listing) => void;
   onSelectListing?: (listing: Listing) => void;
+  selectedIds?: ReadonlySet<string>;
 }) {
   const { breakdown } = data;
   const isSac = breakdown.system === "sac";
@@ -90,7 +92,7 @@ export function SimulationCard({
           <div className="mb-1 text-xs font-semibold text-ink">
             {niche === "concessionaria" ? "Veículos que cabem no seu orçamento" : "Imóveis que cabem no seu orçamento"}
           </div>
-          <ListingCards listings={listings} onOpen={onOpenListing} onSelect={onSelectListing} />
+          <ListingCards listings={listings} onOpen={onOpenListing} onSelect={onSelectListing} selectedIds={selectedIds} />
         </div>
       )}
     </div>

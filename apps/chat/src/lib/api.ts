@@ -126,11 +126,59 @@ export function advanceFlow(
   });
 }
 
-export function bookAppointment(businessId: string, conversationId: string, serviceName: string, startsAt: string, endsAt: string) {
+// `alternatives`: extra date+time options the visitor also picked — the earliest chosen option is
+// booked, the rest are recorded for the team.
+export function bookAppointment(
+  businessId: string,
+  conversationId: string,
+  serviceName: string,
+  startsAt: string,
+  endsAt: string,
+  alternatives: { startsAt: string; endsAt: string }[] = [],
+) {
   return request(`/chat/${businessId}/conversations/${conversationId}/book`, {
     method: "POST",
-    body: JSON.stringify({ serviceName, startsAt, endsAt }),
+    body: JSON.stringify({ serviceName, startsAt, endsAt, alternatives }),
   });
+}
+
+// Select / unselect a listing card. Multiple selections are kept server-side and injected into
+// every later answer, so "quanto fica o total?" is answered about the selection.
+export function setListingSelection(
+  businessId: string,
+  conversationId: string,
+  listingId: string,
+  selected: boolean,
+): Promise<{ selectedListingIds: string[]; message: { id: string; content: string } | null; suggestions: string[] }> {
+  return request(`/chat/${businessId}/conversations/${conversationId}/selection`, {
+    method: "POST",
+    body: JSON.stringify({ listingId, selected }),
+  });
+}
+
+export interface ScheduleSlot {
+  startsAt: string;
+  endsAt: string;
+  label: string;
+}
+
+export interface ScheduleDay {
+  dateKey: string;
+  label: string;
+  weekday: string;
+  slots: ScheduleSlot[];
+}
+
+export interface ScheduleOptions {
+  configured: boolean;
+  days: ScheduleDay[];
+  hasContact: boolean;
+  listing: { id: string; title: string } | null;
+}
+
+// Days the business attends (from its configured availability) with that day's open time slots.
+export function getScheduleOptions(businessId: string, conversationId: string): Promise<ScheduleOptions> {
+  return request(`/chat/${businessId}/conversations/${conversationId}/schedule`);
 }
 
 // Returns null when the business hasn't connected Google Calendar, so callers fall back to free-text date/time inputs.

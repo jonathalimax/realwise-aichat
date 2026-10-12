@@ -31,6 +31,28 @@ import {
 } from "./flow-calculators";
 import { getPersona } from "./personas";
 import { parseMoneyToCents } from "./simulator.service";
+import { TeamSummaryService } from "../leads/team-summary.service";
+import type { EngagementEvent } from "../leads/engagement-summary";
+import { resolveVisitAppointmentType } from "../bookings/slot-generation";
+import {
+  TRIAGE_NODE_IDS,
+  TRIAGE_START_NODE_ID,
+  TRIAGE_ORDER,
+  extractPreferencesFromText,
+  isTriageEntry,
+  mergePreferences,
+  triageQuestion,
+  nextTriageStep,
+  parseAreaAnswer,
+  parseBedroomsAnswer,
+  parseBudgetAnswer,
+  parseNeighborhoodAnswer,
+  paramsFromPreferences,
+  preferencesFromParams,
+  triageNodeForStep,
+  triageStepForNode,
+  type TriagePreferences,
+} from "./triage";
 
 // Scripted nodes that are supposed to hand the visitor off to a real human WhatsApp number —
 // their flow-JSON message templates have placeholders ({numero}, {espera}) that nothing ever
@@ -81,10 +103,10 @@ const EMAIL_CAPTURE_NODE_IDS = new Set(["visita_email", "agend_email"]);
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-// Only "visita_local" (in-person) exists as a modeled AppointmentType today (see AppointmentType
-// enum in packages/db/prisma/schema.prisma) — both the imobiliaria property visit and the
-// concessionaria test-drive/showroom-visit flows are in-person, so both map to it.
-const BOOKING_APPOINTMENT_TYPE = "visita_local" as const;
+// Chat visits/test-drives are in-person. Which AppointmentType the business actually configured
+// availability for ("visita_local" in the dashboard, or the legacy default "presencial") is
+// resolved per business by visitAppointmentType() below — this used to be hardcoded to
+// "visita_local", so businesses that only configured "Presencial" got no real slots in the flow.
 
 interface FlowBubble {
   label: string;
@@ -121,6 +143,9 @@ interface FlowSnapshot {
   // sparse-bubble policy (bubblePolicy() === "none") — kept so matchFreeTextBubble can still match
   // a visitor's typed text against the node's real options even though they aren't rendered.
   hiddenBubbles?: FlowBubble[];
+  // Tells the chat UI to open the day/time schedule picker card instead of rendering bubbles
+  // (booking day nodes, when the business has real availability configured).
+  ui?: "schedule_picker";
 }
 
 export interface ListingItem {
@@ -168,6 +193,16 @@ const CALCULATOR_NODE_IDS = new Set([
 ]);
 
 const MAX_FLOW_HISTORY = 25;
+
+// Listings shown per "resultados" page — a short subset, never the whole portfolio.
+const RESULTS_PAGE_SIZE = 4;
+
+// Flow params that belong to one triage session — reset when a new search starts so a previous
+// search's answers can't silently filter (or skip questions in) the new one.
+const TRIAGE_PARAM_KEYS = ["modo", "quartos", "regiao", "area", "area_min", "area_max", "orcamento_max", "faixa", "tipo", "offset", "last_listing_ids"];
+
+// Flow nodes where a typed rent/buy intent ("quero alugar uma casa de 3 quartos") starts triage.
+const TRIAGE_ENTRY_FROM_NODES = new Set([null, "start", "nao_entendi", "fim", "obrigado", "triagem_inicio", "retorno"]);
 
 const STOPWORDS = new Set([
   "quero", "queria", "gostaria", "de", "da", "do", "um", "uma", "o", "a", "e",
@@ -317,7 +352,25 @@ export class FlowService {
     private readonly availability: AvailabilityService,
     private readonly calendar: CalendarService,
     private readonly analytics: AnalyticsService,
+    private readonly teamSummary: TeamSummaryService,
   ) {}
+
+  private async visitAppointmentType(businessId: string) {
+    return resolveVisitAppointmentType(await this.availability.configuredAppointmentTypes(businessId));
+  }
+
+  // Legacy numbered price bucket -> ceiling in cents (null for the open-ended top bucket / "any").
+  private faixaCeilingCents(niche: string, faixa: unknown, transaction?: "aluguel" | "venda"): number | null {
+    return this.faixaToPriceRange(niche, transaction, faixa).priceMax ?? null;
+  }
+
+  triagePreferencesFromParams(niche: string, params: Record<string, unknown>): TriagePreferences {
+    return preferencesFromParams(params, (faixa, transaction) => this.faixaCeilingCents(niche, faixa, transaction));
+  }
+
+  private recordEngagement(businessId: string, conversationId: string, events: EngagementEvent[]) {
+    void this.teamSummary.record(businessId, conversationId, events);
+  }
 
   // Fire-and-forget, same pattern as ChatService's own recomputeLeadScore — scoring must never
   // slow down the visitor-facing flow response. Previously nothing in the scripted bubble-flow
@@ -377,6 +430,8 @@ export class FlowService {
       },
     });
     this.analytics.recordEvent(businessId, "escalation", { reason: "flow_node" }, conversationId).catch(() => {});
+    const topic = await this.resolveTopic(conversationId).catch(() => null);
+    this.recordEngagement(businessId, conversationId, [{ type: "escalation", topic }]);
   }
 
   private flowFor(niche: string): FlowDef {
@@ -413,8 +468,38 @@ export class FlowService {
     conversationId: string,
     node: FlowNode,
     params: Record<string, unknown>,
-  ): Promise<{ message: string; listings?: ListingItem[]; whatsappUrl?: string | null; bubblesOverride?: FlowBubble[] }> {
+  ): Promise<{ message: string; listings?: ListingItem[]; whatsappUrl?: string | null; bubblesOverride?: FlowBubble[]; ui?: "schedule_picker" }> {
     const substituted = this.substitute(node.message, params);
+
+    // Booking day nodes open the chat's schedule picker card (days the business attends -> that
+    // day's real time slots -> optional extra options -> contact card once) instead of the old
+    // day/period/time bubble chain, whenever real availability is configured. Without
+    // availability we keep the scripted fallback, which ends in an honest human handoff.
+    if (BOOKING_DAY_NODE_IDS.has(node.id)) {
+      const days = await this.dayBubbles(businessId, node.id);
+      if (days && !(days.length === 1 && days[0].goto === "handoff")) {
+        const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
+        return {
+          message:
+            business?.niche === "concessionaria"
+              ? "Ótimo! Escolha o dia e o horário que preferir para o test-drive 👇"
+              : "Ótimo! Escolha o dia e o horário que preferir para a visita 👇 Se quiser, pode marcar mais de uma opção.",
+          bubblesOverride: [],
+          ui: "schedule_picker",
+        };
+      }
+    }
+
+    if (node.id === "triagem_orcamento") {
+      return { message: this.budgetQuestion(params), bubblesOverride: this.budgetBubbles(params) };
+    }
+
+    if (node.id === "alerta_criado") {
+      const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
+      this.recordEngagement(businessId, conversationId, [
+        { type: "alert_requested", preferences: this.triagePreferencesFromParams(business?.niche ?? "imobiliaria", params) },
+      ]);
+    }
 
     if (WHATSAPP_HANDOFF_NODE_IDS.has(node.id)) {
       return this.resolveWhatsappHandoff(businessId, conversationId, substituted);
@@ -483,7 +568,8 @@ export class FlowService {
         delete params.paginate;
         if (!isPaginating) params.offset = 0;
         const filters = this.chatFiltersFor(business.niche, params);
-        const dbListings = await this.listingsService.queryForChat(businessId, filters, 6);
+        // A short, filtered subset — never the whole portfolio (agencies can have 100+ listings).
+        const dbListings = await this.listingsService.queryForChat(businessId, filters, RESULTS_PAGE_SIZE);
         if (dbListings.length > 0) {
           // Mutates the same `params` object the caller holds a reference to (advance() stores
           // THIS object as the conversation's flowParams) so a later bubble tap into
@@ -493,8 +579,20 @@ export class FlowService {
           // page left off.
           params.last_listing_ids = dbListings.map((l) => l.id).filter((id): id is string => Boolean(id));
           params.offset = (filters.offset ?? 0) + dbListings.length;
-          return { message: "Encontrei algumas opções que podem te interessar 👇", listings: dbListings };
+          if (business.niche === "concessionaria") {
+            return { message: "Encontrei algumas opções que podem te interessar 👇", listings: dbListings };
+          }
+          return {
+            message: isPaginating
+              ? "Aqui vão mais algumas opções 👇"
+              : `Separei ${dbListings.length === 1 ? "uma opção que combina" : `${dbListings.length} opções que combinam`} com o que você me contou 👇 Toque em "Selecionar" no que mais gostar — ou me diga o que ajustar.`,
+            listings: dbListings,
+            bubblesOverride: this.resultsBubbles(params),
+          };
         }
+        this.recordEngagement(businessId, conversationId, [
+          { type: "no_match", preferences: this.triagePreferencesFromParams(business.niche, params) },
+        ]);
         // Real inventory exists but nothing matches the visitor's chosen filters — route
         // explicitly to the flow's own "sem_resultados" node (real bubbles that actually narrow
         // the search) instead of falling through to the generic LLM-prose fallback below, which
@@ -624,7 +722,10 @@ export class FlowService {
        ${renderEmailButton("Abrir a conversa no painel", dashboardLink("/inbox"))}`,
     );
 
-    return { message: "Me passa seu WhatsApp no campo abaixo que um atendente já te chama ✅", whatsappUrl };
+    return {
+      message: "Avisei nosso time agora mesmo ✅ Eles vão falar com você o quanto antes — me passa seu WhatsApp no campo abaixo pra agilizar. Enquanto isso, sigo por aqui pra te ajudar no que precisar.",
+      whatsappUrl,
+    };
   }
 
   // "callback_ok" — the visitor asked to be called back instead of using WhatsApp. No input node
@@ -1152,6 +1253,7 @@ export class FlowService {
 
     const startsAt = new Date(slotStart);
     const endsAt = new Date(slotEnd);
+    const appointmentType = await this.visitAppointmentType(businessId);
     if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || startsAt.getTime() <= Date.now()) {
       return { message: "Esse horário não é mais válido. Vamos escolher outro horário? 👉 Toque em \"Nenhum serve\" para ver os horários atuais." };
     }
@@ -1160,7 +1262,7 @@ export class FlowService {
     // picking a slot and tapping "Confirmar", and someone else could have booked it meanwhile.
     // computeSlots already subtracts existing appointments, so this is a cheap, honest re-check.
     const { configured, slots } = await this.availability.computeSlots(businessId, {
-      appointmentType: BOOKING_APPOINTMENT_TYPE,
+      appointmentType,
       from: startsAt,
       to: endsAt,
     });
@@ -1181,8 +1283,10 @@ export class FlowService {
       select: { content: true },
     });
     const haystack = recentMessages.map((m) => m.content).join("\n");
-    const matched = await this.listingsService.findMentionedForChat(businessId, haystack, 1);
-    const listingId = matched[0]?.id ?? null;
+    // The visitor's explicit selection wins over the message-history heuristic.
+    const selectedId = conversation.selectedListingIds[conversation.selectedListingIds.length - 1] ?? conversation.pinnedListingId;
+    const matched = selectedId ? [] : await this.listingsService.findMentionedForChat(businessId, haystack, 1);
+    const listingId = selectedId ?? matched[0]?.id ?? null;
 
     let appointment;
     try {
@@ -1194,7 +1298,7 @@ export class FlowService {
         startsAt,
         endsAt,
         "chat",
-        BOOKING_APPOINTMENT_TYPE,
+        appointmentType,
         listingId,
       );
     } catch (err) {
@@ -1207,6 +1311,12 @@ export class FlowService {
       throw err;
     }
     this.calendar.createEvent(businessId, appointment).catch(() => {});
+    const listingTitle = listingId
+      ? (await this.prisma.client.listing.findFirst({ where: { id: listingId, businessId }, select: { title: true } }))?.title ?? null
+      : null;
+    this.recordEngagement(businessId, conversationId, [
+      { type: "visit_scheduled", startsAt: startsAt.toISOString(), alternatives: [], listingId, listingTitle },
+    ]);
 
     const timezone = business.timezone ?? "America/Sao_Paulo";
     const formatted = startsAt.toLocaleString("pt-BR", { timeZone: timezone, dateStyle: "short", timeStyle: "short" });
@@ -1254,7 +1364,7 @@ export class FlowService {
     const now = new Date();
     const to = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
     const { configured, slots } = await this.availability.computeSlots(businessId, {
-      appointmentType: BOOKING_APPOINTMENT_TYPE,
+      appointmentType: await this.visitAppointmentType(businessId),
       from: now,
       to,
     });
@@ -1292,7 +1402,7 @@ export class FlowService {
     const from = new Date(Date.UTC(year, month - 1, day - 1, 0, 0, 0));
     const to = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0));
     const { configured, slots } = await this.availability.computeSlots(businessId, {
-      appointmentType: BOOKING_APPOINTMENT_TYPE,
+      appointmentType: await this.visitAppointmentType(businessId),
       from,
       to,
     });
@@ -1330,7 +1440,7 @@ export class FlowService {
     const from = new Date(Date.UTC(year, month - 1, day - 1, 0, 0, 0));
     const to = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0));
     const { configured, slots } = await this.availability.computeSlots(businessId, {
-      appointmentType: BOOKING_APPOINTMENT_TYPE,
+      appointmentType: await this.visitAppointmentType(businessId),
       from,
       to,
     });
@@ -1413,8 +1523,15 @@ export class FlowService {
   // ListingsService.queryForChat's filter shape, used once the business has real extracted rows.
   private chatFiltersFor(niche: string, params: Record<string, unknown>): ChatQueryFilters {
     const transaction = typeof params.modo === "string" && params.modo !== "any" ? params.modo : undefined;
-    const { priceMin, priceMax } = this.faixaToPriceRange(niche, transaction, params.faixa);
+    const bucket = this.faixaToPriceRange(niche, transaction, params.faixa);
+    const priceMin = bucket.priceMin;
+    // A typed budget ("até 3 mil") is stored as orcamento_max and wins over a bucket tap.
+    const priceMax = typeof params.orcamento_max === "number" && params.orcamento_max > 0 ? params.orcamento_max : bucket.priceMax;
+    const prefs = niche === "concessionaria" ? {} : preferencesFromParams(params);
     return {
+      ...(typeof prefs.bedrooms === "number" && { bedroomsMin: prefs.bedrooms }),
+      ...(prefs.areaMin != null && { areaMin: prefs.areaMin }),
+      ...(prefs.areaMax != null && { areaMax: prefs.areaMax }),
       ...(typeof params.tipo === "string" && params.tipo !== "any" && { listingType: params.tipo }),
       ...(transaction && { transaction }),
       ...(priceMin != null && { priceMin }),
@@ -1642,8 +1759,12 @@ export class FlowService {
       if (hasGenuinelyNewItemWord) return true;
     }
 
+    // "quartos" and "dormitorios" are the same filter — the pinned summary says "N dormitórios", so
+    // checking them independently made ANY follow-up mentioning "quartos" (including the auto-sent
+    // "Quero saber mais sobre Casa 3 quartos...") look like a new search and re-send the carousel.
+    const normalizedSummary = normalize(pinnedListingContextSummary ?? "").replace(/\bdormitorios?\b/g, "quartos dormitorios");
     const filterWords = ["bairro", "regiao", "preco", "valor maximo", "ate r$", "quartos", "dormitorios"];
-    const hasNewFilterWord = filterWords.some((w) => normalized.includes(w) && !normalize(pinnedListingContextSummary ?? "").includes(w));
+    const hasNewFilterWord = filterWords.some((w) => normalized.includes(w) && !normalizedSummary.includes(w));
     if (hasNewFilterWord) return true;
 
     return false;
@@ -1937,8 +2058,23 @@ export class FlowService {
     opts?: { firstContact?: boolean; conversationalModeEnabled?: boolean },
   ): Promise<FlowSnapshot> {
     const flow = this.flowFor(niche);
+    // "triagem_inicio" (generic "ver imóveis" entry) jumps straight to the first triage question
+    // the visitor hasn't answered yet when rent/buy is already known — never re-asks.
+    if (nodeId === TRIAGE_START_NODE_ID && (params.modo === "aluguel" || params.modo === "venda")) {
+      const prefs = this.triagePreferencesFromParams(niche, params);
+      nodeId = triageNodeForStep(nextTriageStep(prefs), params.modo);
+    }
+    // Triage questions the visitor already answered in their own words ("3 quartos no Centro")
+    // are skipped forward — the chain never re-asks something already known.
+    const triageStep = triageStepForNode(nodeId);
+    if (triageStep && triageStep !== "bedrooms" && niche !== "concessionaria") {
+      const next = nextTriageStep(this.triagePreferencesFromParams(niche, params));
+      if (next !== triageStep && (next === null || TRIAGE_ORDER.indexOf(next) > TRIAGE_ORDER.indexOf(triageStep))) {
+        nodeId = triageNodeForStep(next, params.modo === "venda" ? "venda" : "aluguel");
+      }
+    }
     const node = flow.nodes[nodeId] ?? flow.nodes[flow.start];
-    const { message, listings, whatsappUrl, bubblesOverride } = await this.resolveMessage(businessId, conversationId, node, params);
+    const { message, listings, whatsappUrl, bubblesOverride, ui } = await this.resolveMessage(businessId, conversationId, node, params);
 
     let bubbles: FlowBubble[];
     // Number of leading bubbles in `bubbles` that are dynamic/contextual (derived from the
@@ -1950,13 +2086,20 @@ export class FlowService {
       // clarifying "which car?" message, or an explicit redirect to "sem_resultados"'s own
       // bubbles) — use exactly what it returned instead of the node's JSON bubbles.
       bubbles = bubblesOverride;
-    } else if (node.id === "busca_bairro") {
+    } else if (node.id === "busca_bairro" || node.id === "triagem_regiao") {
       // Only the location-agnostic bubbles from the script ("Perto de mim" / "Tanto faz") plus
-      // real region names derived from the business's own documents — no hardcoded zone list.
+      // real region names — the neighborhoods of this business's actual active listings first,
+      // then names extracted from its documents — no hardcoded zone list.
       const locationAgnostic = (node.bubbles ?? []).filter(
         (b) => b.params?.regiao === "geo" || b.params?.regiao === "any",
       );
-      const regions = await this.dynamicRegionBubbles(businessId);
+      const nextGoto = node.id === "triagem_regiao" ? "triagem_area" : "resultados";
+      const transaction = params.modo === "aluguel" || params.modo === "venda" ? params.modo : undefined;
+      const inventoryRegions = await this.listingsService.distinctNeighborhoods(businessId, transaction, 4);
+      const regions =
+        inventoryRegions.length > 0
+          ? inventoryRegions.map((name) => ({ label: name, goto: nextGoto, params: { regiao: name } }))
+          : (await this.dynamicRegionBubbles(businessId)).map((b) => ({ ...b, goto: nextGoto }));
       bubbles = [...regions, ...locationAgnostic, ...flow.global_bubbles];
       dynamicCount = regions.length;
     } else {
@@ -1988,7 +2131,7 @@ export class FlowService {
     // but stash the would-have-shown bubbles into `hiddenBubbles` so matchFreeTextBubble still
     // works, and skip ensureNonEmptyBubbles entirely (its safety-net fallback would otherwise
     // resurrect a bubble on every suppressed node and defeat this whole policy).
-    const exempt = !!bubblesOverride || dynamicCount > 0;
+    const exempt = !!bubblesOverride || dynamicCount > 0 || TRIAGE_NODE_IDS.has(node.id);
     const depth = this.depthMap(niche)[node.id] ?? Infinity;
     const policy = exempt ? "full" : this.bubblePolicy(node, depth);
 
@@ -1999,13 +2142,18 @@ export class FlowService {
     // `exempt` (dynamic-options) logic above and any per-node `bubbleMode: "full"`. When the flag
     // is off (the default) or this IS first contact, `policy` passes through unchanged below —
     // byte-identical to today's behavior.
-    const isBookingSlotNode = BOOKING_DAY_NODE_IDS.has(node.id) || BOOKING_PERIOD_NODE_IDS.has(node.id) || BOOKING_TIME_NODE_IDS.has(node.id);
+    // Triage questions are structured collectors too (quartos/região/tamanho/orçamento) — keep
+    // their bubbles visible for the same reason as the live slot pickers.
+    const isBookingSlotNode =
+      BOOKING_DAY_NODE_IDS.has(node.id) || BOOKING_PERIOD_NODE_IDS.has(node.id) || BOOKING_TIME_NODE_IDS.has(node.id) || TRIAGE_NODE_IDS.has(node.id);
     const suppressForConversationalMode = !!opts?.conversationalModeEnabled && !opts?.firstContact && !isBookingSlotNode;
     const effectivePolicy: "full" | "none" = suppressForConversationalMode ? "none" : policy;
 
     let finalBubbles: FlowBubble[];
     let hiddenBubbles: FlowBubble[] | undefined;
-    if (effectivePolicy === "none") {
+    if (ui === "schedule_picker") {
+      finalBubbles = [];
+    } else if (effectivePolicy === "none") {
       finalBubbles = [];
       hiddenBubbles = resolvedBubbles;
     } else {
@@ -2021,6 +2169,7 @@ export class FlowService {
       ...(listings ? { listings } : {}),
       ...(whatsappUrl !== undefined ? { whatsappUrl } : {}),
       ...(hiddenBubbles ? { hiddenBubbles } : {}),
+      ...(ui ? { ui } : {}),
     };
   }
 
@@ -2251,7 +2400,16 @@ export class FlowService {
     const history = (conversation.flowHistory as unknown as FlowSnapshot[]) ?? [];
 
     const currentSnapshot = (conversation.flowSnapshot as unknown as FlowSnapshot) ?? null;
-    const mergedParams = { ...(conversation.flowParams as Record<string, unknown>), ...bubbleParams };
+    const previousParams = { ...((conversation.flowParams as Record<string, unknown>) ?? {}) };
+    // Entering the rent/buy triage (or the generic "ver imóveis" entry) starts a NEW search —
+    // drop the previous search's answers, but never while moving between triage questions.
+    const startsNewSearch =
+      (goto === "alugar" || goto === "comprar" || goto === TRIAGE_START_NODE_ID) && !TRIAGE_NODE_IDS.has(conversation.flowNodeId ?? "");
+    if (startsNewSearch) for (const key of TRIAGE_PARAM_KEYS) delete previousParams[key];
+    // A bucket tap and a typed budget are two ways to answer the same question — the newest wins.
+    if ("faixa" in bubbleParams) delete previousParams.orcamento_max;
+    if ("orcamento_max" in bubbleParams) delete previousParams.faixa;
+    const mergedParams = { ...previousParams, ...bubbleParams };
 
     // Persist the visitor's bubble-tap BEFORE advancing, same ordering as a real typed message —
     // best-effort only (a scripted bubble tap should never fail because of a logging write).
@@ -2295,7 +2453,109 @@ export class FlowService {
     }
 
     this.recomputeLeadScore(businessId, conversation.leadId);
+
+    const triageKeysTouched = Object.keys(bubbleParams).some((k) => ["modo", "quartos", "regiao", "area", "area_min", "area_max", "faixa", "orcamento_max"].includes(k));
+    if (triageKeysTouched && business.niche !== "concessionaria") {
+      this.recordEngagement(businessId, conversationId, [
+        { type: "preferences", preferences: this.triagePreferencesFromParams(business.niche, mergedParams) },
+      ]);
+    }
     return nextSnapshot;
+  }
+
+  // A typed answer while the visitor is sitting on a triage question ("3", "no Centro", "uns 80m²",
+  // "até 3 mil") advances the triage deterministically, exactly like tapping the matching bubble —
+  // also picking up any OTHER filters stated in the same message. Returns null (caller falls through
+  // to bubble matching / the LLM) when the text doesn't read as an answer to the current question.
+  async tryAdvanceTriageFromText(businessId: string, conversationId: string, visitorText: string) {
+    const conversation = await this.currentState(conversationId);
+    const step = triageStepForNode(conversation.flowNodeId);
+    if (!step) return null;
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
+    if (!business || business.niche === "concessionaria") return null;
+
+    const params = (conversation.flowParams as Record<string, unknown>) ?? {};
+    const transaction = params.modo === "venda" ? "venda" : params.modo === "aluguel" ? "aluguel" : conversation.flowNodeId === "comprar" ? "venda" : "aluguel";
+    let answer: TriagePreferences | null = null;
+    switch (step) {
+      case "bedrooms": {
+        const value = parseBedroomsAnswer(visitorText);
+        if (value !== null) answer = { bedrooms: value };
+        break;
+      }
+      case "neighborhood": {
+        // Only real places count: this business's inventory neighborhoods / extracted regions, or an
+        // explicit "no/na/bairro X" — anything else goes to bubble matching or the LLM.
+        const inventory = await this.listingsService.distinctNeighborhoods(businessId, transaction, 50);
+        const cached = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { cachedLocations: true } });
+        const known = [...inventory, ...(Array.isArray(cached?.cachedLocations) ? (cached!.cachedLocations as unknown[]).filter((n): n is string => typeof n === "string") : [])];
+        const value = parseNeighborhoodAnswer(visitorText, known);
+        if (value !== null) answer = { neighborhood: value };
+        break;
+      }
+      case "area": {
+        const value = parseAreaAnswer(visitorText);
+        if (value !== null) answer = value;
+        break;
+      }
+      case "budget": {
+        const value = parseBudgetAnswer(visitorText, transaction);
+        if (value !== null) answer = { budgetMaxCents: value };
+        break;
+      }
+    }
+    if (!answer) return null;
+
+    const { transaction: _ignored, ...extra } = extractPreferencesFromText(visitorText);
+    const newInfo = mergePreferences(extra, answer);
+    const allPrefs = mergePreferences(this.triagePreferencesFromParams(business.niche, params), newInfo);
+    const nextNode = triageNodeForStep(nextTriageStep(allPrefs), transaction);
+    return this.advance(businessId, conversationId, nextNode, { modo: transaction, ...paramsFromPreferences(newInfo) }, undefined, false);
+  }
+
+  // "Quero alugar uma casa" (and longer variants with filters) typed at the start of a
+  // conversation: acknowledge and start triage at the first question not already answered,
+  // instead of the generic "o que você quer saber?". Returns null when not applicable.
+  async startTriageFromText(businessId: string, conversationId: string, visitorText: string) {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
+    if (!business || business.niche === "concessionaria") return null;
+    const conversation = await this.currentState(conversationId);
+    if (!TRIAGE_ENTRY_FROM_NODES.has(conversation.flowNodeId as string | null)) return null;
+    if (!isTriageEntry(visitorText)) return null;
+
+    const prefs = extractPreferencesFromText(visitorText);
+    if (!prefs.transaction) return null;
+    const reset: Record<string, unknown> = {};
+    for (const key of TRIAGE_PARAM_KEYS) reset[key] = undefined;
+    const nextNode = triageNodeForStep(nextTriageStep(prefs), prefs.transaction);
+    return this.advance(businessId, conversationId, nextNode, { ...reset, ...paramsFromPreferences(prefs) }, undefined, false);
+  }
+
+  private budgetQuestion(params: Record<string, unknown>): string {
+    return triageQuestion("budget", params.modo === "venda" ? "venda" : "aluguel");
+  }
+
+  private budgetBubbles(params: Record<string, unknown>): FlowBubble[] {
+    const labels =
+      params.modo === "venda"
+        ? ["Até R$ 300 mil", "R$ 300 a 500 mil", "R$ 500 a 800 mil", "R$ 800 mil a 1,2 mi"]
+        : ["Até R$ 1.500/mês", "R$ 1.500 a 2.500", "R$ 2.500 a 4.000", "R$ 4.000 a 6.000"];
+    return [
+      ...labels.map((label, i) => ({ label, goto: "resultados", params: { faixa: i + 1 } })),
+      { label: "Tanto faz", goto: "resultados", params: { faixa: "any" } },
+    ];
+  }
+
+  // After showing results: refine, more, schedule, and (for purchases) a light financing hook.
+  private resultsBubbles(params: Record<string, unknown>): FlowBubble[] {
+    const bubbles: FlowBubble[] = [
+      { label: "➡️ Ver mais opções", goto: "resultados", params: { paginate: true } },
+      { label: "🎛 Refinar busca", goto: "refinar" },
+    ];
+    if (params.modo === "venda") bubbles.push({ label: "💰 Simular financiamento", goto: "cp_sim_renda" });
+    bubbles.push({ label: "📅 Agendar visita", goto: "visita_dia" });
+    bubbles.push({ label: "🔔 Me avise de novos imóveis", goto: "alerta_criado" });
+    return bubbles.slice(0, 5);
   }
 
   // Called right before ChatService's normal on_input/free-text advance logic runs, whenever the

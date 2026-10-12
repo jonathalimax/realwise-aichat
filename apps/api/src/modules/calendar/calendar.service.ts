@@ -4,6 +4,8 @@ import { google } from "googleapis";
 import { PrismaService } from "../../prisma/prisma.service";
 import { encryptSecret, decryptSecret } from "../../common/crypto";
 import { AvailabilityService } from "../bookings/availability.service";
+import { resolveVisitAppointmentType } from "../bookings/slot-generation";
+import type { AppointmentType } from "@realwise/db";
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -114,14 +116,23 @@ export class CalendarService {
   // this used to be Google-Calendar-only logic, which meant businesses without a connected
   // calendar never got real slots at all. When Google Calendar IS connected, additionally
   // exclude anything that overlaps a busy block on the owner's calendar.
-  async getAvailableSlots(businessId: string, dateRange: { from: Date; to: Date }): Promise<{ start: string; end: string }[] | null> {
+  async getAvailableSlots(
+    businessId: string,
+    dateRange: { from: Date; to: Date },
+    options: { appointmentType?: AppointmentType; listingId?: string | null } = {},
+  ): Promise<{ start: string; end: string }[] | null> {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     // Same public-access rule as the chat widget itself (getBySlug) — only live businesses are
     // queryable, so this endpoint can't be used to probe/spam arbitrary/dead IDs.
     if (!business || business.status !== "live") return [];
 
+    // Visits used to be hardcoded to "presencial" here while the scripted flow used "visita_local",
+    // so a business that configured only one of them silently got no slots on the other path.
+    const appointmentType =
+      options.appointmentType ?? resolveVisitAppointmentType(await this.availability.configuredAppointmentTypes(businessId));
     const { configured, slots } = await this.availability.computeSlots(businessId, {
-      appointmentType: "presencial",
+      appointmentType,
+      listingId: options.listingId ?? null,
       from: dateRange.from,
       to: dateRange.to,
     });

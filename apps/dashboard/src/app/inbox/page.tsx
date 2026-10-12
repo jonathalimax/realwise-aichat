@@ -10,6 +10,7 @@ import {
   getLeadWhatsappLink,
 } from "../../lib/api";
 import { Card, CardContent } from "../../components/ui/card";
+import { TeamSummaryCard } from "../../components/TeamSummaryCard";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Textarea } from "../../components/ui/textarea";
@@ -362,6 +363,28 @@ export default function InboxPage() {
               </div>
             ) : (
               <>
+                {/* Real-time team summary (intent, selected listings ranked by interest, budget,
+                    what the visitor is waiting for, next action) — the handoff context, so the
+                    team doesn't have to read the whole transcript to close the loop. */}
+                <details
+                  key={thread.id}
+                  open={thread.status === "escalated"}
+                  className="mb-3 max-h-[40%] flex-none overflow-y-auto rounded-lg border border-border bg-bg-2 px-3 py-2"
+                >
+                  <summary className="cursor-pointer text-sm font-semibold text-ink">
+                    Resumo para o time
+                    {thread.teamSummary?.headline ? <span className="ml-2 font-normal text-ink-soft">· {thread.teamSummary.headline}</span> : null}
+                  </summary>
+                  <div className="mt-2">
+                    {thread.lead && (
+                      <p className="mb-2 text-xs text-ink-soft">
+                        {thread.lead.name ?? "Interessado"} · <span className="font-mono">{thread.lead.phone}</span>
+                        {thread.lead.email ? ` · ${thread.lead.email}` : ""}
+                      </p>
+                    )}
+                    <TeamSummaryCard summary={thread.teamSummary} compact />
+                  </div>
+                </details>
                 <div ref={messageListRef} className="flex-1 overflow-y-auto pr-1">
                   {/* Mirrors the visitor-facing chat widget's own bubble styling (rounded-3xl,
                       flat tinted blur, sender label only on the first message of a run) instead

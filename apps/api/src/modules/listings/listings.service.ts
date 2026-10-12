@@ -24,6 +24,13 @@ export interface ChatQueryFilters {
   brand?: string;
   model?: string;
   ordem?: string;
+  // Triage filters. Listings with the field unknown (null) still match, same tolerance as price —
+  // a missing extraction must not silently hide a real listing.
+  bedroomsMin?: number;
+  bedroomsMax?: number;
+  areaMin?: number;
+  areaMax?: number;
+  excludeIds?: string[];
   // Pagination offset for the chat flow's "➡️ Ver próximo" bubble (see flow.service.ts's
   // resultados handling, which tracks this across turns via flowParams).
   offset?: number;
@@ -127,6 +134,46 @@ export class ListingsService {
   // Real distinct listingType values for a business's active inventory — used by the chat flow's
   // "busca_tipo" node to build type bubbles from actual rows instead of an LLM extraction call
   // when the business already has a populated Listing table.
+  // Real neighborhoods from active inventory (most listings first) — used as the triage "região"
+  // bubbles so the visitor only ever picks places where the business actually has listings.
+  async distinctNeighborhoods(businessId: string, transaction?: string, limit = 4): Promise<string[]> {
+    const rows = await this.prisma.client.listing.groupBy({
+      by: ["neighborhood"],
+      where: { businessId, status: "active", deletedAt: null, neighborhood: { not: null }, ...(transaction && { transaction }) },
+      _count: { _all: true },
+      orderBy: { _count: { neighborhood: "desc" } },
+      take: limit,
+    });
+    return rows.map((r) => r.neighborhood).filter((n): n is string => Boolean(n && n.trim()));
+  }
+
+  // Full field set for the visitor's selected listings (selection memory / cost package).
+  async getSelectionDetails(businessId: string, ids: string[]) {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.client.listing.findMany({
+      where: { businessId, id: { in: ids }, deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        referenceCode: true,
+        transaction: true,
+        listingType: true,
+        priceCents: true,
+        pricePeriod: true,
+        priceText: true,
+        bedrooms: true,
+        parkingSpots: true,
+        areaM2: true,
+        neighborhood: true,
+        city: true,
+        description: true,
+        status: true,
+      },
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return ids.map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => Boolean(r));
+  }
+
   async distinctListingTypes(businessId: string): Promise<string[]> {
     const rows = await this.prisma.client.listing.findMany({
       where: { businessId, status: "active", deletedAt: null },
@@ -218,6 +265,16 @@ export class ListingsService {
         }
       : {};
 
+    const rangeOrNull = (field: "bedrooms" | "areaM2", min?: number, max?: number) =>
+      min != null || max != null
+        ? { OR: [{ [field]: { ...(min != null && { gte: min }), ...(max != null && { lte: max }) } }, { [field]: null }] }
+        : null;
+    const rangeConditions = [
+      hasPriceFilter ? priceCondition : null,
+      rangeOrNull("bedrooms", filters.bedroomsMin, filters.bedroomsMax),
+      rangeOrNull("areaM2", filters.areaMin, filters.areaMax),
+    ].filter((c): c is NonNullable<typeof c> => c !== null);
+
     const orderBy =
       filters.ordem === "preco_asc"
         ? { priceCents: "asc" as const }
@@ -239,7 +296,8 @@ export class ListingsService {
         ...(filters.neighborhood && { neighborhood: { contains: filters.neighborhood, mode: "insensitive" } }),
         ...(filters.brand && { brand: { equals: filters.brand, mode: "insensitive" } }),
         ...(filters.model && { model: { contains: filters.model, mode: "insensitive" } }),
-        ...priceCondition,
+        ...(filters.excludeIds?.length && { id: { notIn: filters.excludeIds } }),
+        ...(rangeConditions.length > 0 && { AND: rangeConditions }),
       },
       orderBy,
       include: { images: { orderBy: { ordinal: "asc" }, take: 12 } },
