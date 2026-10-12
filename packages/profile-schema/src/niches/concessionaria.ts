@@ -1,0 +1,51 @@
+import type { NicheTemplate } from "../types";
+
+export const concessionariaTemplate: NicheTemplate = {
+  niche: "concessionaria",
+  version: "0.1.0",
+  fields: [
+    { key: "marcas_modelos", label: "Marcas e modelos trabalhados", weight: "required" },
+    { key: "aceita_troca", label: "Aceita veículo usado na troca", weight: "required" },
+    { key: "bancos_financiamento", label: "Bancos parceiros para financiamento", weight: "required" },
+    { key: "horario_test_drive", label: "Horário disponível para test-drive", weight: "required", type: "hours" },
+    { key: "garantia_fabrica", label: "Garantia de fábrica", weight: "recommended" },
+    { key: "garantia_estendida", label: "Garantia estendida disponível", weight: "recommended" },
+    { key: "revisoes_programadas", label: "Política de revisões programadas", weight: "recommended" },
+    { key: "assistencia_24h", label: "Assistência 24h / guincho", weight: "optional" },
+    { key: "desconto_a_vista", label: "Desconto para pagamento à vista", weight: "recommended" },
+    { key: "prazo_entrega_0km", label: "Prazo de entrega para 0km", weight: "optional" },
+  ],
+  interviewQuestions: [
+    { id: "iq1", prompt: "Quais marcas e modelos vocês trabalham?", fillsField: "marcas_modelos" },
+    { id: "iq2", prompt: "Vocês aceitam carro usado na troca?", fillsField: "aceita_troca" },
+    { id: "iq3", prompt: "Com quais bancos vocês trabalham para financiamento?", fillsField: "bancos_financiamento" },
+    { id: "iq4", prompt: "Em quais horários vocês conseguem fazer test-drive?", fillsField: "horario_test_drive" },
+    { id: "iq5", prompt: "Qual a garantia de fábrica dos veículos?", fillsField: "garantia_fabrica" },
+    { id: "iq6", prompt: "Vocês oferecem garantia estendida? Em quais condições?", fillsField: "garantia_estendida" },
+    { id: "iq7", prompt: "Como funciona a política de revisões programadas?", fillsField: "revisoes_programadas" },
+    { id: "iq8", prompt: "Tem desconto para pagamento à vista?", fillsField: "desconto_a_vista" },
+    { id: "iq9", prompt: "Vocês oferecem assistência 24h ou guincho para quem compra com vocês?", fillsField: "assistencia_24h" },
+    { id: "iq10", prompt: "Qual o prazo de entrega para um carro 0km?", fillsField: "prazo_entrega_0km" },
+  ],
+  defaultChips: ["Ver estoque", "Simular financiamento", "Agendar test-drive", "Aceita meu carro na troca?"],
+  chipGraph: [
+    { state: "after_stock", chips: ["Quero financiar", "Aceita meu carro na troca?", "Agendar test-drive"] },
+    { state: "after_financing", chips: ["Quanto fica por mês?", "Posso dar entrada maior?", "Agendar test-drive"] },
+    { state: "after_booking", chips: ["Como chego lá?", "Posso levar meu carro para avaliar?", "Falar com atendente"] },
+  ],
+  fixedFlows: [
+    { id: "stock_lookup", label: "Busca de estoque", triggerIntents: ["estoque", "tem esse modelo", "disponível"] },
+    { id: "financing_sim", label: "Simulação de financiamento", triggerIntents: ["financiar", "entrada", "parcelas"] },
+    { id: "test_drive_booking", label: "Agendar test-drive", triggerIntents: ["test-drive", "agendar", "ver o carro"] },
+  ],
+  evalQuestions: [
+    "Vocês têm esse modelo disponível em estoque?",
+    "Qual o valor de entrada financiando em 48x?",
+    "Aceitam meu carro usado na troca?",
+    "Posso agendar um test-drive para amanhã?",
+    "Qual a garantia de fábrica desse veículo?",
+    "Vocês têm garantia estendida? Quanto custa?",
+    "Como funcionam as revisões programadas desse carro?",
+    "Se eu quebrar na estrada, vocês têm assistência 24h?",
+  ],
+};

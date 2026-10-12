@@ -1,22 +1,17 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "declaration": true,
+    "module": "commonjs",
+    "target": "es2021",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "outDir": "dist",
-    "types": ["node"],
-    "paths": {
-      "@realwise/auth": ["../../packages/auth/src/index.ts"],
-      "@realwise/billing": ["../../packages/billing/src/index.ts"],
-      "@realwise/chatwoot": ["../../packages/chatwoot/src/index.ts"],
-      "@realwise/config": ["../../packages/config/src/index.ts"],
-      "@realwise/contracts": ["../../packages/contracts/src/index.ts"],
-      "@realwise/database": ["../../packages/database/src/index.ts"],
-      "@realwise/knowledge": ["../../packages/knowledge/src/index.ts"],
-      "@realwise/meta": ["../../packages/meta/src/index.ts"],
-      "@realwise/queue": ["../../packages/queue/src/index.ts"]
-    }
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "resolveJsonModule": true,
+    "outDir": "./dist",
+    "baseUrl": "./"
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/**/*"
+  ]
 }

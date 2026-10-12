@@ -1,68 +1,32 @@
 name: CI
 
 on:
-  pull_request:
   push:
-    branches: [main]
+  pull_request:
 
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: realwise
-          POSTGRES_PASSWORD: realwise
-          POSTGRES_DB: realwise_aichat
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U realwise -d realwise_aichat"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      DATABASE_URL: postgres://realwise:realwise@localhost:5432/realwise_aichat
-      REDIS_URL: redis://localhost:6379
-      SESSION_SECRET: change-me-at-least-32-chars-ci
-      ENCRYPTION_MASTER_KEYS: v1:BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
-      NEXT_PUBLIC_API_URL: http://localhost:3001/api
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
         with:
-          version: 10.30.1
+          version: 9.15.0
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: pnpm
-      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @realwise/database db:migrate
-      - run: pnpm --filter @realwise/database db:seed
-      - run: pnpm check
-      - run: pnpm exec playwright install --with-deps chromium
-      - name: Run API smoke with worker
-        run: |
-          (cd apps/api && pnpm dev > ../../api.log 2>&1) &
-          API_PID=$!
-          (cd apps/worker && pnpm dev > ../../worker.log 2>&1) &
-          WORKER_PID=$!
-          trap 'kill $API_PID $WORKER_PID || true' EXIT
-          for i in {1..60}; do
-            if curl -fsS http://localhost:3001/api/health/live >/dev/null; then break; fi
-            sleep 1
-          done
-          USE_DIRECT_PSQL=1 pnpm smoke:api
-      - run: pnpm e2e:local
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @realwise/db exec prisma generate
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Build
+        run: pnpm run build

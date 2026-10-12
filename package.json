@@ -1,30 +1,14 @@
 {
-  "name": "realwise-aichat",
-  "version": "0.1.0",
+  "name": "realwise",
   "private": true,
-  "description": "Multi-tenant AI messaging SaaS for WhatsApp, Instagram, Facebook Messenger, Chatwoot, knowledge, leads and billing.",
-  "packageManager": "pnpm@10.30.1",
-  "engines": {
-    "node": ">=22.0.0",
-    "pnpm": ">=10.0.0"
-  },
+  "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "lint": "turbo lint",
-    "typecheck": "turbo typecheck",
-    "test": "turbo test",
-    "format": "prettier --write .",
-    "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "smoke:api": "infrastructure/scripts/smoke-api.sh",
-    "e2e:local": "DATABASE_URL=postgres://realwise:realwise@localhost:5432/realwise_aichat pnpm --filter @realwise/database db:migrate && DATABASE_URL=postgres://realwise:realwise@localhost:5432/realwise_aichat pnpm --filter @realwise/database db:seed && playwright test"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@playwright/test": "^1.54.2",
-    "prettier": "^3.6.2",
-    "turbo": "^2.5.5",
-    "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "turbo": "^2.3.0"
   }
 }

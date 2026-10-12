@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 255 255 255;
+  --bg-2: 255 252 250;
+  --surface: 255 255 255;
+  --surface-sunken: 255 250 248;
+  --border: 221 206 193;
+  --border-strong: 205 188 173;
+  --ink: 14 43 34;
+  --ink-soft: 69 84 76;
+  --muted: 132 140 132;
+  --accent: 21 128 61;
+  --accent-soft: 220 243 230;
+  --accent-ink: 7 49 40;
+  --lime: 215 242 107;
+  --lime-soft: 243 250 217;
+  --lime-ink: 47 59 18;
+  --positive: 47 143 78;
+  --positive-soft: 228 243 232;
+  --negative: 192 67 44;
+  --negative-soft: 251 234 228;
+  --warning: 184 134 43;
+  --warning-soft: 247 238 214;
+  --secondary: 255 99 72;
+  --secondary-soft: 255 228 221;
+  --secondary-ink: 168 48 27;
+  --tertiary: 124 111 240;
+  --tertiary-soft: 231 229 253;
+  --tertiary-ink: 72 56 184;
+}
+
+.dark {
+  --bg: 12 23 19;
+  --bg-2: 19 33 27;
+  --surface: 23 37 31;
+  --surface-sunken: 15 28 23;
+  --border: 40 57 47;
+  --border-strong: 54 73 61;
+  --ink: 234 235 226;
+  --ink-soft: 169 179 170;
+  --muted: 111 125 114;
+  --accent: 95 190 148;
+  --accent-soft: 27 58 45;
+  --accent-ink: 199 235 216;
+  --lime: 215 242 107;
+  --lime-soft: 42 52 24;
+  --lime-ink: 234 248 184;
+  --positive: 103 195 137;
+  --positive-soft: 29 51 36;
+  --negative: 227 134 114;
+  --negative-soft: 58 36 30;
+  --warning: 224 189 112;
+  --warning-soft: 58 49 27;
+  --secondary: 255 138 115;
+  --secondary-soft: 58 36 30;
+  --secondary-ink: 255 205 190;
+  --tertiary: 160 150 245;
+  --tertiary-soft: 30 36 58;
+  --tertiary-ink: 214 209 252;
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+  }
+}

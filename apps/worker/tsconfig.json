@@ -1,15 +1,10 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "declaration": true,
-    "outDir": "dist",
-    "types": ["node"],
-    "paths": {
-      "@realwise/contracts": ["../../packages/contracts/src/index.ts"],
-      "@realwise/database": ["../../packages/database/src/index.ts"],
-      "@realwise/knowledge": ["../../packages/knowledge/src/index.ts"],
-      "@realwise/queue": ["../../packages/queue/src/index.ts"]
-    }
-  },
-  "include": ["src/**/*.ts"]
+    "module": "commonjs",
+    "target": "es2021",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "outDir": "./dist"
+  }
 }

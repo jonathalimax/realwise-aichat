@@ -1,26 +1,78 @@
 import "reflect-metadata";
-import type { NextFunction, Request, Response } from "express";
 import { NestFactory } from "@nestjs/core";
-import { AppModule } from "./modules/app.module";
-import { ApiExceptionFilter } from "./modules/api-exception.filter";
+import { json, raw } from "express";
+import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import { AppModule } from "./app.module";
 
-const port = Number(process.env.PORT ?? 3001);
+// Dev-only fallbacks so local work across the 4 frontend apps isn't broken when
+// CORS_ALLOWED_ORIGINS/NEXT_PUBLIC_* aren't set — never relied on in production.
+const DEV_DEFAULT_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:3003",
+  "http://localhost:3004",
+  "http://localhost:3005",
+  "http://localhost:3007",
+];
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
-  app.enableCors({ origin: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000", credentials: true });
-  app.use((request: Request, response: Response, next: NextFunction) => {
-    const requestId = String(request.headers["x-request-id"] ?? `rw-${Date.now().toString(36)}`);
-    request.headers["x-request-id"] = requestId;
-    response.setHeader("x-request-id", requestId);
-    next();
-  });
-  app.useGlobalFilters(new ApiExceptionFilter());
-  app.setGlobalPrefix("api");
-  await app.listen(port);
+function buildAllowedOrigins(): string[] {
+  const fromEnvList = (process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  const fromAppEnvVars = [
+    process.env.NEXT_PUBLIC_DASHBOARD_URL,
+    process.env.NEXT_PUBLIC_CHAT_URL,
+    process.env.NEXT_PUBLIC_ADMIN_URL,
+    process.env.NEXT_PUBLIC_MARKETING_URL,
+    process.env.DASHBOARD_URL,
+  ]
+    .filter((v): v is string => Boolean(v))
+    // CORS origins are scheme+host+port only — strip any path (e.g. NEXT_PUBLIC_CHAT_URL now
+    // includes /client/conversation for building public chat links, which isn't a valid origin).
+    .map((v) => {
+      try {
+        return new URL(v).origin;
+      } catch {
+        return v;
+      }
+    });
+
+  const devDefaults = process.env.NODE_ENV === "production" ? [] : DEV_DEFAULT_ORIGINS;
+
+  return Array.from(new Set([...fromEnvList, ...fromAppEnvVars, ...devDefaults]));
 }
 
-bootstrap().catch((error) => {
-  console.error("Failed to start API", error);
-  process.exit(1);
-});
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  // Default img-src ('self' + data:) would silently block any off-origin business logo
+  // (e.g. a logoUrl pointing at S3/Cloudinary) — this API never serves/renders images itself,
+  // so widening img-src here is safe and only matters if this CSP header is ever inherited
+  // by a page that embeds the API's own responses directly (it isn't, today).
+  app.use(helmet({ contentSecurityPolicy: { directives: { imgSrc: ["'self'", "data:", "https:"] } } }));
+  app.use("/api/billing/webhook", raw({ type: "application/json" }));
+  app.use(json());
+  app.use(cookieParser());
+  app.setGlobalPrefix("api");
+
+  const allowedOrigins = buildAllowedOrigins();
+  app.enableCors({
+    origin(origin, callback) {
+      // No Origin header (curl, server-to-server, same-origin) — allow through.
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  });
+
+  const port = process.env.API_PORT ?? 3006;
+  await app.listen(port);
+  console.log(`Realwise API listening on :${port}`);
+  console.log(`CORS allowed origins: ${allowedOrigins.join(", ")}`);
+}
+
+bootstrap();

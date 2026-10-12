@@ -1,0 +1,671 @@
+generator client {
+  provider      = "prisma-client-js"
+  // worker's image ends up with a newer OpenSSL than the build stage after Playwright's
+  // --with-deps install pulls in extra system packages — ship both engine binaries so
+  // whichever runtime libssl is actually present at container start still resolves.
+  binaryTargets = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector, pgcrypto]
+}
+
+generator json {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+enum Niche {
+  imobiliaria
+  concessionaria
+}
+
+enum BusinessStatus {
+  onboarding
+  pending_review
+  live
+  suspended
+  churned
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+}
+
+enum DocumentStatus {
+  uploaded
+  processing
+  processed
+  failed
+}
+
+enum ConversationStatus {
+  active
+  idle
+  escalated
+  closed
+}
+
+enum AnswerSource {
+  fixed_flow
+  rag
+  abstained
+  escalation
+  discovery
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  canceled
+  no_show
+  completed
+}
+
+enum DataSubjectRequestType {
+  access
+  deletion
+  correction
+  portability
+}
+
+enum ListingStatus {
+  active
+  reserved
+  sold
+  rented
+  inactive
+}
+
+enum AppointmentType {
+  presencial
+  remoto
+  visita_local
+}
+
+model Business {
+  id              String         @id @default(uuid())
+  name            String
+  slug            String         @unique
+  niche           Niche
+  parentBusinessId String?
+  phone           String         @unique
+  ownerName       String
+  email           String?
+  logoUrl         String?
+  brandColor      String?
+  timezone        String         @default("America/Sao_Paulo")
+  defaultSlotDurationMinutes Int @default(60)
+  financingRatePercent Float? // monthly percent (e.g. 1.8); null = use the niche default in flow-calculators.ts
+  llmMonthlyBudgetUsdCents Int? // null = inherit from plan, see resolution order in apps/inference-gateway/src/budget.ts
+  address         String?
+  websiteUrl      String?
+  websiteContentHash String?
+  websiteSyncedAt DateTime?
+  cachedLocations Json?
+  cachedLocationsAt DateTime?
+  cachedFlowOptions Json?
+  trialEndsAt     DateTime?
+  trialReminderSentAt DateTime?
+  status          BusinessStatus @default(onboarding)
+  confidenceScore Int            @default(0)
+  confidenceBreakdown Json?
+  publishedAt     DateTime?
+  linkPlacedAt    DateTime?
+  createdAt       DateTime       @default(now())
+  deletedAt       DateTime?
+  // Stage 5 conversational redesign — flag-gated, default off. Toggled only via the admin-only
+  // PATCH /admin/tenants/:id/conversational-mode endpoint (never the tenant-facing PATCH
+  // /businesses/me). See chat.service.ts's resolveConversationalMode for the env kill-switch.
+  conversationalModeEnabled Boolean @default(false)
+
+  profile         BusinessProfile?
+  documents       KnowledgeDocument[]
+  conversations   Conversation[]
+  leads           Lead[]
+  routingNumbers  WhatsappRoutingNumber[]
+  subscription    Subscription?
+  bookingSlots    BookingSlot[]
+  appointments    Appointment[]
+  calendarIntegration CalendarIntegration?
+  unansweredQuestions UnansweredQuestion[]
+  consentRecords  ConsentRecord[]
+  dataSubjectRequests DataSubjectRequest[]
+  alerts          BusinessAlert[]
+  listings        Listing[]
+  pushSubscriptions PushSubscription[]
+}
+
+model Plan {
+  id                  String  @id @default(uuid())
+  code                String  @unique
+  name                String
+  priceBrlCents       Int
+  setupFeeBrlCents    Int
+  conversationQuota   Int
+  documentQuota       Int
+  whatsappNumberQuota Int
+  features            Json
+  stripePriceId       String
+  stripeSetupPriceId  String
+  isActive            Boolean @default(true)
+  // Per-plan monthly cap (USD cents) on LLM spend before chat answering downgrades back to the
+  // cheaper managed model for the rest of the calendar month; null = use the hardcoded default in
+  // apps/inference-gateway/src/budget.ts. Business.llmMonthlyBudgetUsdCents overrides this per-tenant.
+  llmMonthlyBudgetUsdCents Int?
+
+  subscriptions       Subscription[]
+}
+
+model Subscription {
+  id                        String              @id @default(uuid())
+  businessId                String              @unique
+  business                  Business            @relation(fields: [businessId], references: [id])
+  planId                    String
+  plan                      Plan                @relation(fields: [planId], references: [id])
+  stripeCustomerId          String
+  stripeSubscriptionId      String
+  status                    SubscriptionStatus  @default(trialing)
+  currentPeriodStart        DateTime
+  currentPeriodEnd          DateTime
+  setupFeePaidAt            DateTime?
+  cancelAtPeriodEnd         Boolean             @default(false)
+  conversationsUsedThisPeriod Int               @default(0)
+}
+
+model KnowledgeDocument {
+  id                String          @id @default(uuid())
+  businessId        String
+  business          Business        @relation(fields: [businessId], references: [id])
+  filename          String
+  mimeType          String
+  sizeBytes         Int
+  storageKey        String
+  source            String
+  status            DocumentStatus  @default(uploaded)
+  extractedMarkdown String?
+  ocrUsed           Boolean         @default(false)
+  pageCount         Int?
+  processingError   String?
+  createdAt         DateTime        @default(now())
+  retentionDeleteAt DateTime?
+
+  chunks            KnowledgeChunk[]
+  listings          Listing[]
+}
+
+model KnowledgeChunk {
+  id          String            @id @default(uuid())
+  businessId  String
+  documentId  String
+  document    KnowledgeDocument @relation(fields: [documentId], references: [id])
+  ordinal     Int
+  content     String
+  tokenCount  Int
+  embedding   Unsupported("vector(768)")?
+  sectionPath String?
+}
+
+// Shared/global knowledge tier (Stage 2b) — general domain content (rental/vehicle law,
+// financing basics, documentation) that is NOT specific to any one tenant, scoped only by
+// niche. Deliberately separate tables from KnowledgeDocument/KnowledgeChunk (rather than a
+// nullable businessId on those) so a tenant-scoped query can never accidentally reach shared
+// rows.
+model SharedKnowledgeDocument {
+  id                String          @id @default(uuid())
+  niche             String
+  title             String
+  filename          String
+  mimeType          String
+  sizeBytes         Int
+  storageKey        String
+  source            String
+  status            DocumentStatus  @default(uploaded)
+  extractedMarkdown String?
+  version           String?
+  sourceCitation    String?
+  reviewedAt        DateTime?
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+
+  chunks            SharedKnowledgeChunk[]
+
+  @@index([niche])
+}
+
+model SharedKnowledgeChunk {
+  id          String                  @id @default(uuid())
+  documentId  String
+  document    SharedKnowledgeDocument @relation(fields: [documentId], references: [id])
+  niche       String
+  ordinal     Int
+  content     String
+  tokenCount  Int
+  embedding   Unsupported("vector(768)")?
+  sectionPath String?
+
+  @@index([niche])
+}
+
+model BusinessProfile {
+  id               String    @id @default(uuid())
+  businessId       String    @unique
+  business         Business  @relation(fields: [businessId], references: [id])
+  templateVersion  String
+  data             Json
+  fieldStatus      Json
+  cachedSummary    String?
+  cachedSummaryTokens Int?
+  customInstructions String?
+  approvedAt       DateTime?
+  updatedAt        DateTime  @updatedAt
+}
+
+model Conversation {
+  id                  String              @id @default(uuid())
+  businessId          String
+  business            Business            @relation(fields: [businessId], references: [id])
+  leadId              String?
+  lead                Lead?               @relation(fields: [leadId], references: [id])
+  visitorToken        String
+  // Partial unique index on (businessId, visitorToken) WHERE status IN (active, idle) lives in a
+  // hand-written migration — Prisma schema DSL has no partial-unique-index support.
+  resumeToken         String?             @unique
+  status              ConversationStatus  @default(active)
+  channel             String?
+  referrer            String?
+  startedAt           DateTime            @default(now())
+  lastMessageAt       DateTime            @default(now())
+  messageCount        Int                 @default(0)
+  rollingSummary      String?
+  summaryUpdatedAtMessage Int?
+  escalatedAt         DateTime?
+  escalationNumberId  String?
+  referenceCode       String?
+  lastReadByOwnerAt   DateTime?
+  lastOwnerReplyAt    DateTime?
+  lastVisitorSeenAt   DateTime?
+  totalInputTokens    Int                 @default(0)
+  totalOutputTokens   Int                 @default(0)
+  fixedFlowTurns      Int                 @default(0)
+  llmTurns            Int                 @default(0)
+  ollamaContext       Int[]
+  flowNodeId          String?
+  flowParams          Json                @default("{}")
+  flowStack           String[]
+  flowSnapshot        Json?
+  flowHistory         Json                @default("[]")
+  // Explicit "Selecionar e continuar" pin — when set, follow-up questions resolve against this
+  // listing directly instead of the message-history lookback in resolveContextListing.
+  pinnedListingId     String?
+  // Last explicit transaction intent ("aluguel" | "venda") the visitor stated in this
+  // conversation — persists across turns so a keyword-less follow-up ("Quais imóveis
+  // disponíveis?") still carries the previously stated rental/purchase intent instead of
+  // dropping the transaction filter entirely.
+  pinnedTransaction   String?
+  // Every listing the visitor explicitly tapped "Selecionar" on, most recent last (capped, see
+  // chat/selection.ts). Injected into Clara's prompt every turn so follow-ups ("quanto fica o
+  // total?") resolve against the selection instead of re-sending the browse carousel.
+  // pinnedListingId above stays in sync with the most recent entry for backward compatibility.
+  selectedListingIds  String[]            @default([])
+  // Raw engagement-state reducer input (see leads/engagement-summary.ts) — preferences gathered,
+  // per-listing interest, budget/finance signals, escalation/visit events.
+  engagementState     Json?
+  // Rendered, team-facing summary of engagementState (intent, ranked listings, what the visitor
+  // is waiting for, next suggested action) — shown in the dashboard inbox and copied to the Lead.
+  teamSummary         Json?
+  teamSummaryUpdatedAt DateTime?
+
+  messages            Message[]
+  appointments        Appointment[]
+  pushSubscriptions   PushSubscription[]
+}
+
+model Message {
+  id                  String        @id @default(uuid())
+  conversationId      String
+  conversation        Conversation  @relation(fields: [conversationId], references: [id])
+  businessId          String
+  role                String
+  content             String
+  createdAt           DateTime      @default(now())
+  answerSource        AnswerSource?
+  retrievedChunkIds   String[]
+  // IDs of real Listing rows attached to this turn as cards. Stored as IDs, not denormalized
+  // listing data, so a replayed turn reflects current price/photos instead of a stale snapshot.
+  // Empty for the LLM-extraction listing path, whose items have no backing DB row.
+  listingIds          String[]      @default([])
+  // Point-in-time financing-simulation breakdown (see simulator.service.ts), persisted as a
+  // snapshot since the numbers themselves (installments, rate, totals) must replay exactly as
+  // originally shown — only matchedListingIds inside this JSON get rehydrated against the live
+  // Listing table on replay (same rule as listingIds above), the numeric breakdown never does.
+  simulationData      Json?
+  retrievalTopScore   Float?
+  modelUsed           String?
+  inputTokens         Int?
+  outputTokens        Int?
+  latencyMs           Int?
+  feedback            String?
+  flagged             Boolean       @default(false)
+}
+
+model UnansweredQuestion {
+  id                   String    @id @default(uuid())
+  businessId           String
+  business             Business  @relation(fields: [businessId], references: [id])
+  conversationId       String
+  messageId            String
+  questionText         String
+  normalizedText       String
+  occurrenceCount      Int       @default(1)
+  status               String    @default("open")
+  resolvedByProfileField String?
+  resolvedAt           DateTime?
+}
+
+model Lead {
+  id                String          @id @default(uuid())
+  businessId        String
+  business          Business        @relation(fields: [businessId], references: [id])
+  name              String?
+  email             String?
+  phone             String
+  phoneNormalized   String
+  firstSeenAt       DateTime        @default(now())
+  lastSeenAt        DateTime        @default(now())
+  sessionCount      Int             @default(1)
+  commitmentScore   Int             @default(0)
+  scoreBand         String          @default("cold")
+  scoreSignals      Json?
+  consentId         String?
+  ownerNotes        String?
+  ownerOutcome       String?
+  whatsappContactedAt DateTime?
+  lastDigestNotifiedAt DateTime?
+  tags              String[]
+  retentionDeleteAt DateTime?
+  // Lifecycle (see leads/lead-status.ts): new | contacted | visit_scheduled | negotiating |
+  // closed_won | closed_lost. Closed leads are retained (never deleted) for follow-up/upsell.
+  status            String          @default("new")
+  statusUpdatedAt   DateTime?
+  closedAt          DateTime?
+  // rent | buy | questions — latest intent observed across this lead's conversations.
+  intent            String?
+  // Listings the lead selected/showed interest in, ranked by interest (most interested first).
+  interestListingIds String[]       @default([])
+  // Copy of the latest conversation's team summary (survives the 12-month conversation purge).
+  summary           Json?
+  summaryUpdatedAt  DateTime?
+  // What the lead is waiting for (e.g. matching inventory, visit confirmation, team callback).
+  waitingFor        String?
+  sourceConversationId String?
+
+  conversations     Conversation[]
+  appointments      Appointment[]
+
+  @@unique([businessId, phoneNormalized])
+  @@index([businessId, status])
+}
+
+model BookingSlot {
+  id              String    @id @default(uuid())
+  businessId      String
+  business        Business  @relation(fields: [businessId], references: [id])
+  kind            String
+  weekday         Int?
+  startTime       String?
+  endTime         String?
+  slotDurationMinutes Int
+  capacity        Int       @default(1)
+  serviceId       String?
+  validFrom       DateTime?
+  validUntil      DateTime?
+  isBlocked       Boolean   @default(false)
+  appointmentType AppointmentType @default(presencial)
+  listingId       String?
+  listing         Listing?  @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  exceptionDate   DateTime?
+
+  @@index([businessId, appointmentType])
+  @@index([businessId, listingId])
+}
+
+model Appointment {
+  id                      String            @id @default(uuid())
+  businessId              String
+  business                Business          @relation(fields: [businessId], references: [id])
+  leadId                  String?
+  lead                    Lead?             @relation(fields: [leadId], references: [id])
+  conversationId          String?
+  conversation            Conversation?     @relation(fields: [conversationId], references: [id])
+  serviceName             String
+  startsAt                DateTime
+  endsAt                  DateTime
+  status                  AppointmentStatus @default(pending)
+  createdVia              String
+  notes                   String?
+  ownerConfirmedAt        DateTime?
+  externalCalendarEventId String?
+  appointmentType         AppointmentType   @default(presencial)
+  listingId               String?
+  listing                 Listing?          @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  locationAddress         String?
+
+  @@index([businessId, startsAt])
+}
+
+model CalendarIntegration {
+  id          String    @id @default(uuid())
+  businessId  String    @unique
+  business    Business  @relation(fields: [businessId], references: [id])
+  provider    String    @default("google")
+  // Encrypted at rest (AES-256-GCM via apps/api/src/common/crypto.ts) — never stored/logged in plaintext.
+  accessToken String
+  refreshToken String
+  calendarId  String
+  connectedAt DateTime  @default(now())
+  syncEnabled Boolean   @default(false)
+}
+
+model WhatsappRoutingNumber {
+  id            String    @id @default(uuid())
+  businessId    String
+  business      Business  @relation(fields: [businessId], references: [id])
+  label         String
+  phone         String
+  isActive      Boolean   @default(true)
+  businessHours Json?
+  priority      Int       @default(0)
+  lastRoutedAt  DateTime?
+}
+
+model ConsentRecord {
+  id            String    @id @default(uuid())
+  businessId    String
+  business      Business  @relation(fields: [businessId], references: [id])
+  leadId        String?
+  phoneHash     String
+  consentTextVersion String
+  purposes      String[]
+  grantedAt     DateTime  @default(now())
+  ipAddress     String?
+  userAgent     String?
+  withdrawnAt   DateTime?
+  withdrawalReason String?
+}
+
+model DataSubjectRequest {
+  id              String                  @id @default(uuid())
+  businessId      String
+  business        Business                @relation(fields: [businessId], references: [id])
+  leadId          String?
+  type            DataSubjectRequestType
+  status          String                  @default("open")
+  requestedAt     DateTime                @default(now())
+  fulfilledAt     DateTime?
+  fulfillmentNotes String?
+}
+
+model AnalyticsEvent {
+  id             String    @id @default(uuid())
+  businessId     String
+  name           String
+  properties     Json?
+  conversationId String?
+  leadId         String?
+  occurredAt     DateTime  @default(now())
+}
+
+model LlmCallLog {
+  id               String   @id @default(uuid())
+  businessId       String?
+  purpose          String
+  model            String
+  provider         String
+  inputTokens      Int
+  outputTokens     Int
+  latencyMs        Int
+  costEstimateMicroCents Int?
+  cachedPrefixHit  Boolean  @default(false)
+  error            String?
+  createdAt        DateTime @default(now())
+
+  @@index([businessId, createdAt])
+}
+
+// Generic per-business notification mechanism — not quota-specific in shape, so any future
+// module (billing, compliance, etc.) can raise an alert without a schema change.
+model BusinessAlert {
+  id          String    @id @default(uuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id])
+  type        String
+  severity    String    @default("warning")
+  message     String
+  actionLabel String?
+  actionHref  String?
+  createdAt   DateTime  @default(now())
+  dismissedAt DateTime?
+}
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  phone        String?   @unique
+  name         String
+  role         String
+  lastLoginAt  DateTime?
+}
+
+// Single row (id always "singleton") holding platform-wide settings configured from the admin UI —
+// e.g. the founder's own support WhatsApp number the owner-assistant escalates to.
+model PlatformConfig {
+  id                    String  @id @default("singleton")
+  supportWhatsappNumber String?
+
+  // Weekly BCB SGS sync (see apps/worker/src/processors/bcb-rate-sync.ts) — monthly percent
+  // rates, same convention as Business.financingRatePercent / DEFAULT_*_MONTHLY_RATE_PERCENT.
+  realEstateRatePercent Float?
+  vehicleRatePercent    Float?
+  ratesReferenceMonth   String? // e.g. "2026-09" — the BCB release month these rates belong to
+  ratesFetchedAt        DateTime?
+}
+
+model Listing {
+  id            String        @id @default(uuid())
+  businessId    String
+  business      Business      @relation(fields: [businessId], references: [id])
+
+  referenceCode String
+
+  title         String
+  description   String?
+
+  priceText     String?
+  priceCents    Int?
+  pricePeriod   String?
+
+  addressLine   String?
+  neighborhood  String?
+  city          String?
+  state         String?
+  postalCode    String?
+  latitude      Float?
+  longitude     Float?
+
+  listingType   String?
+  transaction   String?
+  bedrooms      Int?
+  parkingSpots  Int?
+  areaM2        Int?
+  brand         String?
+  model         String?
+  year          Int?
+  mileageKm     Int?
+
+  status        ListingStatus @default(active)
+
+  url           String?
+
+  sourceDocumentId String?
+  sourceDocument   KnowledgeDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  sourceUrl        String?
+  dedupKey         String
+  extractedAt      DateTime?
+  lastSeenInSourceAt DateTime?
+
+  overriddenFields Json     @default("{}")
+  manuallyCreated  Boolean  @default(false)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  images        ListingImage[]
+  bookingSlots  BookingSlot[]
+  appointments  Appointment[]
+
+  @@unique([businessId, dedupKey])
+  @@unique([businessId, referenceCode])
+  @@index([businessId, status])
+  @@index([businessId, status, listingType, transaction])
+  @@index([businessId, status, priceCents])
+  @@index([businessId, status, neighborhood])
+}
+
+model PushSubscription {
+  id             String       @id @default(uuid())
+  businessId     String
+  business       Business     @relation(fields: [businessId], references: [id])
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  endpoint       String       @unique
+  p256dh         String
+  auth           String
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+  lastSentAt     DateTime?
+  failureCount   Int          @default(0)
+  revokedAt      DateTime?
+
+  @@index([conversationId, revokedAt])
+}
+
+model ListingImage {
+  id         String   @id @default(uuid())
+  listingId  String
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  url        String
+  ordinal    Int      @default(0)
+  caption    String?
+  createdAt  DateTime @default(now())
+
+  @@unique([listingId, url])
+  @@index([listingId, ordinal])
+}

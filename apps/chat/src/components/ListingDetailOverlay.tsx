@@ -1,0 +1,199 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+export interface Listing {
+  id?: string;
+  title: string;
+  price?: string;
+  description?: string;
+  url?: string;
+  imageUrl?: string;
+  images?: string[];
+}
+
+// listing.url/imageUrl/images come from LLM-parsed JSON, not from code we control — only ever
+// render them if they're a genuine http(s) URL, since a malformed/adversarial model response could
+// otherwise produce a javascript: href or similar.
+export function safeHttpUrl(u?: string): string | undefined {
+  if (!u) return undefined;
+  try {
+    const parsed = new URL(u);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Same step/gap math as ChatScreen.tsx's ListingCards gallery strip, sized for this overlay's
+// full-width slides instead of the w-56 card.
+const MAX_VISIBLE_DOTS = 8;
+
+// Swipeable horizontal photo gallery, following the exact pattern used by ChatScreen.tsx's
+// ListingCards: a snap-x strip with onScroll-computed active index and a capped dot indicator.
+// Renders nothing when there are no real photos — no empty bordered box.
+function Gallery({ title, photos }: { title: string; photos: string[] }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [failed, setFailed] = useState<Record<number, boolean>>({});
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const visiblePhotos = photos.filter((_, i) => !failed[i]);
+  if (visiblePhotos.length === 0) return null;
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    const step = el.clientWidth;
+    if (step <= 0) return;
+    const index = Math.round(el.scrollLeft / step);
+    setActiveIndex(Math.max(0, Math.min(index, visiblePhotos.length - 1)));
+  }
+
+  return (
+    <div>
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="flex w-full scroll-smooth snap-x snap-mandatory overflow-x-auto overscroll-x-contain"
+      >
+        {photos.map((photo, i) =>
+          failed[i] ? null : (
+            // Fixed aspect-ratio box (rather than a fixed pixel height) + object-cover so the
+            // hero image scales cleanly across any viewport width instead of looking
+            // stretched/cropped oddly on narrow or wide screens.
+            <div key={`${photo}-${i}`} className="aspect-[4/3] w-full flex-none snap-start overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={photo}
+                alt={title}
+                className="h-full w-full object-cover"
+                onError={() => setFailed((prev) => ({ ...prev, [i]: true }))}
+              />
+            </div>
+          ),
+        )}
+      </div>
+      {visiblePhotos.length > 1 && (
+        <div className="mt-1 flex items-center justify-center gap-1">
+          {visiblePhotos.length <= MAX_VISIBLE_DOTS ? (
+            visiblePhotos.map((_, i) => (
+              <span
+                key={i}
+                className={`h-1.5 w-1.5 rounded-full ${i === activeIndex ? "bg-accent" : "bg-border"}`}
+              />
+            ))
+          ) : (
+            <span className="text-xs text-ink-soft">
+              {activeIndex + 1}/{visiblePhotos.length}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// In-app bottom sheet for a listing's full detail — a photo gallery plus a CTA linking out to the
+// real listing page. There is no reliable embedded view: many business sites (confirmed live for
+// Allure) block framing via CSP/X-Frame-Options, so this never attempts an iframe — the gallery +
+// "Ver no site" CTA is the whole experience.
+export function ListingDetailOverlay({ listing, onClose }: { listing: Listing; onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  const touchStartYRef = useRef<number | null>(null);
+
+  const url = safeHttpUrl(listing.url);
+  const gallery = (listing.images?.length ? listing.images : [listing.imageUrl])
+    .map((u) => safeHttpUrl(u))
+    .filter((u): u is string => Boolean(u));
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartYRef.current = e.touches[0]?.clientY ?? null;
+  }
+  function handleTouchEnd(e: React.TouchEvent) {
+    const startY = touchStartYRef.current;
+    touchStartYRef.current = null;
+    if (startY == null) return;
+    const endY = e.changedTouches[0]?.clientY ?? startY;
+    if (endY - startY > 80) onClose();
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} aria-hidden="true" />
+      {/* Mobile: edge-to-edge bottom sheet (swipe-to-dismiss). Desktop (sm+): a centered,
+          width-capped modal instead of a full-bleed sheet — unconstrained inset-x-0 looked
+          broken on wide viewports, with the gallery stretched across the entire browser width
+          instead of staying inside a reasonably sized dialog. */}
+      <div
+        className={`fixed inset-x-0 bottom-0 z-50 flex h-[92dvh] flex-col rounded-t-card bg-bg shadow-[0_-8px_24px_rgba(20,24,21,0.12)] transition-transform duration-300 sm:inset-x-0 sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:rounded-card sm:shadow-2xl ${
+          mounted ? "translate-y-0 sm:-translate-y-1/2" : "translate-y-full sm:-translate-y-1/2"
+        }`}
+      >
+        <div
+          className="flex-none border-b border-border px-4 pb-3 pt-2"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-border" />
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <div className="break-words text-sm font-semibold text-ink">{listing.title}</div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fechar"
+              className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-surface text-ink"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          {gallery.length > 0 && (
+            <div className="mb-3">
+              <Gallery title={listing.title} photos={gallery} />
+            </div>
+          )}
+          <div className="p-4 pt-0">
+            <div className="break-words text-base font-semibold text-ink">{listing.title}</div>
+            {listing.price && <div className="mt-1 text-sm font-semibold text-accent">{listing.price}</div>}
+            {listing.description && (
+              <p className="mt-2 whitespace-pre-line break-words text-sm text-ink-soft">{listing.description}</p>
+            )}
+            {url && (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="tenant-accent-bg mt-4 inline-block w-auto max-w-xs rounded-full px-6 py-3 text-center text-sm font-medium text-white shadow-sm"
+              >
+                Ver no site da Allure
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}

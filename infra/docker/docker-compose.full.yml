@@ -1,0 +1,97 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: realwise
+      POSTGRES_PASSWORD: realwise
+      POSTGRES_DB: realwise
+    volumes:
+      - realwise_pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    env_file: ../../.env
+    environment:
+      LOCAL_STORAGE_DIR: /data/realwise-storage
+    ports:
+      - "3006:3006"
+    volumes:
+      - realwise_storage:/data/realwise-storage
+    depends_on: [postgres, redis]
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+    env_file: ../../.env
+    environment:
+      LOCAL_STORAGE_DIR: /data/realwise-storage
+    volumes:
+      - realwise_storage:/data/realwise-storage
+    depends_on: [postgres, redis]
+
+  inference-gateway:
+    build:
+      context: ../..
+      dockerfile: apps/inference-gateway/Dockerfile
+    env_file: ../../.env
+    ports:
+      - "3002:3002"
+    depends_on: [postgres]
+
+  chat:
+    build:
+      context: ../..
+      dockerfile: apps/chat/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    env_file: ../../.env
+    ports:
+      - "3000:3000"
+    depends_on: [api]
+
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_CHAT_URL: ${NEXT_PUBLIC_CHAT_URL}
+        NEXT_PUBLIC_FIREBASE_API_KEY: ${NEXT_PUBLIC_FIREBASE_API_KEY}
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${NEXT_PUBLIC_FIREBASE_PROJECT_ID}
+    env_file: ../../.env
+    ports:
+      - "3003:3003"
+    depends_on: [api]
+
+  admin:
+    build:
+      context: ../..
+      dockerfile: apps/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_FIREBASE_API_KEY: ${NEXT_PUBLIC_FIREBASE_API_KEY}
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${NEXT_PUBLIC_FIREBASE_PROJECT_ID}
+    env_file: ../../.env
+    ports:
+      - "3004:3004"
+    depends_on: [api]
+
+  marketing:
+    build:
+      context: ../..
+      dockerfile: apps/marketing/Dockerfile
+    env_file: ../../.env
+    ports:
+      - "3007:3007"
+
+volumes:
+  realwise_pg_data:
+  realwise_storage:
