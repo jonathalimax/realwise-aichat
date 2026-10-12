@@ -64,9 +64,10 @@ function makeScheduleWorker(queueName: string, planCodes: string[]) {
   return { queue, worker };
 }
 
-// Weekly: essencial + studio plans. Daily: profissional plans (previously got zero automated sync).
-const { queue: scheduleQueue } = makeScheduleWorker("website-sync-schedule", ["essencial", "studio"]);
-const { queue: scheduleQueueDaily } = makeScheduleWorker("website-sync-schedule-daily", ["profissional"]);
+// Weekly: essencial. Daily: profissional and studio (studio is the top tier again, so it gets at
+// least what profissional gets).
+const { queue: scheduleQueue } = makeScheduleWorker("website-sync-schedule", ["essencial"]);
+const { queue: scheduleQueueDaily } = makeScheduleWorker("website-sync-schedule-daily", ["profissional", "studio"]);
 
 const listingExtractionWorker = new Worker("listing-extraction", processListingExtraction, { connection: redisConnection });
 listingExtractionWorker.on("completed", (job) => console.log(`listing-extraction ${job.id} completed`));

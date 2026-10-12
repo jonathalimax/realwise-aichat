@@ -2,15 +2,14 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { nicheTemplates, questionForField } from "@realwise/profile-schema";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
-import { estimateCostUsd } from "@realwise/shared";
+import { estimateCostUsd, getEntryPlan } from "@realwise/shared";
 import { ListingsService, type ListingItem } from "../listings/listings.service";
 import { getPersona } from "../chat/personas";
 
 // Mirrors the resolution order in apps/inference-gateway/src/budget.ts (Business override -> Plan
-// threshold -> this default) and its DEFAULT_LLM_MONTHLY_BUDGET_USD_CENTS constant, kept in sync by
-// hand since the gateway and the admin API are separate deployables without a shared runtime module
-// for this specific value.
-const DEFAULT_LLM_MONTHLY_BUDGET_USD_CENTS = 500;
+// threshold -> this default). The default (business with no subscription) is the entry plan's
+// budget from the shared plan catalog, same as the gateway's.
+const DEFAULT_LLM_MONTHLY_BUDGET_USD_CENTS = getEntryPlan().llmMonthlyBudgetUsdCents;
 const MANAGED_MODEL = process.env.MANAGED_MODEL ?? "qwen/qwen-2.5-7b-instruct";
 const MANAGED_MODEL_CHAT = process.env.MANAGED_MODEL_CHAT ?? "z-ai/glm-4.7-flash";
 

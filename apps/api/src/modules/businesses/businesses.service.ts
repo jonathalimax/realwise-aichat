@@ -63,10 +63,9 @@ export class BusinessesService {
       }
     }
     if (data.websiteUrl !== undefined && data.websiteUrl !== "") {
-      // Website sync was originally a "studio" plan exclusive, but that tier was retired in
-      // favor of essencial/profissional — automatic site ingestion is the product's core
-      // differentiator and must be available on every paying tier, not locked behind a plan
-      // that no longer exists to purchase.
+      // Website sync was originally a "studio" plan exclusive — automatic site ingestion is the
+      // product's core differentiator and must be available on every paying tier, so it is not
+      // plan-gated.
       try {
         await assertPublicHttpUrl(data.websiteUrl);
       } catch (error) {
