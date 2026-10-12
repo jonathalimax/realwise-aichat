@@ -36,7 +36,7 @@ import {
   buildCostPackageReply,
   isCompareRequest,
   isCostPackageQuestion,
-  isRental,
+  isSale,
   isSimilarRequest,
   selectionEngagementReply,
   selectionPromptBlock,
@@ -265,7 +265,8 @@ export class ChatService {
       select: { selectedListingIds: true, pinnedListingId: true },
     });
     if (!conversation) return [];
-    if (conversation.selectedListingIds.length > 0) return conversation.selectedListingIds;
+    // Single selection: older conversations may still hold several ids; only the latest counts.
+    if (conversation.selectedListingIds.length > 0) return conversation.selectedListingIds.slice(-1);
     return conversation.pinnedListingId ? [conversation.pinnedListingId] : [];
   }
 
@@ -351,12 +352,14 @@ export class ChatService {
     }
 
     if (wantsCost) {
-      const suggestions = isRental(latest)
-        ? ["Agendar uma visita", "Ver imóveis parecidos"]
-        : [
+      // Only offer what this listing is actually available for: financing for sales, nothing
+      // purchase-related for rentals or listings that don't say.
+      const suggestions = isSale(latest)
+        ? [
             ...(typeof latest.priceCents === "number" && latest.priceCents > 0 ? [`Simular financiamento de ${formatBRL(latest.priceCents)}`] : []),
             "Agendar uma visita",
-          ];
+          ]
+        : ["Agendar uma visita", "Ver imóveis parecidos"];
       return { text: buildCostPackageReply(this.costPackages(recent)), suggestions };
     }
 
@@ -418,6 +421,7 @@ export class ChatService {
       : conversation.pinnedListingId
         ? [conversation.pinnedListingId]
         : [];
+    // (toggleSelection keeps exactly one listing: a new selection replaces the previous one.)
     const selectedListingIds = toggleSelection(current, listingId, selected);
     await this.prisma.client.conversation.update({
       where: { id: conversationId },

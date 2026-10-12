@@ -8,14 +8,12 @@
 
 import { normalizeText, formatCentsBRL } from "./triage";
 
-export const MAX_SELECTED_LISTINGS = 5;
+export const MAX_SELECTED_LISTINGS = 1;
 
-// Most recent selection last; re-selecting moves it to the end; capped by dropping the oldest.
+// One listing at a time: selecting a listing replaces any earlier selection; deselecting clears it.
 export function toggleSelection(current: readonly string[], listingId: string, selected: boolean): string[] {
-  const without = current.filter((id) => id !== listingId);
-  if (!selected) return without;
-  const next = [...without, listingId];
-  return next.slice(Math.max(0, next.length - MAX_SELECTED_LISTINGS));
+  if (!selected) return current.filter((id) => id !== listingId);
+  return [listingId];
 }
 
 export interface SelectedListingDetails {
@@ -35,10 +33,31 @@ export interface SelectedListingDetails {
   description?: string | null;
 }
 
-export function isRental(listing: Pick<SelectedListingDetails, "transaction" | "pricePeriod">): boolean {
+export type TransactionKind = "rent" | "sale" | "unknown";
+
+// What the listing is actually offered for. Only "sale" listings may get a purchase simulation
+// (ITBI, cartório, financing) and only "rent" listings a monthly rental package. When the
+// listing doesn't say, it is "unknown": we show its stated price and nothing else — never guess.
+export function transactionKind(listing: Pick<SelectedListingDetails, "transaction" | "pricePeriod">): TransactionKind {
   const transaction = normalizeText(listing.transaction ?? "");
   const period = normalizeText(listing.pricePeriod ?? "");
-  return transaction.includes("alug") || transaction.includes("loca") || period.includes("mes") || period.includes("mensal");
+  const rentSignal = /\b(alug\w*|loca\w*|rent\w*|temporada)\b/.test(transaction);
+  const saleSignal = /\b(vend\w*|compr\w*|sale|sell\w*|buy)\b/.test(transaction);
+  const monthly = /\b(mes|mensal|mensais|month\w*)\b/.test(period);
+  if (rentSignal && !saleSignal) return "rent";
+  if (saleSignal && !rentSignal) return "sale";
+  // Both words, or neither: the price period is the tie-breaker; a monthly price is a rent.
+  if (monthly) return "rent";
+  if (rentSignal && saleSignal) return "sale";
+  return "unknown";
+}
+
+export function isRental(listing: Pick<SelectedListingDetails, "transaction" | "pricePeriod">): boolean {
+  return transactionKind(listing) === "rent";
+}
+
+export function isSale(listing: Pick<SelectedListingDetails, "transaction" | "pricePeriod">): boolean {
+  return transactionKind(listing) === "sale";
 }
 
 export interface FeeMatch {
@@ -74,7 +93,7 @@ export interface CostLine {
 export interface CostPackage {
   listingId: string;
   title: string;
-  kind: "rent" | "sale";
+  kind: TransactionKind;
   lines: CostLine[];
   totalCents: number | null;
   totalLabel: string;
@@ -92,6 +111,11 @@ export function buildCostPackage(listing: SelectedListingDetails, options: CostP
   const iptu = extractFeeFromDescription(listing.description, "iptu");
   const price = typeof listing.priceCents === "number" && listing.priceCents > 0 ? listing.priceCents : null;
   const missing: string[] = [];
+
+  if (transactionKind(listing) === "unknown") {
+    const lines: CostLine[] = price ? [{ label: "Valor do anúncio", cents: price }] : [];
+    return { listingId: listing.id, title: listing.title, kind: "unknown", lines, totalCents: null, totalLabel: "", missing: price ? [] : ["valor"] };
+  }
 
   const monthlyFees: CostLine[] = [];
   if (condo) monthlyFees.push({ label: "Condomínio", cents: condo.annual ? Math.round(condo.cents / 12) : condo.cents });
@@ -164,9 +188,12 @@ export function buildCostPackageReply(packages: CostPackage[]): string {
       ? "Aqui está o pacote completo do imóvel que você selecionou 👇"
       : "Aqui está o pacote completo dos imóveis que você selecionou 👇";
   const hasSale = packages.some((p) => p.kind === "sale");
+  const hasUnknown = packages.some((p) => p.kind === "unknown");
   const outro = hasSale
     ? "ITBI e cartório são estimativas pelas alíquotas usuais — o valor exato depende do município. Quer que eu simule o financiamento ou agende uma visita?"
-    : "Quer que eu agende uma visita ou te mostre opções parecidas?";
+    : hasUnknown
+      ? "Esse anúncio não detalha as condições (aluguel ou venda, taxas) — confirmo com o time e te retorno. Quer agendar uma visita?"
+      : "Quer que eu agende uma visita ou te mostre opções parecidas?";
   return [intro, ...packages.map(formatCostPackage), outro].join("\n\n");
 }
 
@@ -252,26 +279,32 @@ export function buildComparisonReply(selected: SelectedListingDetails[], package
 // with ONE light offer (not pushy), and hand quick-reply suggestions to the chat UI.
 export function selectionEngagementReply(
   listing: SelectedListingDetails,
-  selectedCount: number,
+  _selectedCount: number,
   niche: string,
 ): { text: string; suggestions: string[] } {
   const noun = niche === "concessionaria" ? "veículo" : "imóvel";
-  const rental = isRental(listing);
+  const kind = transactionKind(listing);
   const text =
-    selectedCount > 1
-      ? `Anotado! Separei **${listing.title}** junto com os outros ${selectedCount - 1} que você escolheu ✅ Posso comparar os selecionados, te passar o custo total de cada um ou agendar visitas.`
-      : rental
-        ? `Ótima escolha! Separei **${listing.title}** pra você ✅ Quer que eu te passe o custo total por mês (aluguel + condomínio + IPTU) ou prefere já agendar uma visita?`
-        : `Ótima escolha! Separei **${listing.title}** pra você ✅ Posso te passar o custo total da compra, simular um financiamento ou agendar uma visita — o que prefere?`;
+    kind === "rent"
+      ? `Ótima escolha! Separei **${listing.title}** pra você ✅ Quer que eu te passe o custo total por mês (aluguel + condomínio + IPTU) ou prefere já agendar uma visita?`
+      : kind === "sale"
+        ? `Ótima escolha! Separei **${listing.title}** pra você ✅ Posso te passar o custo total da compra, simular um financiamento ou agendar uma visita — o que prefere?`
+        : `Ótima escolha! Separei **${listing.title}** pra você ✅ Posso te passar os detalhes, agendar uma visita ou mostrar opções parecidas — o que prefere?`;
   const suggestions: string[] = [];
-  suggestions.push(rental ? "Quanto fica o total por mês?" : "Quanto fica o custo total?");
-  if (!rental && niche !== "concessionaria" && typeof listing.priceCents === "number" && listing.priceCents > 0) {
+  if (kind === "rent") suggestions.push("Quanto fica o total por mês?");
+  else if (kind === "sale") suggestions.push("Quanto fica o custo total?");
+  if (kind === "sale" && niche !== "concessionaria" && typeof listing.priceCents === "number" && listing.priceCents > 0) {
     suggestions.push(`Simular financiamento de ${formatCentsBRL(listing.priceCents)}`);
   }
   suggestions.push("Agendar uma visita");
-  if (selectedCount > 1) suggestions.push("Comparar os selecionados");
-  else suggestions.push(`Ver ${noun === "imóvel" ? "imóveis" : "veículos"} parecidos`);
+  suggestions.push(`Ver ${noun === "imóvel" ? "imóveis" : "veículos"} parecidos`);
   return { text, suggestions: suggestions.slice(0, 4) };
+}
+
+function kindNote(kind: TransactionKind): string {
+  if (kind === "rent") return "modalidade: SOMENTE ALUGUEL — não simule compra, ITBI nem financiamento";
+  if (kind === "sale") return "modalidade: SOMENTE VENDA — não fale em aluguel mensal";
+  return "modalidade não informada — não simule compra nem aluguel; confirme com o time";
 }
 
 // Injected into Clara's system prompt every turn while a selection exists.
@@ -284,6 +317,7 @@ export function selectionPromptBlock(selected: SelectedListingDetails[], package
       `${index + 1}. ${listing.title}`,
       listing.referenceCode ? `código ${listing.referenceCode}` : null,
       listing.transaction ? `(${listing.transaction})` : null,
+      kindNote(transactionKind(listing)),
       shortFacts(listing) || null,
       listing.priceText ?? (typeof listing.priceCents === "number" ? formatCentsBRL(listing.priceCents) : null),
       pkg?.totalCents != null ? `${pkg.totalLabel}: ${formatCentsBRL(pkg.totalCents)}` : null,
@@ -293,8 +327,8 @@ export function selectionPromptBlock(selected: SelectedListingDetails[], package
     return parts.join(" — ");
   });
   return [
-    "Imóveis/veículos que o cliente SELECIONOU nesta conversa (dados reais do cadastro — pode citar preço, quartos, área e os totais calculados abaixo):",
+    "Imóvel/veículo que o cliente SELECIONOU nesta conversa (dados reais do cadastro — pode citar preço, quartos, área e os totais calculados abaixo):",
     ...items,
-    "Perguntas sobre valor, custo total, 'pacote', visita, documentação ou 'esse imóvel' referem-se a esta seleção (o mais recente é o último da lista). NÃO mostre a lista de imóveis de novo nem pergunte qual imóvel ele escolheu — responda sobre a seleção. Nunca invente condomínio, IPTU ou taxas que não estejam acima; se faltar, diga que vai confirmar com o time.",
+    "Perguntas sobre valor, custo total, 'pacote', visita, documentação ou 'esse imóvel' referem-se a esta seleção . NÃO mostre a lista de imóveis de novo nem pergunte qual imóvel ele escolheu — responda sobre a seleção. Nunca invente condomínio, IPTU ou taxas que não estejam acima; se faltar, diga que vai confirmar com o time.",
   ].join("\n");
 }
