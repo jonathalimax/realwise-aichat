@@ -1,4 +1,5 @@
 import { Reveal } from "../components/Reveal";
+import { PricingSection } from "../components/PricingSection";
 
 const WHATSAPP_NUMBER = "5585992265544";
 const WHATSAPP_MSG = encodeURIComponent("Oi! Vi o site da Realwise e quero saber mais.");
@@ -232,42 +233,7 @@ export default function MarketingHome() {
       </section>
 
       {/* PRICING */}
-      <section id="precos" className="py-20">
-        <Reveal className="mx-auto max-w-5xl px-5 text-center">
-          <h2 className="font-serif text-3xl text-ink md:text-4xl">Preço</h2>
-          <p className="mx-auto mt-2 max-w-md text-ink-soft">Sem letra miúda. Sem taxa de setup — só a mensalidade.</p>
-          <div className="mt-10 grid gap-5 text-left md:grid-cols-2">
-            <div className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-              <h3 className="font-serif text-lg">Essencial</h3>
-              <div className="mt-2 font-mono text-3xl text-ink">R$297<span className="text-sm font-sans text-muted">/mês</span></div>
-              <ul className="mt-5 flex flex-col gap-2 text-sm text-ink-soft">
-                <li>— 100 conversas/mês</li>
-                <li>— 10 documentos na base</li>
-                <li>— Agendamento embutido</li>
-                <li>— 1 número de WhatsApp</li>
-                <li>— Analytics básico</li>
-              </ul>
-              <Pill href={`${DASHBOARD_LOGIN_URL}?plan=essencial`} className="mt-6 w-full justify-center px-6 py-3">Escolher Essencial</Pill>
-            </div>
-            <div className="relative rounded-3xl bg-ink p-7 text-bg transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl">
-              <span className="absolute -top-3 left-7 rounded-full bg-lime px-3 py-1 text-[0.65rem] font-bold uppercase text-lime-ink">Mais escolhido</span>
-              <h3 className="font-serif text-lg">Profissional</h3>
-              <div className="mt-2 font-mono text-3xl">R$697<span className="text-sm font-sans opacity-60">/mês</span></div>
-              <span className="mt-3 inline-block rounded-full bg-lime px-2.5 py-1 text-[0.68rem] font-bold text-lime-ink">50x mais conversas que o Essencial</span>
-              <ul className="mt-4 flex flex-col gap-2 text-sm opacity-90">
-                <li>— 5.000 conversas/mês</li>
-                <li>— Documentos ilimitados</li>
-                <li>— 5 números de WhatsApp</li>
-                <li>— Sincronização com Google Calendar</li>
-                <li>— Sua marca e domínio próprio</li>
-                <li>— Suporte prioritário</li>
-              </ul>
-              <Pill href={`${DASHBOARD_LOGIN_URL}?plan=profissional`} className="mt-6 w-full justify-center bg-lime px-6 py-3 text-lime-ink">Escolher Profissional</Pill>
-            </div>
-          </div>
-          <p className="mt-6 text-sm text-ink-soft">O que conta como conversa? Uma sessão onde a IA de fato responde algo — perguntas de fluxo fixo (horário, endereço) não contam.</p>
-        </Reveal>
-      </section>
+      <PricingSection cta={(plan) => ({ href: `${DASHBOARD_LOGIN_URL}?plan=${plan.code}`, label: `Escolher ${plan.name}` })} />
 
       {/* SOCIAL PROOF */}
       <section className="bg-bg-2 py-16">

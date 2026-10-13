@@ -1,90 +1,30 @@
 import * as bcrypt from "bcrypt";
+import { PLAN_CATALOG } from "@realwise/shared";
 import { prisma } from "../src/index";
 
 async function main() {
-  // Restructured to 2 tiers (from 3) — differentiated by things an owner actually feels (WhatsApp
-  // lines, calendar sync, branding/domain, support priority), not raw conversation-count quotas.
-  await prisma.plan.upsert({
-    where: { code: "essencial" },
-    update: {
-      name: "Essencial",
-      priceBrlCents: 29700,
-      setupFeeBrlCents: 9900,
-      conversationQuota: 100,
-      documentQuota: 10,
-      whatsappNumberQuota: 1,
-      features: { analytics: "basic", calendarSync: false, branding: false, customDomain: false, prioritySupport: false },
-      stripeSetupPriceId: "price_1UMGJrRo53xwsjMq3nSGDjUb",
+  // Plans come from the shared catalog (packages/shared/src/plans.ts) — edit numbers there, not
+  // here. Setup is always free and Stripe price IDs are read from STRIPE_PRICE_* env at checkout,
+  // so the legacy non-null columns are written as neutral values: setupFeeBrlCents 0,
+  // stripePriceId/stripeSetupPriceId "" (kept, not dropped, to avoid a migration).
+  for (const plan of PLAN_CATALOG) {
+    const data = {
+      name: plan.name,
+      priceBrlCents: plan.priceBrlCents,
+      setupFeeBrlCents: 0,
+      conversationQuota: plan.conversationQuota,
+      documentQuota: plan.documentQuota,
+      whatsappNumberQuota: plan.whatsappNumberQuota,
+      features: { ...plan.features },
+      stripePriceId: "",
+      stripeSetupPriceId: "",
       isActive: true,
-      llmMonthlyBudgetUsdCents: 500,
-    },
-    create: {
-      code: "essencial",
-      name: "Essencial",
-      priceBrlCents: 29700,
-      setupFeeBrlCents: 9900,
-      conversationQuota: 100,
-      documentQuota: 10,
-      whatsappNumberQuota: 1,
-      features: { analytics: "basic", calendarSync: false, branding: false, customDomain: false, prioritySupport: false },
-      stripePriceId: "price_1ULfqwRo53xwsjMqTLbkA197",
-      stripeSetupPriceId: "price_1UMGJrRo53xwsjMq3nSGDjUb",
-      llmMonthlyBudgetUsdCents: 500,
-    },
-  });
+      llmMonthlyBudgetUsdCents: plan.llmMonthlyBudgetUsdCents,
+    };
+    await prisma.plan.upsert({ where: { code: plan.code }, update: data, create: { code: plan.code, ...data } });
+  }
 
-  await prisma.plan.upsert({
-    where: { code: "profissional" },
-    update: {
-      name: "Profissional",
-      priceBrlCents: 69700,
-      setupFeeBrlCents: 99700,
-      conversationQuota: 5000,
-      documentQuota: 999999,
-      whatsappNumberQuota: 5,
-      features: { analytics: "full", calendarSync: true, branding: true, customDomain: true, prioritySupport: true },
-      stripePriceId: "price_1UM9NXRo53xwsjMqll4VKSKN",
-      stripeSetupPriceId: "price_1UM9NYRo53xwsjMqcR8Mx3h0",
-      isActive: true,
-      llmMonthlyBudgetUsdCents: 2500,
-    },
-    create: {
-      code: "profissional",
-      name: "Profissional",
-      priceBrlCents: 69700,
-      setupFeeBrlCents: 99700,
-      conversationQuota: 5000,
-      documentQuota: 999999,
-      whatsappNumberQuota: 5,
-      features: { analytics: "full", calendarSync: true, branding: true, customDomain: true, prioritySupport: true },
-      stripePriceId: "price_1UM9NXRo53xwsjMqll4VKSKN",
-      stripeSetupPriceId: "price_1UM9NYRo53xwsjMqcR8Mx3h0",
-      llmMonthlyBudgetUsdCents: 2500,
-    },
-  });
-
-  // Retired as a standalone tier (consolidated into the new Profissional) — kept inactive, not
-  // deleted, so existing subscribers on this plan (if any) keep a valid foreign-key reference.
-  await prisma.plan.upsert({
-    where: { code: "studio" },
-    update: { isActive: false, llmMonthlyBudgetUsdCents: 3500 },
-    create: {
-      code: "studio",
-      name: "Studio",
-      priceBrlCents: 119700,
-      setupFeeBrlCents: 199700,
-      conversationQuota: 4000,
-      documentQuota: 999999,
-      whatsappNumberQuota: 10,
-      features: { analytics: "full", branding: true, customDomain: true },
-      stripePriceId: "price_1ULfr1Ro53xwsjMq2jtiANbN",
-      stripeSetupPriceId: "price_1ULfr2Ro53xwsjMqAPh14Ywo",
-      isActive: false,
-      llmMonthlyBudgetUsdCents: 3500,
-    },
-  });
-
-  console.log("Seeded plans: essencial, profissional (studio retired/inactive)");
+  console.log(`Seeded plans: ${PLAN_CATALOG.map((p) => p.code).join(", ")}`);
 
   const adminEmail = process.env.SEED_ADMIN_EMAIL;
   const adminPassword = process.env.SEED_ADMIN_PASSWORD;

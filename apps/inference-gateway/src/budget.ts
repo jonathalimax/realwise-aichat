@@ -1,10 +1,11 @@
 import { prisma } from "@realwise/db";
-import { estimateCostUsd } from "@realwise/shared";
+import { estimateCostUsd, getEntryPlan } from "@realwise/shared";
 
 // Fallback chain for a tenant's monthly LLM budget cap: Business.llmMonthlyBudgetUsdCents (admin
 // override) -> Plan.llmMonthlyBudgetUsdCents (plan-tier default) -> this constant (business with no
-// active subscription — fail-open to essencial-tier pricing, NOT pre-downgraded).
-export const DEFAULT_LLM_MONTHLY_BUDGET_USD_CENTS = 500;
+// active subscription — fail-open to the entry (essencial) plan's budget from the shared plan
+// catalog, NOT pre-downgraded).
+export const DEFAULT_LLM_MONTHLY_BUDGET_USD_CENTS = getEntryPlan().llmMonthlyBudgetUsdCents;
 
 const TTL_MS = 5 * 60 * 1000; // 5 minutes
 const EVICTION_IDLE_MS = 60 * 60 * 1000; // 1 hour

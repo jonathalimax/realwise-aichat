@@ -537,7 +537,7 @@ export class ListingExtractionService {
   async extractForBusiness(businessId: string): Promise<{ created: number; updated: number; retired: number }> {
     const noop = { created: 0, updated: 0, retired: 0 };
 
-    // Studio was retired in favor of essencial/profissional — listing extraction is core
+    // Not plan-gated (it used to be Studio-only) — listing extraction is core
     // product functionality for the imobiliária/concessionária niches, not a premium add-on,
     // and must run regardless of plan.
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });

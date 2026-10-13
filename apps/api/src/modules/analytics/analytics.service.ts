@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { LeadsService } from "../leads/leads.service";
+import { getPlanFeatures } from "../billing/plan-features";
 
 const WEEKDAY_LABELS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
@@ -138,8 +139,8 @@ export class AnalyticsService {
       where: { id: businessId },
       include: { subscription: { include: { plan: true } } },
     });
-    const features = business?.subscription?.plan?.features as { analytics?: string } | undefined;
-    return features?.analytics === "full";
+    // No subscription -> null plan -> entry-tier features (basic analytics).
+    return getPlanFeatures(business?.subscription?.plan ?? null).analytics === "full";
   }
 
   private async responseTimePercentiles(businessId: string, days: number) {

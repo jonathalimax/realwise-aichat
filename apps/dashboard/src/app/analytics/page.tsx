@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { resolvePlanFeatures } from "@realwise/shared";
 import { getTopQuestions, getAnalyticsSummary, getAdvancedAnalytics, getMe } from "../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../components/ui/table";
@@ -16,7 +17,7 @@ export default function AnalyticsPage() {
     getTopQuestions().then(setQuestions).catch(() => setQuestions([]));
     getAnalyticsSummary().then(setSummary).catch(() => setSummary(null));
     getMe()
-      .then((business) => setHasFullAnalytics(business?.subscription?.plan?.features?.analytics === "full"))
+      .then((business) => setHasFullAnalytics(resolvePlanFeatures(business?.subscription?.plan ?? null).analytics === "full"))
       .catch(() => setHasFullAnalytics(false));
     getAdvancedAnalytics().then(setAdvanced).catch(() => setAdvanced(null));
   }, []);
