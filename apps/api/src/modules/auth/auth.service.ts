@@ -1,9 +1,11 @@
 import { Injectable, BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
-import { verifyPhoneIdToken, normalizePhone, signBusinessSession, signVisitorSession, signAdminSession } from "@realwise/auth";
+import { verifyPhoneIdToken, normalizePhone, signVisitorSession, signAdminSession } from "@realwise/auth";
 import { createHash } from "crypto";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
 import { TeamSummaryService } from "../leads/team-summary.service";
+import { MemberAuthService } from "../access/member-auth.service";
+import { StarterRolesService } from "../access/starter-roles.service";
 
 const CONSENT_TEXT_VERSION = "2026-02";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -13,6 +15,8 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly teamSummary: TeamSummaryService,
+    private readonly memberAuth: MemberAuthService,
+    private readonly starterRoles: StarterRolesService,
   ) {}
 
   async loginBusinessWithFirebaseToken(idToken: string) {
@@ -46,7 +50,11 @@ export class AuthService {
     }
     const business = existing;
 
-    const token = await signBusinessSession({ businessId: business.id, phoneNumber: phone });
+    // Team & access: every business has its starter roles and an Owner member. Idempotent, so it
+    // also repairs businesses created before the team feature. The session carries memberId so the
+    // dashboard knows who is acting; old cookies without it still resolve to the primary Owner.
+    await this.starterRoles.ensureForBusiness(business);
+    const { token } = await this.memberAuth.sessionForPhoneOwner({ id: business.id, phone });
     return { token, business, isNew };
   }
 

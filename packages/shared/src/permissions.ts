@@ -77,8 +77,20 @@ export const NICHE_SECTIONS: Record<NicheKey, readonly PermissionSection[]> = {
 
 /** Sections where "edit" is only meaningful for a role flagged requiresCrf (pharmacist actions). */
 export const CRF_SECTIONS: readonly PermissionSection[] = ["receitas", "atendimento", "classes"];
-/** Sections that can never be "edit" (read-only mirrors). */
-export const READ_ONLY_SECTIONS: readonly PermissionSection[] = ["conversas"];
+/** Sections that can never be "edit" for a niche (read-only mirrors). Pharmacy conversations are read-only: staff answer through handoffs / orders. */
+export function readOnlySectionsFor(niche: NicheKey): readonly PermissionSection[] {
+  switch (niche) {
+    case "farmacia":
+      return ["conversas"];
+    case "imobiliaria":
+    case "concessionaria":
+      return [];
+    default: {
+      const _never: never = niche;
+      return _never;
+    }
+  }
+}
 
 export const STARTER_ROLE_KEYS = ["owner", "pharmacist", "manager", "attendant", "courier"] as const;
 export type StarterRoleKey = (typeof STARTER_ROLE_KEYS)[number];
@@ -98,9 +110,9 @@ const PHARMACY_GRID: Record<StarterRoleKey, Grid> = {
 
 // Real estate / dealership: same shape, mapped sensibly onto leads / listings / agenda / knowledge.
 const SALES_GRID: Partial<Record<StarterRoleKey, Grid>> = {
-  owner:     { inicio: "E", leads: "E", imoveis: "E", agenda: "E", conhecimento: "E", conversas: "V", analises: "V", configuracoes: "E", equipe: "E", plano: "E" },
-  manager:   { inicio: "E", leads: "E", imoveis: "E", agenda: "E", conhecimento: "E", conversas: "V", analises: "V", configuracoes: "E", equipe: "E", plano: "E" },
-  attendant: { inicio: "V", leads: "E", imoveis: "V", agenda: "E", conhecimento: "V", conversas: "V", analises: "N", configuracoes: "N", equipe: "N", plano: "N" },
+  owner:     { inicio: "E", leads: "E", imoveis: "E", agenda: "E", conhecimento: "E", conversas: "E", analises: "V", configuracoes: "E", equipe: "E", plano: "E" },
+  manager:   { inicio: "E", leads: "E", imoveis: "E", agenda: "E", conhecimento: "E", conversas: "E", analises: "V", configuracoes: "E", equipe: "E", plano: "E" },
+  attendant: { inicio: "V", leads: "E", imoveis: "V", agenda: "E", conhecimento: "V", conversas: "E", analises: "N", configuracoes: "N", equipe: "N", plano: "N" },
 };
 
 export interface StarterRoleDef {
@@ -159,7 +171,7 @@ export function normalizePermissions(raw: unknown): ResolvedPermissions {
   for (const s of PERMISSION_SECTIONS) {
     const v = (raw as Record<string, unknown>)[s];
     if (v === "view" || v === "edit" || v === "none") {
-      out[s] = READ_ONLY_SECTIONS.includes(s) && v === "edit" ? "view" : v;
+      out[s] = v;
     }
   }
   return out;
@@ -202,7 +214,7 @@ export function validateRoleDefinition(input: RoleDefinitionInput): string[] {
       errors.push(`"${SECTION_LABELS[s]}": editar exige uma função marcada como farmacêutico (CRF).`);
     }
   }
-  if (READ_ONLY_SECTIONS.some((s) => raw[s] === "edit")) errors.push("Conversas é somente leitura.");
+  if (readOnlySectionsFor(input.niche).some((s) => raw[s] === "edit")) errors.push("Conversas é somente leitura.");
   const allowed = new Set<string>(NICHE_SECTIONS[input.niche]);
   for (const s of PERMISSION_SECTIONS) {
     if (perms[s] !== "none" && !allowed.has(s)) errors.push(`A seção ${s} não existe neste tipo de negócio.`);

@@ -1,6 +1,8 @@
 import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 import { AnalyticsService } from "./analytics.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
+import { PermissionsGuard } from "../access/permissions.guard";
+import { RequirePermission } from "../access/permission.decorator";
 import { CurrentBusiness } from "../../common/decorators/current-business.decorator";
 import type { BusinessSessionClaims } from "@realwise/auth";
 
@@ -11,7 +13,8 @@ function parseDays(days?: string): number {
   return ALLOWED_DAYS.includes(parsed) ? parsed : 14;
 }
 
-@UseGuards(BusinessSessionGuard)
+@UseGuards(BusinessSessionGuard, PermissionsGuard)
+@RequirePermission("analises", "view")
 @Controller("analytics")
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}

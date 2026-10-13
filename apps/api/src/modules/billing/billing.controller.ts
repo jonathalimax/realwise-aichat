@@ -2,6 +2,8 @@ import { BadRequestException, Body, Controller, Headers, Post, Req, UseGuards, G
 import type { Request } from "express";
 import { BillingService } from "./billing.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
+import { PermissionsGuard } from "../access/permissions.guard";
+import { RequirePermission } from "../access/permission.decorator";
 import { CurrentBusiness } from "../../common/decorators/current-business.decorator";
 import type { BusinessSessionClaims } from "@realwise/auth";
 
@@ -14,13 +16,15 @@ export class BillingController {
     return this.billing.listPlans();
   }
 
-  @UseGuards(BusinessSessionGuard)
+  @UseGuards(BusinessSessionGuard, PermissionsGuard)
+  @RequirePermission("plano", "edit")
   @Post("checkout")
   checkout(@CurrentBusiness() session: BusinessSessionClaims, @Body("planCode") planCode: string) {
     return this.billing.createCheckoutSession(session.businessId, planCode);
   }
 
-  @UseGuards(BusinessSessionGuard)
+  @UseGuards(BusinessSessionGuard, PermissionsGuard)
+  @RequirePermission("plano", "edit")
   @Post("portal")
   portal(@CurrentBusiness() session: BusinessSessionClaims) {
     return this.billing.createPortalSession(session.businessId);

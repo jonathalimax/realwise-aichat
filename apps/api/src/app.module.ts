@@ -21,11 +21,13 @@ import { AlertsModule } from "./modules/alerts/alerts.module";
 import { UsageModule } from "./modules/usage/usage.module";
 import { InboxModule } from "./modules/inbox/inbox.module";
 import { PushModule } from "./modules/push/push.module";
+import { AccessModule } from "./modules/access/access.module";
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    AccessModule,
     AuthModule,
     BusinessesModule,
     OnboardingModule,

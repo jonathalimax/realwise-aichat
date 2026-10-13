@@ -1,11 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { assertPublicHttpUrl } from "../../common/url-safety";
-import { isEffectivelySuspended } from "@realwise/shared";
+import { isEffectivelySuspended, isValidHexColor, resolveBranding, type NicheKey } from "@realwise/shared";
+import { StarterRolesService } from "../access/starter-roles.service";
 
 @Injectable()
 export class BusinessesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly starterRoles: StarterRolesService,
+  ) {}
 
   async getBySlug(slug: string) {
     const business = await this.prisma.client.business.findUnique({
@@ -16,6 +20,9 @@ export class BusinessesService {
         niche: true,
         logoUrl: true,
         brandColor: true,
+        primaryColor: true,
+        secondaryColor: true,
+        tertiaryColor: true,
         status: true,
         trialEndsAt: true,
         subscription: { select: { status: true } },
@@ -27,8 +34,9 @@ export class BusinessesService {
     // Fire-and-forget: every real page load of the public chat link counts as a link open,
     // feeding the "Aberturas do link 7d" dashboard stat. Never block the chat on this.
     this.prisma.client.analyticsEvent.create({ data: { businessId: business.id, name: "link_opened" } }).catch(() => {});
-    const { trialEndsAt, subscription, ...publicBusiness } = business;
-    return publicBusiness;
+    const { trialEndsAt, subscription, primaryColor, secondaryColor, tertiaryColor, ...publicBusiness } = business;
+    // `branding` is always fully resolved (niche default when unset): the chat widget can apply it as-is.
+    return { ...publicBusiness, branding: resolveBranding(business.niche as NicheKey, { primaryColor, secondaryColor, tertiaryColor, brandColor: business.brandColor }) };
   }
 
   async getOwnBusiness(businessId: string) {
@@ -50,7 +58,7 @@ export class BusinessesService {
       name?: string;
       ownerName?: string;
       email?: string;
-      niche?: "imobiliaria" | "concessionaria";
+      niche?: NicheKey;
       timezone?: string;
       address?: string;
       websiteUrl?: string;
@@ -72,7 +80,11 @@ export class BusinessesService {
         throw new BadRequestException(error instanceof Error ? error.message : "URL do site inválida");
       }
     }
-    return this.prisma.client.business.update({ where: { id: businessId }, data });
+    const updated = await this.prisma.client.business.update({ where: { id: businessId }, data });
+    // Niche is picked during onboarding after the business (and its starter roles) already exist:
+    // re-sync so e.g. a pharmacy gets the pharmacist / courier roles and the pharmacy grids.
+    if (data.niche) await this.starterRoles.syncForNiche(businessId, data.niche);
+    return updated;
   }
 
   async isSlugAvailable(slug: string) {
@@ -144,7 +156,44 @@ export class BusinessesService {
     return this.prisma.client.whatsappRoutingNumber.delete({ where: { id: numberId } });
   }
 
-  async updateBranding(businessId: string, data: { logoUrl?: string; brandColor?: string }) {
-    return this.prisma.client.business.update({ where: { id: businessId }, data });
+  /** Branding with the niche default resolved; `*Stored` fields are the raw (nullable) values. */
+  async getBranding(businessId: string) {
+    const b = await this.prisma.client.business.findUniqueOrThrow({
+      where: { id: businessId },
+      select: { niche: true, logoUrl: true, brandColor: true, primaryColor: true, secondaryColor: true, tertiaryColor: true },
+    });
+    const niche = b.niche as NicheKey;
+    return {
+      logoUrl: b.logoUrl,
+      ...resolveBranding(niche, b),
+      stored: { primaryColor: b.primaryColor, secondaryColor: b.secondaryColor, tertiaryColor: b.tertiaryColor },
+      isCustom: [b.primaryColor, b.secondaryColor, b.tertiaryColor].some(isValidHexColor),
+    };
+  }
+
+  /**
+   * Whitelisted (this used to pass the raw body to Prisma). Colours must be #RRGGBB or null (= reset to
+   * the niche default). `brandColor` is the legacy single colour and is kept in sync with the primary.
+   */
+  async updateBranding(
+    businessId: string,
+    body: { logoUrl?: string | null; brandColor?: string | null; primaryColor?: string | null; secondaryColor?: string | null; tertiaryColor?: string | null },
+  ) {
+    const data: Record<string, string | null> = {};
+    for (const key of ["primaryColor", "secondaryColor", "tertiaryColor", "brandColor"] as const) {
+      const v = body[key];
+      if (v === undefined) continue;
+      if (v !== null && !isValidHexColor(v)) throw new BadRequestException(`Cor inválida em ${key} (use #RRGGBB).`);
+      data[key] = v;
+    }
+    if (body.logoUrl !== undefined) {
+      if (body.logoUrl && (body.logoUrl.length > 2048 || !/^(https?:\/\/|\/)/i.test(body.logoUrl))) {
+        throw new BadRequestException("URL do logo inválida");
+      }
+      data.logoUrl = body.logoUrl || null;
+    }
+    if (data.primaryColor !== undefined && data.brandColor === undefined) data.brandColor = data.primaryColor;
+    await this.prisma.client.business.update({ where: { id: businessId }, data });
+    return this.getBranding(businessId);
   }
 }
