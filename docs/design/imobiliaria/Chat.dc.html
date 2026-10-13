@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Chat do visitante</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}.bub{background:#fff;border:1px solid #e4e4e7;border-radius:14px;padding:10px 12px;max-width:88%}.me{align-self:flex-end;background:var(--primary);color:#fff;border-radius:14px;padding:10px 12px;max-width:88%}.chip{border:1px solid var(--primary);color:var(--primary);background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:500;cursor:pointer}.chip:hover{background:var(--soft)}.chip.on{background:var(--primary);color:#fff}.chip:focus-visible{outline:2px solid var(--ring);outline-offset:2px}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; gap: 40px; min-height: 100vh; background: #eef5f0; padding: 40px; justify-content: center; align-items: flex-start">
+
+<div class="card" style="flex: 0 1 320px; min-width: 260px"><div class="card-h"><div><h2 class="h2">Telas do chat</h2><p class="xs muted">Clique para pular, ou use os botões dentro do chat.</p></div></div>
+<div class="card-b col" style="gap: 4px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="10"><button onClick="{{ s.pick }}" style="text-align: left; font: inherit; border: 0; border-radius: 8px; padding: 8px 10px; cursor: pointer; background: {{s.bg}}; display: flex; gap: 10px"><b style="width: 28px; color: var(--primary)">{{s.id}}</b><span>{{s.label}}</span></button></sc-for>
+</div></div>
+
+<div style="width: 390px; height: 800px; border-radius: 28px; background: #fff; border: 1px solid #d4d4d8; box-shadow: 0 20px 50px rgba(0,0,0,0.15); overflow: hidden; display: flex; flex-direction: column; flex: none">
+<div style="background: var(--primary); color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 10px">
+<span class="avatar" style="background: #fff; color: #09090b; width: 40px; height: 40px">C</span>
+<div style="flex: 1; line-height: 1.3"><div class="row" style="gap: 6px"><b>Clara</b><span class="badge" style="background: var(--tertiary); color: #fff; height: 18px; font-size: 11px">IA</span></div><div class="xs" style="opacity: 0.92">Imobiliária Exemplo · online</div><div class="xs" style="opacity: 0.8">CRECI-PR 12345-J · Resp. Marina Souza</div></div>
+</div>
+<sc-if value="{{strip}}" hint-placeholder-val="{{ false }}"><div class="row" style="padding: 8px 14px; background: #DCF3E6; border-bottom: 1px solid #b6e0c6; gap: 10px"><span class="thumb" style="width: 32px; height: 32px; border-radius: 8px; background: {{prop.bg}}; color: {{prop.fg}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{prop.icon}}"/></svg></span><div class="grow" style="line-height: 1.3"><div class="xs" style="color: #073128">Imóvel escolhido</div><b class="sm">{{prop.title}}</b></div><span class="sm" style="font-weight: 700; color: #073128">{{prop.price}}</span></div></sc-if>
+<div style="flex: 1; overflow: auto; background: #fafafa; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+
+<sc-if value="{{s1}}" hint-placeholder-val="{{ true }}">
+<div class="bub">Oi! Sou a Clara, assistente virtual da Imobiliária Exemplo. Sou uma inteligência artificial. Posso ajudar a encontrar um imóvel, simular valores e agendar uma visita.</div>
+<div class="row wrap"><button class="chip" onClick="{{ go2 }}">Buscar imóvel</button><button class="chip" onClick="{{ go8 }}">Documentos para alugar</button><button class="chip" onClick="{{ go9 }}">Tenho uma dúvida</button></div>
+<div class="xs muted" style="text-align: center; margin-top: 6px"><button class="chip" onClick="{{ go10 }}">Ver exemplo: corretor entra na conversa</button></div>
+</sc-if>
+
+<sc-if value="{{s2}}" hint-placeholder-val="{{ false }}">
+<div class="me">Quero alugar um apartamento de 2 quartos</div>
+<div class="bub">Encontrei duas opções. Toque em uma para escolher:</div>
+<sc-for list="{{results}}" as="r" hint-placeholder-count="2">
+<button onClick="{{ r.pick }}" style="text-align: left; font: inherit; border: 1px solid {{r.bd}}; border-radius: 12px; background: {{r.bgc}}; padding: 12px; cursor: pointer; display: flex; gap: 10px; max-width: 94%; box-shadow: {{r.shadow}}">
+<span class="thumb" style="width: 56px; height: 56px; background: {{r.bg}}; color: {{r.fg}}"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{r.icon}}"/></svg></span>
+<span class="col grow" style="gap: 2px"><b>{{r.title}}</b><span class="xs muted">{{r.where}} · {{r.specs}}</span><span class="row" style="justify-content: space-between"><b style="font-size: 16px">{{r.price}}<span class="xs muted" style="font-weight: 400"> /mês</span></b><span class="badge {{r.badge}}">{{r.state}}</span></span></span>
+</button>
+</sc-for>
+<div class="row wrap"><button class="{{contCls}}" onClick="{{ go3 }}">Continuar com o escolhido</button></div>
+</sc-if>
+
+<sc-if value="{{s3}}" hint-placeholder-val="{{ false }}">
+<div class="me">Quero o da Água Verde</div>
+<div class="bub">Ótima escolha! Guardei o imóvel acima. O que você quer fazer agora?</div>
+<div class="card" style="max-width: 94%"><div class="card-b col" style="gap: 6px; padding: 14px"><b>{{prop.title}}</b><span class="sm muted">{{prop.where}} · {{prop.specs}}</span><span class="sm">Aluguel {{prop.price}} · Condomínio R$ 480 · IPTU não incluso</span><span class="sm muted">Aceita pets de pequeno porte, conforme o condomínio.</span></div></div>
+<div class="row wrap"><button class="chip" onClick="{{ go4 }}">Simular valores</button><button class="chip" onClick="{{ go5 }}">Agendar visita</button><button class="chip" onClick="{{ go10 }}">Falar com um corretor</button></div>
+</sc-if>
+
+<sc-if value="{{s4}}" hint-placeholder-val="{{ false }}">
+<div class="me">Quanto fica por mês?</div>
+<div class="bub">Antes: os valores abaixo são uma estimativa, sem compromisso. Valores finais dependem da análise da imobiliária.</div>
+<div class="card" style="max-width: 100%"><div class="card-b col" style="gap: 8px; padding: 14px">
+<div class="row" style="justify-content: space-between"><span>Aluguel</span><span>R$ 2.400</span></div>
+<div class="row" style="justify-content: space-between"><span>Condomínio</span><span>R$ 480</span></div>
+<hr class="sep"><div class="row" style="justify-content: space-between; font-weight: 700"><span>Total estimado</span><span>R$ 2.880/mês</span></div>
+<div class="xs muted">IPTU (R$ 110/mês) fica por conta do locatário e não está incluso.</div></div></div>
+<div class="bub">Quer ver como seria <b>comprar</b> uma casa? Posso simular um financiamento.</div>
+<div class="row wrap"><button class="chip" onClick="{{ go4b }}">{{simBtn}}</button><button class="chip" onClick="{{ go5 }}">Agendar visita</button></div>
+<sc-if value="{{sale}}" hint-placeholder-val="{{ false }}"><div class="card" style="max-width: 100%"><div class="card-b col" style="gap: 8px; padding: 14px"><b>Casa 3 quartos · R$ 890.000</b>
+<div class="row"><span class="sm">Entrada {{entPct}}%</span><button class="btn btn-outline btn-icon btn-sm" aria-label="Menos entrada" onClick="{{ decEnt }}" style="margin-left: auto">−</button><button class="btn btn-outline btn-icon btn-sm" aria-label="Mais entrada" onClick="{{ incEnt }}">+</button></div>
+<div class="row" style="justify-content: space-between"><span>Parcela estimada (360 meses)</span><b>{{parcela}}/mês</b></div>
+<div class="xs muted">Estimativa com juros de 1,01% ao mês. Não é proposta de crédito.</div></div></div></sc-if>
+</sc-if>
+
+<sc-if value="{{s5}}" hint-placeholder-val="{{ false }}">
+<div class="me">Quero visitar</div>
+<div class="bub">Claro! Escolha um dia e um horário disponíveis:</div>
+<div class="row wrap"><sc-for list="{{days}}" as="d" hint-placeholder-count="4"><button class="{{d.cls}}" onClick="{{ d.pick }}">{{d.label}}</button></sc-for></div>
+<div class="row wrap"><sc-for list="{{times}}" as="t" hint-placeholder-count="4"><button class="{{t.cls}}" onClick="{{ t.pick }}">{{t.label}}</button></sc-for></div>
+<div class="row wrap"><button class="btn btn-sm" onClick="{{ go6 }}">Continuar</button></div>
+</sc-if>
+
+<sc-if value="{{s6}}" hint-placeholder-val="{{ false }}">
+<div class="bub">Para registrar a visita de {{dayLabel}} às {{timeLabel}}, me diga seu nome e WhatsApp.</div>
+<div class="card" style="max-width: 100%"><div class="card-b col" style="gap: 10px; padding: 14px">
+<div class="field"><label class="label" for="nm">Nome</label><input id="nm" class="input" value="Camila Andrade"></div>
+<div class="field"><label class="label" for="wa">WhatsApp (com DDD)</label><input id="wa" class="input" value="(41) 99812-3344"></div>
+<label class="row" style="gap: 8px; align-items: flex-start"><span class="chk on">✓</span><span class="xs">Aceito receber mensagens da imobiliária sobre esta visita (LGPD). Ver aviso</span></label>
+<button class="btn" onClick="{{ go7 }}">Registrar visita</button></div></div>
+</sc-if>
+
+<sc-if value="{{s7}}" hint-placeholder-val="{{ false }}">
+<div class="bub"><b>Visita registrada.</b> A imobiliária confirma em breve e eu aviso você por aqui e pelo WhatsApp.</div>
+<div class="card" style="max-width: 100%"><div class="card-b col" style="gap: 8px; padding: 14px">
+<div class="row" style="gap: 10px"><span class="thumb" style="width: 40px; height: 40px; border-radius: 8px; background: {{prop.bg}}; color: {{prop.fg}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{prop.icon}}"/></svg></span><div><b>{{prop.title}}</b><div class="xs muted">{{prop.address}}</div></div></div>
+<div class="row sm"><span class="badge b-amber">Aguardando confirmação</span><span class="badge b-outline">{{dayLabel}}, {{timeLabel}}</span></div></div></div>
+<div class="row wrap"><button class="chip" onClick="{{ go8 }}">O que devo levar?</button><button class="chip" onClick="{{ go10 }}">Falar com um corretor</button></div>
+</sc-if>
+
+<sc-if value="{{s8}}" hint-placeholder-val="{{ false }}">
+<div class="me">Quais documentos preciso para alugar?</div>
+<div class="bub">Para a análise, a imobiliária pede:</div>
+<div class="card" style="max-width: 100%"><div class="card-b col" style="gap: 8px; padding: 14px">
+<sc-for list="{{docs}}" as="d" hint-placeholder-count="4"><button onClick="{{ d.toggle }}" class="row" style="gap: 8px; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; padding: 2px 0"><span class="{{d.cls}}">{{d.mark}}</span><span class="sm">{{d.t}}</span></button></sc-for>
+<div class="xs muted">Garantia: fiador, seguro fiança ou caução. Análise de crédito em até 2 dias úteis.</div></div></div>
+<div class="row wrap"><button class="chip" onClick="{{ go5 }}">Agendar visita</button><button class="chip">Posso enviar por WhatsApp?</button></div>
+</sc-if>
+
+<sc-if value="{{s9}}" hint-placeholder-val="{{ false }}">
+<div class="me">Qual o valor do IPTU?</div>
+<div class="bub">Não tenho essa informação com segurança, e não quero errar com você. Vou avisar a equipe e um corretor responde por aqui.</div>
+<div class="card" style="max-width: 100%"><div class="card-b col" style="gap: 6px; padding: 14px"><span class="badge b-amber" style="width: fit-content">Pergunta enviada à equipe</span><span class="sm muted">Você recebe a resposta aqui ou no WhatsApp.</span></div></div>
+<div class="row wrap"><button class="chip" onClick="{{ go10 }}">Falar com um corretor agora</button></div>
+</sc-if>
+
+<sc-if value="{{s10}}" hint-placeholder-val="{{ false }}">
+<div class="me">Pode chamar um corretor?</div>
+<div class="bub">Claro. Estou avisando a equipe. Um corretor entra na conversa em instantes.</div>
+<div style="text-align: center"><span class="badge b-soft" style="height: auto; padding: 6px 12px; white-space: normal">Carlos Prado · Corretor da Imobiliária Exemplo entrou na conversa</span></div>
+<div style="display: flex; gap: 8px; align-items: flex-end"><span class="avatar" style="background: var(--secondary); color: #fff">CP</span><div style="max-width: 80%"><div class="xs muted" style="margin-bottom: 2px">Carlos Prado · Corretor</div><div style="background: var(--soft); border: 1px solid #b6e0c6; border-radius: 14px; padding: 10px 12px">Oi! Aqui é o Carlos, corretor. Vi a sua conversa com a Clara. Posso te mostrar o apartamento hoje às 10h?</div></div></div>
+<div class="xs muted" style="text-align: center">A Clara fica em silêncio enquanto o corretor atende.</div>
+</sc-if>
+
+</div>
+<div style="padding: 10px 12px; border-top: 1px solid #e4e4e7; display: flex; gap: 8px; align-items: center; background: #fff"><input class="input" placeholder="Digite sua mensagem…" aria-label="Mensagem"><button class="btn btn-icon" aria-label="Enviar">➤</button></div>
+<div class="xs muted" style="text-align: center; padding: 4px 8px 8px; background: #fff">Você conversa com uma IA. Valores e disponibilidade dependem da confirmação da imobiliária.</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  state = { step: 1, pick: 0, ent: 30, sale: false, day: 0, time: 1, docs: [true, true, false, false] };
+  renderVals() {
+    const S = this.state;
+    const names = ['Boas-vindas', 'Busca de imóvel', 'Imóvel escolhido', 'Simulação', 'Agendar visita', 'Contato', 'Visita registrada', 'Documentos', 'Pergunta sem resposta', 'Corretor entrou'];
+    const steps = names.map((label, i) => ({ id: 'S' + (i + 1), label, bg: S.step === i + 1 ? '#DCF3E6' : 'transparent', pick: () => this.setState({ step: i + 1 }) }));
+    const go = (n) => () => this.setState({ step: n });
+    const props = [
+      { title: 'Apartamento 2 quartos', where: 'Água Verde', specs: '68 m² · 1 vaga', price: 'R$ 2.400', address: 'Rua Pasteur, 55, Água Verde', icon: 'M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 7h3M8 11h3M8 15h3', bg: '#DCF3E6', fg: '#15803D' },
+      { title: 'Apartamento 2 quartos', where: 'Cabral', specs: '74 m² · 2 vagas', price: 'R$ 2.750', address: 'Rua Bom Jesus, 120, Cabral', icon: 'M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 7h3M8 11h3M8 15h3', bg: '#E7E5FD', fg: '#4838B8' }
+    ];
+    const results = props.map((p, i) => { const on = S.pick === i; return { ...p, bd: on ? '#15803D' : '#e4e4e7', bgc: on ? '#DCF3E6' : '#fff', shadow: on ? '0 0 0 1px #15803D' : 'none', badge: on ? 'b-default' : 'b-outline', state: on ? 'Escolhido' : 'Escolher', pick: () => this.setState({ pick: i }) }; });
+    const dl = ['Hoje', 'Amanhã', 'Sex, 16/10', 'Sáb, 17/10'];
+    const days = dl.map((label, i) => ({ label, cls: S.day === i ? 'chip on' : 'chip', pick: () => this.setState({ day: i }) }));
+    const tl = ['09:00', '10:00', '14:30', '16:00'];
+    const times = tl.map((label, i) => ({ label, cls: S.time === i ? 'chip on' : 'chip', pick: () => this.setState({ time: i }) }));
+    const dd = ['Pasteur, 55'];
+    const fin = 890000 * (1 - S.ent / 100); const i = 0.0101; const pm = (fin * i) / (1 - Math.pow(1 + i, -360));
+    const dc = ['RG e CPF', 'Comprovante de renda dos últimos 3 meses', 'Comprovante de residência', 'Documentos do fiador (se houver)'];
+    const docs = dc.map((t, k) => ({ t, cls: S.docs[k] ? 'chk on' : 'chk', mark: S.docs[k] ? '✓' : '', toggle: () => { const d = S.docs.slice(); d[k] = !d[k]; this.setState({ docs: d }); } }));
+    return {
+      steps, s1: S.step === 1, s2: S.step === 2, s3: S.step === 3, s4: S.step === 4, s5: S.step === 5, s6: S.step === 6, s7: S.step === 7, s8: S.step === 8, s9: S.step === 9, s10: S.step === 10,
+      strip: S.step >= 3 && S.step <= 7, prop: props[S.pick], results, contCls: 'btn btn-sm',
+      go2: go(2), go3: go(3), go4: go(4), go5: go(5), go6: go(6), go7: go(7), go8: go(8), go9: go(9), go10: go(10),
+      days, times, dayLabel: dl[S.day].toLowerCase(), timeLabel: tl[S.time],
+      sale: S.sale, simBtn: S.sale ? 'Ocultar simulação de compra' : 'Simular compra', go4b: () => this.setState({ sale: !S.sale }),
+      entPct: S.ent, parcela: 'R$ ' + Math.round(pm).toLocaleString('pt-BR'),
+      incEnt: () => this.setState({ ent: Math.min(60, S.ent + 10) }), decEnt: () => this.setState({ ent: Math.max(10, S.ent - 10) }),
+      docs
+    };
+  }
+}
+</script>
+</body>
+</html>

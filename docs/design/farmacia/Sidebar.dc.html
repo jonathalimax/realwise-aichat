@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Sidebar</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<nav aria-label="Principal" style="width: 100%; min-height: 100vh; background: #FFFFFF; border-right: 1px solid #e4e4e7; display: flex; flex-direction: column; padding: 16px 12px; gap: 16px; font-family: 'Geist', system-ui, sans-serif; font-size: 14px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px">
+<div style="width: 36px; height: 36px; border-radius: 9px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+</div>
+<div style="display: flex; flex-direction: column; line-height: 1.25"><span style="font-weight: 700">Farmácia Exemplo</span><span class="xs muted">CRF-PR 1234</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div class="xs muted" style="padding: 4px 8px; font-weight: 500">Operação</div>
+<sc-for list="{{ops}}" as="i" hint-placeholder-count="5">
+<a href="{{i.href}}" style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 8px; border-radius: 8px; font-weight: 500; background: {{i.bg}}; color: {{i.fg}}">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{i.d}}"/></svg>
+<span style="flex: 1">{{i.t}}</span>
+<sc-if value="{{i.count}}" hint-placeholder-val="{{ false }}"><span class="badge b-default" style="height: 20px; padding: 0 7px">{{i.count}}</span></sc-if>
+</a>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div class="xs muted" style="padding: 4px 8px; font-weight: 500">Gestão</div>
+<sc-for list="{{mgmt}}" as="i" hint-placeholder-count="4">
+<a href="{{i.href}}" style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 8px; border-radius: 8px; font-weight: 500; background: {{i.bg}}; color: {{i.fg}}">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{i.d}}"/></svg>
+<span style="flex: 1">{{i.t}}</span>
+</a>
+</sc-for>
+</div>
+<div style="margin-top: auto; border-top: 1px solid #e4e4e7; padding-top: 12px; display: flex; align-items: center; gap: 10px">
+<span class="avatar">MS</span>
+<div style="display: flex; flex-direction: column; line-height: 1.25; flex: 1; min-width: 0"><span style="font-weight: 600">Maria Souza</span><span class="xs muted">Proprietária</span></div>
+<a href="Login.dc.html" aria-label="Sair" style="color: #71717a"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></a>
+</div>
+</nav>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"active":{"editor":"text","default":"Início"},"$preview":{"width":260,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const a = this.props.active ?? 'Início';
+    const mk = (t, href, d, count) => ({ t, href, d, count: count || '', bg: t === a ? '#E6F4F1' : 'transparent', fg: t === a ? '#0B4F4A' : '#3f3f46' });
+    const ops = [
+      mk('Assistente', 'Onboarding.dc.html', 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z'),
+      mk('Início', 'Home.dc.html', 'M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'),
+      mk('Pedidos', 'Orders.dc.html', 'M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8', '3'),
+      mk('Atendimento farmacêutico', 'Handoffs.dc.html', 'M3 12h4l2-5 4 10 2-5h6', '2'),
+      mk('Catálogo', 'Catalog.dc.html', 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5'),
+      mk('Clientes', 'Customers.dc.html', 'M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 20v-2a4 4 0 0 0-3-3.9'),
+      mk('Conversas', 'Conversations.dc.html', 'M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z'),
+      mk('Análises', 'Analytics.dc.html', 'M4 20V10M10 20V4M16 20v-7M22 20H2')
+    ];
+    const mgmt = [
+      mk('Farmácia', 'Settings.dc.html', 'M3 9l1-5h16l1 5M3 9v11h18V9M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M9 20v-6h6v6'),
+      mk('Equipe e acessos', 'Team.dc.html', 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z'),
+      mk('Plano e cobrança', 'Billing.dc.html', 'M3 6h18v12H3zM3 10h18')
+    ];
+    return { ops, mgmt };
+  }
+}
+</script>
+</body>
+</html>

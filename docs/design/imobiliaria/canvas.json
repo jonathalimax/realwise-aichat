@@ -1,0 +1,30 @@
+{"v":3,"createdOnFiles":{"v":1,"at":"2026-10-13T20:30:00Z"},"title":"Imobiliária Admin","launch":{"view":"canvas"},"pages":[],"boards":{
+"Main.dc.html":{"x":0,"y":300,"w":1440,"h":1100,"title":"Estrutura","expand":"fill"},
+"Login.dc.html":{"x":0,"y":1900,"w":1440,"h":900,"title":"Login","expand":"fill","is_interactive":true},
+"AcceptInvite.dc.html":{"x":1520,"y":1900,"w":1440,"h":900,"title":"Aceitar convite","expand":"fill","is_interactive":true},
+"NoAccess.dc.html":{"x":3040,"y":1900,"w":1440,"h":900,"title":"Sem acesso","expand":"fill","is_interactive":true},
+"Onboarding.dc.html":{"x":4560,"y":1900,"w":1440,"h":1000,"title":"Assistente (entrevista)","expand":"fill","is_interactive":true},
+"Home.dc.html":{"x":0,"y":3460,"w":1440,"h":1200,"title":"Início","expand":"fill","is_interactive":true},
+"Leads.dc.html":{"x":1520,"y":3460,"w":1440,"h":1200,"title":"Leads","expand":"fill","is_interactive":true},
+"Visits.dc.html":{"x":3040,"y":3460,"w":1440,"h":1200,"title":"Visitas","expand":"fill","is_interactive":true},
+"Conversations.dc.html":{"x":4560,"y":3460,"w":1440,"h":1200,"title":"Conversas","expand":"fill","is_interactive":true},
+"Properties.dc.html":{"x":0,"y":5220,"w":1440,"h":1200,"title":"Imóveis","expand":"fill","is_interactive":true},
+"PropertyImport.dc.html":{"x":1520,"y":5220,"w":1440,"h":1200,"title":"Importar imóveis","expand":"fill","is_interactive":true},
+"Knowledge.dc.html":{"x":3040,"y":5220,"w":1440,"h":1200,"title":"Base de conhecimento","expand":"fill","is_interactive":true},
+"Simulations.dc.html":{"x":4560,"y":5220,"w":1440,"h":1200,"title":"Simulações","expand":"fill","is_interactive":true},
+"Analytics.dc.html":{"x":0,"y":6980,"w":1440,"h":1200,"title":"Análises","expand":"fill","is_interactive":true},
+"Settings.dc.html":{"x":1520,"y":6980,"w":1440,"h":1200,"title":"Imobiliária (configurações)","expand":"fill","is_interactive":true},
+"Team.dc.html":{"x":3040,"y":6980,"w":1440,"h":1200,"title":"Equipe e acessos","expand":"fill","is_interactive":true},
+"RoleEditor.dc.html":{"x":4560,"y":6980,"w":1440,"h":1200,"title":"Editor de função","expand":"fill","is_interactive":true},
+"Billing.dc.html":{"x":6080,"y":6980,"w":1440,"h":1200,"title":"Plano e cobrança","expand":"fill","is_interactive":true},
+"Chat.dc.html":{"x":0,"y":8740,"w":1440,"h":1000,"title":"Chat do visitante (Clara)","expand":"fill","is_interactive":true},
+"Sidebar.dc.html":{"x":1520,"y":8740,"w":260,"h":900,"title":"Sidebar (componente)"}
+},"order":["Main.dc.html","Login.dc.html","AcceptInvite.dc.html","NoAccess.dc.html","Onboarding.dc.html","Home.dc.html","Leads.dc.html","Visits.dc.html","Conversations.dc.html","Properties.dc.html","PropertyImport.dc.html","Knowledge.dc.html","Simulations.dc.html","Analytics.dc.html","Settings.dc.html","Team.dc.html","RoleEditor.dc.html","Billing.dc.html","Chat.dc.html","Sidebar.dc.html"],
+"notes":{
+"n0":{"x":0,"y":0,"text":"Estrutura","kind":"title1","maxW":1440},
+"n1":{"x":0,"y":1640,"text":"Acesso","kind":"title1","maxW":6000},
+"n2":{"x":0,"y":3200,"text":"Atendimento","kind":"title1","maxW":6000},
+"n3":{"x":0,"y":4960,"text":"Imóveis e conteúdo","kind":"title1","maxW":6000},
+"n4":{"x":0,"y":6720,"text":"Análises, imobiliária, equipe e plano","kind":"title1","maxW":7520},
+"n5":{"x":0,"y":8480,"text":"Chat do visitante","kind":"title1","maxW":1800}
+},"designSystems":[]}

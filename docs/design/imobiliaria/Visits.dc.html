@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Visitas</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}.day{border:1px solid #e4e4e7;border-radius:8px;min-height:72px;padding:6px 8px;background:#fff;font:inherit;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:4px;align-items:flex-start}.day:hover{background:#fafafa}.day:focus-visible{outline:2px solid var(--ring);outline-offset:2px}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Visitas" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Visitas</h1><p class="muted">Visitas agendadas pela Clara. Confirme, acompanhe e registre o resultado.</p></div>
+<div class="tabs" role="tablist" aria-label="Modo">
+<sc-for list="{{views}}" as="v" hint-placeholder-count="3"><button class="{{v.cls}}" role="tab" onClick="{{ v.pick }}">{{v.label}}</button></sc-for>
+</div>
+</div>
+
+<sc-if value="{{showList}}" hint-placeholder-val="{{ true }}">
+<div class="tabs" role="tablist" aria-label="Situação" style="width: fit-content">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="4"><button class="{{f.cls}}" role="tab" onClick="{{ f.pick }}">{{f.label}} <span class="xs muted">{{f.n}}</span></button></sc-for>
+</div>
+<div class="card scroll-x">
+<table class="tbl">
+<thead><tr><th>Quando</th><th>Interessado</th><th>Imóvel</th><th>Corretor</th><th>Situação</th></tr></thead>
+<tbody>
+<sc-for list="{{list}}" as="v" hint-placeholder-count="4">
+<tr class="hover" onClick="{{ v.open }}"><td><b>{{v.when}}</b></td><td>{{v.who}}</td>
+<td><div class="row"><span class="thumb" style="width: 36px; height: 36px; border-radius: 8px; background: {{v.bg}}; color: {{v.fg}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{v.icon}}"/></svg></span><span>{{v.prop}}</span></div></td>
+<td class="muted">{{v.broker}}</td><td><span class="badge {{v.badge}}">{{v.label}}</span></td></tr>
+</sc-for>
+</tbody></table>
+<sc-if value="{{emptyList}}" hint-placeholder-val="{{ false }}"><div style="padding: 32px; text-align: center" class="muted">Nenhuma visita aqui.</div></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{showCal}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div class="card" style="flex: 2 1 560px; min-width: 0">
+<div class="card-h"><div><h2 class="h2">Outubro de 2026</h2><p class="xs muted">Clique num dia para ver as visitas dele</p></div><span class="badge b-soft">Hoje: 13</span></div>
+<div class="card-b" style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px">
+<sc-for list="{{wd}}" as="w" hint-placeholder-count="7"><div class="xs muted" style="text-align: center; font-weight: 500">{{w}}</div></sc-for>
+<sc-for list="{{cells}}" as="c" hint-placeholder-count="35">
+<button class="day" onClick="{{ c.pick }}" aria-label="{{c.aria}}" style="{{c.style}}"><span class="sm" style="font-weight: 600">{{c.n}}</span><sc-if value="{{c.count}}" hint-placeholder-val="{{ false }}"><span class="badge {{c.badge}}" style="height: 18px; padding: 0 6px; font-size: 11px">{{c.count}} visita(s)</span></sc-if></button>
+</sc-for>
+</div></div>
+<div class="card" style="flex: 1 1 300px; min-width: 0">
+<div class="card-h"><div><h2 class="h2">{{dayTitle}}</h2><p class="xs muted">{{dayCount}}</p></div></div>
+<div class="card-b col" style="gap: 12px">
+<sc-for list="{{dayList}}" as="v" hint-placeholder-count="2">
+<button onClick="{{ v.open }}" class="row" style="gap: 12px; padding: 10px; border: 1px solid #e4e4e7; border-radius: 10px; background: #fff; font: inherit; text-align: left; cursor: pointer; align-items: flex-start"><b style="width: 48px; flex: none">{{v.time}}</b><div class="col grow" style="gap: 2px"><b>{{v.who}}</b><span class="sm muted">{{v.prop}}</span><span class="badge {{v.badge}}" style="width: fit-content">{{v.label}}</span></div></button>
+</sc-for>
+<sc-if value="{{dayEmpty}}" hint-placeholder-val="{{ false }}"><span class="sm muted">Sem visitas neste dia.</span></sc-if>
+</div></div>
+</div>
+</sc-if>
+
+<sc-if value="{{showAvail}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div class="card" style="flex: 2 1 480px; min-width: 0"><div class="card-h"><div><h2 class="h2">Horários para visitas</h2><p class="xs muted">A Clara só oferece horários livres dentro destas janelas</p></div></div>
+<div class="card-b col" style="gap: 14px">
+<sc-for list="{{hours}}" as="h" hint-placeholder-count="3"><div class="row" style="justify-content: space-between; border: 1px solid #e4e4e7; border-radius: 10px; padding: 10px 14px"><div><b>{{h.d}}</b><div class="sm muted">{{h.t}}</div></div><button class="{{h.cls}}" role="switch" aria-checked="{{h.on}}" aria-label="{{h.d}}" onClick="{{ h.toggle }}"></button></div></sc-for>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px">
+<div class="field"><label class="label" for="dur">Duração da visita</label><select id="dur" class="input"><option>30 minutos</option><option selected>45 minutos</option><option>1 hora</option></select></div>
+<div class="field"><label class="label" for="ant">Antecedência mínima</label><select id="ant" class="input"><option>2 horas</option><option selected>12 horas</option><option>1 dia</option></select></div>
+</div>
+<div class="row" style="justify-content: flex-end"><button class="btn">Salvar horários</button></div>
+</div></div>
+<div class="card" style="flex: 1 1 300px; min-width: 0"><div class="card-h"><div><h2 class="h2">Google Agenda</h2><p class="xs muted">Evita marcar visitas em horários ocupados</p></div><span class="badge {{gBadge}}">{{gLabel}}</span></div>
+<div class="card-b col" style="gap: 12px"><p class="sm muted">{{gText}}</p><button class="btn btn-outline" style="width: fit-content" onClick="{{ toggleG }}">{{gBtn}}</button><span class="xs muted">Disponível nos planos Profissional e Studio.</span></div></div>
+</div>
+</sc-if>
+
+</main>
+
+<sc-if value="{{sheetOpen}}" hint-placeholder-val="{{ false }}">
+<div class="sheet-wrap">
+<aside class="sheet" aria-label="Detalhe da visita">
+<div class="row" style="justify-content: space-between"><div><h2 class="h2" style="font-size: 20px">{{sel.who}}</h2><p class="xs muted">{{sel.when}} · {{sel.dur}}</p></div><button class="btn btn-ghost btn-icon" aria-label="Fechar" onClick="{{ close }}">✕</button></div>
+<div class="row wrap"><span class="badge {{sel.badge}}">{{sel.label}}</span><span class="badge b-outline">Corretor: {{sel.broker}}</span></div>
+<a href="Properties.dc.html" class="row" style="gap: 12px; border: 1px solid #e4e4e7; border-radius: 10px; padding: 10px">
+<span class="thumb" style="background: {{sel.bg}}; color: {{sel.fg}}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{sel.icon}}"/></svg></span>
+<div class="grow"><b>{{sel.prop}}</b><div class="xs muted">{{sel.address}}</div></div><span class="sm" style="color: var(--primary); font-weight: 600">Abrir →</span></a>
+<div class="col" style="gap: 6px"><b>Interessado</b><span>{{sel.who}} · {{sel.phone}}</span><a class="sm" href="Leads.dc.html" style="color: var(--primary); font-weight: 600">Abrir lead →</a><a class="sm" href="Conversations.dc.html" style="color: var(--primary); font-weight: 600">Abrir conversa →</a></div>
+<sc-if value="{{sel.pending}}" hint-placeholder-val="{{ false }}"><div class="alert alert-amber">Aguardando a sua confirmação. Ao confirmar, a Clara avisa o interessado e o evento vai para o Google Agenda.</div></sc-if>
+<sc-if value="{{sel.note}}" hint-placeholder-val="{{ false }}"><div class="alert alert-soft">{{sel.note}}</div></sc-if>
+<div class="row wrap" style="margin-top: auto; padding-top: 8px">
+<sc-if value="{{sel.canConfirm}}" hint-placeholder-val="{{ true }}"><button class="btn" onClick="{{ confirmV }}">Confirmar visita</button></sc-if>
+<sc-if value="{{sel.canDone}}" hint-placeholder-val="{{ false }}"><button class="btn" onClick="{{ doneV }}">Marcar como concluída</button></sc-if>
+<sc-if value="{{sel.canDone}}" hint-placeholder-val="{{ false }}"><button class="btn btn-outline" onClick="{{ noShow }}">Não compareceu</button></sc-if>
+<sc-if value="{{sel.canCancel}}" hint-placeholder-val="{{ true }}"><button class="btn btn-danger" onClick="{{ askCancel }}">Cancelar visita</button></sc-if>
+</div>
+</aside>
+</div>
+</sc-if>
+
+<sc-if value="{{cancelOpen}}" hint-placeholder-val="{{ false }}">
+<div class="dialog-wrap"><div class="dialog" role="dialog" aria-label="Cancelar visita">
+<div><h2 class="h2" style="font-size: 18px">Cancelar a visita de {{sel.who}}?</h2><p class="muted sm">A Clara avisa o interessado e oferece outros horários.</p></div>
+<div class="col" style="gap: 8px"><span class="label" style="margin: 0">Motivo</span>
+<sc-for list="{{reasons}}" as="r" hint-placeholder-count="3"><button class="{{r.cls}}" onClick="{{ r.pick }}" style="justify-content: flex-start; width: 100%">{{r.label}}</button></sc-for></div>
+<div class="row" style="justify-content: flex-end"><button class="btn btn-outline" onClick="{{ keep }}">Voltar</button><button class="btn btn-danger" onClick="{{ doCancel }}">Cancelar visita</button></div>
+</div></div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { view: 'list', filter: 'pending', sel: null, cancelOpen: false, reason: 0, status: {}, day: 13, g: true, hrs: [true, true, false] };
+  renderVals() {
+    const S = this.state;
+    const ICON = {
+      apto: ['M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 7h3M8 11h3M8 15h3', '#DCF3E6', '#15803D'],
+      casa: ['M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', '#FFE4DD', '#A8301B'],
+      terreno: ['M3 20l6-9 4 5 3-4 5 8z', '#E7E5FD', '#4838B8'],
+      sala: ['M3 9l1-5h16l1 5M3 9v11h18V9M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0', '#FEF3C7', '#92400E']
+    };
+    const base = [
+      { id: 1, d: 13, time: '10:00', who: 'Camila Andrade', phone: '(41) 99812-3344', prop: 'Apartamento 2 quartos, Água Verde', address: 'Rua Pasteur, 55, Água Verde', kind: 'apto', broker: 'Carlos Prado', st: 'confirmed' },
+      { id: 2, d: 13, time: '14:30', who: 'Marcos Vieira', phone: '(41) 99422-9087', prop: 'Cobertura, Bigorrilho', address: 'Av. Água Verde, 1200, Bigorrilho', kind: 'apto', broker: 'Carlos Prado', st: 'pending' },
+      { id: 3, d: 13, time: '16:00', who: 'Helena Costa', phone: '(41) 99310-2255', prop: 'Terreno, Campo Comprido', address: 'Rua das Araucárias, lote 14', kind: 'terreno', broker: 'Ana Lopes', st: 'pending' },
+      { id: 4, d: 17, time: '10:00', who: 'Patrícia Gomes', phone: '(41) 99655-4412', prop: 'Studio, Batel', address: 'Rua Bispo Dom José, 400, Batel', kind: 'apto', broker: 'Carlos Prado', st: 'pending' },
+      { id: 5, d: 15, time: '11:00', who: 'Rodrigo Teixeira', phone: '(41) 99777-1020', prop: 'Casa 3 quartos, Santa Felicidade', address: 'Rua Ângelo Dal Prá, 88', kind: 'casa', broker: 'Ana Lopes', st: 'confirmed' },
+      { id: 6, d: 1, time: '15:00', who: 'Bruno Faria', phone: '(41) 99288-6140', prop: 'Apartamento 3 quartos, Cabral', address: 'Rua Bom Jesus, 310, Cabral', kind: 'apto', broker: 'Carlos Prado', st: 'done' },
+      { id: 7, d: 8, time: '09:30', who: 'Luiz Fernando', phone: '(41) 99540-8821', prop: 'Sala comercial, Centro', address: 'Rua XV de Novembro, 900, Centro', kind: 'sala', broker: 'Ana Lopes', st: 'noshow' },
+      { id: 8, d: 6, time: '17:00', who: 'Sofia Rezende', phone: '(41) 99101-7788', prop: 'Studio, Batel', address: 'Rua Bispo Dom José, 400, Batel', kind: 'apto', broker: 'Ana Lopes', st: 'canceled' }
+    ];
+    const info = { pending: ['Aguardando', 'b-amber'], confirmed: ['Confirmada', 'b-green'], done: ['Concluída', 'b-soft'], noshow: ['Não compareceu', 'b-red'], canceled: ['Cancelada', 'b-gray'] };
+    const all = base.map((v) => { const st = S.status[v.id] || v.st; const ic = ICON[v.kind]; const wd = { 13: 'Hoje', 15: 'Qui, 15/10', 17: 'Sáb, 17/10', 1: '01/10', 8: '08/10', 6: '06/10' }[v.d]; return { ...v, st, label: info[st][0], badge: info[st][1], icon: ic[0], bg: ic[1], fg: ic[2], when: wd + ' · ' + v.time, dur: '45 minutos', open: () => this.setState({ sel: v.id }) }; });
+    const fl = [['pending', 'Aguardando', ['pending']], ['confirmed', 'Confirmadas', ['confirmed']], ['done', 'Concluídas', ['done']], ['closed', 'Canceladas e faltas', ['canceled', 'noshow']]];
+    const filters = fl.map(([k, label, sts]) => ({ label, n: all.filter((v) => sts.includes(v.st)).length, cls: S.filter === k ? 'tab on' : 'tab', pick: () => this.setState({ filter: k }) }));
+    const cur = fl.find((f) => f[0] === S.filter);
+    const list = all.filter((v) => cur[2].includes(v.st)).sort((a, b) => a.d - b.d);
+    const vl = [['list', 'Lista'], ['cal', 'Calendário'], ['avail', 'Disponibilidade']];
+    const views = vl.map(([k, label]) => ({ label, cls: S.view === k ? 'tab on' : 'tab', pick: () => this.setState({ view: k }) }));
+    const cells = [];
+    for (let i = 0; i < 35; i++) {
+      const n = i - 3 + 1;
+      const inMonth = n >= 1 && n <= 31;
+      const cnt = inMonth ? all.filter((v) => v.d === n && !['canceled'].includes(v.st)).length : 0;
+      cells.push({ n: inMonth ? n : '', count: cnt || '', badge: cnt && n === S.day ? 'b-default' : 'b-soft', aria: inMonth ? 'Dia ' + n : 'Fora do mês', style: inMonth ? (n === S.day ? 'border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary)' : (n === 13 ? 'background: #DCF3E6' : '')) : 'background: #fafafa; cursor: default', pick: () => { if (inMonth) this.setState({ day: n }); } });
+    }
+    const dayList = all.filter((v) => v.d === S.day).sort((a, b) => (a.time < b.time ? -1 : 1));
+    const selV = all.find((v) => v.id === S.sel);
+    const sel = selV ? { ...selV, pending: selV.st === 'pending', canConfirm: selV.st === 'pending', canDone: selV.st === 'confirmed', canCancel: selV.st === 'pending' || selV.st === 'confirmed', note: selV.st === 'noshow' ? 'O interessado não compareceu. Você pode pedir à Clara para oferecer um novo horário.' : (selV.st === 'confirmed' && S.g ? 'Evento criado no Google Agenda de ' + selV.broker + '.' : '') } : {};
+    const setSt = (st) => this.setState({ status: { ...S.status, [S.sel]: st }, sel: null });
+    const rl = ['O interessado pediu para cancelar', 'Imóvel indisponível', 'Corretor sem agenda', 'Outro motivo'];
+    const reasons = rl.map((label, i) => ({ label, cls: S.reason === i ? 'btn btn-outline' : 'btn btn-ghost', pick: () => this.setState({ reason: i }) }));
+    const hd = [['Segunda a sexta', '09:00 às 18:00'], ['Sábado', '09:00 às 13:00'], ['Domingo e feriados', 'Fechado']];
+    const hours = hd.map(([d, t], i) => ({ d, t: S.hrs[i] ? t : 'Fechado', on: S.hrs[i], cls: S.hrs[i] ? 'sw on' : 'sw', toggle: () => { const h = S.hrs.slice(); h[i] = !h[i]; this.setState({ hrs: h }); } }));
+    return {
+      views, showList: S.view === 'list', showCal: S.view === 'cal', showAvail: S.view === 'avail',
+      filters, list, emptyList: list.length === 0,
+      wd: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'], cells,
+      dayTitle: S.day === 13 ? 'Hoje, 13 de outubro' : S.day + ' de outubro', dayCount: dayList.length + ' visita(s)', dayList, dayEmpty: dayList.length === 0,
+      sel, sheetOpen: !!selV, close: () => this.setState({ sel: null }),
+      confirmV: () => setSt('confirmed'), doneV: () => setSt('done'), noShow: () => setSt('noshow'),
+      askCancel: () => this.setState({ cancelOpen: true }), keep: () => this.setState({ cancelOpen: false }),
+      doCancel: () => { this.setState({ cancelOpen: false }); setSt('canceled'); },
+      cancelOpen: S.cancelOpen && !!selV, reasons,
+      hours, gBadge: S.g ? 'b-green' : 'b-gray', gLabel: S.g ? 'Conectado' : 'Desconectado',
+      gText: S.g ? 'Sincronizando com marina@imobiliariaexemplo.com.br. Visitas confirmadas viram eventos e horários ocupados ficam bloqueados.' : 'Conecte para bloquear horários ocupados e criar eventos automaticamente.',
+      gBtn: S.g ? 'Desconectar' : 'Conectar Google Agenda', toggleG: () => this.setState({ g: !S.g })
+    };
+  }
+}
+</script>
+</body>
+</html>

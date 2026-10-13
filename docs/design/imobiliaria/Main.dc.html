@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Estrutura do painel</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="min-height: 100vh; background: #fafafa; padding: 40px 32px 56px; box-sizing: border-box">
+<div style="max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px">
+
+<div class="col" style="gap: 6px; max-width: 760px">
+<span class="xs" style="font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--primary)">Painel da imobiliária, versão simplificada</span>
+<h1 class="h1" style="font-size: 32px">Do menu de 11 itens para 4 grupos claros</h1>
+<p class="muted" style="font-size: 16px">Mesmos recursos de hoje, reorganizados pelo que a equipe faz no dia a dia. Cada lista tem abas de filtro, e clicar numa linha abre os detalhes ao lado. Todos os dados são de exemplo.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px">
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+<div class="card"><div class="card-h"><div><h2 class="h2">{{g.name}}</h2><p class="xs muted">{{g.desc}}</p></div></div>
+<div class="card-b col" style="gap: 8px">
+<sc-for list="{{g.items}}" as="i" hint-placeholder-count="4">
+<a href="{{i.href}}" class="row" style="justify-content: space-between; padding: 8px 10px; border: 1px solid #e4e4e7; border-radius: 8px"><span><b>{{i.t}}</b><span class="xs muted" style="display: block">{{i.was}}</span></span><span class="badge {{i.badge}}">{{i.tag}}</span></a>
+</sc-for>
+</div></div>
+</sc-for>
+</div>
+
+<div class="card scroll-x">
+<div class="card-h"><div><h2 class="h2">Quem acessa o quê</h2><p class="xs muted">Padrão das quatro funções. O proprietário pode ajustar em Equipe e acessos.</p></div></div>
+<div class="card-b scroll-x" style="padding: 0 0 4px">
+<table class="tbl" style="min-width: 720px">
+<thead><tr><th>Seção</th><th>Proprietário</th><th>Gerente</th><th>Corretor</th><th>Atendente</th></tr></thead>
+<tbody>
+<sc-for list="{{matrix}}" as="r" hint-placeholder-count="6">
+<tr><td><b>{{r.n}}</b></td><td>{{r.o}}</td><td>{{r.g}}</td><td>{{r.c}}</td><td>{{r.a}}</td></tr>
+</sc-for>
+</tbody></table></div>
+</div>
+
+<div class="alert alert-soft"><span>O proprietário nunca perde o acesso e só outro proprietário altera um proprietário. O gerente gerencia a equipe, menos os proprietários. O corretor vê apenas os leads, visitas e conversas dele.</span></div>
+
+<div class="row wrap">
+<a class="btn" href="Login.dc.html">Começar pelo login</a>
+<a class="btn btn-outline" href="Home.dc.html">Ir direto ao Início</a>
+<a class="btn btn-outline" href="Chat.dc.html">Ver o chat da Clara</a>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const groups = [
+      { name: 'Atendimento', desc: 'O que acontece hoje com os interessados', items: [
+        { t: 'Início', was: 'Antes: Início', tag: 'Resumo', badge: 'b-soft', href: 'Home.dc.html' },
+        { t: 'Leads', was: 'Antes: Interessados', tag: 'Por etapa', badge: 'b-soft', href: 'Leads.dc.html' },
+        { t: 'Visitas', was: 'Antes: Agenda e disponibilidade', tag: 'Lista e calendário', badge: 'b-soft', href: 'Visits.dc.html' },
+        { t: 'Conversas', was: 'Antes: Conversas', tag: 'Somente leitura', badge: 'b-gray', href: 'Conversations.dc.html' }
+      ] },
+      { name: 'Conteúdo', desc: 'O que a Clara sabe e oferece', items: [
+        { t: 'Imóveis', was: 'Antes: Anúncios', tag: 'Com fotos', badge: 'b-soft', href: 'Properties.dc.html' },
+        { t: 'Importar imóveis', was: 'Antes: botões soltos em Anúncios', tag: 'Passo a passo', badge: 'b-blue', href: 'PropertyImport.dc.html' },
+        { t: 'Base de conhecimento', was: 'Antes: Base de conhecimento', tag: 'Documentos e respostas', badge: 'b-soft', href: 'Knowledge.dc.html' },
+        { t: 'Simulações', was: 'Antes: escondido na conversa', tag: 'Novo', badge: 'b-green', href: 'Simulations.dc.html' }
+      ] },
+      { name: 'Gestão', desc: 'Resultados, equipe e plano', items: [
+        { t: 'Análises', was: 'Antes: Análises', tag: 'Gráficos', badge: 'b-soft', href: 'Analytics.dc.html' },
+        { t: 'Imobiliária', was: 'Antes: Perfil e Personalização', tag: 'Duas telas em uma', badge: 'b-soft', href: 'Settings.dc.html' },
+        { t: 'Equipe e acessos', was: 'Antes: não existia', tag: 'Novo', badge: 'b-green', href: 'Team.dc.html' },
+        { t: 'Plano e cobrança', was: 'Antes: Plano e cobrança', tag: 'Uso do mês', badge: 'b-soft', href: 'Billing.dc.html' }
+      ] },
+      { name: 'Assistente e acesso', desc: 'Entrada e ajuda', items: [
+        { t: 'Assistente', was: 'Antes: Assistente e Onboarding', tag: 'Entrevista guiada', badge: 'b-soft', href: 'Onboarding.dc.html' },
+        { t: 'Login e convite', was: 'Antes: Login', tag: 'Com convite', badge: 'b-soft', href: 'Login.dc.html' },
+        { t: 'Sem acesso', was: 'Antes: não existia', tag: 'Novo', badge: 'b-green', href: 'NoAccess.dc.html' },
+        { t: 'Chat da Clara', was: 'Visitante do site', tag: 'Interativo', badge: 'b-blue', href: 'Chat.dc.html' }
+      ] }
+    ];
+    const matrix = [
+      ['Início', 'Tudo', 'Tudo', 'Só os dele', 'Resumo'],
+      ['Leads', 'Editar', 'Editar', 'Só os dele', 'Ver'],
+      ['Imóveis', 'Editar', 'Editar', 'Ver', 'Ver'],
+      ['Visitas', 'Editar', 'Editar', 'Só as dele', 'Editar'],
+      ['Conversas', 'Ver', 'Ver', 'Só as dele', 'Ver'],
+      ['Base de conhecimento e simulações', 'Editar', 'Editar', 'Ver', '-'],
+      ['Análises', 'Ver', 'Ver', '-', '-'],
+      ['Imobiliária', 'Editar', 'Ver', '-', '-'],
+      ['Equipe e acessos', 'Editar', 'Editar, menos proprietários', '-', '-'],
+      ['Plano e cobrança', 'Editar', 'Ver', '-', '-']
+    ].map(([n, o, g, c, a]) => ({ n, o, g, c, a }));
+    return { groups, matrix };
+  }
+}
+</script>
+</body>
+</html>

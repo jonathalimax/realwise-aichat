@@ -1,0 +1,29 @@
+{"v":3,"createdOnFiles":{"v":1,"at":"2026-10-13T15:00:00Z"},"title":"Pharmacy Admin","launch":{"view":"canvas"},"pages":[],"boards":{
+"Main.dc.html":{"x":0,"y":300,"w":1760,"h":1700,"title":"Structure","expand":"fill"},
+"Login.dc.html":{"x":0,"y":2420,"w":1440,"h":900,"title":"Login","expand":"fill","is_interactive":true},
+"AcceptInvite.dc.html":{"x":1520,"y":2420,"w":1440,"h":900,"title":"Accept invite","expand":"fill","is_interactive":true},
+"NoAccess.dc.html":{"x":3040,"y":2420,"w":1440,"h":900,"title":"No access","expand":"fill","is_interactive":true},
+"Onboarding.dc.html":{"x":4560,"y":2420,"w":1440,"h":1000,"title":"Assistente (onboarding)","expand":"fill","is_interactive":true},
+"Home.dc.html":{"x":0,"y":3740,"w":1440,"h":1200,"title":"Início","expand":"fill","is_interactive":true},
+"Orders.dc.html":{"x":1520,"y":3740,"w":1440,"h":1200,"title":"Pedidos","expand":"fill","is_interactive":true},
+"Handoffs.dc.html":{"x":3040,"y":3740,"w":1440,"h":1200,"title":"Atendimento farmacêutico","expand":"fill","is_interactive":true},
+"Customers.dc.html":{"x":4560,"y":3740,"w":1440,"h":1200,"title":"Clientes","expand":"fill","is_interactive":true},
+"Conversations.dc.html":{"x":6080,"y":3740,"w":1440,"h":1200,"title":"Conversas","expand":"fill","is_interactive":true},
+"Catalog.dc.html":{"x":0,"y":5060,"w":1440,"h":1200,"title":"Catálogo","expand":"fill","is_interactive":true},
+"ClassReview.dc.html":{"x":1520,"y":5060,"w":1440,"h":1200,"title":"Revisar classes","expand":"fill","is_interactive":true},
+"Import.dc.html":{"x":3040,"y":5060,"w":1440,"h":1200,"title":"Importar planilha","expand":"fill","is_interactive":true},
+"Analytics.dc.html":{"x":4560,"y":5060,"w":1440,"h":1200,"title":"Análises","expand":"fill","is_interactive":true},
+"Settings.dc.html":{"x":0,"y":6380,"w":1440,"h":1200,"title":"Farmácia (configurações)","expand":"fill","is_interactive":true},
+"Team.dc.html":{"x":1520,"y":6380,"w":1440,"h":1200,"title":"Equipe e acessos","expand":"fill","is_interactive":true},
+"RoleEditor.dc.html":{"x":3040,"y":6380,"w":1440,"h":1200,"title":"Editor de função","expand":"fill","is_interactive":true},
+"Billing.dc.html":{"x":4560,"y":6380,"w":1440,"h":1200,"title":"Plano e cobrança","expand":"fill","is_interactive":true},
+"Chat.dc.html":{"x":0,"y":7700,"w":1440,"h":1000,"title":"Chat do cliente (Alex)","expand":"fill","is_interactive":true},
+"Sidebar.dc.html":{"x":1520,"y":7700,"w":260,"h":900,"title":"Sidebar (component)"}
+},"order":["Main.dc.html","Login.dc.html","AcceptInvite.dc.html","NoAccess.dc.html","Onboarding.dc.html","Home.dc.html","Orders.dc.html","Handoffs.dc.html","Customers.dc.html","Conversations.dc.html","Catalog.dc.html","ClassReview.dc.html","Import.dc.html","Analytics.dc.html","Settings.dc.html","Team.dc.html","RoleEditor.dc.html","Billing.dc.html","Chat.dc.html","Sidebar.dc.html"],
+"notes":{
+"n0":{"x":0,"y":2160,"text":"Acesso","kind":"title1","maxW":6000},
+"n1":{"x":0,"y":3480,"text":"Operação","kind":"title1","maxW":7520},
+"n2":{"x":0,"y":4800,"text":"Catálogo e análises","kind":"title1","maxW":6000},
+"n3":{"x":0,"y":6120,"text":"Farmácia, equipe e plano","kind":"title1","maxW":6000},
+"n4":{"x":0,"y":7440,"text":"Chat do cliente","kind":"title1","maxW":3000}
+},"designSystems":[]}

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Leads</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Leads" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Leads</h1><p class="muted">Interessados que conversaram com a Clara, da primeira mensagem ao negócio fechado</p></div>
+<div class="row" style="gap: 10px"><span class="xs muted">Ver como</span>
+<div class="tabs" role="tablist" aria-label="Ver como">
+<button class="{{viewOwnerCls}}" role="tab" onClick="{{ viewOwner }}">Proprietário</button>
+<button class="{{viewBrokerCls}}" role="tab" onClick="{{ viewBroker }}">Corretor</button>
+</div></div>
+</div>
+
+<sc-if value="{{isBroker}}" hint-placeholder-val="{{ false }}"><div class="alert alert-soft">Você está vendo como Carlos Prado (corretor). Só aparecem os leads atribuídos a ele.</div></sc-if>
+
+<div class="row wrap" style="justify-content: space-between; gap: 12px">
+<div class="tabs" role="tablist" aria-label="Etapa">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="7"><button class="{{f.cls}}" role="tab" onClick="{{ f.pick }}">{{f.label}} <span class="xs muted">{{f.n}}</span></button></sc-for>
+</div>
+<div class="row" style="gap: 8px">
+<div style="width: 170px"><select class="input" aria-label="Temperatura" onChange="{{ setTemp }}"><option value="all">Toda temperatura</option><option value="Quente">Quente</option><option value="Morno">Morno</option><option value="Frio">Frio</option></select></div>
+<div style="width: 240px; max-width: 100%"><input class="input" placeholder="Buscar por nome ou imóvel" aria-label="Buscar lead" onInput="{{ setQ }}"></div>
+</div>
+</div>
+
+<div class="card scroll-x">
+<table class="tbl">
+<thead><tr><th>Interessado</th><th>Imóvel de interesse</th><th>Temperatura</th><th>Etapa</th><th>Responsável</th><th>Última atividade</th></tr></thead>
+<tbody>
+<sc-for list="{{rows}}" as="l" hint-placeholder-count="5">
+<tr class="hover" onClick="{{ l.open }}">
+<td><div class="row"><span class="avatar">{{l.ini}}</span><div><b>{{l.name}}</b><div class="xs muted">{{l.phone}}</div></div></div></td>
+<td><div class="row"><span class="thumb" style="width: 36px; height: 36px; border-radius: 8px; background: {{l.bg}}; color: {{l.fg}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{l.icon}}"/></svg></span><div><span>{{l.prop}}</span><div class="xs muted">{{l.deal}}</div></div></div></td>
+<td><span class="badge {{l.tBadge}}">{{l.temp}}</span> <span class="xs muted">{{l.score}}</span></td>
+<td><span class="badge {{l.badge}}">{{l.stageLabel}}</span></td>
+<td class="muted">{{l.owner}}</td>
+<td class="muted">{{l.last}}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+<sc-if value="{{empty}}" hint-placeholder-val="{{ false }}"><div style="padding: 32px; text-align: center" class="muted">Nenhum lead encontrado com esses filtros.</div></sc-if>
+</div>
+
+</main>
+
+<sc-if value="{{sheetOpen}}" hint-placeholder-val="{{ false }}">
+<div class="sheet-wrap">
+<aside class="sheet" aria-label="Detalhe do lead">
+<div class="row" style="justify-content: space-between"><div class="row"><span class="avatar" style="width: 44px; height: 44px; font-size: 15px">{{sel.ini}}</span><div><h2 class="h2" style="font-size: 20px">{{sel.name}}</h2><p class="xs muted">{{sel.phone}} · {{sel.email}}</p></div></div><button class="btn btn-ghost btn-icon" aria-label="Fechar" onClick="{{ close }}">✕</button></div>
+<div class="row wrap"><span class="badge {{sel.badge}}">{{sel.stageLabel}}</span><span class="badge {{sel.tBadge}}">{{sel.temp}} · {{sel.score}} pontos</span><span class="badge b-outline">Responsável: {{sel.owner}}</span></div>
+<div class="row wrap"><a class="btn btn-sm" href="Conversations.dc.html">Abrir conversa</a><button class="btn btn-outline btn-sm">Abrir no WhatsApp</button></div>
+
+<div class="col" style="gap: 8px"><b>Etapa</b>
+<div class="tabs" role="tablist" aria-label="Mudar etapa" style="width: fit-content">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="4"><button class="{{s.cls}}" role="tab" onClick="{{ s.pick }}">{{s.label}}</button></sc-for>
+</div>
+<span class="xs muted">Visita agendada pelo chat move o lead sozinha. Fechados nunca reabrem sozinhos.</span>
+</div>
+
+<hr class="sep">
+<div class="col" style="gap: 8px"><b>Imóvel de interesse</b>
+<a href="Properties.dc.html" class="row" style="gap: 12px; border: 1px solid #e4e4e7; border-radius: 10px; padding: 10px">
+<span class="thumb" style="background: {{sel.bg}}; color: {{sel.fg}}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{sel.icon}}"/></svg></span>
+<div class="grow"><b>{{sel.prop}}</b><div class="xs muted">{{sel.code}} · {{sel.deal}}</div></div><span class="sm" style="color: var(--primary); font-weight: 600">Abrir →</span>
+</a></div>
+
+<div class="col" style="gap: 6px"><b>Resumo da Clara</b><span class="sm muted">{{sel.summary}}</span></div>
+<sc-if value="{{sel.sim}}" hint-placeholder-val="{{ true }}"><div class="alert alert-soft" style="justify-content: space-between; align-items: center"><span>{{sel.sim}}</span><a href="Simulations.dc.html" class="sm" style="font-weight: 600; text-decoration: underline">Ver simulação</a></div></sc-if>
+
+<div class="col" style="gap: 6px"><b>Por que {{sel.temp}}</b>
+<sc-for list="{{sel.why}}" as="w" hint-placeholder-count="3"><div class="row sm" style="gap: 8px; align-items: flex-start"><span class="chk on" style="margin-top: 2px">✓</span><span>{{w}}</span></div></sc-for>
+</div>
+
+<hr class="sep">
+<div class="col" style="gap: 10px"><b>Linha do tempo</b>
+<sc-for list="{{sel.timeline}}" as="t" hint-placeholder-count="4">
+<div class="row" style="gap: 10px; align-items: flex-start"><span style="width: 8px; height: 8px; border-radius: 50%; background: var(--primary); margin-top: 7px; flex: none"></span><div><div class="sm"><b>{{t.t}}</b> <span class="xs muted">{{t.when}}</span></div><div class="xs muted">{{t.d}}</div></div></div>
+</sc-for>
+</div>
+
+<div class="row wrap" style="margin-top: auto; padding-top: 8px">
+<sc-if value="{{sel.canNext}}" hint-placeholder-val="{{ true }}"><button class="btn" onClick="{{ next }}">{{sel.nextLabel}}</button></sc-if>
+<sc-if value="{{sel.canLose}}" hint-placeholder-val="{{ true }}"><button class="btn btn-danger" onClick="{{ askLose }}">Marcar como perdido</button></sc-if>
+</div>
+</aside>
+</div>
+</sc-if>
+
+<sc-if value="{{loseOpen}}" hint-placeholder-val="{{ false }}">
+<div class="dialog-wrap"><div class="dialog" role="dialog" aria-label="Marcar como perdido">
+<div><h2 class="h2" style="font-size: 18px">Marcar {{sel.name}} como perdido?</h2><p class="muted sm">O lead fica guardado para um novo contato no futuro. A Clara não escreve sozinha para leads perdidos.</p></div>
+<div class="col" style="gap: 8px"><span class="label" style="margin: 0">Motivo</span>
+<sc-for list="{{reasons}}" as="r" hint-placeholder-count="4"><button class="{{r.cls}}" onClick="{{ r.pick }}" style="justify-content: flex-start; width: 100%">{{r.label}}</button></sc-for>
+</div>
+<div class="row" style="justify-content: flex-end"><button class="btn btn-outline" onClick="{{ keep }}">Voltar</button><button class="btn btn-danger" onClick="{{ doLose }}">Marcar como perdido</button></div>
+</div></div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { filter: 'all', sel: null, loseOpen: false, reason: 0, stage: {}, viewBroker: false, q: '', temp: 'all' };
+  renderVals() {
+    const S = this.state;
+    const ICON = {
+      apto: ['M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 7h3M8 11h3M8 15h3', '#DCF3E6', '#15803D'],
+      casa: ['M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', '#FFE4DD', '#A8301B'],
+      terreno: ['M3 20l6-9 4 5 3-4 5 8z', '#E7E5FD', '#4838B8'],
+      sala: ['M3 9l1-5h16l1 5M3 9v11h18V9M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0', '#FEF3C7', '#92400E']
+    };
+    const base = [
+      { id: 1, name: 'Camila Andrade', phone: '(41) 99812-3344', email: 'camila.a@email.com', st: 'new', temp: 'Quente', score: 86, kind: 'apto', prop: 'Apartamento 2 quartos, Água Verde', code: 'IMV-101', deal: 'Aluguel · R$ 2.400/mês', owner: 'Carlos Prado', last: 'há 6 min', summary: 'Procura apartamento para alugar em até 30 dias. Mora sozinha, tem um cachorro pequeno e perguntou sobre pets, fiador e prazo da análise.', sim: 'Simulou aluguel com condomínio: R$ 2.880 por mês.', why: ['Pediu para falar com um corretor', 'Perguntou sobre pets e fiador', 'Voltou ao chat 3 vezes em 2 dias'], timeline: [{ t: 'Pediu corretor', when: 'há 6 min', d: 'A Clara encaminhou a conversa para a equipe.' }, { t: 'Perguntou sobre pets', when: 'há 20 min', d: 'Aceita animais de pequeno porte, conforme o condomínio.' }, { t: 'Escolheu o imóvel', when: 'ontem 19:40', d: 'Apartamento 2 quartos, Água Verde.' }, { t: 'Primeira conversa', when: 'ontem 19:32', d: 'Chegou pelo site.' }] },
+      { id: 2, name: 'Rodrigo Teixeira', phone: '(41) 99777-1020', email: 'rodrigo.t@email.com', st: 'new', temp: 'Quente', score: 81, kind: 'casa', prop: 'Casa 3 quartos, Santa Felicidade', code: 'IMV-102', deal: 'Venda · R$ 890.000', owner: 'Ana Lopes', last: 'há 22 min', summary: 'Quer comprar com financiamento e entrada de 30%. Perguntou o valor da parcela e a documentação do imóvel.', sim: 'Simulou financiamento de R$ 623.000 em 360 meses.', why: ['Fez uma simulação de financiamento', 'Informou renda e entrada', 'Perguntou sobre documentação'], timeline: [{ t: 'Simulou financiamento', when: 'há 22 min', d: 'Parcela estimada de R$ 6.466 por mês.' }, { t: 'Escolheu o imóvel', when: 'há 40 min', d: 'Casa 3 quartos, Santa Felicidade.' }, { t: 'Primeira conversa', when: 'há 45 min', d: 'Chegou pelo WhatsApp.' }] },
+      { id: 3, name: 'Patrícia Gomes', phone: '(41) 99655-4412', email: 'patricia.g@email.com', st: 'visit', temp: 'Morno', score: 64, kind: 'apto', prop: 'Studio, Batel', code: 'IMV-103', deal: 'Aluguel · R$ 1.950/mês', owner: 'Carlos Prado', last: 'há 1 h', summary: 'Estudante de pós-graduação, procura algo perto da universidade. Visita marcada para sábado às 10h.', sim: '', why: ['Agendou visita pelo chat', 'Perguntou sobre contrato mínimo', 'Ainda comparando imóveis'], timeline: [{ t: 'Visita agendada', when: 'há 1 h', d: 'Sábado, 10:00. Aguardando confirmação.' }, { t: 'Perguntou sobre documentos', when: 'há 1 h', d: 'A Clara enviou a lista de documentos.' }, { t: 'Primeira conversa', when: 'há 2 h', d: 'Chegou pelo site.' }] },
+      { id: 4, name: 'Luiz Fernando', phone: '(41) 99540-8821', email: 'luiz.f@email.com', st: 'contacted', temp: 'Frio', score: 32, kind: 'sala', prop: 'Sala comercial, Centro', code: 'IMV-104', deal: 'Aluguel · R$ 3.200/mês', owner: 'Ana Lopes', last: 'há 3 dias', summary: 'Consultor autônomo, quer uma sala pequena. Parou de responder depois de saber o valor do condomínio.', sim: '', why: ['Parou de responder há 3 dias', 'Perguntou só o valor do aluguel'], timeline: [{ t: 'Contato feito', when: 'há 3 dias', d: 'Ana Lopes ligou e deixou recado.' }, { t: 'Primeira conversa', when: 'há 4 dias', d: 'Chegou pelo site.' }] },
+      { id: 5, name: 'Marcos Vieira', phone: '(41) 99422-9087', email: 'marcos.v@email.com', st: 'visit', temp: 'Quente', score: 78, kind: 'apto', prop: 'Cobertura, Bigorrilho', code: 'IMV-106', deal: 'Venda · R$ 1.650.000', owner: 'Carlos Prado', last: 'há 2 h', summary: 'Investidor, quer ver a cobertura hoje à tarde. Perguntou sobre desconto à vista.', sim: 'Simulou financiamento de R$ 1.150.000.', why: ['Visita marcada para hoje', 'Perguntou sobre pagamento à vista', 'Simulou financiamento'], timeline: [{ t: 'Visita agendada', when: 'há 2 h', d: 'Hoje, 14:30.' }, { t: 'Perguntou sobre desconto', when: 'há 2 h', d: 'Encaminhado para o corretor.' }, { t: 'Primeira conversa', when: 'ontem', d: 'Chegou pelo WhatsApp.' }] },
+      { id: 6, name: 'Helena Costa', phone: '(41) 99310-2255', email: 'helena.c@email.com', st: 'negotiating', temp: 'Quente', score: 90, kind: 'terreno', prop: 'Terreno, Campo Comprido', code: 'IMV-105', deal: 'Venda · R$ 420.000', owner: 'Ana Lopes', last: 'ontem', summary: 'Visitou o terreno e enviou proposta de R$ 395.000. Aguardando contraproposta do proprietário.', sim: '', why: ['Visitou o imóvel', 'Enviou proposta', 'Respondeu em menos de 10 minutos'], timeline: [{ t: 'Proposta enviada', when: 'ontem', d: 'R$ 395.000 à vista.' }, { t: 'Visita concluída', when: 'há 3 dias', d: 'Acompanhada por Ana Lopes.' }, { t: 'Primeira conversa', when: 'há 8 dias', d: 'Chegou pelo site.' }] },
+      { id: 7, name: 'Bruno Faria', phone: '(41) 99288-6140', email: 'bruno.f@email.com', st: 'won', temp: 'Quente', score: 95, kind: 'apto', prop: 'Apartamento 3 quartos, Cabral', code: 'IMV-107', deal: 'Aluguel · R$ 3.100/mês', owner: 'Carlos Prado', last: 'há 5 dias', summary: 'Contrato assinado. Cliente guardado para futuras indicações.', sim: '', why: ['Contrato assinado'], timeline: [{ t: 'Fechado', when: 'há 5 dias', d: 'Contrato de 30 meses assinado.' }, { t: 'Visita concluída', when: 'há 12 dias', d: '' }, { t: 'Primeira conversa', when: 'há 18 dias', d: 'Chegou pelo site.' }] },
+      { id: 8, name: 'Sofia Rezende', phone: '(41) 99101-7788', email: 'sofia.r@email.com', st: 'lost', temp: 'Frio', score: 18, kind: 'apto', prop: 'Studio, Batel', code: 'IMV-103', deal: 'Aluguel · R$ 1.950/mês', owner: 'Ana Lopes', last: 'há 9 dias', summary: 'Escolheu outro imóvel de outra imobiliária.', sim: '', why: ['Sem retorno há mais de 7 dias'], timeline: [{ t: 'Perdido', when: 'há 9 dias', d: 'Motivo: escolheu outro imóvel.' }, { t: 'Primeira conversa', when: 'há 15 dias', d: 'Chegou pelo site.' }] }
+    ];
+    const info = { new: ['Novo', 'b-blue'], contacted: ['Contatado', 'b-outline'], visit: ['Visita agendada', 'b-soft'], negotiating: ['Em negociação', 'b-amber'], won: ['Fechado', 'b-green'], lost: ['Perdido', 'b-gray'] };
+    const tB = { Quente: 'b-red', Morno: 'b-amber', Frio: 'b-gray' };
+    const stOf = (l) => S.stage[l.id] || l.st;
+    const all = base.filter((l) => !S.viewBroker || l.owner === 'Carlos Prado').map((l) => { const st = stOf(l); const ic = ICON[l.kind]; return { ...l, st, stageLabel: info[st][0], badge: info[st][1], tBadge: tB[l.temp], icon: ic[0], bg: ic[1], fg: ic[2], ini: l.name.split(' ').map((p) => p[0]).slice(0, 2).join('') }; });
+    const fl = [['all', 'Todos'], ['new', 'Novos'], ['contacted', 'Contatados'], ['visit', 'Visita agendada'], ['negotiating', 'Em negociação'], ['won', 'Fechados'], ['lost', 'Perdidos']];
+    const cnt = (k) => (k === 'all' ? all.length : all.filter((l) => l.st === k).length);
+    const filters = fl.map(([k, label]) => ({ label, n: cnt(k), cls: S.filter === k ? 'tab on' : 'tab', pick: () => this.setState({ filter: k }) }));
+    const q = S.q.trim().toLowerCase();
+    const rows = all.filter((l) => (S.filter === 'all' || l.st === S.filter) && (S.temp === 'all' || l.temp === S.temp) && (!q || (l.name + ' ' + l.prop).toLowerCase().includes(q))).map((l) => ({ ...l, open: () => this.setState({ sel: l.id }) }));
+    const cur = all.find((l) => l.id === S.sel);
+    const order = ['new', 'contacted', 'visit', 'negotiating', 'won'];
+    const nextLabels = { new: 'Marcar como contatado', contacted: 'Marcar visita agendada', visit: 'Iniciar negociação', negotiating: 'Fechar negócio' };
+    const steps = [['new', 'Novo'], ['contacted', 'Contatado'], ['visit', 'Visita'], ['negotiating', 'Negociação'], ['won', 'Fechado']].map(([k, label]) => ({ label, cls: cur && cur.st === k ? 'tab on' : 'tab', pick: () => this.setState({ stage: { ...S.stage, [S.sel]: k } }) }));
+    const sel = cur ? { ...cur, canNext: order.includes(cur.st) && cur.st !== 'won', nextLabel: nextLabels[cur.st], canLose: cur.st !== 'lost' && cur.st !== 'won' } : { why: [], timeline: [] };
+    const rl = ['Escolheu outro imóvel', 'Sem retorno', 'Fora do orçamento', 'Desistiu de mudar'];
+    const reasons = rl.map((label, i) => ({ label, cls: S.reason === i ? 'btn btn-outline' : 'btn btn-ghost', pick: () => this.setState({ reason: i }) }));
+    return {
+      isBroker: S.viewBroker, viewOwnerCls: S.viewBroker ? 'tab' : 'tab on', viewBrokerCls: S.viewBroker ? 'tab on' : 'tab',
+      viewOwner: () => this.setState({ viewBroker: false, sel: null }), viewBroker: () => this.setState({ viewBroker: true, sel: null }),
+      filters, rows, empty: rows.length === 0, sel, steps, sheetOpen: !!cur, close: () => this.setState({ sel: null }),
+      setQ: (e) => this.setState({ q: e.target.value }), setTemp: (e) => this.setState({ temp: e.target.value }),
+      next: () => { const i = order.indexOf(cur.st); this.setState({ stage: { ...S.stage, [S.sel]: order[i + 1] } }); },
+      askLose: () => this.setState({ loseOpen: true }), keep: () => this.setState({ loseOpen: false }),
+      doLose: () => this.setState({ loseOpen: false, stage: { ...S.stage, [S.sel]: 'lost' }, sel: null, filter: 'lost' }),
+      loseOpen: S.loseOpen && !!cur, reasons
+    };
+  }
+}
+</script>
+</body>
+</html>

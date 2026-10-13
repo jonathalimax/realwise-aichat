@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Plano e cobrança</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Plano e cobrança" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 24px">
+
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Plano e cobrança</h1><p class="muted">Seu plano, o uso deste mês e as faturas</p></div>
+<button class="btn btn-outline">Gerenciar pagamento e faturas</button>
+</div>
+
+<div class="card">
+<div class="card-h"><div><h2 class="h2">Uso do mês no plano {{curName}}</h2><p class="xs muted">Renova em 28/10/2026. Dados de exemplo.</p></div><span class="badge b-green">Assinatura ativa</span></div>
+<div class="card-b" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px">
+<sc-for list="{{usage}}" as="u" hint-placeholder-count="3">
+<div class="col" style="gap: 6px"><div class="row sm" style="justify-content: space-between"><span>{{u.label}}</span><b>{{u.text}}</b></div><div class="bar"><i style="width: {{u.w}}%"></i></div></div>
+</sc-for>
+</div></div>
+
+<div class="col" style="gap: 12px"><h2 class="h2">Planos</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: stretch">
+<sc-for list="{{plans}}" as="p" hint-placeholder-count="3">
+<div class="card" style="{{p.style}}"><div class="card-h"><div><h3 class="h2">{{p.name}}</h3><p class="xs muted">{{p.sub}}</p></div><span class="badge {{p.badge}}">{{p.tag}}</span></div>
+<div class="card-b col" style="gap: 14px">
+<div><span style="font-size: 30px; font-weight: 700; letter-spacing: -0.02em">{{p.price}}</span><span class="muted"> /mês</span> <s class="xs muted">{{p.list}}</s></div>
+<div class="col" style="gap: 8px">
+<sc-for list="{{p.feats}}" as="f" hint-placeholder-count="5"><div class="row sm" style="gap: 8px; align-items: flex-start"><span class="chk on" style="margin-top: 2px">✓</span><span>{{f}}</span></div></sc-for>
+</div>
+<button class="{{p.btnCls}}" onClick="{{ p.pick }}" style="margin-top: auto">{{p.btn}}</button>
+</div></div>
+</sc-for>
+</div></div>
+
+<div class="card scroll-x"><div class="card-h"><div><h2 class="h2">Faturas</h2><p class="xs muted">Últimos pagamentos</p></div></div>
+<div class="card-b scroll-x" style="padding-top: 8px"><table class="tbl"><thead><tr><th>Data</th><th>Plano</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody>
+<sc-for list="{{invoices}}" as="i" hint-placeholder-count="3"><tr><td>{{i.d}}</td><td>{{i.p}}</td><td>{{i.v}}</td><td><span class="badge b-green">Paga</span></td><td style="text-align: right"><button class="btn btn-ghost btn-sm">Baixar</button></td></tr></sc-for>
+</tbody></table></div></div>
+
+</main>
+
+<sc-if value="{{confirm}}" hint-placeholder-val="{{ false }}">
+<div class="dialog-wrap"><div class="dialog" role="dialog" aria-label="Mudar de plano">
+<div><h2 class="h2" style="font-size: 18px">Mudar para {{target.name}}?</h2><p class="muted sm">Você será levado ao pagamento seguro. A diferença é calculada pelo que falta do mês.</p></div>
+<div class="alert alert-soft"><span>{{target.price}} por mês · {{target.conv}} conversas, {{target.docs}} documentos, {{target.wa}} número(s) de WhatsApp.</span></div>
+<div class="row" style="justify-content: flex-end"><button class="btn btn-outline" onClick="{{ cancel }}">Voltar</button><button class="btn" onClick="{{ doChange }}">Continuar para o pagamento</button></div>
+</div></div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { cur: 1, target: null };
+  renderVals() {
+    const S = this.state;
+    const defs = [
+      { name: 'Essencial', price: 'R$ 197', list: 'R$ 297', sub: 'Para começar', conv: 150, docs: 10, wa: 1, feats: ['150 conversas por mês', '10 documentos', '1 número de WhatsApp', 'Análises básicas'] },
+      { name: 'Profissional', price: 'R$ 397', list: 'R$ 597', sub: 'O mais escolhido', conv: 1000, docs: 50, wa: 3, feats: ['1.000 conversas por mês', '50 documentos', '3 números de WhatsApp', 'Análises completas', 'Google Agenda', 'Cores e domínio próprio', 'Suporte prioritário'] },
+      { name: 'Studio', price: 'R$ 797', list: 'R$ 1.197', sub: 'Para equipes grandes', conv: 3000, docs: 'Ilimitados', wa: 10, feats: ['3.000 conversas por mês', 'Documentos ilimitados', '10 números de WhatsApp', 'Rascunhos sugeridos pela Clara', 'Alertas por WhatsApp', 'CRM por webhook', 'Suporte dedicado'] }
+    ];
+    const plans = defs.map((d, i) => {
+      const isCur = i === S.cur;
+      return { ...d, tag: isCur ? 'Plano atual' : (i === 1 ? 'Recomendado' : 'Disponível'), badge: isCur ? 'b-green' : 'b-soft', style: isCur ? 'border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary)' : '', btn: isCur ? 'Plano atual' : (i > S.cur ? 'Fazer upgrade' : 'Mudar para este'), btnCls: isCur ? 'btn btn-outline' : 'btn', pick: () => { if (!isCur) this.setState({ target: i }); } };
+    });
+    const c = defs[S.cur];
+    const used = [412, 4, 1];
+    const lim = [c.conv, typeof c.docs === 'number' ? c.docs : null, c.wa];
+    const labels = ['Conversas da Clara', 'Documentos na base', 'Números de WhatsApp'];
+    const usage = labels.map((label, i) => ({ label, text: used[i] + ' de ' + (lim[i] === null ? 'ilimitado' : lim[i]), w: lim[i] === null ? 4 : Math.min(100, Math.round((used[i] / lim[i]) * 100)) }));
+    return {
+      curName: c.name, plans, usage, confirm: S.target !== null, target: S.target !== null ? defs[S.target] : {},
+      cancel: () => this.setState({ target: null }), doChange: () => this.setState({ cur: S.target, target: null }),
+      invoices: [{ d: '28/09/2026', p: 'Profissional', v: 'R$ 397,00' }, { d: '28/08/2026', p: 'Profissional', v: 'R$ 397,00' }, { d: '28/07/2026', p: 'Essencial', v: 'R$ 197,00' }]
+    };
+  }
+}
+</script>
+</body>
+</html>

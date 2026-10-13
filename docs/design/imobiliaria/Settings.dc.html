@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Imobiliária</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Imobiliária" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Imobiliária</h1><p class="muted">Dados da empresa, regras de locação, jeito de atender e aparência</p></div>
+<button class="btn" onClick="{{ save }}">{{saveLabel}}</button>
+</div>
+<div class="tabs" role="tablist" aria-label="Seção" style="width: fit-content">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="5"><button class="{{t.cls}}" role="tab" onClick="{{ t.pick }}">{{t.label}}</button></sc-for>
+</div>
+
+<sc-if value="{{t_id}}" hint-placeholder-val="{{ true }}">
+<div class="card"><div class="card-h"><div><h2 class="h2">Identidade</h2><p class="xs muted">Aparece no chat, nas mensagens e nos contratos</p></div></div>
+<div class="card-b" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px">
+<div class="field"><label class="label" for="a1">Nome fantasia</label><input id="a1" class="input" value="Imobiliária Exemplo"></div>
+<div class="field"><label class="label" for="a2">Razão social</label><input id="a2" class="input" value="Exemplo Negócios Imobiliários Ltda."></div>
+<div class="field"><label class="label" for="a3">CNPJ</label><input id="a3" class="input" value="12.345.678/0001-90"></div>
+<div class="field"><label class="label" for="a4">CRECI da empresa</label><input id="a4" class="input" value="CRECI-PR 12345-J"></div>
+<div class="field"><label class="label" for="a5">Corretor responsável</label><input id="a5" class="input" value="Marina Souza · CRECI-PR 54321-F"></div>
+<div class="field"><label class="label" for="a6">Telefone e WhatsApp</label><input id="a6" class="input" value="(41) 3333-4455"></div>
+<div class="field"><label class="label" for="a7">E-mail de contato</label><input id="a7" class="input" value="contato@imobiliariaexemplo.com.br"></div>
+<div class="field"><label class="label" for="a8">Endereço</label><input id="a8" class="input" value="Rua Marechal Deodoro, 500, Centro, Curitiba/PR"></div>
+</div></div>
+</sc-if>
+
+<sc-if value="{{t_rules}}" hint-placeholder-val="{{ false }}">
+<div class="alert alert-soft" style="align-items: center; justify-content: space-between; flex-wrap: wrap"><span>Estas respostas alimentam a Clara. Preenchimento: <b>{{filled}} de {{total}}</b>. Prefere conversar? O Assistente preenche com você.</span><a class="btn btn-outline btn-sm" href="Onboarding.dc.html">Abrir o Assistente</a></div>
+<div class="card"><div class="card-b" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; padding-top: 20px">
+<sc-for list="{{rules}}" as="r" hint-placeholder-count="10">
+<div class="field"><label class="label" for="{{r.id}}">{{r.label}} <span class="badge {{r.badge}}" style="height: 18px; font-size: 11px; margin-left: 4px">{{r.weight}}</span></label><input id="{{r.id}}" class="input" value="{{r.value}}" placeholder="Ainda não informado"></div>
+</sc-for>
+</div></div>
+</sc-if>
+
+<sc-if value="{{t_clara}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div class="card" style="flex: 2 1 480px"><div class="card-h"><div><h2 class="h2">Comportamento da Clara</h2><p class="xs muted">Ela sempre se apresenta como assistente virtual com inteligência artificial</p></div></div>
+<div class="card-b col" style="gap: 14px">
+<div class="field"><label class="label" for="ci">Instruções personalizadas</label><textarea id="ci" class="input" rows="5">Priorize imóveis em Curitiba e região metropolitana. Não prometa descontos. Quando o interessado pedir proposta, chame um corretor.</textarea></div>
+<sc-for list="{{toggles}}" as="t" hint-placeholder-count="4"><div class="row" style="justify-content: space-between; border: 1px solid #e4e4e7; border-radius: 10px; padding: 10px 14px"><div><b>{{t.t}}</b><div class="xs muted">{{t.d}}</div></div><button class="{{t.cls}}" role="switch" aria-checked="{{t.on}}" aria-label="{{t.t}}" onClick="{{ t.toggle }}"></button></div></sc-for>
+<div class="row" style="justify-content: space-between; border: 1px solid #e4e4e7; border-radius: 10px; padding: 10px 14px; background: #fafafa"><div><b>Identificar-se como IA</b><div class="xs muted">Sempre ligado. Não pode ser desativado.</div></div><span class="badge b-gray">Obrigatório</span></div>
+</div></div>
+<div class="card" style="flex: 1 1 300px"><div class="card-h"><div><h2 class="h2">Quem é a Clara</h2></div></div><div class="card-b col" style="gap: 10px"><div class="row"><span class="avatar" style="width: 48px; height: 48px; font-size: 16px; background: var(--primary); color: #fff">C</span><div><b>Clara</b> <span class="badge b-soft" style="height: 18px">IA</span><div class="xs muted">Assistente virtual da imobiliária</div></div></div><p class="sm muted">Quando um corretor entra na conversa, o visitante vê o nome e a função dele num aviso no chat.</p><a class="btn btn-outline btn-sm" style="width: fit-content" href="Chat.dc.html">Ver no chat</a></div></div>
+</div>
+</sc-if>
+
+<sc-if value="{{t_int}}" hint-placeholder-val="{{ false }}">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start">
+<div class="card"><div class="card-h"><div><h2 class="h2">Site da imobiliária</h2><p class="xs muted">Importa anúncios e textos do site</p></div></div><div class="card-b col" style="gap: 10px"><div class="field"><label class="label" for="su">Endereço do site</label><input id="su" class="input" value="https://www.imobiliariaexemplo.com.br"></div><div class="row"><a class="btn btn-outline btn-sm" href="PropertyImport.dc.html">Sincronizar site</a><span class="xs muted">Última sincronização: ontem, 18:10</span></div></div></div>
+<div class="card"><div class="card-h"><div><h2 class="h2">Google Agenda</h2><p class="xs muted">Bloqueia horários ocupados e cria eventos de visita</p></div><span class="badge b-green">Conectado</span></div><div class="card-b"><a class="btn btn-outline btn-sm" href="Visits.dc.html">Gerenciar em Visitas</a></div></div>
+<div class="card"><div class="card-h"><div><h2 class="h2">Números de WhatsApp</h2><p class="xs muted">1 de 3 no plano Profissional</p></div></div><div class="card-b col" style="gap: 10px"><div class="row" style="justify-content: space-between"><span>(41) 99900-1122</span><span class="badge b-green">Ativo</span></div><button class="btn btn-outline btn-sm" style="width: fit-content">Adicionar número</button></div></div>
+<div class="card"><div class="card-h"><div><h2 class="h2">CRM por webhook</h2><p class="xs muted">Envia leads novos para o seu CRM</p></div><span class="badge b-outline">Plano Studio</span></div><div class="card-b"><a class="btn btn-outline btn-sm" href="Billing.dc.html">Ver planos</a></div></div>
+</div>
+</sc-if>
+
+<sc-if value="{{t_look}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div class="card" style="flex: 1 1 340px"><div class="card-h"><div><h2 class="h2">Aparência</h2><p class="xs muted">Cores do chat e deste painel. Sem cores definidas, usa o verde padrão da plataforma.</p></div></div><div class="card-b col" style="gap: 14px">
+<sc-for list="{{colors}}" as="c" hint-placeholder-count="3"><div class="row" style="justify-content: space-between"><div><b>{{c.name}}</b><div class="xs muted">{{c.use}}</div></div><div class="row"><span class="sm muted">{{c.value}}</span><input type="color" aria-label="{{c.name}}" value="{{c.value}}" onChange="{{ c.set }}" style="width: 40px; height: 36px; border: 1px solid #e4e4e7; border-radius: 8px; padding: 2px; background: #fff"></div></div></sc-for>
+<div class="row" style="justify-content: space-between"><b>Logo</b><button class="btn btn-outline btn-sm">Enviar imagem</button></div>
+<button class="btn btn-ghost btn-sm" style="width: fit-content" onClick="{{ reset }}">Restaurar padrão</button>
+</div></div>
+<div class="card" style="flex: 1 1 340px"><div class="card-h"><div><h2 class="h2">Pré-visualização do chat</h2></div></div><div class="card-b">
+<div style="border-radius: 14px; overflow: hidden; border: 1px solid #e4e4e7">
+<div style="background: {{p1}}; color: #fff; padding: 14px; display: flex; align-items: center; gap: 10px"><span class="avatar" style="background: #fff; color: #09090b">C</span><div><b>Clara</b> <span class="badge" style="background: {{p3}}; color: #fff; height: 18px">IA</span><div class="xs" style="opacity: 0.9">Imobiliária Exemplo</div></div></div>
+<div class="col" style="padding: 14px; background: #fafafa; gap: 10px"><div style="background: #fff; border: 1px solid #e4e4e7; border-radius: 12px; padding: 10px 12px; max-width: 85%">Oi! Sou a Clara, assistente virtual com inteligência artificial. Posso ajudar a encontrar um imóvel e agendar uma visita.</div><div style="align-self: flex-end; background: {{p1}}; color: #fff; border-radius: 12px; padding: 10px 12px">Quero ver apartamentos</div><button class="btn" style="background: {{p2}}; border-color: {{p2}}; width: fit-content">Agendar visita</button></div>
+</div></div></div>
+</div>
+</sc-if>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { tab: 'id', saved: false, c1: '#15803D', c2: '#FF6348', c3: '#7C6FF0', tg: [true, true, true, false] };
+  renderVals() {
+    const S = this.state;
+    const tl = [['id', 'Identidade'], ['rules', 'Regras de locação'], ['clara', 'Clara'], ['int', 'Integrações'], ['look', 'Aparência']];
+    const tabs = tl.map(([k, label]) => ({ label, cls: S.tab === k ? 'tab on' : 'tab', pick: () => this.setState({ tab: k }) }));
+    const rl = [
+      ['Tipos de imóvel', 'Apartamentos, casas e salas comerciais', 'obrigatório'], ['Documentos exigidos', 'RG, CPF, comprovante de renda e de residência', 'obrigatório'],
+      ['Fiador e seguro fiança', 'Fiador, seguro fiança ou caução', 'obrigatório'], ['Taxa de administração', '10% do aluguel mensal', 'obrigatório'],
+      ['Horário de visitas', 'Seg a sex 9h às 18h, sábado 9h às 13h', 'obrigatório'], ['Política de pets', 'Sim, conforme o condomínio', 'recomendado'],
+      ['Prazo mínimo de contrato', '30 meses para residencial', 'recomendado'], ['Prazo da análise de crédito', 'Até 2 dias úteis', 'recomendado'],
+      ['Reajuste anual', '', 'opcional'], ['Vistoria de saída', '', 'opcional']
+    ];
+    const bd = { obrigatório: 'b-amber', recomendado: 'b-blue', opcional: 'b-gray' };
+    const rules = rl.map(([label, value, weight], i) => ({ id: 'r' + i, label, value, weight, badge: bd[weight] }));
+    const td = [['Avisar a equipe de leads quentes', 'Envia alerta quando o interessado está pronto para visitar ou propor'], ['Oferecer simulação de financiamento', 'Usa a taxa configurada em Simulações'], ['Pedir contato antes de agendar visita', 'Nome e telefone antes de confirmar o horário'], ['Responder fora do horário comercial', 'A Clara continua atendendo à noite e aos domingos']];
+    const toggles = td.map(([t, d], i) => ({ t, d, on: S.tg[i], cls: S.tg[i] ? 'sw on' : 'sw', toggle: () => { const g = S.tg.slice(); g[i] = !g[i]; this.setState({ tg: g }); } }));
+    const mk = (name, use, key) => ({ name, use, value: S[key], set: (e) => this.setState({ [key]: e.target.value }) });
+    return {
+      tabs, t_id: S.tab === 'id', t_rules: S.tab === 'rules', t_clara: S.tab === 'clara', t_int: S.tab === 'int', t_look: S.tab === 'look',
+      rules, filled: rl.filter((r) => r[1]).length, total: rl.length, toggles,
+      save: () => this.setState({ saved: true }), saveLabel: S.saved ? 'Alterações salvas' : 'Salvar alterações',
+      colors: [mk('Primária', 'Botões, cabeçalho do chat, menu ativo', 'c1'), mk('Secundária', 'Botões de ação no chat, destaques quentes', 'c2'), mk('Terciária', 'Selos e realces', 'c3')],
+      p1: S.c1, p2: S.c2, p3: S.c3, reset: () => this.setState({ c1: '#15803D', c2: '#FF6348', c3: '#7C6FF0' })
+    };
+  }
+}
+</script>
+</body>
+</html>

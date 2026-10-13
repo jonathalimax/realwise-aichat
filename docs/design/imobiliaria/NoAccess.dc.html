@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Sem acesso</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Início" role="Corretor" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; align-items: center; justify-content: center">
+<div class="card" style="width: min(480px, 100%)"><div class="card-b col" style="gap: 16px; padding: 32px; align-items: center; text-align: center">
+<span class="thumb thumb-lg" style="background: #f4f4f5; color: #71717a"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11V8a6 6 0 0 1 12 0v3M5 11h14v10H5zM12 15v2"/></svg></span>
+<div><h1 class="h1" style="font-size: 22px">Você não tem acesso a Plano e cobrança</h1><p class="muted" style="margin-top: 6px">A sua função é Corretor. Essa seção é de quem gerencia a imobiliária.</p></div>
+<sc-if value="{{sent}}" hint-placeholder-val="{{ false }}"><div class="alert alert-soft" style="text-align: left">Pedido enviado para Marina Souza (proprietária). Você recebe um e-mail quando ela responder.</div></sc-if>
+<div class="row wrap" style="justify-content: center">
+<a class="btn" href="Home.dc.html">Voltar ao Início</a>
+<sc-if value="{{canAsk}}" hint-placeholder-val="{{ true }}"><button class="btn btn-outline" onClick="{{ ask }}">Pedir acesso</button></sc-if>
+</div>
+<p class="xs muted">O menu mostra apenas o que a sua função pode abrir.</p>
+</div></div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  state = { sent: false };
+  renderVals() {
+    return { sent: this.state.sent, canAsk: !this.state.sent, ask: () => this.setState({ sent: true }) };
+  }
+}
+</script>
+</body>
+</html>

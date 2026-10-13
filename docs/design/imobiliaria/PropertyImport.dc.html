@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Importar imóveis</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}.opt{border:1px solid #e4e4e7;border-radius:12px;background:#fff;padding:16px;font:inherit;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;align-items:flex-start}.opt:hover{background:#fafafa}.opt:focus-visible{outline:2px solid var(--ring);outline-offset:2px}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Imóveis" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px; max-width: 1080px">
+<div class="col" style="gap: 4px"><a class="sm muted" href="Properties.dc.html">← Imóveis</a><h1 class="h1">Importar imóveis</h1><p class="muted">Envie uma tabela de preços, um PDF de anúncios ou aponte o site. A IA extrai os imóveis e você revisa antes de publicar.</p></div>
+
+<div class="row wrap" style="gap: 8px" aria-label="Passos">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="3">
+<div class="row" style="gap: 8px"><span class="avatar" style="{{s.style}}">{{s.n}}</span><span style="{{s.tstyle}}">{{s.label}}</span><span class="muted" style="margin: 0 8px">{{s.sep}}</span></div>
+</sc-for>
+</div>
+
+<sc-if value="{{s1}}" hint-placeholder-val="{{ true }}">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px">
+<sc-for list="{{origins}}" as="o" hint-placeholder-count="3">
+<button class="opt" onClick="{{ o.pick }}" style="{{o.style}}">
+<span class="thumb" style="background: #DCF3E6; color: #15803D"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{o.icon}}"/></svg></span>
+<b>{{o.t}}</b><span class="sm muted" style="font-weight: 400">{{o.d}}</span>
+</button>
+</sc-for>
+</div>
+<sc-if value="{{isFile}}" hint-placeholder-val="{{ true }}"><div class="card"><div class="card-b col" style="gap: 10px; align-items: center; padding: 28px; border: 1px dashed #a1a1aa; border-radius: 12px; text-align: center"><b>Arraste arquivos aqui</b><span class="sm muted">PDF, planilha (.xlsx, .csv) ou imagem. Até 20 MB por arquivo.</span><button class="btn btn-outline">Escolher arquivos</button><span class="badge b-soft">tabela_locacao_outubro.pdf · 1,2 MB</span></div></div></sc-if>
+<sc-if value="{{isSite}}" hint-placeholder-val="{{ false }}"><div class="card"><div class="card-b field"><label class="label" for="url">Endereço do site</label><input id="url" class="input" value="https://www.imobiliariaexemplo.com.br/imoveis"><span class="xs muted" style="margin-top: 4px">A IA lê as páginas de anúncios. Imóveis já cadastrados são atualizados, não duplicados.</span></div></div></sc-if>
+<sc-if value="{{isText}}" hint-placeholder-val="{{ false }}"><div class="card"><div class="card-b field"><label class="label" for="txt">Cole os anúncios</label><textarea id="txt" class="input" rows="5">Casa 4 quartos, Santa Cândida, cond. Vale Verde, R$ 4.800/mês. Loja de rua no Portão, 120 m², R$ 5.500.</textarea></div></div></sc-if>
+<div class="alert alert-soft">Seu plano Profissional permite até 50 documentos. Você usou 4 este mês.</div>
+<div class="row" style="justify-content: flex-end"><button class="btn" onClick="{{ toStep2 }}">Extrair imóveis</button></div>
+</sc-if>
+
+<sc-if value="{{s2}}" hint-placeholder-val="{{ false }}">
+<div class="card"><div class="card-h"><div><h2 class="h2">{{exTitle}}</h2><p class="xs muted">{{exSub}}</p></div><span class="badge {{exBadge}}">{{exLabel}}</span></div>
+<div class="card-b col" style="gap: 14px"><div class="bar"><i style="width: {{pct}}%"></i></div>
+<sc-for list="{{log}}" as="l" hint-placeholder-count="3"><div class="row sm" style="gap: 8px"><span class="chk {{l.cls}}">{{l.mark}}</span><span>{{l.t}}</span></div></sc-for>
+<div class="row wrap" style="justify-content: space-between"><button class="btn btn-outline" onClick="{{ backTo1 }}">Voltar</button><div class="row"><button class="btn btn-outline" onClick="{{ advance }}">{{advLabel}}</button><button class="{{nextCls}}" onClick="{{ toStep3 }}">Revisar imóveis</button></div></div>
+</div></div>
+</sc-if>
+
+<sc-if value="{{s3}}" hint-placeholder-val="{{ false }}">
+<div class="alert alert-amber">A IA pode errar valores e endereços. Campos em dúvida aparecem marcados. Só os imóveis selecionados serão publicados.</div>
+<div class="card scroll-x"><table class="tbl">
+<thead><tr><th style="width: 40px"></th><th>Imóvel</th><th>Negócio</th><th>Valor</th><th>Pontos de atenção</th></tr></thead>
+<tbody>
+<sc-for list="{{items}}" as="p" hint-placeholder-count="4">
+<tr class="hover" onClick="{{ p.toggle }}"><td><span class="{{p.chk}}">{{p.mark}}</span></td>
+<td><div class="row"><span class="thumb" style="width: 40px; height: 40px; border-radius: 8px; background: {{p.bg}}; color: {{p.fg}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{p.icon}}"/></svg></span><div><b>{{p.title}}</b><div class="xs muted">{{p.where}}</div></div></div></td>
+<td><span class="badge b-outline">{{p.deal}}</span></td><td>{{p.price}}</td><td><span class="badge {{p.warnBadge}}">{{p.warn}}</span></td></tr>
+</sc-for></tbody></table></div>
+<div class="row wrap" style="justify-content: space-between"><button class="btn btn-outline" onClick="{{ backTo2 }}">Voltar</button><div class="row"><span class="sm muted">{{selCount}} selecionado(s)</span><button class="btn" onClick="{{ publish }}">Publicar selecionados</button></div></div>
+</sc-if>
+
+<sc-if value="{{s4}}" hint-placeholder-val="{{ false }}">
+<div class="card"><div class="card-b col" style="gap: 12px; align-items: center; text-align: center; padding: 40px"><span class="thumb thumb-lg" style="background: #DCF3E6; color: #15803D"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><h2 class="h2" style="font-size: 20px">{{selCount}} imóveis publicados</h2><p class="muted">A Clara já pode oferecê-los no chat. O que ficou de fora continua em Para revisar.</p><div class="row"><a class="btn" href="Properties.dc.html">Ver imóveis</a><button class="btn btn-outline" onClick="{{ again }}">Importar mais</button></div></div></div>
+</sc-if>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { step: 1, origin: 0, pct: 20, sel: [true, true, false, true] };
+  renderVals() {
+    const S = this.state;
+    const names = ['Origem', 'Extração', 'Revisão'];
+    const steps = names.map((label, i) => {
+      const n = i + 1; const on = S.step >= n;
+      return { n: S.step > n || S.step === 4 ? '✓' : n, label, sep: i < 2 ? '›' : '', style: on ? 'background: var(--primary); color: #fff' : '', tstyle: S.step === n ? 'font-weight: 600' : 'color: #71717a' };
+    });
+    const ot = [
+      ['Enviar PDF ou planilha', 'Tabela de preços, catálogo, fichas de imóveis.', 'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5'],
+      ['Sincronizar site', 'Lê os anúncios do site da imobiliária.', 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18'],
+      ['Colar texto', 'Cole anúncios de WhatsApp ou de portais.', 'M9 4h6l1 2h3v14H5V6h3zM9 11h6M9 15h4']
+    ];
+    const origins = ot.map(([t, d, icon], i) => ({ t, d, icon, style: S.origin === i ? 'border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); background: #DCF3E6' : '', pick: () => this.setState({ origin: i }) }));
+    const done = S.pct >= 100;
+    const log = [
+      { t: 'Arquivo recebido e lido', ok: S.pct >= 30 }, { t: 'Imóveis identificados: 4', ok: S.pct >= 60 }, { t: 'Valores e características conferidos', ok: S.pct >= 100 }
+    ].map((l) => ({ t: l.t, cls: l.ok ? 'on' : '', mark: l.ok ? '✓' : '' }));
+    const ICON = {
+      apto: ['M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 7h3M8 11h3M8 15h3', '#DCF3E6', '#15803D'],
+      casa: ['M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', '#FFE4DD', '#A8301B'],
+      sala: ['M3 9l1-5h16l1 5M3 9v11h18V9M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0', '#FEF3C7', '#92400E']
+    };
+    const raw = [
+      ['Casa 4 quartos', 'Santa Cândida, cond. Vale Verde', 'Aluguel', 'R$ 4.800', 'IPTU e área ausentes', 'b-amber', 'casa'],
+      ['Loja de rua 120 m²', 'Portão (endereço ausente)', 'Aluguel', 'R$ 5.500', 'Endereço ausente', 'b-amber', 'sala'],
+      ['Apartamento 2 quartos', 'Água Verde', 'Aluguel', 'R$ 2.400', 'Já existe (IMV-101)', 'b-gray', 'apto'],
+      ['Studio 28 m²', 'Centro', 'Aluguel', 'R$ 1.500', 'Tudo certo', 'b-green', 'apto']
+    ];
+    const items = raw.map(([title, where, deal, price, warn, warnBadge, k], i) => ({ title, where, deal, price, warn, warnBadge, icon: ICON[k][0], bg: ICON[k][1], fg: ICON[k][2], chk: S.sel[i] ? 'chk on' : 'chk', mark: S.sel[i] ? '✓' : '', toggle: () => { const s = S.sel.slice(); s[i] = !s[i]; this.setState({ sel: s }); } }));
+    const selCount = S.sel.filter(Boolean).length;
+    return {
+      steps, s1: S.step === 1, s2: S.step === 2, s3: S.step === 3, s4: S.step === 4,
+      origins, isFile: S.origin === 0, isSite: S.origin === 1, isText: S.origin === 2,
+      toStep2: () => this.setState({ step: 2, pct: 20 }), backTo1: () => this.setState({ step: 1 }),
+      exTitle: done ? 'Extração concluída' : 'Extraindo imóveis', exSub: done ? '4 imóveis encontrados em 1 documento' : 'Isso pode levar alguns minutos. Você pode sair desta tela, avisamos quando terminar.',
+      exBadge: done ? 'b-green' : 'b-amber', exLabel: done ? 'Pronto' : 'Em andamento', pct: S.pct, log,
+      advance: () => this.setState({ pct: Math.min(100, S.pct + 40) }), advLabel: done ? 'Tudo certo' : 'Avançar extração (exemplo)',
+      nextCls: done ? 'btn' : 'btn btn-outline', toStep3: () => { if (done) this.setState({ step: 3 }); },
+      items, selCount, backTo2: () => this.setState({ step: 2 }), publish: () => this.setState({ step: 4 }),
+      again: () => this.setState({ step: 1, pct: 20, sel: [true, true, false, true] })
+    };
+  }
+}
+</script>
+</body>
+</html>

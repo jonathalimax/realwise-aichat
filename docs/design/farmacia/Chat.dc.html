@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Chat do cliente</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}.bub{background:#fff;border:1px solid #e4e4e7;border-radius:14px;padding:10px 12px;max-width:88%}.me{align-self:flex-end;background:var(--primary);color:#fff;border-radius:14px;padding:10px 12px;max-width:88%}.chip{border:1px solid var(--primary);color:var(--primary);background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:500;cursor:pointer}.chip:hover{background:var(--soft)}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; gap: 40px; min-height: 100vh; background: #eef2f1; padding: 40px; justify-content: center; align-items: flex-start">
+
+<div class="card" style="flex: 0 1 320px; min-width: 260px"><div class="card-h"><div><h2 class="h2">Telas do chat</h2><p class="xs muted">Clique para pular, ou use os botões dentro do chat.</p></div></div>
+<div class="card-b col" style="gap: 4px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="10"><button onClick="{{ s.pick }}" style="text-align: left; font: inherit; border: 0; border-radius: 8px; padding: 8px 10px; cursor: pointer; background: {{s.bg}}; display: flex; gap: 10px"><b style="width: 28px; color: var(--primary)">{{s.id}}</b><span>{{s.label}}</span></button></sc-for>
+</div></div>
+
+<div style="width: 390px; height: 800px; border-radius: 28px; background: #fff; border: 1px solid #d4d4d8; box-shadow: 0 20px 50px rgba(0,0,0,0.15); overflow: hidden; display: flex; flex-direction: column; flex: none">
+<div style="background: var(--primary); color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 10px">
+<span class="avatar" style="background: #fff; color: #09090b; width: 40px; height: 40px">A</span>
+<div style="flex: 1; line-height: 1.3"><div class="row" style="gap: 6px"><b>Alex</b><span class="badge" style="background: var(--tertiary); color: #09090b; height: 18px; font-size: 11px">IA</span></div><div class="xs" style="opacity: 0.92">Farmácia Exemplo · online</div><div class="xs" style="opacity: 0.8">CRF-PR 1234 · Farm. resp. Maria S.</div></div>
+</div>
+<div style="flex: 1; overflow: auto; background: #fafafa; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+
+<sc-if value="{{s1}}" hint-placeholder-val="{{ true }}">
+<div class="bub">Oi! Sou o Alex, assistente virtual da Farmácia Exemplo. Sou uma inteligência artificial. Posso ajudar a montar seu pedido ou encaminhar você ao farmacêutico. Não indico remédios.</div>
+<div class="row wrap"><button class="chip" onClick="{{ go2 }}">Fazer um pedido</button><button class="chip" onClick="{{ go3 }}">Falar com o farmacêutico</button><button class="chip">Horários e entrega</button></div>
+<div class="xs muted" style="text-align: center; margin-top: 6px"><button class="chip" onClick="{{ go5 }}">Ver exemplo: remédio controlado</button></div>
+</sc-if>
+
+<sc-if value="{{s2}}" hint-placeholder-val="{{ false }}">
+<div class="me">Quero dipirona 500</div>
+<div class="bub">Encontrei:</div>
+<div class="card" style="max-width: 92%"><div class="card-b col" style="gap: 8px; padding: 14px"><div class="row" style="gap: 10px"><span class="thumb" style="background: #E6F4F1; color: #0B4F4A"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 20.5l10-10a4.95 4.95 0 0 0-7-7l-10 10a4.95 4.95 0 0 0 7 7zM8.5 8.5l7 7"/></svg></span><b>Dipirona 500 mg · 10 comp.</b></div><div class="row" style="justify-content: space-between"><span style="font-size: 18px; font-weight: 700">R$ 8,90</span><span class="badge b-green">✓ em estoque</span></div>
+<div class="row"><button class="btn btn-outline btn-icon btn-sm" aria-label="Menos" onClick="{{ dec }}">−</button><b style="width: 24px; text-align: center">{{qty}}</b><button class="btn btn-outline btn-icon btn-sm" aria-label="Mais" onClick="{{ inc }}">+</button><button class="btn btn-sm" style="margin-left: auto" onClick="{{ go6 }}">Adicionar</button></div></div></div>
+<div class="xs muted">Carrinho: {{qty}} item · {{subtotal}}</div>
+</sc-if>
+
+<sc-if value="{{s3}}" hint-placeholder-val="{{ false }}">
+<div class="me">Estou com dor de cabeça</div>
+<div class="bub">Entendi. Vou reunir algumas informações para o farmacêutico. Há quanto tempo você sente isso?</div>
+<div class="row wrap"><button class="chip">Hoje</button><button class="chip" onClick="{{ go3b }}">1 a 3 dias</button><button class="chip">Mais de 3 dias</button></div>
+<div class="bub">Alguma alergia a medicamentos ou componentes?</div>
+<div class="row wrap"><button class="chip" onClick="{{ go10 }}">Não tenho</button><button class="chip" onClick="{{ go10 }}">Tenho…</button></div>
+<div class="xs muted" style="text-align: center"><button class="chip" onClick="{{ go4 }}">Ver exemplo: sinal de alerta</button></div>
+</sc-if>
+
+<sc-if value="{{s4}}" hint-placeholder-val="{{ false }}">
+<div class="me">Estou com dor forte no peito e falta de ar</div>
+<div class="alert alert-red" style="flex-direction: column; gap: 6px"><b>Isso pode ser urgente.</b><span>Ligue 192 (SAMU) ou vá ao pronto-socorro agora. Posso avisar o farmacêutico também.</span></div>
+<div class="row wrap"><button class="btn" style="background: #b91c1c; border-color: #b91c1c" onClick="{{ go10 }}">Avisar o farmacêutico</button></div>
+</sc-if>
+
+<sc-if value="{{s5}}" hint-placeholder-val="{{ false }}">
+<div class="me">Vocês têm clonazepam 2 mg?</div>
+<div class="card" style="max-width: 92%"><div class="card-b col" style="gap: 6px; padding: 14px"><b>Clonazepam 2 mg · 30 comp.</b><span>Temos em estoque · <b>R$ 24,90</b></span><div class="alert alert-amber" style="font-size: 13px">Este medicamento é controlado e não pode ser vendido online. Venha à farmácia com a receita.</div></div></div>
+<div class="row wrap"><button class="chip" onClick="{{ go10 }}">Falar com o farmacêutico</button></div>
+</sc-if>
+
+<sc-if value="{{s6}}" hint-placeholder-val="{{ false }}">
+<div class="bub">Dipirona 500 mg adicionada. Qual o seu WhatsApp (com DDD) para acompanhar o pedido?</div>
+<div class="row"><input class="input" value="(41) 99812-3344" aria-label="WhatsApp"><button class="btn" onClick="{{ go6b }}">Continuar</button></div>
+<sc-if value="{{known}}" hint-placeholder-val="{{ false }}"><div class="bub">Oi, João! Confirma seu endereço?<br><b>Rua das F…, nº •••, Água Verde</b></div><div class="row wrap"><button class="chip" onClick="{{ go8 }}">Está certo</button><button class="chip" onClick="{{ go7 }}">Atualizar endereço</button></div></sc-if>
+</sc-if>
+
+<sc-if value="{{s7}}" hint-placeholder-val="{{ false }}">
+<div class="bub">Me passe o CEP da entrega.</div>
+<div class="card" style="max-width: 100%"><div class="card-b col" style="gap: 10px; padding: 14px">
+<div class="field"><label class="label" for="cep">CEP</label><input id="cep" class="input" value="80250-000"></div>
+<div class="sm muted">Rua X, Água Verde, Curitiba/PR</div>
+<div class="row"><div class="field grow"><label class="label" for="num">Número</label><input id="num" class="input" value="120B"></div><label class="row xs" style="margin-top: 22px"><span class="chk"></span> sem número</label></div>
+<div class="field"><label class="label" for="cp">Complemento (opcional)</label><input id="cp" class="input" value="ap 31"></div>
+<div class="field"><label class="label" for="rf">Ponto de referência (opcional)</label><input id="rf" class="input"></div>
+<button class="btn" onClick="{{ go8 }}">Continuar</button></div></div>
+</sc-if>
+
+<sc-if value="{{s8}}" hint-placeholder-val="{{ false }}">
+<div class="bub">Confira seu pedido:</div>
+<div class="card" style="max-width: 100%"><div class="card-b col" style="gap: 8px; padding: 14px">
+<div class="row" style="justify-content: space-between"><span>{{qty}}× Dipirona 500 mg</span><span>{{subtotal}}</span></div>
+<div class="row muted" style="justify-content: space-between"><span>Entrega</span><span>R$ 6,00</span></div>
+<hr class="sep"><div class="row" style="justify-content: space-between; font-weight: 700"><span>Total</span><span>{{total}}</span></div>
+<div class="sm muted">Entrega em Rua X, 120B · 30–50 min<br>Pagamento na entrega (Pix, cartão ou dinheiro, conforme a farmácia)</div>
+<button class="btn" onClick="{{ go9 }}">Confirmar pedido</button></div></div>
+</sc-if>
+
+<sc-if value="{{s9}}" hint-placeholder-val="{{ false }}">
+<div class="bub"><b>Pedido PED-4821 recebido.</b> A farmácia confirma em instantes. Acompanhe: farmacia.exemplo/p/4821</div>
+<div class="card" style="max-width: 100%"><div class="card-b col" style="gap: 8px; padding: 14px"><div class="row sm"><span class="badge b-default">Recebido</span><span class="badge b-outline">Confirmado</span><span class="badge b-outline">Em entrega</span><span class="badge b-outline">Entregue</span></div></div></div>
+<div class="bub">Este medicamento exige receita? Envie uma foto nítida.</div>
+<div class="card" style="max-width: 100%"><div class="card-b col" style="gap: 10px; padding: 14px"><label class="row" style="gap: 8px; align-items: flex-start"><span class="chk on">✓</span><span class="xs">Autorizo o uso da receita para validação do farmacêutico (LGPD). Ver aviso</span></label><div class="row"><button class="btn btn-outline">Tirar foto</button><button class="btn btn-outline">Escolher arquivo</button></div></div></div>
+</sc-if>
+
+<sc-if value="{{s10}}" hint-placeholder-val="{{ false }}">
+<div class="bub">Passei suas informações ao farmacêutico. Ele responde por aqui em instantes.</div>
+<div style="text-align: center"><span class="badge b-soft">Paulo Nunes · Farmacêutico RT entrou na conversa</span></div>
+<div style="display: flex; gap: 8px; align-items: flex-end"><span class="avatar" style="background: var(--secondary); color: #fff">PN</span><div style="max-width: 80%"><div class="xs muted" style="margin-bottom: 2px">Paulo Nunes · Farmacêutico</div><div style="background: var(--soft); border: 1px solid #b7ded7; border-radius: 14px; padding: 10px 12px">Oi, Maria! Aqui é o Paulo, farmacêutico. Vi suas respostas. Posso fazer mais uma pergunta?</div></div></div>
+</sc-if>
+
+</div>
+<div style="padding: 10px 12px; border-top: 1px solid #e4e4e7; display: flex; gap: 8px; align-items: center; background: #fff"><input class="input" placeholder="Digite sua mensagem…" aria-label="Mensagem"><button class="btn btn-icon" aria-label="Enviar">➤</button></div>
+<div class="xs muted" style="text-align: center; padding: 4px 8px 8px; background: #fff">Você conversa com uma IA. Ela não indica remédios nem dá orientação médica.</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  state = { step: 1, qty: 1, known: false };
+  renderVals() {
+    const S = this.state;
+    const names = ['Boas-vindas', 'Produto e carrinho', 'Perguntas de sintoma', 'Sinal de alerta', 'Medicamento controlado', 'Contato (telefone)', 'Endereço (CEP)', 'Revisão do pedido', 'Pedido recebido e receita', 'Farmacêutico entrou'];
+    const steps = names.map((label, i) => ({ id: 'S' + (i + 1), label, bg: S.step === i + 1 ? '#E6F4F1' : 'transparent', pick: () => this.setState({ step: i + 1 }) }));
+    const go = (n) => () => this.setState({ step: n });
+    const price = (q) => 'R$ ' + (8.9 * q).toFixed(2).replace('.', ',');
+    return {
+      steps, qty: S.qty, subtotal: price(S.qty), total: 'R$ ' + (8.9 * S.qty + 6).toFixed(2).replace('.', ','), known: S.known,
+      inc: () => this.setState({ qty: Math.min(S.qty + 1, 5) }), dec: () => this.setState({ qty: Math.max(S.qty - 1, 1) }),
+      s1: S.step === 1, s2: S.step === 2, s3: S.step === 3, s4: S.step === 4, s5: S.step === 5, s6: S.step === 6, s7: S.step === 7, s8: S.step === 8, s9: S.step === 9, s10: S.step === 10,
+      go2: go(2), go3: go(3), go4: go(4), go5: go(5), go6: go(6), go7: go(7), go8: go(8), go9: go(9), go10: go(10), go3b: go(3), go6b: () => this.setState({ known: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

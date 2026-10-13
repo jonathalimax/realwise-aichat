@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Atendimento farmacêutico</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Atendimento farmacêutico" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Atendimento farmacêutico</h1><p class="muted">Conversas que o Alex encaminhou para o farmacêutico responder</p></div>
+<div class="tabs" role="tablist" aria-label="Situação">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="3"><button class="{{f.cls}}" role="tab" onClick="{{ f.pick }}">{{f.label}} <span class="xs muted">{{f.n}}</span></button></sc-for>
+</div>
+</div>
+<div class="alert alert-soft">Somente o farmacêutico responsável pode responder. As sugestões abaixo aparecem só para a equipe e nunca são enviadas ao cliente.</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div class="card" style="flex: 1 1 340px; min-width: 0; max-width: 460px">
+<div class="card-b col" style="gap: 0; padding: 8px">
+<sc-for list="{{list}}" as="h" hint-placeholder-count="3">
+<button onClick="{{ h.pick }}" style="text-align: left; font: inherit; border: 0; border-radius: 8px; padding: 12px; cursor: pointer; background: {{h.bg}}; display: flex; flex-direction: column; gap: 4px">
+<span class="row" style="justify-content: space-between"><b>{{h.who}}</b><span class="badge {{h.badge}}">{{h.tag}}</span></span>
+<span class="sm muted">{{h.short}}</span><span class="xs muted">{{h.when}}</span>
+</button>
+</sc-for>
+</div>
+</div>
+
+<div class="card" style="flex: 2 1 480px; min-width: 0">
+<div class="card-h"><div><h2 class="h2" style="font-size: 18px">{{sel.who}} · {{sel.reasonLabel}}</h2><p class="xs muted">{{sel.when}} · consentimento LGPD registrado</p></div><span class="badge {{sel.badge}}">{{sel.tag}}</span></div>
+<div class="card-b col" style="gap: 16px">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px">
+<sc-for list="{{sel.brief}}" as="b" hint-placeholder-count="6"><div class="col" style="gap: 2px"><span class="xs muted">{{b.k}}</span><span style="font-weight: 500">{{b.v}}</span></div></sc-for>
+</div>
+<sc-if value="{{sel.sug}}" hint-placeholder-val="{{ true }}"><div class="alert alert-amber" style="flex-direction: column; gap: 4px"><b>Sugestão só para você, não enviada ao cliente</b><span>{{sel.sug}}</span></div></sc-if>
+<a class="sm" href="Conversations.dc.html" style="color: var(--primary); font-weight: 600">Ver conversa completa →</a>
+<hr class="sep">
+<sc-if value="{{sel.open}}" hint-placeholder-val="{{ true }}">
+<div class="field"><label class="label" for="reply">Responder ao cliente</label><textarea id="reply" class="input" rows="3" placeholder="Sua resposta aparece no chat com seu nome e função">{{reply}}</textarea></div>
+<div class="row" style="justify-content: space-between; flex-wrap: wrap"><span class="xs muted">Será enviado como Maria Souza · Farmacêutica responsável</span><button class="btn" onClick="{{ send }}">Enviar resposta</button></div>
+</sc-if>
+<sc-if value="{{sel.answered}}" hint-placeholder-val="{{ false }}"><div class="alert alert-soft">Respondido por Maria Souza · Farmacêutica responsável. O cliente viu a mensagem no chat.</div></sc-if>
+</div>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { filter: 'open', sel: 'h1', answered: {} };
+  renderVals() {
+    const S = this.state;
+    const all = [
+      { id: 'h1', who: 'Maria, 34', tag: 'Urgente', badge: 'b-red', reasonLabel: 'Sintoma', when: 'há 4 min', short: 'Dor de cabeça há 3 dias', sug: 'Paracetamol 750 mg · em estoque · R$ 11,20. Ela tem alergia a dipirona.', brief: [['Sintoma', 'Dor de cabeça forte'], ['Duração', 'Há 3 dias'], ['Intensidade', 'Forte, piora à noite'], ['Para quem', 'Ela mesma, 34 anos'], ['Gestante', 'Não'], ['Alergias', 'Dipirona'], ['Outros remédios', 'Losartana'], ['Já tentou', 'Ibuprofeno sem melhora']] },
+      { id: 'h2', who: 'Roberto, 61', tag: 'Controlado', badge: 'b-gray', reasonLabel: 'Medicamento controlado', when: 'há 18 min', short: 'Pergunta o preço do clonazepam 2 mg', sug: '', brief: [['Medicamento', 'Clonazepam 2 mg · 30 comp.'], ['Disponibilidade', 'Em estoque'], ['Preço informado', 'R$ 24,90'], ['Venda online', 'Não permitida'], ['Pedido do cliente', 'Quer saber se pode reservar']] },
+      { id: 'h3', who: 'Camila, 29', tag: 'Sem estoque', badge: 'b-amber', reasonLabel: 'Sem estoque', when: 'há 1 h', short: 'Pediu dipirona 500 mg, sem estoque', sug: 'Equivalente cadastrado: Novalgina 500 mg · em estoque · R$ 12,90.', brief: [['Produto pedido', 'Dipirona 500 mg · 10 comp.'], ['Estoque', '0 unidades'], ['Equivalentes', 'Novalgina 500 mg (grupo A)'], ['Pedido do cliente', 'Aceita substituir se o farmacêutico confirmar']] }
+    ];
+    const items = all.map((h) => ({ ...h, open: !S.answered[h.id], answered: !!S.answered[h.id] }));
+    const filters = [['open', 'Abertos'], ['answered', 'Respondidos']].map(([k, label]) => ({ label, n: items.filter((h) => (k === 'open' ? h.open : h.answered)).length, cls: S.filter === k ? 'tab on' : 'tab', pick: () => { const f = items.find((h) => (k === 'open' ? h.open : h.answered)); this.setState({ filter: k, sel: f ? f.id : S.sel }); } }));
+    const list = items.filter((h) => (S.filter === 'open' ? h.open : h.answered)).map((h) => ({ ...h, bg: h.id === S.sel ? '#E6F4F1' : 'transparent', pick: () => this.setState({ sel: h.id }) }));
+    const sel = items.find((h) => h.id === S.sel) || items[0];
+    return { filters, list, sel, reply: '', send: () => this.setState({ answered: { ...S.answered, [S.sel]: true }, filter: 'answered' }) };
+  }
+}
+</script>
+</body>
+</html>

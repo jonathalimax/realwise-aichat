@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Base de conhecimento</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Base de conhecimento" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Base de conhecimento</h1><p class="muted">O que a Clara sabe responder sobre contratos, documentos, condomínios e regras da imobiliária</p></div>
+<button class="btn" onClick="{{ openUpload }}">Enviar documento</button>
+</div>
+
+<div class="tabs" role="tablist" aria-label="Seção" style="width: fit-content">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3"><button class="{{t.cls}}" role="tab" onClick="{{ t.pick }}">{{t.label}} <span class="xs muted">{{t.n}}</span></button></sc-for>
+</div>
+
+<sc-if value="{{showDocs}}" hint-placeholder-val="{{ true }}">
+<div class="alert alert-soft" style="align-items: center; justify-content: space-between; flex-wrap: wrap"><span>4 de 50 documentos usados no plano Profissional.</span><a class="btn btn-outline btn-sm" href="Billing.dc.html">Ver plano</a></div>
+<div class="card scroll-x"><table class="tbl">
+<thead><tr><th>Documento</th><th>Tipo</th><th>Tamanho</th><th>Enviado</th><th>Situação</th><th></th></tr></thead>
+<tbody>
+<sc-for list="{{docs}}" as="d" hint-placeholder-count="4">
+<tr><td><div class="row"><span class="thumb" style="width: 36px; height: 36px; border-radius: 8px; background: {{d.bg}}; color: {{d.fg}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6"/></svg></span><b>{{d.name}}</b></div></td><td class="muted">{{d.kind}}</td><td class="muted">{{d.size}}</td><td class="muted">{{d.when}}</td><td><span class="badge {{d.badge}}">{{d.status}}</span></td><td style="text-align: right"><button class="btn btn-ghost btn-sm">Remover</button></td></tr>
+</sc-for></tbody></table></div>
+</sc-if>
+
+<sc-if value="{{showSaved}}" hint-placeholder-val="{{ false }}">
+<div class="card"><div class="card-b col" style="gap: 0; padding: 0">
+<sc-for list="{{saved}}" as="a" hint-placeholder-count="3">
+<div class="col" style="gap: 4px; padding: 16px 20px; border-bottom: 1px solid #e4e4e7"><div class="row" style="justify-content: space-between"><b>{{a.q}}</b><span class="badge {{a.badge}}">{{a.tag}}</span></div><span class="sm muted">{{a.a}}</span></div>
+</sc-for></div></div>
+</sc-if>
+
+<sc-if value="{{showUnans}}" hint-placeholder-val="{{ false }}">
+<div class="alert alert-amber">Estas perguntas a Clara não soube responder com segurança. Ao salvar uma resposta, ela passa a usá-la nas próximas conversas.</div>
+<div class="card scroll-x"><table class="tbl">
+<thead><tr><th>Pergunta</th><th>Vezes</th><th>Última</th><th></th></tr></thead>
+<tbody>
+<sc-for list="{{unans}}" as="u" hint-placeholder-count="4">
+<tr class="hover" onClick="{{ u.open }}"><td><b>{{u.q}}</b><div class="xs muted">{{u.ctx}}</div></td><td>{{u.n}}</td><td class="muted">{{u.when}}</td><td style="text-align: right"><span class="btn btn-outline btn-sm">Responder</span></td></tr>
+</sc-for></tbody></table>
+<sc-if value="{{unansEmpty}}" hint-placeholder-val="{{ false }}"><div style="padding: 32px; text-align: center" class="muted">Tudo respondido. Boa!</div></sc-if></div>
+</sc-if>
+
+</main>
+
+<sc-if value="{{sheetOpen}}" hint-placeholder-val="{{ false }}">
+<div class="sheet-wrap">
+<aside class="sheet" aria-label="Responder pergunta">
+<div class="row" style="justify-content: space-between; align-items: flex-start"><div><h2 class="h2" style="font-size: 20px">{{sel.q}}</h2><p class="xs muted">Perguntada {{sel.n}} vez(es) · {{sel.ctx}}</p></div><button class="btn btn-ghost btn-icon" aria-label="Fechar" onClick="{{ close }}">✕</button></div>
+<div class="field"><label class="label" for="ans">Resposta que a Clara deve usar</label><textarea id="ans" class="input" rows="6" placeholder="Escreva a resposta, como você diria a um cliente"></textarea></div>
+<div class="alert alert-soft">A Clara não inventa valores. Se a resposta depender do imóvel, diga de onde vem a informação.</div>
+<div class="row" style="margin-top: auto"><button class="btn" onClick="{{ save }}">Salvar resposta</button><button class="btn btn-outline" onClick="{{ close }}">Cancelar</button></div>
+</aside>
+</div>
+</sc-if>
+
+<sc-if value="{{upload}}" hint-placeholder-val="{{ false }}">
+<div class="dialog-wrap"><div class="dialog" role="dialog" aria-label="Enviar documento">
+<div><h2 class="h2" style="font-size: 18px">Enviar documento</h2><p class="sm muted">Contratos-modelo, regras de condomínio, tabelas de taxas, FAQ. A Clara lê e usa nas respostas.</p></div>
+<div style="border: 1px dashed #a1a1aa; border-radius: 12px; padding: 28px; text-align: center" class="col"><b>Arraste o arquivo aqui</b><span class="sm muted">PDF, Word ou texto. Até 20 MB.</span><button class="btn btn-outline" style="align-self: center">Escolher arquivo</button></div>
+<div class="row" style="justify-content: flex-end"><button class="btn btn-outline" onClick="{{ closeUpload }}">Cancelar</button><button class="btn" onClick="{{ doUpload }}">Enviar</button></div>
+</div></div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { tab: 'docs', sel: null, done: [], upload: false, added: false };
+  renderVals() {
+    const S = this.state;
+    const docs = [
+      { name: 'contrato_locacao_modelo.pdf', kind: 'Contrato', size: '210 KB', when: '02/10', status: 'Pronto', badge: 'b-green', bg: '#DCF3E6', fg: '#15803D' },
+      { name: 'regras_condominio_aguaverde.pdf', kind: 'Condomínio', size: '1,4 MB', when: '28/09', status: 'Pronto', badge: 'b-green', bg: '#FFE4DD', fg: '#A8301B' },
+      { name: 'tabela_taxas_e_documentos.docx', kind: 'FAQ', size: '84 KB', when: '15/09', status: 'Pronto', badge: 'b-green', bg: '#E7E5FD', fg: '#4838B8' },
+      { name: 'politica_seguro_fianca.pdf', kind: 'Garantias', size: '320 KB', when: 'hoje', status: 'Processando', badge: 'b-amber', bg: '#FEF3C7', fg: '#92400E' }
+    ];
+    if (S.added) docs.unshift({ name: 'novo_documento.pdf', kind: 'Outros', size: '150 KB', when: 'agora', status: 'Processando', badge: 'b-amber', bg: '#f4f4f5', fg: '#3f3f46' });
+    const un0 = [
+      { id: 1, q: 'Qual o valor do IPTU do apartamento da Água Verde?', ctx: 'IMV-101', n: 5, when: 'há 2 h' },
+      { id: 2, q: 'O condomínio inclui água e gás?', ctx: 'Vários imóveis', n: 4, when: 'ontem' },
+      { id: 3, q: 'Vocês fazem a vistoria de entrada com fotos?', ctx: 'Regras de locação', n: 3, when: 'há 2 dias' },
+      { id: 4, q: 'Posso pagar o aluguel com cartão de crédito?', ctx: 'Regras de locação', n: 2, when: 'há 3 dias' },
+      { id: 5, q: 'Quanto custa o ITBI em Curitiba?', ctx: 'Compra e venda', n: 2, when: 'há 4 dias' }
+    ].map((u) => ({ ...u, open: () => this.setState({ sel: u.id }) }));
+    const unans = un0.filter((u) => !S.done.includes(u.id));
+    const saved = [
+      { q: 'Aceitam animais de estimação?', a: 'Sim, de pequeno porte, conforme o regimento do condomínio.', tag: 'Regras', badge: 'b-soft' },
+      { q: 'Qual o prazo mínimo do contrato?', a: '30 meses para locação residencial.', tag: 'Regras', badge: 'b-soft' },
+      { q: 'Aceitam seguro fiança?', a: 'Sim, além de fiador e caução.', tag: 'Garantias', badge: 'b-outline' }
+    ];
+    S.done.forEach((id) => { const u = un0.find((x) => x.id === id); saved.unshift({ q: u.q, a: 'Resposta salva agora por Marina Souza.', tag: 'Nova', badge: 'b-green' }); });
+    const tl = [['docs', 'Documentos', docs.length], ['saved', 'Respostas salvas', saved.length], ['unans', 'Sem resposta', unans.length]];
+    const tabs = tl.map(([k, label, n]) => ({ label, n, cls: S.tab === k ? 'tab on' : 'tab', pick: () => this.setState({ tab: k }) }));
+    const sel = un0.find((u) => u.id === S.sel);
+    return {
+      tabs, docs, saved, unans, unansEmpty: unans.length === 0,
+      showDocs: S.tab === 'docs', showSaved: S.tab === 'saved', showUnans: S.tab === 'unans',
+      sel: sel || {}, sheetOpen: !!sel, close: () => this.setState({ sel: null }),
+      save: () => this.setState({ done: S.done.concat([S.sel]), sel: null, tab: 'saved' }),
+      upload: S.upload, openUpload: () => this.setState({ upload: true }), closeUpload: () => this.setState({ upload: false }),
+      doUpload: () => this.setState({ upload: false, added: true, tab: 'docs' })
+    };
+  }
+}
+</script>
+</body>
+</html>

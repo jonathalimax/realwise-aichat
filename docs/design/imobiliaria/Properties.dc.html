@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Imóveis</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Imóveis" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Imóveis</h1><p class="muted">Os imóveis que a Clara apresenta no chat. Só os disponíveis e revisados são oferecidos.</p></div>
+<div class="row"><a class="btn btn-outline" href="PropertyImport.dc.html">Importar de documentos</a><button class="btn">Novo imóvel</button></div>
+</div>
+
+<sc-if value="{{hasReview}}" hint-placeholder-val="{{ true }}"><div class="alert alert-amber" style="align-items: center; justify-content: space-between; flex-wrap: wrap"><span>{{reviewCount}} imóvel(is) extraído(s) de documentos aguardam a sua revisão. A Clara não os oferece até você aprovar.</span><button class="btn btn-outline btn-sm" onClick="{{ goReview }}">Revisar agora</button></div></sc-if>
+
+<div class="row wrap" style="justify-content: space-between; gap: 12px">
+<div class="tabs" role="tablist" aria-label="Filtro">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="5"><button class="{{f.cls}}" role="tab" onClick="{{ f.pick }}">{{f.label}} <span class="xs muted">{{f.n}}</span></button></sc-for>
+</div>
+<div class="row" style="gap: 8px">
+<div style="width: 180px"><select class="input" aria-label="Tipo" onChange="{{ setKind }}"><option value="all">Todos os tipos</option><option value="apto">Apartamento</option><option value="casa">Casa</option><option value="sala">Sala comercial</option><option value="terreno">Terreno</option></select></div>
+<div style="width: 240px; max-width: 100%"><input class="input" placeholder="Buscar por bairro ou código" aria-label="Buscar imóvel" onInput="{{ setQ }}"></div>
+</div>
+</div>
+
+<div class="card scroll-x">
+<table class="tbl">
+<thead><tr><th>Imóvel</th><th>Negócio</th><th>Valor</th><th>Características</th><th>Situação</th><th>Interessados</th></tr></thead>
+<tbody>
+<sc-for list="{{rows}}" as="p" hint-placeholder-count="6">
+<tr class="hover" onClick="{{ p.open }}">
+<td><div class="row" style="gap: 12px"><span class="thumb" style="width: 56px; height: 56px; border-radius: 10px; background: {{p.bg}}; color: {{p.fg}}"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{p.icon}}"/></svg></span><div><b>{{p.title}}</b><div class="xs muted">{{p.code}} · {{p.district}}, Curitiba</div></div></div></td>
+<td><span class="badge b-outline">{{p.deal}}</span></td>
+<td><b>{{p.price}}</b><div class="xs muted">{{p.extra}}</div></td>
+<td class="muted">{{p.specs}}</td>
+<td><span class="badge {{p.badge}}">{{p.label}}</span></td>
+<td class="muted">{{p.leads}}</td>
+</tr>
+</sc-for>
+</tbody></table>
+<sc-if value="{{empty}}" hint-placeholder-val="{{ false }}"><div style="padding: 32px; text-align: center" class="muted">Nenhum imóvel com esses filtros.</div></sc-if>
+</div>
+</main>
+
+<sc-if value="{{sheetOpen}}" hint-placeholder-val="{{ false }}">
+<div class="sheet-wrap">
+<aside class="sheet" aria-label="Detalhe do imóvel">
+<div class="row" style="justify-content: space-between; align-items: flex-start"><div><h2 class="h2" style="font-size: 20px">{{sel.title}}</h2><p class="xs muted">{{sel.code}} · {{sel.address}}</p></div><button class="btn btn-ghost btn-icon" aria-label="Fechar" onClick="{{ close }}">✕</button></div>
+<div style="height: 170px; border-radius: 12px; background: {{sel.bg}}; color: {{sel.fg}}; display: flex; align-items: center; justify-content: center"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{sel.icon}}"/></svg></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{photos}}" as="x" hint-placeholder-count="4"><div style="height: 52px; border-radius: 8px; background: {{x.bg}}; border: 1px dashed #d4d4d8; display: flex; align-items: center; justify-content: center; color: #a1a1aa" class="xs">{{x.t}}</div></sc-for>
+</div>
+<div class="row wrap"><span class="badge {{sel.badge}}">{{sel.label}}</span><span class="badge b-outline">{{sel.deal}}</span><span class="badge b-outline">{{sel.specs}}</span></div>
+<sc-if value="{{sel.review}}" hint-placeholder-val="{{ false }}"><div class="alert alert-amber">Extraído de <b>{{sel.source}}</b>. Confira valor, endereço e características antes de publicar.</div></sc-if>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<div class="field"><label class="label" for="pv">{{sel.priceLabel}}</label><input id="pv" class="input" value="{{sel.price}}"></div>
+<div class="field"><label class="label" for="pc">Condomínio</label><input id="pc" class="input" value="{{sel.cond}}"></div>
+<div class="field"><label class="label" for="pi">IPTU anual</label><input id="pi" class="input" value="{{sel.iptu}}"></div>
+<div class="field"><label class="label" for="pa">Área</label><input id="pa" class="input" value="{{sel.area}}"></div>
+</div>
+<div class="field"><label class="label" for="pd">Descrição para a Clara</label><textarea id="pd" class="input" rows="3">{{sel.desc}}</textarea></div>
+<div class="row" style="justify-content: space-between; border: 1px solid #e4e4e7; border-radius: 8px; padding: 8px 12px"><div><b>A Clara pode oferecer</b><div class="xs muted">{{sel.offerNote}}</div></div><button class="{{offerCls}}" role="switch" aria-checked="{{offerOn}}" aria-label="Clara pode oferecer" onClick="{{ toggleOffer }}"></button></div>
+<div class="row sm" style="gap: 8px"><b>{{sel.leads}} interessados</b><a href="Leads.dc.html" style="color: var(--primary); font-weight: 600">Ver leads →</a></div>
+<div class="row wrap" style="margin-top: auto; padding-top: 8px">
+<sc-if value="{{sel.review}}" hint-placeholder-val="{{ false }}"><button class="btn" onClick="{{ approve }}">Aprovar e publicar</button></sc-if>
+<sc-if value="{{sel.notReview}}" hint-placeholder-val="{{ true }}"><button class="btn" onClick="{{ close }}">Salvar alterações</button></sc-if>
+<sc-if value="{{sel.canClose}}" hint-placeholder-val="{{ true }}"><button class="btn btn-outline" onClick="{{ markClosed }}">{{sel.closeLabel}}</button></sc-if>
+<button class="btn btn-danger" onClick="{{ close }}">Arquivar</button>
+</div>
+</aside>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { filter: 'all', sel: null, kind: 'all', q: '', st: {}, off: {} };
+  renderVals() {
+    const S = this.state;
+    const ICON = {
+      apto: ['M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 7h3M8 11h3M8 15h3', '#DCF3E6', '#15803D'],
+      casa: ['M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', '#FFE4DD', '#A8301B'],
+      terreno: ['M3 20l6-9 4 5 3-4 5 8z', '#E7E5FD', '#4838B8'],
+      sala: ['M3 9l1-5h16l1 5M3 9v11h18V9M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0', '#FEF3C7', '#92400E']
+    };
+    const base = [
+      { id: 'IMV-101', kind: 'apto', title: 'Apartamento 2 quartos', district: 'Água Verde', address: 'Rua Pasteur, 55, Água Verde', deal: 'Aluguel', price: 'R$ 2.400', extra: '+ cond. R$ 480', cond: 'R$ 480', iptu: 'R$ 1.320', area: '68 m²', specs: '2 qts · 1 vaga · 68 m²', st: 'available', leads: 4, desc: 'Apartamento reformado, andar alto, sol da manhã, aceita pets de pequeno porte.' },
+      { id: 'IMV-102', kind: 'casa', title: 'Casa 3 quartos', district: 'Santa Felicidade', address: 'Rua Ângelo Dal Prá, 88', deal: 'Venda', price: 'R$ 890.000', extra: 'Aceita financiamento', cond: '-', iptu: 'R$ 2.900', area: '160 m²', specs: '3 qts · 2 vagas · 160 m²', st: 'available', leads: 3, desc: 'Casa com quintal e churrasqueira, terreno de 360 m², documentação em dia.' },
+      { id: 'IMV-103', kind: 'apto', title: 'Studio mobiliado', district: 'Batel', address: 'Rua Bispo Dom José, 400, Batel', deal: 'Aluguel', price: 'R$ 1.950', extra: '+ cond. R$ 390', cond: 'R$ 390', iptu: 'R$ 780', area: '32 m²', specs: '1 qto · 1 vaga · 32 m²', st: 'available', leads: 6, desc: 'Studio mobiliado com cozinha integrada, portaria 24 horas.' },
+      { id: 'IMV-104', kind: 'sala', title: 'Sala comercial', district: 'Centro', address: 'Rua XV de Novembro, 900, Centro', deal: 'Aluguel', price: 'R$ 3.200', extra: '+ cond. R$ 540', cond: 'R$ 540', iptu: 'R$ 1.900', area: '54 m²', specs: '2 salas · 1 vaga · 54 m²', st: 'available', leads: 2, desc: 'Sala no 8º andar, com banheiro privativo e copa.' },
+      { id: 'IMV-105', kind: 'terreno', title: 'Terreno plano', district: 'Campo Comprido', address: 'Rua das Araucárias, lote 14', deal: 'Venda', price: 'R$ 420.000', extra: 'Documentação regular', cond: '-', iptu: 'R$ 640', area: '360 m²', specs: '360 m² · plano', st: 'reserved', leads: 1, desc: 'Terreno plano de esquina em rua asfaltada.' },
+      { id: 'IMV-106', kind: 'apto', title: 'Cobertura duplex', district: 'Bigorrilho', address: 'Av. Água Verde, 1200, Bigorrilho', deal: 'Venda', price: 'R$ 1.650.000', extra: 'Cond. R$ 1.850', cond: 'R$ 1.850', iptu: 'R$ 6.100', area: '210 m²', specs: '3 suítes · 3 vagas · 210 m²', st: 'available', leads: 5, desc: 'Cobertura com terraço e vista panorâmica.' },
+      { id: 'IMV-107', kind: 'apto', title: 'Apartamento 3 quartos', district: 'Cabral', address: 'Rua Bom Jesus, 310, Cabral', deal: 'Aluguel', price: 'R$ 3.100', extra: '+ cond. R$ 720', cond: 'R$ 720', iptu: 'R$ 1.980', area: '98 m²', specs: '3 qts · 2 vagas · 98 m²', st: 'closed', leads: 1, desc: 'Apartamento com varanda gourmet.' },
+      { id: 'IMV-108', kind: 'casa', title: 'Casa em condomínio', district: 'Santa Cândida', address: 'Rua dos Ipês, 12, cond. Vale Verde', deal: 'Aluguel', price: 'R$ 4.800', extra: 'Valor extraído, conferir', cond: 'R$ 650', iptu: '[conferir]', area: '[conferir]', specs: '4 qts · [conferir]', st: 'review', leads: 0, desc: '', source: 'tabela_locacao_outubro.pdf' },
+      { id: 'IMV-109', kind: 'sala', title: 'Loja de rua', district: 'Portão', address: '[conferir endereço]', deal: 'Aluguel', price: 'R$ 5.500', extra: 'Valor extraído, conferir', cond: '-', iptu: '[conferir]', area: '120 m²', specs: '120 m² · térreo', st: 'review', leads: 0, desc: '', source: 'tabela_locacao_outubro.pdf' }
+    ];
+    const info = { available: ['Disponível', 'b-green'], reserved: ['Reservado', 'b-amber'], closed: ['Alugado/vendido', 'b-gray'], review: ['Para revisar', 'b-blue'] };
+    const all = base.map((p) => { const st = S.st[p.id] || p.st; const ic = ICON[p.kind]; return { ...p, st, label: info[st][0], badge: info[st][1], icon: ic[0], bg: ic[1], fg: ic[2], review: st === 'review', notReview: st !== 'review', canClose: st !== 'review' && st !== 'closed', closeLabel: p.deal === 'Venda' ? 'Marcar como vendido' : 'Marcar como alugado', priceLabel: p.deal === 'Venda' ? 'Valor de venda' : 'Aluguel mensal', offerNote: st === 'available' ? 'Aparece nas buscas do chat' : 'Não aparece nas buscas do chat' }; });
+    const fl = [['all', 'Todos', () => true], ['rent', 'Aluguel', (p) => p.deal === 'Aluguel' && p.st !== 'review'], ['sale', 'Venda', (p) => p.deal === 'Venda' && p.st !== 'review'], ['review', 'Para revisar', (p) => p.st === 'review'], ['closed', 'Alugados e vendidos', (p) => p.st === 'closed']];
+    const filters = fl.map(([k, label, fn]) => ({ label, n: all.filter(fn).length, cls: S.filter === k ? 'tab on' : 'tab', pick: () => this.setState({ filter: k }) }));
+    const fn = fl.find((f) => f[0] === S.filter)[2];
+    const q = S.q.trim().toLowerCase();
+    const rows = all.filter((p) => fn(p) && (S.kind === 'all' || p.kind === S.kind) && (!q || (p.district + ' ' + p.id + ' ' + p.title).toLowerCase().includes(q))).map((p) => ({ ...p, open: () => this.setState({ sel: p.id }) }));
+    const cur = all.find((p) => p.id === S.sel);
+    const offerOn = cur ? (S.off[cur.id] !== undefined ? S.off[cur.id] : cur.st === 'available') : false;
+    const reviewCount = all.filter((p) => p.st === 'review').length;
+    return {
+      filters, rows, empty: rows.length === 0, hasReview: reviewCount > 0, reviewCount, goReview: () => this.setState({ filter: 'review' }),
+      setKind: (e) => this.setState({ kind: e.target.value }), setQ: (e) => this.setState({ q: e.target.value }),
+      sel: cur || {}, sheetOpen: !!cur, close: () => this.setState({ sel: null }),
+      photos: [{ t: 'Sala', bg: '#fafafa' }, { t: 'Quarto', bg: '#fafafa' }, { t: 'Cozinha', bg: '#fafafa' }, { t: '+ foto', bg: '#fff' }],
+      offerOn, offerCls: offerOn ? 'sw on' : 'sw', toggleOffer: () => this.setState({ off: { ...S.off, [S.sel]: !offerOn } }),
+      approve: () => this.setState({ st: { ...S.st, [S.sel]: 'available' }, sel: null, filter: 'all' }),
+      markClosed: () => this.setState({ st: { ...S.st, [S.sel]: 'closed' }, sel: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

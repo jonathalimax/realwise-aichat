@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Simulações</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Simulações" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Simulações</h1><p class="muted">Estimativas de aluguel e financiamento que a Clara fez nas conversas. São sempre apresentadas como estimativa.</p></div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px">
+<div class="card" style="flex: 1 1 320px"><div class="card-h"><div><h2 class="h2">Taxa de juros do financiamento</h2><p class="xs muted">Usada pela Clara em todas as simulações de compra</p></div></div>
+<div class="card-b row"><div style="width: 120px"><input class="input" aria-label="Taxa ao mês" value="{{rate}}" onInput="{{ setRate }}"></div><span class="sm muted">% ao mês · tabela Price</span><button class="btn btn-outline btn-sm" style="margin-left: auto" onClick="{{ saveRate }}">{{saveLabel}}</button></div></div>
+<div class="card" style="flex: 2 1 420px"><div class="card-h"><div><h2 class="h2">Aviso de estimativa</h2><p class="xs muted">Mostrado e registrado antes de cada simulação</p></div><a class="btn btn-outline btn-sm" href="Settings.dc.html">Editar em Imobiliária</a></div>
+<div class="card-b"><p class="sm muted">Valores aproximados, sem compromisso. A aprovação, a taxa final e as parcelas dependem da análise do banco e da imobiliária.</p></div></div>
+</div>
+
+<div class="tabs" role="tablist" aria-label="Tipo" style="width: fit-content">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="3"><button class="{{f.cls}}" role="tab" onClick="{{ f.pick }}">{{f.label}} <span class="xs muted">{{f.n}}</span></button></sc-for>
+</div>
+
+<div class="card scroll-x"><table class="tbl">
+<thead><tr><th>Interessado</th><th>Imóvel</th><th>Tipo</th><th>Estimativa</th><th>Quando</th></tr></thead>
+<tbody>
+<sc-for list="{{rows}}" as="s" hint-placeholder-count="5">
+<tr class="hover" onClick="{{ s.open }}"><td><b>{{s.who}}</b></td>
+<td><div class="row"><span class="thumb" style="width: 36px; height: 36px; border-radius: 8px; background: {{s.bg}}; color: {{s.fg}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{s.icon}}"/></svg></span><span>{{s.prop}}</span></div></td>
+<td><span class="badge {{s.badge}}">{{s.kindLabel}}</span></td><td><b>{{s.result}}</b><div class="xs muted">{{s.short}}</div></td><td class="muted">{{s.when}}</td></tr>
+</sc-for></tbody></table></div>
+</main>
+
+<sc-if value="{{sheetOpen}}" hint-placeholder-val="{{ false }}">
+<div class="sheet-wrap">
+<aside class="sheet" aria-label="Detalhe da simulação">
+<div class="row" style="justify-content: space-between; align-items: flex-start"><div><h2 class="h2" style="font-size: 20px">{{sel.who}}</h2><p class="xs muted">{{sel.prop}} · {{sel.when}}</p></div><button class="btn btn-ghost btn-icon" aria-label="Fechar" onClick="{{ close }}">✕</button></div>
+<div class="row wrap"><span class="badge {{sel.badge}}">{{sel.kindLabel}}</span><span class="badge b-green">Aviso de estimativa aceito</span></div>
+<div style="border: 1px solid #e4e4e7; border-radius: 12px; padding: 16px"><div class="xs muted">{{sel.resultLabel}}</div><div style="font-size: 28px; font-weight: 700; letter-spacing: -0.02em">{{sel.result}}</div><div class="xs muted">{{sel.short}}</div></div>
+<sc-for list="{{sel.lines}}" as="l" hint-placeholder-count="4"><div class="row sm" style="justify-content: space-between"><span class="muted">{{l.k}}</span><b>{{l.v}}</b></div></sc-for>
+<sc-if value="{{sel.isFin}}" hint-placeholder-val="{{ true }}">
+<hr class="sep">
+<div class="col" style="gap: 10px"><b>Testar outros valores</b>
+<div class="field"><label class="label" for="ent">Entrada: {{entPct}}%</label><input id="ent" type="range" min="10" max="80" step="5" value="{{entPct}}" onInput="{{ setEnt }}" style="width: 100%; accent-color: var(--primary)"></div>
+<div class="field"><label class="label" for="prz">Prazo</label><select id="prz" class="input" onChange="{{ setPrz }}"><option value="180">180 meses</option><option value="240">240 meses</option><option value="360" selected>360 meses</option><option value="420">420 meses</option></select></div></div>
+</sc-if>
+<div class="row" style="margin-top: auto"><a class="btn" href="Leads.dc.html">Abrir lead</a><a class="btn btn-outline" href="Conversations.dc.html">Abrir conversa</a></div>
+</aside>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { filter: 'all', sel: null, rate: '1,01', saved: false, ent: null, prz: null };
+  renderVals() {
+    const S = this.state;
+    const brl = (n) => 'R$ ' + Math.round(n).toLocaleString('pt-BR');
+    const i = (parseFloat(String(S.rate).replace(',', '.')) || 1.01) / 100;
+    const pmt = (P, n) => (P * i) / (1 - Math.pow(1 + i, -n));
+    const ICON = {
+      apto: ['M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 7h3M8 11h3M8 15h3', '#DCF3E6', '#15803D'],
+      casa: ['M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', '#FFE4DD', '#A8301B'],
+      terreno: ['M3 20l6-9 4 5 3-4 5 8z', '#E7E5FD', '#4838B8']
+    };
+    const base = [
+      { id: 1, who: 'Rodrigo Teixeira', prop: 'Casa 3 quartos, Santa Felicidade', kind: 'casa', type: 'fin', price: 890000, entPct: 30, n: 360, when: 'há 22 min' },
+      { id: 2, who: 'Marcos Vieira', prop: 'Cobertura, Bigorrilho', kind: 'apto', type: 'fin', price: 1650000, entPct: 30, n: 360, when: 'há 2 h' },
+      { id: 3, who: 'Patrícia Gomes', prop: 'Studio, Batel', kind: 'apto', type: 'rent', rent: 1950, cond: 390, iptu: 780, when: 'há 1 h' },
+      { id: 4, who: 'Camila Andrade', prop: 'Apartamento 2 quartos, Água Verde', kind: 'apto', type: 'rent', rent: 2400, cond: 480, iptu: 1320, when: 'ontem' },
+      { id: 5, who: 'Helena Costa', prop: 'Terreno, Campo Comprido', kind: 'terreno', type: 'fin', price: 420000, entPct: 30, n: 180, when: 'há 5 dias' }
+    ];
+    const all = base.map((b) => {
+      const ic = ICON[b.kind]; const open = () => this.setState({ sel: b.id, ent: null, prz: null });
+      const common = { ...b, icon: ic[0], bg: ic[1], fg: ic[2], open };
+      if (b.type === 'rent') {
+        const tot = b.rent + b.cond;
+        return { ...common, kindLabel: 'Aluguel', badge: 'b-soft', result: brl(tot) + '/mês', short: 'Aluguel + condomínio', resultLabel: 'Total mensal estimado', isFin: false, lines: [{ k: 'Aluguel', v: brl(b.rent) }, { k: 'Condomínio', v: brl(b.cond) }, { k: 'IPTU (não incluso)', v: brl(b.iptu / 12) + '/mês' }, { k: 'Garantia', v: 'Fiador, seguro fiança ou caução' }] };
+      }
+      const entPct = (S.sel === b.id && S.ent) || b.entPct; const n = (S.sel === b.id && S.prz) || b.n;
+      const fin = b.price * (1 - entPct / 100);
+      return { ...common, entPct, kindLabel: 'Financiamento', badge: 'b-blue', result: brl(pmt(fin, n)) + '/mês', short: n + ' meses · entrada ' + entPct + '%', resultLabel: 'Parcela estimada', isFin: true, lines: [{ k: 'Valor do imóvel', v: brl(b.price) }, { k: 'Entrada (' + entPct + '%)', v: brl(b.price * entPct / 100) }, { k: 'Valor financiado', v: brl(fin) }, { k: 'Taxa', v: String(S.rate) + '% ao mês' }] };
+    });
+    const fl = [['all', 'Todas', () => true], ['rent', 'Aluguel', (s) => s.type === 'rent'], ['fin', 'Financiamento', (s) => s.type === 'fin']];
+    const filters = fl.map(([k, label, fn]) => ({ label, n: all.filter(fn).length, cls: S.filter === k ? 'tab on' : 'tab', pick: () => this.setState({ filter: k }) }));
+    const fn = fl.find((f) => f[0] === S.filter)[2];
+    const cur = all.find((s) => s.id === S.sel);
+    return {
+      filters, rows: all.filter(fn), sel: cur || { lines: [] }, sheetOpen: !!cur, close: () => this.setState({ sel: null }),
+      rate: S.rate, setRate: (e) => this.setState({ rate: e.target.value, saved: false }), saveRate: () => this.setState({ saved: true }), saveLabel: S.saved ? 'Taxa salva' : 'Salvar taxa',
+      entPct: cur && cur.isFin ? cur.entPct : 30, setEnt: (e) => this.setState({ ent: Number(e.target.value) }), setPrz: (e) => this.setState({ prz: Number(e.target.value) })
+    };
+  }
+}
+</script>
+</body>
+</html>

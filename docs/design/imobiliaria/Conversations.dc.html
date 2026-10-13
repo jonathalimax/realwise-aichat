@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Conversas</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}.crow{display:flex;gap:10px;align-items:flex-start;width:100%;border:0;border-bottom:1px solid #e4e4e7;background:#fff;padding:12px 16px;font:inherit;text-align:left;cursor:pointer}.crow:hover{background:#fafafa}.crow:focus-visible{outline:2px solid var(--ring);outline-offset:-2px}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Conversas" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Conversas</h1><p class="muted">Tudo o que a Clara conversou com visitantes do site e do WhatsApp</p></div>
+<span class="badge b-gray">Somente leitura</span>
+</div>
+
+<div class="tabs" role="tablist" aria-label="Filtro" style="width: fit-content">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="4"><button class="{{f.cls}}" role="tab" onClick="{{ f.pick }}">{{f.label}} <span class="xs muted">{{f.n}}</span></button></sc-for>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch">
+<div class="card" style="flex: 1 1 340px; max-width: 420px; min-width: 0; overflow: hidden">
+<div style="padding: 12px 16px; border-bottom: 1px solid #e4e4e7"><input class="input" placeholder="Buscar por nome ou mensagem" aria-label="Buscar conversa"></div>
+<sc-for list="{{list}}" as="c" hint-placeholder-count="6">
+<button class="crow" onClick="{{ c.open }}" style="{{c.style}}">
+<span class="avatar">{{c.ini}}</span>
+<div class="col grow" style="gap: 2px"><div class="row" style="justify-content: space-between"><b>{{c.name}}</b><span class="xs muted">{{c.when}}</span></div><span class="sm muted" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.last}}</span><div class="row" style="gap: 6px"><span class="badge {{c.badge}}" style="height: 18px; font-size: 11px">{{c.tag}}</span><span class="xs muted">{{c.channel}}</span></div></div>
+</button>
+</sc-for>
+</div>
+
+<div class="card" style="flex: 2 1 480px; min-width: 0; display: flex; flex-direction: column">
+<div class="card-h" style="border-bottom: 1px solid #e4e4e7"><div class="row"><span class="avatar" style="width: 40px; height: 40px">{{cur.ini}}</span><div><h2 class="h2">{{cur.name}}</h2><p class="xs muted">{{cur.channel}} · {{cur.phone}} · {{cur.prop}}</p></div></div>
+<div class="row"><a class="btn btn-outline btn-sm" href="Leads.dc.html">Abrir lead</a><button class="btn btn-outline btn-sm">Abrir no WhatsApp</button></div></div>
+<div class="card-b col" style="gap: 12px; background: #fafafa; min-height: 520px; padding-top: 16px">
+<sc-for list="{{cur.msgs}}" as="m" hint-placeholder-count="6">
+<sc-if value="{{m.isBanner}}" hint-placeholder-val="{{ false }}"><div style="text-align: center"><span class="badge b-soft">{{m.t}}</span></div></sc-if>
+<sc-if value="{{m.isMsg}}" hint-placeholder-val="{{ true }}"><div style="display: flex; justify-content: {{m.just}}"><div style="max-width: 78%"><div class="xs muted" style="margin-bottom: 2px; text-align: {{m.al}}">{{m.who}} · {{m.time}}</div><div style="padding: 10px 14px; border-radius: 12px; background: {{m.bg}}; color: {{m.fg}}; border: 1px solid {{m.bd}}">{{m.t}}</div></div></div></sc-if>
+</sc-for>
+</div>
+<div class="alert alert-soft" style="margin: 0 16px 16px; align-items: center; justify-content: space-between; flex-wrap: wrap"><span>Esta tela é só para acompanhar. Para responder ao interessado, abra a conversa no WhatsApp.</span></div>
+</div>
+</div>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { filter: 'all', sel: 1 };
+  renderVals() {
+    const S = this.state;
+    const mm = (who, t, time, side) => ({ isMsg: true, isBanner: false, who, t, time, just: side === 'v' ? 'flex-end' : 'flex-start', al: side === 'v' ? 'right' : 'left', bg: side === 'v' ? '#15803D' : (side === 'b' ? '#DCF3E6' : '#fff'), fg: side === 'v' ? '#fff' : '#09090b', bd: side === 'v' ? '#15803D' : (side === 'b' ? '#b6e0c6' : '#e4e4e7') });
+    const bn = (t) => ({ isMsg: false, isBanner: true, t });
+    const base = [
+      { id: 1, name: 'Camila Andrade', phone: '(41) 99812-3344', channel: 'Site', prop: 'Apto 2 qts, Água Verde', when: 'há 6 min', tag: 'Com corretor', badge: 'b-green', kind: 'broker', last: 'Carlos: Oi, Camila! Posso te mostrar o apartamento hoje às 10h.', msgs: [
+        mm('Camila', 'Oi! Vi o apartamento de 2 quartos na Água Verde. Aceita cachorro?', '19:32', 'v'),
+        mm('Clara (IA)', 'Oi, Camila! Eu sou a Clara, assistente virtual com inteligência artificial. Aceita animais de pequeno porte, conforme o regimento do condomínio. Quer agendar uma visita?', '19:32', 'c'),
+        mm('Camila', 'Quero. Como funciona o fiador?', '19:35', 'v'),
+        mm('Clara (IA)', 'Aceitamos fiador, seguro fiança ou caução. Posso chamar um corretor para explicar as opções?', '19:35', 'c'),
+        mm('Camila', 'Pode chamar, por favor.', '19:36', 'v'),
+        bn('Carlos Prado · Corretor entrou na conversa'),
+        mm('Carlos Prado', 'Oi, Camila! Aqui é o Carlos, corretor. Posso te mostrar o apartamento hoje às 10h.', '19:40', 'b')
+      ] },
+      { id: 2, name: 'Rodrigo Teixeira', phone: '(41) 99777-1020', channel: 'WhatsApp', prop: 'Casa 3 qts, Santa Felicidade', when: 'há 22 min', tag: 'Simulação', badge: 'b-blue', kind: 'all', last: 'Clara: A parcela estimada fica em torno de R$ 6.466 por mês.', msgs: [
+        mm('Rodrigo', 'Quero comprar a casa de Santa Felicidade. Dá pra financiar?', '14:02', 'v'),
+        mm('Clara (IA)', 'Dá sim. Posso fazer uma simulação. Valores são estimativas e dependem da análise do banco. Qual a sua entrada?', '14:02', 'c'),
+        mm('Rodrigo', 'Uns 30%.', '14:04', 'v'),
+        mm('Clara (IA)', 'Com entrada de R$ 267.000 e 360 meses, a parcela estimada fica em torno de R$ 6.466 por mês.', '14:04', 'c')
+      ] },
+      { id: 3, name: 'Patrícia Gomes', phone: '(41) 99655-4412', channel: 'Site', prop: 'Studio, Batel', when: 'há 1 h', tag: 'Visita', badge: 'b-soft', kind: 'all', last: 'Clara: Visita registrada para sábado às 10h.', msgs: [
+        mm('Patrícia', 'Tem studio perto da UFPR?', '13:10', 'v'),
+        mm('Clara (IA)', 'Tenho o studio no Batel por R$ 1.950 por mês. Quer ver as fotos ou agendar uma visita?', '13:10', 'c'),
+        mm('Patrícia', 'Agendar, sábado de manhã.', '13:12', 'v'),
+        mm('Clara (IA)', 'Visita registrada para sábado às 10h. A imobiliária confirma em breve.', '13:12', 'c')
+      ] },
+      { id: 4, name: 'Visitante anônimo', phone: 'Sem telefone', channel: 'Site', prop: 'Sem imóvel', when: 'há 2 h', tag: 'Sem resposta', badge: 'b-amber', kind: 'escalated', last: 'Clara: Não tenho essa informação. Vou avisar a equipe.', msgs: [
+        mm('Visitante', 'Qual o valor do IPTU do apartamento da Água Verde?', '12:21', 'v'),
+        mm('Clara (IA)', 'Não tenho essa informação com segurança. Vou avisar a equipe para responder.', '12:21', 'c'),
+        bn('Passou para a equipe · pergunta salva na Base de conhecimento')
+      ] },
+      { id: 5, name: 'Luiz Fernando', phone: '(41) 99540-8821', channel: 'Site', prop: 'Sala comercial, Centro', when: 'há 3 dias', tag: 'Escalonada', badge: 'b-amber', kind: 'escalated', last: 'Ana: Liguei e deixei recado.', msgs: [
+        mm('Luiz', 'Qual o condomínio da sala do Centro?', '10:05', 'v'),
+        mm('Clara (IA)', 'O condomínio é R$ 540 por mês. Quer agendar uma visita?', '10:05', 'c'),
+        bn('Ana Lopes · Corretora entrou na conversa'),
+        mm('Ana Lopes', 'Liguei e deixei recado, Luiz.', '10:30', 'b')
+      ] }
+    ].map((c) => ({ ...c, ini: c.name.split(' ').map((p) => p[0]).slice(0, 2).join('') }));
+    const fl = [['all', 'Todas', () => true], ['broker', 'Com corretor', (c) => c.kind === 'broker' || c.msgs.some((m) => m.isBanner && m.t.includes('Corretor'))], ['escalated', 'Escalonadas', (c) => c.kind === 'escalated'], ['sim', 'Simulações', (c) => c.tag === 'Simulação']];
+    const filters = fl.map(([k, label, fn]) => ({ label, n: base.filter(fn).length, cls: S.filter === k ? 'tab on' : 'tab', pick: () => this.setState({ filter: k }) }));
+    const fn = fl.find((f) => f[0] === S.filter)[2];
+    const list = base.filter(fn).map((c) => ({ ...c, style: c.id === S.sel ? 'background: #DCF3E6' : '', open: () => this.setState({ sel: c.id }) }));
+    const cur = base.find((c) => c.id === S.sel) || base[0];
+    return { filters, list, cur };
+  }
+}
+</script>
+</body>
+</html>
