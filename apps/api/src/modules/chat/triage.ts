@@ -396,11 +396,11 @@ export function paramsFromPreferences(prefs: TriagePreferences): Record<string, 
 // Refers to something already selected ("esse", "quanto fica o aluguel desse?") — answered about
 // the selection, never by restarting the search.
 const SELECTION_REFERENCE_PATTERN = /\b(esse|essa|desse|dessa|deste|desta|este|esta|nesse|nessa|selecionei|selecionado|selecionada|escolhi)\b/;
-const COST_WORDS_PATTERN = /\b(total|pacote|custa|custo|custos|valor|pagaria|pagar|taxas?)\b/;
+const COST_WORDS_PATTERN = /\b(total|pacote|custa|custo|custos|valor|pagaria|pagar|taxas?|quanto)\b/;
 
 // Questions about rental/purchase rules ("quero alugar, aceita pet?") are FAQ questions, not a
 // request to start searching — those keep going to the knowledge-base answer path.
-const FAQ_TOPIC_PATTERN = /\b(garantia|fiador|caucao|seguro fianca|documento|documentos|documentacao|contrato|pet|pets|animal|renda|fgts|financiamento|financiar|iptu|condominio|multa|reajuste|taxa|taxas|itbi|escritura|visita|agendar|horario)\b/;
+const FAQ_TOPIC_PATTERN = /\b(garantias?|fiador(es)?|caucao|seguro fianca|documentos?|documentacao|contratos?|pets?|animal|animais|renda|fgts|financiamento|financiar|iptu|condominio|multas?|reajustes?|taxas?|itbi|escritura|visitas?|agendar|horarios?|requisitos?|exigencias?|regras?|politicas?|prazos?)\b/;
 
 // "Quero alugar uma casa", "vocês têm apartamento pra comprar?" -> start triage.
 export function isTriageEntry(text: string): boolean {
