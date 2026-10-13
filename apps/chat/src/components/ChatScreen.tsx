@@ -316,11 +316,19 @@ function BookingConfirmedCard({
   );
 }
 
-// Niche -> persona name, mirroring apps/api/src/modules/chat/personas.ts's two cases. The API
-// doesn't currently expose the persona name on the business/conversation response, so this is
-// resolved locally from the niche the component already receives.
+// Niche -> persona name, mirroring apps/api/src/modules/chat/personas.ts. The API doesn't
+// currently expose the persona name on the business/conversation response, so this is resolved
+// locally from the niche the component already receives. Exhaustive: no silent "Clara" fallback.
 function getPersonaName(niche: string): string {
-  return niche === "concessionaria" ? "Tom" : "Clara";
+  switch (niche) {
+    case "concessionaria":
+      return "Tom";
+    case "farmacia":
+      return "Alex";
+    case "imobiliaria":
+    default:
+      return "Clara";
+  }
 }
 
 // Prefers the business's own logo; falls back to the persona's own photo (she/he's who's

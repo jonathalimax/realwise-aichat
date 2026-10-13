@@ -324,6 +324,7 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
             <a href="/" className="hover:text-ink">Início</a>
             <a href="/imobiliaria" className="hover:text-ink">Imobiliárias</a>
             <a href="/concessionaria" className="hover:text-ink">Concessionárias</a>
+            <a href="/farmacia" className="hover:text-ink">Farmácias</a>
             <a href="#faq" className="hover:text-ink">FAQ</a>
           </nav>
         </div>

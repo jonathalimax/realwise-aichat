@@ -1,4 +1,4 @@
-import { Building2, Car } from "lucide-react";
+import { Building2, Car, Pill } from "lucide-react";
 
 export const NICHES = [
   {
@@ -12,5 +12,11 @@ export const NICHES = [
     label: "Concessionária",
     description: "Venda de veículos — a Clara ajuda seus clientes a encontrar o carro ideal e agendar test-drives.",
     icon: Car,
+  },
+  {
+    value: "farmacia",
+    label: "Farmácia",
+    description: "Pedidos de venda livre no chat e encaminhamento ao farmacêutico — o Alex nunca indica remédio.",
+    icon: Pill,
   },
 ] as const;

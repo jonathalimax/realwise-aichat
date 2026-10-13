@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "language": "pt-BR",
+  "start": "start",
+  "entry_points": {
+    "start": "Primeira conversa",
+    "retorno": "Usuário que já conversou antes",
+    "nao_entendi": "Fallback para texto não reconhecido"
+  },
+  "global_bubbles": [],
+  "notes": [
+    "STUB (foundation wave). Persona Alex. The pharmacy chat engine (wave 2: red flags, lanes, cart, checkout, handoff) is code-driven, not scripted: this flow only covers the welcome and generic fallbacks.",
+    "Never recommend medicines and never state doses in any copy added here."
+  ],
+  "nodes": {
+    "start": {
+      "id": "start",
+      "message": "Oi! Sou o Alex, assistente virtual com inteligência artificial. Posso ajudar a montar seu pedido ou chamar o farmacêutico. Não indico remédios.",
+      "bubbles": [
+        { "label": "🛒 Fazer um pedido", "goto": "pedido" },
+        { "label": "💊 Falar com o farmacêutico", "goto": "farmaceutico" },
+        { "label": "🕒 Horários e entrega", "goto": "outras" }
+      ]
+    },
+    "retorno": {
+      "id": "retorno",
+      "message": "Que bom te ver de novo! Como posso ajudar?",
+      "bubbles": [
+        { "label": "🛒 Fazer um pedido", "goto": "pedido" },
+        { "label": "💊 Falar com o farmacêutico", "goto": "farmaceutico" }
+      ]
+    },
+    "pedido": {
+      "id": "pedido",
+      "message": "Claro! Me diga o nome do produto que você procura.",
+      "bubbles": [
+        { "label": "💊 Falar com o farmacêutico", "goto": "farmaceutico" },
+        { "label": "🕒 Horários e entrega", "goto": "outras" }
+      ]
+    },
+    "farmaceutico": {
+      "id": "farmaceutico",
+      "message": "Posso encaminhar você ao farmacêutico. Me conte o que está acontecendo e eu passo as informações para ele.",
+      "bubbles": [
+        { "label": "🕒 Horários e entrega", "goto": "outras" },
+        { "label": "🛒 Fazer um pedido", "goto": "pedido" }
+      ]
+    },
+    "outras": {
+      "id": "outras",
+      "message": "Posso responder sobre horário de funcionamento, área e taxa de entrega e retirada em loja. O que você quer saber?",
+      "bubbles": [
+        { "label": "🛒 Fazer um pedido", "goto": "pedido" },
+        { "label": "💊 Falar com o farmacêutico", "goto": "farmaceutico" }
+      ]
+    },
+    "nao_entendi": {
+      "id": "nao_entendi",
+      "message": "Desculpe, não entendi. Escolha uma opção ou escreva de outro jeito:",
+      "bubbles": [
+        { "label": "🛒 Fazer um pedido", "goto": "pedido" },
+        { "label": "💊 Falar com o farmacêutico", "goto": "farmaceutico" },
+        { "label": "🕒 Horários e entrega", "goto": "outras" }
+      ]
+    },
+    "fim": {
+      "id": "fim",
+      "message": "Posso ajudar com mais alguma coisa?",
+      "bubbles": [
+        { "label": "🛒 Fazer um pedido", "goto": "pedido" },
+        { "label": "Não, obrigado", "goto": "obrigado" }
+      ]
+    },
+    "obrigado": {
+      "id": "obrigado",
+      "message": "Obrigado! Estamos por aqui sempre que precisar.",
+      "bubbles": [
+        { "label": "🛒 Fazer um pedido", "goto": "pedido" }
+      ]
+    }
+  }
+}

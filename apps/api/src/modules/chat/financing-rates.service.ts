@@ -52,7 +52,20 @@ export class FinancingRatesService {
     }
 
     const platformConfig = await this.prisma.client.platformConfig.findUnique({ where: { id: "singleton" } });
-    const bcbRatePercent = niche === "imobiliaria" ? platformConfig?.realEstateRatePercent : platformConfig?.vehicleRatePercent;
+    const bcbRatePercent = (() => {
+      switch (niche) {
+        case "imobiliaria":
+          return platformConfig?.realEstateRatePercent;
+        case "concessionaria":
+          return platformConfig?.vehicleRatePercent;
+        case "farmacia":
+          return null; // no financing for pharmacies (see niche-behavior.ts)
+        default: {
+          const _never: never = niche;
+          return _never;
+        }
+      }
+    })();
     if (isPositiveFinite(bcbRatePercent) && platformConfig?.ratesReferenceMonth) {
       return {
         monthlyRatePercent: bcbRatePercent,
@@ -61,7 +74,20 @@ export class FinancingRatesService {
       };
     }
 
-    const defaultRatePercent = niche === "imobiliaria" ? DEFAULT_REAL_ESTATE_MONTHLY_RATE_PERCENT : DEFAULT_VEHICLE_MONTHLY_RATE_PERCENT;
+    const defaultRatePercent = (() => {
+      switch (niche) {
+        case "imobiliaria":
+          return DEFAULT_REAL_ESTATE_MONTHLY_RATE_PERCENT;
+        case "concessionaria":
+          return DEFAULT_VEHICLE_MONTHLY_RATE_PERCENT;
+        case "farmacia":
+          return 0; // TODO(wave2:chat-engine): never reached, financing is disabled for pharmacies
+        default: {
+          const _never: never = niche;
+          return _never;
+        }
+      }
+    })();
     return { monthlyRatePercent: defaultRatePercent, rateSource: "default" };
   }
 }

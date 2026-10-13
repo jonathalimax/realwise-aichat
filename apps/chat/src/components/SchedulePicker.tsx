@@ -44,7 +44,8 @@ export function SchedulePicker({
   onClose: () => void;
   onError: (message: string) => void;
 }) {
-  const serviceName = niche === "concessionaria" ? "Test-drive" : "Visita ao imóvel";
+  // Visit scheduling exists for real estate and dealerships only; pharmacies never open this picker.
+  const serviceName = niche === "concessionaria" ? "Test-drive" : niche === "imobiliaria" ? "Visita ao imóvel" : "Atendimento";
   const [options, setOptions] = useState<ScheduleOptions | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [activeDay, setActiveDay] = useState<string | null>(null);
@@ -142,7 +143,7 @@ export function SchedulePicker({
     }
   }
 
-  const title = niche === "concessionaria" ? "Agendar test-drive" : "Agendar visita";
+  const title = niche === "concessionaria" ? "Agendar test-drive" : niche === "imobiliaria" ? "Agendar visita" : "Agendar atendimento";
 
   return (
     <Card className="mt-3 w-full max-w-[min(100%,26rem)]">

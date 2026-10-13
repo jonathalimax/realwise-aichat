@@ -1,5 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { nicheTemplates } from "@realwise/profile-schema";
+import type { Niche } from "@realwise/db";
+import { getPersona } from "../chat/personas";
+import { nicheBehavior } from "../chat/niche-behavior";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 
@@ -219,11 +222,11 @@ export class OnboardingService {
     return { reply, allDone: remaining.length === 0, remainingGaps: remaining.length, confidenceScore };
   }
 
-  private async runEvalQuestions(businessId: string, businessName: string, niche: string, profileSummary: string, evalQuestions: string[]): Promise<number> {
+  private async runEvalQuestions(businessId: string, businessName: string, niche: Niche, profileSummary: string, evalQuestions: string[]): Promise<number> {
     if (evalQuestions.length === 0) return 0;
 
     const systemPrompt = [
-      `Você é a Clara, a atendente de IA da ${businessName}, um negócio de ${niche === "imobiliaria" ? "locação imobiliária" : "concessionária de veículos"}.`,
+      `Você é ${niche === "imobiliaria" ? "a Clara" : getPersona(niche).name}, a atendente de IA da ${businessName}, um negócio de ${nicheBehavior(niche).businessDescriptor}.`,
       "Responda apenas com base nas informações abaixo. Se não souber, diga que vai confirmar com um atendente humano — nunca invente preço, prazo ou disponibilidade.",
       `Informações do negócio: ${profileSummary}`,
     ].join("\n");

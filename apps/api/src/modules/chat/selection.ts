@@ -6,7 +6,9 @@
 // fields/description or from an explicitly labelled percentage estimate (ITBI/cartório). Anything
 // not present is listed as "não informado" — never guessed.
 
+import type { Niche } from "@realwise/db";
 import { normalizeText, formatCentsBRL } from "./triage";
+import { nicheBehavior } from "./niche-behavior";
 
 export const MAX_SELECTED_LISTINGS = 1;
 
@@ -280,9 +282,9 @@ export function buildComparisonReply(selected: SelectedListingDetails[], package
 export function selectionEngagementReply(
   listing: SelectedListingDetails,
   _selectedCount: number,
-  niche: string,
+  niche: Niche,
 ): { text: string; suggestions: string[] } {
-  const noun = niche === "concessionaria" ? "veículo" : "imóvel";
+  const noun = nicheBehavior(niche).selectionNoun;
   const kind = transactionKind(listing);
   const text =
     kind === "rent"
@@ -293,7 +295,7 @@ export function selectionEngagementReply(
   const suggestions: string[] = [];
   if (kind === "rent") suggestions.push("Quanto fica o total por mês?");
   else if (kind === "sale") suggestions.push("Quanto fica o custo total?");
-  if (kind === "sale" && niche !== "concessionaria" && typeof listing.priceCents === "number" && listing.priceCents > 0) {
+  if (kind === "sale" && niche === "imobiliaria" && typeof listing.priceCents === "number" && listing.priceCents > 0) {
     suggestions.push(`Simular financiamento de ${formatCentsBRL(listing.priceCents)}`);
   }
   suggestions.push("Agendar uma visita");

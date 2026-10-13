@@ -2,6 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { buildWaMeLink, buildCustomerEscalationMessage, buildOwnerOutreachMessage, generateReferenceCode } from "@realwise/shared";
 import concessionariaFlow from "./flows/concessionaria.flow.json";
 import imobiliariaFlow from "./flows/imobiliaria.flow.json";
+import farmaciaFlow from "./flows/farmacia.flow.json";
+import type { Niche } from "@realwise/db";
+import { nicheBehavior } from "./niche-behavior";
 import { PrismaService } from "../../prisma/prisma.service";
 import { LeadsService } from "../leads/leads.service";
 import { generateFromGateway, generateResilient } from "../../inference/gateway-client";
@@ -282,9 +285,12 @@ function expandWithSynonyms(keywords: string[]): Set<string> {
   return expanded;
 }
 
-const FLOWS: Record<string, FlowDef> = {
+// Exhaustive: a niche without a scripted flow is a compile error (no silent real-estate fallback).
+const FLOWS: Record<Niche, FlowDef> = {
   imobiliaria: imobiliariaFlow as unknown as FlowDef,
   concessionaria: concessionariaFlow as unknown as FlowDef,
+  // TODO(wave2:chat-engine): welcome/fallback stub only; the pharmacy lanes are code-driven.
+  farmacia: farmaciaFlow as unknown as FlowDef,
 };
 
 const PLACEHOLDER_PATTERN = /\{[^{}]+\}/g;
@@ -371,11 +377,11 @@ export class FlowService {
   }
 
   // Legacy numbered price bucket -> ceiling in cents (null for the open-ended top bucket / "any").
-  private faixaCeilingCents(niche: string, faixa: unknown, transaction?: "aluguel" | "venda"): number | null {
+  private faixaCeilingCents(niche: Niche, faixa: unknown, transaction?: "aluguel" | "venda"): number | null {
     return this.faixaToPriceRange(niche, transaction, faixa).priceMax ?? null;
   }
 
-  triagePreferencesFromParams(niche: string, params: Record<string, unknown>): TriagePreferences {
+  triagePreferencesFromParams(niche: Niche, params: Record<string, unknown>): TriagePreferences {
     return preferencesFromParams(params, (faixa, transaction) => this.faixaCeilingCents(niche, faixa, transaction));
   }
 
@@ -445,8 +451,8 @@ export class FlowService {
     this.recordEngagement(businessId, conversationId, [{ type: "escalation", topic }]);
   }
 
-  private flowFor(niche: string): FlowDef {
-    return FLOWS[niche] ?? FLOWS.imobiliaria;
+  private flowFor(niche: Niche): FlowDef {
+    return FLOWS[niche];
   }
 
   private substitute(template: string, params: Record<string, unknown>): string {
@@ -492,9 +498,8 @@ export class FlowService {
         const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
         return {
           message:
-            business?.niche === "concessionaria"
-              ? "Ótimo! Escolha o dia e o horário que preferir para o test-drive 👇"
-              : "Ótimo! Escolha o dia e o horário que preferir para a visita 👇 Se quiser, pode marcar mais de uma opção.",
+            nicheBehavior(business?.niche ?? "imobiliaria").scheduling?.pickerMessage ??
+            "Ótimo! Escolha o dia e o horário que preferir 👇",
           bubblesOverride: [],
           ui: "schedule_picker",
         };
@@ -594,7 +599,7 @@ export class FlowService {
           // page left off.
           params.last_listing_ids = dbListings.map((l) => l.id).filter((id): id is string => Boolean(id));
           params.offset = (filters.offset ?? 0) + dbListings.length;
-          if (business.niche === "concessionaria") {
+          if (!nicheBehavior(business.niche).usesRentBuyTriage) {
             return { message: "Encontrei algumas opções que podem te interessar 👇", listings: dbListings };
           }
           return {
@@ -635,13 +640,10 @@ export class FlowService {
         // grounding instructions — so this is an honest dead end, not a prompt to improve: offer a
         // real human handoff instead of ever reaching that fallback.
         return {
-          message:
-            business.niche === "concessionaria"
-              ? "Ainda não tenho o estoque carregado aqui — quer falar com um vendedor para ver as opções disponíveis?"
-              : "Ainda não tenho os imóveis carregados aqui — quer falar com um corretor para ver as opções disponíveis?",
+          message: nicheBehavior(business.niche).noInventory.message,
           bubblesOverride: [
             {
-              label: business.niche === "concessionaria" ? "Falar com um vendedor" : "Falar com um corretor",
+              label: nicheBehavior(business.niche).noInventory.bubbleLabel,
               goto: "handoff_whats",
             },
             { label: "⬅ Voltar ao menu", goto: "start" },
@@ -728,10 +730,8 @@ export class FlowService {
     })().catch(() => {});
   }
 
-  private honestFallbackMessage(niche: string): string {
-    return niche === "concessionaria"
-      ? "Essa informação eu vou confirmar com o time pra não te passar nada errado. Quer agendar um test-drive ou falar com um vendedor?"
-      : "Essa informação eu vou confirmar com o time pra não te passar nada errado. Quer agendar uma visita ou falar com um corretor?";
+  private honestFallbackMessage(niche: Niche): string {
+    return nicheBehavior(niche).honestFallback;
   }
 
   // The listing the visitor is looking at: an explicit/unambiguous one from the flow params, else
@@ -943,10 +943,8 @@ export class FlowService {
     conversationId: string,
   ): Promise<{ message: string; bubblesOverride?: FlowBubble[] }> {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
-    const isConcessionaria = business?.niche === "concessionaria";
-    const message = isConcessionaria
-      ? "Não consegui confirmar esse horário automaticamente — vou te colocar em contato com um vendedor para agendar manualmente."
-      : "Não consegui confirmar esse horário automaticamente — vou te colocar em contato com um corretor para agendar manualmente.";
+    const bookingBehavior = nicheBehavior(business?.niche ?? "imobiliaria");
+    const message = bookingBehavior.bookingFailureMessage;
 
     const conversation = await this.prisma.client.conversation.findUnique({
       where: { id: conversationId },
@@ -973,7 +971,7 @@ export class FlowService {
       this.notifyOwner(
         businessId,
         "Agendamento não confirmado — contato manual",
-        `<p>Um cliente tentou agendar ${isConcessionaria ? "um test-drive" : "uma visita"} pelo chat, mas o horário não pôde ser confirmado automaticamente.</p>
+        `<p>Um cliente tentou agendar ${bookingBehavior.scheduling?.appointmentPhrase ?? "um atendimento"} pelo chat, mas o horário não pôde ser confirmado automaticamente.</p>
          <p><strong>Assunto:</strong> ${escapeHtml(topic ?? "Atendimento via chat")}</p>
          <p><strong>Código de referência:</strong> ${escapeHtml(referenceCode)}</p>
          ${waButton}
@@ -984,7 +982,7 @@ export class FlowService {
     return {
       message,
       bubblesOverride: [
-        { label: isConcessionaria ? "Falar com um vendedor" : "Falar com um corretor", goto: "handoff_whats" },
+        { label: bookingBehavior.noInventory.bubbleLabel, goto: "handoff_whats" },
         { label: "⬅ Voltar ao menu", goto: "start" },
       ],
     };
@@ -1016,8 +1014,11 @@ export class FlowService {
     params: Record<string, unknown>,
   ): Promise<{ message: string; listings?: ListingItem[]; bubblesOverride?: FlowBubble[] }> {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
+    const detailBehavior = nicheBehavior(business?.niche ?? "imobiliaria");
+    // Listing detail nodes only exist in the real-estate / vehicle flows. TODO(wave2:chat-engine): pharmacy product cards.
+    if (!detailBehavior.usesListingEngine) return { message: node.message };
     const isConcessionaria = business?.niche === "concessionaria";
-    const itemWord = isConcessionaria ? "carro" : "imóvel";
+    const itemWord = detailBehavior.flowItemWord;
 
     // "goto: resultados" works the same regardless of niche — the resultados node itself is
     // already niche-aware (see LISTING_NODE_IDS handling above).
@@ -1380,7 +1381,7 @@ export class FlowService {
       return { message: "Esse horário acabou de ser reservado por outra pessoa. Vamos escolher outro horário? 👉 Toque em \"Nenhum serve\" para ver os horários atuais." };
     }
 
-    const serviceName = business.niche === "concessionaria" ? "Test-drive" : "Visita ao imóvel";
+    const serviceName = nicheBehavior(business.niche).scheduling?.serviceName ?? "Atendimento";
 
     // Best-effort: resolve which listing was actually discussed in this conversation so the
     // appointment (and its confirmation emails/ICS) can reference the right address/listing
@@ -1429,7 +1430,7 @@ export class FlowService {
 
     const timezone = business.timezone ?? "America/Sao_Paulo";
     const formatted = startsAt.toLocaleString("pt-BR", { timeZone: timezone, dateStyle: "short", timeStyle: "short" });
-    const label = business.niche === "concessionaria" ? "Agendado" : "Visita agendada";
+    const label = nicheBehavior(business.niche).scheduling?.scheduledLabel ?? "Agendado";
     return { message: `${label}! 🎉 Confirmado para ${formatted}.` };
   }
 
@@ -1578,8 +1579,8 @@ export class FlowService {
 
   // Turns the flow's accumulated filter params into a retrieval query that actually resembles
   // real listing text (e.g. "apartamento aluguel centro") instead of the generic node copy.
-  private listingQueryFor(niche: string, params: Record<string, unknown>): string {
-    const words: string[] = [niche === "concessionaria" ? "carro veículo" : "imóvel apartamento casa"];
+  private listingQueryFor(niche: Niche, params: Record<string, unknown>): string {
+    const words: string[] = [nicheBehavior(niche).listingQueryWords];
     for (const key of ["tipo", "categoria", "marca", "modelo", "regiao", "modo"]) {
       const value = params[key];
       if (typeof value === "string" && value !== "any") words.push(value);
@@ -1613,9 +1614,11 @@ export class FlowService {
     [20000000, null],
   ];
 
-  private faixaToPriceRange(niche: string, transaction: string | undefined, faixa: unknown): { priceMin?: number; priceMax?: number } {
+  private faixaToPriceRange(niche: Niche, transaction: string | undefined, faixa: unknown): { priceMin?: number; priceMax?: number } {
     const index = typeof faixa === "number" ? faixa : typeof faixa === "string" ? Number(faixa) : NaN;
     if (!Number.isFinite(index) || index < 1) return {};
+    // TODO(wave2:chat-engine): the pharmacy has no price-bucket bubbles.
+    if (niche === "farmacia") return {};
     const buckets =
       niche === "concessionaria"
         ? FlowService.FAIXA_BUCKETS_VEICULO
@@ -1630,13 +1633,13 @@ export class FlowService {
 
   // Maps the flow's accumulated filter params (tipo/modo/faixa/regiao/marca/modelo/ordem) onto
   // ListingsService.queryForChat's filter shape, used once the business has real extracted rows.
-  private chatFiltersFor(niche: string, params: Record<string, unknown>): ChatQueryFilters {
+  private chatFiltersFor(niche: Niche, params: Record<string, unknown>): ChatQueryFilters {
     const transaction = typeof params.modo === "string" && params.modo !== "any" ? params.modo : undefined;
     const bucket = this.faixaToPriceRange(niche, transaction, params.faixa);
     const priceMin = bucket.priceMin;
     // A typed budget ("até 3 mil") is stored as orcamento_max and wins over a bucket tap.
     const priceMax = typeof params.orcamento_max === "number" && params.orcamento_max > 0 ? params.orcamento_max : bucket.priceMax;
-    const prefs = niche === "concessionaria" ? {} : preferencesFromParams(params);
+    const prefs = nicheBehavior(niche).usesRentBuyTriage ? preferencesFromParams(params) : {};
     return {
       ...(typeof prefs.bedrooms === "number" && { bedroomsMin: prefs.bedrooms }),
       ...(prefs.areaMin != null && { areaMin: prefs.areaMin }),
@@ -1682,7 +1685,7 @@ export class FlowService {
   // silently showing both aluguel and venda listings mixed together.
   async listingFiltersForText(
     businessId: string,
-    niche: string,
+    niche: Niche,
     visitorText: string,
     pinnedTransaction?: string | null,
   ): Promise<ChatQueryFilters> {
@@ -1720,12 +1723,12 @@ export class FlowService {
   private async extractListings(
     businessId: string,
     businessName: string,
-    niche: string,
+    niche: Niche,
     chunkText: string,
   ): Promise<ListingItem[]> {
     if (!chunkText) return [];
 
-    const personaName = niche === "imobiliaria" || niche === "concessionaria" ? getPersona(niche).name : "o atendente de IA";
+    const personaName = getPersona(niche).name;
     const systemPrompt = [
       `Você é ${personaName}, atendente de IA da ${businessName}.`,
       "Extraia itens de anúncio (imóveis ou veículos) genuinamente descritos nos trechos de documentos abaixo.",
@@ -2116,11 +2119,21 @@ export class FlowService {
     if (!business) return;
 
     await this.dynamicRegionBubbles(businessId, true);
-    if (business.niche === "concessionaria") {
-      await this.extractOptions(businessId, "marca", BRAND_PROMPT, true);
-      await this.extractOptions(businessId, "categoria_veiculo", VEHICLE_CATEGORY_PROMPT, true);
-    } else {
-      await this.extractOptions(businessId, "categoria_imovel", PROPERTY_TYPE_PROMPT, true);
+    switch (business.niche) {
+      case "concessionaria":
+        await this.extractOptions(businessId, "marca", BRAND_PROMPT, true);
+        await this.extractOptions(businessId, "categoria_veiculo", VEHICLE_CATEGORY_PROMPT, true);
+        break;
+      case "imobiliaria":
+        await this.extractOptions(businessId, "categoria_imovel", PROPERTY_TYPE_PROMPT, true);
+        break;
+      case "farmacia":
+        // TODO(wave2:chat-engine): no dynamic flow options for pharmacies.
+        break;
+      default: {
+        const _never: never = business.niche;
+        throw new Error(`regenerateFlowOptions: unhandled niche ${String(_never)}`);
+      }
     }
   }
 
@@ -2162,7 +2175,7 @@ export class FlowService {
   private async emit(
     businessId: string,
     conversationId: string,
-    niche: string,
+    niche: Niche,
     nodeId: string,
     params: Record<string, unknown>,
     // Stage 5 conversational redesign opts — `conversationalModeEnabled` mirrors however the
@@ -2182,7 +2195,7 @@ export class FlowService {
     // Triage questions the visitor already answered in their own words ("3 quartos no Centro")
     // are skipped forward — the chain never re-asks something already known.
     const triageStep = triageStepForNode(nodeId);
-    if (triageStep && triageStep !== "bedrooms" && niche !== "concessionaria") {
+    if (triageStep && triageStep !== "bedrooms" && nicheBehavior(niche).usesRentBuyTriage) {
       const next = nextTriageStep(this.triagePreferencesFromParams(niche, params));
       if (next !== triageStep && (next === null || TRIAGE_ORDER.indexOf(next) > TRIAGE_ORDER.indexOf(triageStep))) {
         nodeId = triageNodeForStep(next, params.modo === "venda" ? "venda" : "aluguel");
@@ -2296,7 +2309,7 @@ export class FlowService {
   // niche-aware real question rather than generic nav, since bubbles should read as specific
   // questions, not navigation — this is not a reintroduction of the removed persistent nav layer,
   // it only ever appears when every other option-generation path has failed.
-  private ensureNonEmptyBubbles(node: FlowNode, bubbles: FlowBubble[], niche: string, params: Record<string, unknown> = {}): FlowBubble[] {
+  private ensureNonEmptyBubbles(node: FlowNode, bubbles: FlowBubble[], niche: Niche, params: Record<string, unknown> = {}): FlowBubble[] {
     if (bubbles.length > 0) return bubbles;
     // Same substitute-then-drop-unresolved treatment as the primary bubble list above — the
     // node's own raw scripted bubbles can still carry an unresolved {placeholder} label (e.g.
@@ -2309,7 +2322,7 @@ export class FlowService {
       return scriptedBubbles;
     }
     console.warn(`[flow] ensureNonEmptyBubbles tier 3 fallback fired for node "${node.id}" — no bubbles on node either.`);
-    const label = niche === "concessionaria" ? "Quais carros vocês têm disponíveis?" : "Quais imóveis vocês têm disponíveis?";
+    const label = niche === "farmacia" ? "Fazer um pedido" : niche === "concessionaria" ? "Quais carros vocês têm disponíveis?" : "Quais imóveis vocês têm disponíveis?";
     return [{ label, goto: "start" }];
   }
 
@@ -2333,7 +2346,7 @@ export class FlowService {
 
   // BFS from the flow's `start` node, following every bubble's `goto` plus each node's own
   // `on_input` as graph edges. Unreachable nodes get `Infinity`.
-  private depthMap(niche: string): Record<string, number> {
+  private depthMap(niche: Niche): Record<string, number> {
     const cached = this.depthMapCache.get(niche);
     if (cached) return cached;
 
@@ -2570,7 +2583,7 @@ export class FlowService {
     this.recomputeLeadScore(businessId, conversation.leadId);
 
     const triageKeysTouched = Object.keys(bubbleParams).some((k) => ["modo", "quartos", "regiao", "area", "area_min", "area_max", "faixa", "orcamento_max"].includes(k));
-    if (triageKeysTouched && business.niche !== "concessionaria") {
+    if (triageKeysTouched && nicheBehavior(business.niche).usesRentBuyTriage) {
       this.recordEngagement(businessId, conversationId, [
         { type: "preferences", preferences: this.triagePreferencesFromParams(business.niche, mergedParams) },
       ]);
@@ -2587,7 +2600,8 @@ export class FlowService {
     const step = triageStepForNode(conversation.flowNodeId);
     if (!step) return null;
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
-    if (!business || business.niche === "concessionaria") return null;
+    // Rent/buy triage is real-estate only (farmacia and concessionaria never start it).
+    if (!business || !nicheBehavior(business.niche).usesRentBuyTriage) return null;
 
     const params = (conversation.flowParams as Record<string, unknown>) ?? {};
     const transaction = params.modo === "venda" ? "venda" : params.modo === "aluguel" ? "aluguel" : conversation.flowNodeId === "comprar" ? "venda" : "aluguel";
@@ -2633,7 +2647,8 @@ export class FlowService {
   // instead of the generic "o que você quer saber?". Returns null when not applicable.
   async startTriageFromText(businessId: string, conversationId: string, visitorText: string) {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
-    if (!business || business.niche === "concessionaria") return null;
+    // Rent/buy triage is real-estate only (farmacia and concessionaria never start it).
+    if (!business || !nicheBehavior(business.niche).usesRentBuyTriage) return null;
     const conversation = await this.currentState(conversationId);
     if (!TRIAGE_ENTRY_FROM_NODES.has(conversation.flowNodeId as string | null)) return null;
     if (!isTriageEntry(visitorText)) return null;

@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { nicheBehavior } from "./niche-behavior";
 import type { Niche } from "@realwise/db";
 import { ListingsService, type ListingItem } from "../listings/listings.service";
 import { FinancingRatesService, describeFinancingRateSource } from "./financing-rates.service";
@@ -50,7 +51,8 @@ function hasMonetaryAmount(text: string): boolean {
   return MONEY_PATTERN.test(text);
 }
 
-export function detectsFinancingSimulationIntent(text: string, _niche: Niche): boolean {
+export function detectsFinancingSimulationIntent(text: string, niche: Niche): boolean {
+  if (!nicheBehavior(niche).supportsFinancingSimulation) return false;
   const normalized = text.toLowerCase();
   const hasVerb = SIMULATE_VERB_PATTERN.test(normalized);
   const hasMoney = hasMonetaryAmount(normalized);
@@ -202,9 +204,19 @@ export interface ValidatedFinancingParams {
 // question). Rate/system are always defaulted silently — never asked.
 export function validateFinancingParams(params: ExtractedFinancingParams, niche: Niche): string | ValidatedFinancingParams {
   if (params.valueCents == null) {
-    return niche === "imobiliaria"
-      ? "Qual o valor do imóvel que você quer simular?"
-      : "Qual o valor do veículo que você quer simular?";
+    switch (niche) {
+      case "imobiliaria":
+        return "Qual o valor do imóvel que você quer simular?";
+      case "concessionaria":
+        return "Qual o valor do veículo que você quer simular?";
+      case "farmacia":
+        // Unreachable: detectsFinancingSimulationIntent() is false for pharmacies.
+        return "Não trabalhamos com simulação de financiamento.";
+      default: {
+        const _never: never = niche;
+        return _never;
+      }
+    }
   }
   if (params.months == null) {
     return "Em quantos meses (ou anos) você quer simular o financiamento?";
@@ -245,6 +257,10 @@ export class SimulatorService {
   ) {}
 
   async simulate(businessId: string, niche: Niche, visitorText: string): Promise<SimulationOutcome> {
+    if (niche === "farmacia") {
+      // TODO(wave2:chat-engine): unreachable today (intent detection is off for pharmacies); explicit safe stub.
+      return { kind: "followup", text: "Não trabalhamos com simulação de financiamento." };
+    }
     const { params } = extractFinancingParams(visitorText);
     const validatedOrQuestion = validateFinancingParams(params, niche);
 

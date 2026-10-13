@@ -184,7 +184,7 @@ export default function MarketingHome() {
         <Reveal className="mx-auto max-w-5xl px-5 text-center">
           <h2 className="font-serif text-3xl text-ink md:text-4xl">Feito pro seu <em className="italic">tipo de negócio</em></h2>
           <p className="mx-auto mt-3 max-w-md text-ink-soft">A entrevista, os exemplos e as respostas mudam de acordo com o seu nicho.</p>
-          <div className="mt-10 grid gap-5 sm:grid-cols-2">
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             <a href="/imobiliaria" className="group rounded-3xl border border-border bg-surface p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
               <h3 className="font-serif text-xl text-ink">Imobiliárias</h3>
               <p className="mt-2 text-sm text-ink-soft">Documentos, fiador, seguro fiança e agendamento de visita — explicado antes do cliente ligar.</p>
@@ -196,9 +196,15 @@ export default function MarketingHome() {
               <p className="mt-2 text-sm text-ink-soft">Estoque, simulação de financiamento, avaliação de troca e test-drive, direto no chat.</p>
               <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-accent">Entrar na lista de espera <span className="transition-transform group-hover:translate-x-1">→</span></span>
             </a>
+            <a href="/farmacia" className="group relative rounded-3xl border border-border bg-surface p-8 text-left opacity-80 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:opacity-100">
+              <span className="absolute -top-3 right-6 rounded-full bg-lime px-3 py-1 text-[0.65rem] font-bold uppercase text-lime-ink">Em breve</span>
+              <h3 className="font-serif text-xl text-ink">Farmácias</h3>
+              <p className="mt-2 text-sm text-ink-soft">Pedidos de venda livre no chat, receita validada pelo farmacêutico e sintomas encaminhados — sem a IA indicar remédio.</p>
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-accent">Entrar na lista de espera <span className="transition-transform group-hover:translate-x-1">→</span></span>
+            </a>
           </div>
           <p className="mt-8 text-sm text-ink-soft">
-            Seu negócio não é desses dois?{" "}
+            Seu negócio não é desses?{" "}
             <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent underline underline-offset-2 hover:text-ink">
               Fala com a gente no WhatsApp
             </a>{" "}

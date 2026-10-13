@@ -42,6 +42,20 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+
+// Exhaustive per niche (no silent real-estate fallback). Pharmacies never show financing simulations.
+function matchedListingsTitle(niche?: string | null): string {
+  switch (niche) {
+    case "concessionaria":
+      return "Veículos que cabem no seu orçamento";
+    case "imobiliaria":
+      return "Imóveis que cabem no seu orçamento";
+    case "farmacia":
+    default:
+      return "Itens que cabem no seu orçamento";
+  }
+}
+
 export function SimulationCard({
   data,
   listings,
@@ -90,7 +104,7 @@ export function SimulationCard({
       {listings && listings.length > 0 && (
         <div className="mt-3">
           <div className="mb-1 text-xs font-semibold text-ink">
-            {niche === "concessionaria" ? "Veículos que cabem no seu orçamento" : "Imóveis que cabem no seu orçamento"}
+            {matchedListingsTitle(niche)}
           </div>
           <ListingCards listings={listings} onOpen={onOpenListing} onSelect={onSelectListing} selectedIds={selectedIds} />
         </div>
