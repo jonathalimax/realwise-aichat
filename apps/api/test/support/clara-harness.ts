@@ -479,6 +479,8 @@ export function createClara(options: ScenarioOptions = {}) {
   const usage = spy({
     countConversationsThisMonth: async () => options.usedConversations ?? 0,
     getConversationQuota: async () => options.quota ?? 0,
+    // checkConversationQuota reads the plan (no plan -> entry plan quota), see PR #4.
+    getSubscriptionPlan: async () => (options.quota ? { code: "essencial", conversationQuota: options.quota } : null),
   });
   const knowledge = spy({ recordUnanswered: async () => undefined });
   const analytics = spy({

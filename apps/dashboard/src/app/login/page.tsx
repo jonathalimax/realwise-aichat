@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ConfirmationResult } from "firebase/auth";
-import { maskBrPhone, brPhoneToE164 } from "@realwise/shared";
+import { maskBrPhone, brPhoneToE164, getPlanDefinition, isPlanCode } from "@realwise/shared";
 import { createRecaptchaVerifier, sendPhoneOtp } from "../../lib/firebase";
 import { verifyFirebaseToken } from "../../lib/api";
 import { Input } from "../../components/ui/input";
@@ -20,11 +20,6 @@ export default function LoginPage() {
 }
 
 const WHATSAPP_URL = "https://wa.me/5585992265544?text=" + encodeURIComponent("Oi! Estou tentando entrar no painel da Realwise e deu erro.");
-
-const PLAN_LABELS: Record<string, string> = {
-  essencial: "Essencial",
-  profissional: "Profissional",
-};
 
 function isRateLimitError(err: unknown): boolean {
   const code = (err as { code?: string })?.code ?? "";
@@ -45,7 +40,7 @@ function LoginPageInner() {
 
   useEffect(() => {
     const plan = searchParams.get("plan");
-    if (plan) {
+    if (isPlanCode(plan)) {
       localStorage.setItem("rw_selected_plan", plan);
       setSelectedPlan(plan);
     }
@@ -121,7 +116,7 @@ function LoginPageInner() {
           </p>
           {selectedPlan && (
             <p className="mt-3 rounded-lg bg-bg-2 px-3 py-2 text-sm text-ink-soft">
-              Plano selecionado: <span className="font-semibold text-ink">{PLAN_LABELS[selectedPlan] ?? selectedPlan}</span>
+              Plano selecionado: <span className="font-semibold text-ink">{getPlanDefinition(selectedPlan)?.name ?? selectedPlan}</span>
             </p>
           )}
 

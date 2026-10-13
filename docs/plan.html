@@ -263,7 +263,7 @@
 
       <section class="block">
         <h2>O modelo de receita</h2>
-        <div class="sub">Taxa de setup (entrevista guiada) + assinatura mensal por negócio, ancorada no custo de uma recepcionista.</div>
+        <div class="sub">Três planos com mensalidade fixa por negócio, ancorados no custo de uma recepcionista. Setup sempre grátis, sem pay-as-you-go e sem cobrança por excedente. Fonte única dos números: <code>packages/shared/src/plans.ts</code>.</div>
         <div class="grid cols-3" style="margin-bottom:18px;">
           <div class="stat"><span class="v">R$3.200–4.500</span><span class="l">custo mensal carregado de uma recepcionista</span></div>
           <div class="stat"><span class="v">R$0,03–0,08</span><span class="l">custo marginal de inferência por conversa</span></div>
@@ -272,25 +272,25 @@
         <div class="price-row">
           <div class="price-card">
             <h4>Essencial</h4>
-            <div class="amt">R$297<small>/mês</small></div>
-            <div class="setup">+ R$497 taxa de setup</div>
-            <ul><li>300 conversas/mês</li><li>10 documentos de base</li><li>Agendamento embutido</li><li>1 número de WhatsApp</li><li>Analytics básico</li></ul>
+            <div class="amt">R$197<small>/mês</small></div>
+            <div class="setup">Preço de lançamento (de <s>R$297</s>) · setup grátis</div>
+            <ul><li>150 conversas/mês</li><li>10 documentos na base</li><li>1 número de WhatsApp</li><li>Agendamento embutido</li><li>Analytics básico</li></ul>
           </div>
           <div class="price-card featured">
             <span class="badge">Mais escolhido</span>
             <h4>Profissional</h4>
-            <div class="amt">R$597<small>/mês</small></div>
-            <div class="setup">+ R$997 taxa de setup</div>
-            <ul><li>1.200 conversas/mês</li><li>50 documentos de base</li><li>3 números de WhatsApp</li><li>Analytics completo + tendências</li><li>Marca própria (logo/cores)</li><li>Revisão trimestral da base</li></ul>
+            <div class="amt">R$397<small>/mês</small></div>
+            <div class="setup">Preço de lançamento (de <s>R$597</s>) · setup grátis</div>
+            <ul><li>1.000 conversas/mês</li><li>50 documentos na base</li><li>3 números de WhatsApp</li><li>Analytics completo</li><li>Sincronização com Google Calendar</li><li>Sua marca e domínio próprio</li><li>Suporte prioritário</li></ul>
           </div>
           <div class="price-card">
             <h4>Studio</h4>
-            <div class="amt">R$1.197<small>/mês</small></div>
-            <div class="setup">+ R$1.997 taxa de setup</div>
-            <ul><li>4.000 conversas/mês</li><li>Documentos ilimitados</li><li>10 números de WhatsApp</li><li>Domínio próprio</li><li>Webhook para CRM</li><li>Suporte dedicado</li></ul>
+            <div class="amt">R$797<small>/mês</small></div>
+            <div class="setup">Preço de lançamento (de <s>R$1.197</s>) · setup grátis</div>
+            <ul><li>3.000 conversas/mês</li><li>Documentos ilimitados</li><li>10 números de WhatsApp</li><li>Tudo do Profissional</li><li>Suporte dedicado</li></ul>
           </div>
         </div>
-        <p class="footnote">Anual: 2 meses grátis. Setup grátis para os primeiros 10 parceiros de design, em troca de depoimento em vídeo. Preço a validar com os primeiros clientes — ver decisão aberta em <a href="javascript:void(0)" onclick="go('riscos')">Riscos &amp; Decisões</a>.</p>
+        <p class="footnote">O que conta como conversa: uma sessão em que a IA de fato responde — respostas de fluxo fixo (horário, endereço) não contam. Passou do limite: nada é cobrado a mais; o dono recebe alertas (80%, 95%, 100%) com "Ver planos" e novas conversas vão direto para a equipe até o próximo ciclo ou um upgrade (Essencial → Profissional → Studio). Anual: 2 meses grátis. Preço a validar com os primeiros clientes — ver decisão aberta em <a href="javascript:void(0)" onclick="go('riscos')">Riscos &amp; Decisões</a>.</p>
       </section>
 
       <section class="block">
@@ -439,7 +439,7 @@
               <li>Reconhecimento de visitante recorrente por nome+telefone</li>
               <li>Dashboard: leads, conversas, base de conhecimento, cobrança</li>
               <li>Admin interno (propositalmente simples)</li>
-              <li>Stripe (assinatura + taxa de setup) + Apple/Google Pay</li>
+              <li>Stripe (assinatura mensal, setup grátis) + Apple/Google Pay</li>
               <li>Duas templates de nicho</li>
             </ul>
           </div>
@@ -998,7 +998,7 @@
             <h4>MVP</h4>
             <ul>
               <li>Login por telefone via Firebase Auth (decidido — substitui OTP custom)</li>
-              <li>Checkout Stripe (assinatura + taxa de setup)</li>
+              <li>Checkout Stripe (assinatura mensal, sem taxa de setup)</li>
               <li>Upload de documentos + OCR (tabela de preços, fotos de estoque/imóveis)</li>
               <li>Entrevista guiada — 2 templates: imobiliária e concessionária</li>
               <li>Medidor de confiança com lista priorizada do que falta</li>

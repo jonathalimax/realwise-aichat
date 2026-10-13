@@ -1,6 +1,13 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "crypto";
-import { buildWaMeLink, buildCustomerEscalationMessage, buildOwnerOutreachMessage, generateReferenceCode } from "@realwise/shared";
+import {
+  buildCustomerEscalationMessage,
+  buildOwnerOutreachMessage,
+  buildQuotaAlert,
+  buildWaMeLink,
+  generateReferenceCode,
+  getEntryPlan,
+} from "@realwise/shared";
 import { nicheTemplates } from "@realwise/profile-schema";
 import type { Business, Conversation } from "@realwise/db";
 import { Prisma } from "@realwise/db";
@@ -551,7 +558,7 @@ export class ChatService {
           businessId,
           "Limite de conversas do plano atingido",
           `<p>O limite de conversas do plano mensal foi atingido. Novas conversas estão sendo encaminhadas direto para a sua equipe até o início do próximo ciclo ou upgrade de plano.</p>
-           <p>Veja os detalhes do plano: Configurações &gt; Assinatura.</p>`,
+           <p>Veja e compare os planos no painel: Plano e cobrança.</p>`,
         );
         this.analytics.recordEvent(businessId, "escalation", { reason: "quota_exceeded" }, conversation.id).catch(() => {});
       }
@@ -562,43 +569,19 @@ export class ChatService {
   // Checks current-month usage against the plan quota and raises/escalates as needed. Returns
   // whether THIS new conversation should be hard-capped (quota already at/over 100%).
   private async checkConversationQuota(businessId: string): Promise<{ exceeded: boolean; personaName?: string }> {
-    const [used, quota, business] = await Promise.all([
+    const [used, plan, business] = await Promise.all([
       this.usage.countConversationsThisMonth(businessId),
-      this.usage.getConversationQuota(businessId),
+      this.usage.getSubscriptionPlan(businessId),
       this.prisma.client.business.findUnique({ where: { id: businessId } }),
     ]);
-    if (quota <= 0) return { exceeded: false };
-    const percent = (used / quota) * 100;
+    const quota = plan?.conversationQuota ?? getEntryPlan().conversationQuota;
     const personaName = business ? getPersona(business.niche).name : "o atendente de IA";
-
-    if (percent >= 100) {
-      await this.alerts.createAlert(businessId, {
-        type: "quota_exceeded",
-        severity: "critical",
-        message: `Você atingiu 100% das conversas do seu plano este mês — novas conversas estão sendo encaminhadas direto para sua equipe. Faça upgrade para voltar a ser atendido por ${personaName}.`,
-        actionLabel: "Ver planos",
-        actionHref: "/billing",
-      });
-      return { exceeded: true, personaName };
-    }
-    if (percent >= 95) {
-      await this.alerts.createAlert(businessId, {
-        type: "quota_warning_95",
-        severity: "warning",
-        message: "Você já usou 95% das conversas do seu plano este mês — faça upgrade agora para não ficar sem atendimento.",
-        actionLabel: "Ver planos",
-        actionHref: "/billing",
-      });
-    } else if (percent >= 80) {
-      await this.alerts.createAlert(businessId, {
-        type: "quota_warning_80",
-        severity: "warning",
-        message: "Você já usou 80% das conversas do seu plano este mês — considere fazer upgrade para não ficar sem atendimento.",
-        actionLabel: "Ver planos",
-        actionHref: "/billing",
-      });
-    }
-    return { exceeded: false };
+    // Wording/thresholds (80% / 95% / 100%) and the upgrade suggestion live in the shared plan
+    // catalog so they always name the right next tier (essencial -> profissional -> studio).
+    const alert = buildQuotaAlert(used, quota, plan?.code, personaName);
+    if (!alert) return { exceeded: false };
+    await this.alerts.createAlert(businessId, alert);
+    return alert.type === "quota_exceeded" ? { exceeded: true, personaName } : { exceeded: false };
   }
 
   // Shared ownership check used by getHistory and the push subscribe/unsubscribe endpoints — a

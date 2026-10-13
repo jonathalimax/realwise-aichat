@@ -1,4 +1,5 @@
 import { Reveal } from "./Reveal";
+import { PricingSection } from "./PricingSection";
 import { CAPABILITY_ICON_PATHS, type NicheConfig } from "../lib/niches";
 
 const WHATSAPP_NUMBER = "5585992265544";
@@ -199,54 +200,13 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
       </section>
 
       {/* PRICING */}
-      <section id="precos" className="py-20">
-        <Reveal className="mx-auto max-w-5xl px-5 text-center">
-          <h2 className="font-serif text-3xl text-ink md:text-4xl">Preço</h2>
-          <p className="mx-auto mt-2 max-w-md text-ink-soft">Sem letra miúda. Sem taxa de setup — só a mensalidade.</p>
-          <div className="mt-10 grid gap-5 text-left md:grid-cols-3">
-            <div className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-              <h3 className="font-serif text-lg">Essencial</h3>
-              <div className="mt-2 font-mono text-3xl text-ink">R$297<span className="text-sm font-sans text-muted">/mês</span></div>
-              <ul className="mt-5 flex flex-col gap-2 text-sm text-ink-soft">
-                <li>— 300 conversas/mês</li>
-                <li>— 10 documentos na base</li>
-                <li>— Agendamento embutido</li>
-                <li>— 1 número de WhatsApp</li>
-              </ul>
-              <Pill href={niche.earlyAccess ? WHATSAPP_URL : `${DASHBOARD_LOGIN_URL}?plan=essencial`} className="mt-6 w-full justify-center px-6 py-3">
-                {niche.earlyAccess ? "Entrar na lista de espera" : "Escolher Essencial"}
-              </Pill>
-            </div>
-            <div className="relative rounded-3xl bg-ink p-7 text-bg transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl">
-              <span className="absolute -top-3 left-7 rounded-full bg-lime px-3 py-1 text-[0.65rem] font-bold uppercase text-lime-ink">Mais escolhido</span>
-              <h3 className="font-serif text-lg">Profissional</h3>
-              <div className="mt-2 font-mono text-3xl">R$597<span className="text-sm font-sans opacity-60">/mês</span></div>
-              <ul className="mt-5 flex flex-col gap-2 text-sm opacity-90">
-                <li>— 1.200 conversas/mês</li>
-                <li>— 50 documentos na base</li>
-                <li>— 3 números de WhatsApp</li>
-                <li>— Sua marca no chat</li>
-                <li>— Revisão trimestral da base</li>
-              </ul>
-              <Pill href={niche.earlyAccess ? WHATSAPP_URL : `${DASHBOARD_LOGIN_URL}?plan=profissional`} className="mt-6 w-full justify-center bg-lime px-6 py-3 text-lime-ink">
-                {niche.earlyAccess ? "Entrar na lista de espera" : "Escolher Profissional"}
-              </Pill>
-            </div>
-            <div className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-              <h3 className="font-serif text-lg">Studio</h3>
-              <div className="mt-2 font-mono text-3xl text-ink">R$1.197<span className="text-sm font-sans text-muted">/mês</span></div>
-              <ul className="mt-5 flex flex-col gap-2 text-sm text-ink-soft">
-                <li>— 4.000 conversas/mês</li>
-                <li>— Documentos ilimitados</li>
-                <li>— 10 números de WhatsApp</li>
-                <li>— Domínio próprio</li>
-                <li>— Suporte dedicado</li>
-              </ul>
-            </div>
-          </div>
-          <p className="mt-6 text-sm text-ink-soft">O que conta como conversa? Uma sessão onde a IA de fato responde algo — perguntas de fluxo fixo (horário, endereço) não contam. Anual sai 2 meses grátis.</p>
-        </Reveal>
-      </section>
+      <PricingSection
+        cta={(plan) =>
+          niche.earlyAccess
+            ? { href: WHATSAPP_URL, label: "Entrar na lista de espera" }
+            : { href: `${DASHBOARD_LOGIN_URL}?plan=${plan.code}`, label: `Escolher ${plan.name}` }
+        }
+      />
 
       {/* SOCIAL PROOF */}
       <section className="bg-bg-2 py-16">
