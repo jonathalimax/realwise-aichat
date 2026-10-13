@@ -100,7 +100,7 @@ export class AuthController {
     const anonCookieKey = Object.keys(req.cookies ?? {}).find((k) => k.startsWith("rw_visitor_anon_"));
     const anonToken = anonCookieKey ? req.cookies[anonCookieKey] : undefined;
 
-    const { token, lead } = await this.auth.identifyVisitor(
+    const { token, lead, returning } = await this.auth.identifyVisitor(
       businessSlug,
       name,
       phone,
@@ -110,6 +110,7 @@ export class AuthController {
       email,
     );
     res.cookie("rw_visitor_session", token, SESSION_COOKIE_OPTIONS);
-    return { lead: { id: lead.id } };
+    // `returning` (additive): the number already belonged to a customer of this business.
+    return { lead: { id: lead.id }, returning, firstName: lead.name?.trim().split(/\s+/)[0] ?? null };
   }
 }

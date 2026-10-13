@@ -22,6 +22,7 @@ import { UsageModule } from "./modules/usage/usage.module";
 import { InboxModule } from "./modules/inbox/inbox.module";
 import { PushModule } from "./modules/push/push.module";
 import { AccessModule } from "./modules/access/access.module";
+import { CustomersModule } from "./modules/customers/customers.module";
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { AccessModule } from "./modules/access/access.module";
     UsageModule,
     InboxModule,
     PushModule,
+    CustomersModule,
   ],
   controllers: [HealthController],
 })

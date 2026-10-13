@@ -124,7 +124,7 @@ export class AuthService {
     void this.teamSummary.syncLeadFromLatestConversation(business.id, lead.id);
 
     const token = await signVisitorSession({ businessId: business.id, leadId: lead.id, phoneNumber: phoneNormalized, name: cleanName ?? undefined });
-    return { token, lead };
+    return { token, lead, returning: existingLead !== null };
   }
 
   async loginAdminWithPassword(email: string, password: string) {
