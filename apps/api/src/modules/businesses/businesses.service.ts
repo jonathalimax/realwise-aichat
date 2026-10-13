@@ -3,6 +3,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { assertPublicHttpUrl } from "../../common/url-safety";
 import { isEffectivelySuspended, isValidHexColor, resolveBranding, type NicheKey } from "@realwise/shared";
 import { StarterRolesService } from "../access/starter-roles.service";
+import { getPersona } from "../chat/personas";
 
 @Injectable()
 export class BusinessesService {
@@ -35,8 +36,33 @@ export class BusinessesService {
     // feeding the "Aberturas do link 7d" dashboard stat. Never block the chat on this.
     this.prisma.client.analyticsEvent.create({ data: { businessId: business.id, name: "link_opened" } }).catch(() => {});
     const { trialEndsAt, subscription, primaryColor, secondaryColor, tertiaryColor, ...publicBusiness } = business;
+    const persona = getPersona(business.niche);
     // `branding` is always fully resolved (niche default when unset): the chat widget can apply it as-is.
-    return { ...publicBusiness, branding: resolveBranding(business.niche as NicheKey, { primaryColor, secondaryColor, tertiaryColor, brandColor: business.brandColor }) };
+    // `persona` = who the visitor talks to (pharmacy: Alex, isAi true -> "IA" badge in the header).
+    return {
+      ...publicBusiness,
+      branding: resolveBranding(business.niche as NicheKey, { primaryColor, secondaryColor, tertiaryColor, brandColor: business.brandColor }),
+      persona: { name: persona.name, isAi: true },
+      pharmacy: business.niche === "farmacia" ? await this.publicPharmacyBlock(business.id) : null,
+    };
+  }
+
+  /** Public, non-sensitive pharmacy facts for the chat footer/about and checkout copy (null-safe defaults when unset). */
+  private async publicPharmacyBlock(businessId: string) {
+    const st = await this.prisma.client.pharmacySettings.findUnique({ where: { businessId } });
+    return {
+      legalName: st?.legalName ?? null,
+      cnpj: st?.cnpj ?? null,
+      pharmacistName: st?.pharmacistName ?? null,
+      pharmacistCrf: st?.pharmacistCrf ?? null,
+      deliveryEnabled: st?.deliveryEnabled ?? true,
+      pickupEnabled: st?.pickupEnabled ?? true,
+      deliveryFeeCents: st?.deliveryFeeCents ?? 0,
+      minOrderCents: st?.minOrderCents ?? 0,
+      paymentMethods: st?.paymentMethods ?? ["pix", "cartao", "dinheiro"],
+      openingHours: st?.openingHours ?? [],
+      quickChips: st?.quickChips ?? [],
+    };
   }
 
   async getOwnBusiness(businessId: string) {

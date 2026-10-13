@@ -338,6 +338,8 @@ model Conversation {
   // is waiting for, next suggested action) — shown in the dashboard inbox and copied to the Lead.
   teamSummary             Json?
   teamSummaryUpdatedAt    DateTime?
+  // Pharmacy chat engine state (lane, cart, checkout step, symptom questionnaire). Owned by the chat engine.
+  pharmacyState           Json?
 
   messages          Message[]
   appointments      Appointment[]
@@ -374,6 +376,9 @@ model Message {
   // system banner "Nome · Função entrou na conversa" (role "system"). Messages written by a person
   // (not the AI) carry who wrote them so the widget can show name + role instead of the AI persona.
   kind              MessageKind   @default(standard)
+  // Structured card payload rendered by the chat widget (pharmacy: product card, cart, red flag, order review...).
+  // Point-in-time snapshot, like simulationData. See docs/pharmacy/API.md ("Chat UI payloads").
+  uiData            Json?
   authorMemberId    String?
   authorRole        String? // role display name snapshot, e.g. "Farmacêutico RT"
   authorName        String?
@@ -776,6 +781,8 @@ model MemberInvite {
   role              Role           @relation(fields: [roleId], references: [id])
   // SHA-256 hex of the raw token; the raw token is only ever in the invite link.
   tokenHash         String         @unique
+  // "invite" (employee invitation) | "password_reset" (same table, same token mechanics)
+  kind              String         @default("invite")
   expiresAt         DateTime
   acceptedAt        DateTime?
   invitedByMemberId String?
@@ -980,6 +987,7 @@ model Order {
 
   items         OrderItem[]
   prescriptions PrescriptionUpload[]
+  events        OrderStatusEvent[]
 
   @@unique([businessId, number])
   @@index([businessId, status, createdAt])
@@ -1005,8 +1013,11 @@ model PrescriptionUpload {
   id                 String             @id @default(uuid())
   businessId         String
   business           Business           @relation(fields: [businessId], references: [id])
-  orderId            String
-  order              Order              @relation(fields: [orderId], references: [id])
+  // Uploaded in chat BEFORE the order exists (cart step): attached to the order at checkout.
+  orderId            String?
+  order              Order?             @relation(fields: [orderId], references: [id])
+  conversationId     String?
+  leadId             String?
   // Per-business sequence (PharmacySettings.nextRxNumber); code is "RX-" + number.
   number             Int
   // Private storage key (never served statically; download goes through the access-checked endpoint).
@@ -1085,4 +1096,20 @@ model PharmacySettings {
   nextRxNumber              Int      @default(1)
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
+}
+
+// Order status history: powers the order timeline (dashboard) and the public status page.
+model OrderStatusEvent {
+  id         String       @id @default(uuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  businessId String
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  byMemberId String?
+  byName     String? // "Sistema" / "Cliente" / member name
+  reason     String?
+  createdAt  DateTime     @default(now())
+
+  @@index([orderId, createdAt])
 }

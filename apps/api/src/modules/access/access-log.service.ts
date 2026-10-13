@@ -36,6 +36,8 @@ export interface RecordAccessLogInput {
   action: string;
   /** Human target, e.g. "RX-309", "PED-4821", "Tiago Lima". */
   target?: string | null;
+  /** One pt-BR sentence shown in the UI list, e.g. "Aprovou RX-309 do pedido PED-4809". Stored as detail.summary. */
+  summary?: string;
   /** Small JSON. NEVER put health data (symptoms, prescription content, patient text) here. */
   detail?: Record<string, unknown>;
 }
@@ -57,7 +59,7 @@ export class AccessLogService {
           action: input.action,
           category: categoryForAction(input.action),
           target: input.target ?? null,
-          detail: (input.detail ?? {}) as object,
+          detail: { ...(input.detail ?? {}), ...(input.summary ? { summary: input.summary } : {}) } as object,
         },
       });
     } catch (err) {

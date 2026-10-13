@@ -449,32 +449,32 @@ ALTER TABLE "PharmacySettings" ADD CONSTRAINT "PharmacySettings_businessId_fkey"
 -- Starter grids come from packages/shared/src/permissions.ts (generated from it; keep in sync).
 
 INSERT INTO "Role" ("id","businessId","key","name","description","isStarter","requiresCrf","ownDeliveriesOnly","permissions","createdAt","updatedAt")
-SELECT gen_random_uuid()::text, b."id", 'owner', 'Proprietário', 'Acesso total. Sempre existe ao menos um.', true, false, false, '{"inicio":"edit","conversas":"edit","analises":"view","equipe":"edit","plano":"edit","leads":"edit","imoveis":"edit","agenda":"edit","conhecimento":"edit","configuracoes":"edit","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
+SELECT gen_random_uuid()::text, b."id", 'owner', 'Proprietário', 'Acesso total. Sempre existe ao menos um.', true, false, false, '{"inicio":"edit","conversas":"view","analises":"view","equipe":"edit","plano":"edit","leads":"edit","imoveis":"edit","agenda":"edit","conhecimento":"edit","configuracoes":"edit","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
 FROM "Business" b WHERE b."niche"::text = 'imobiliaria'
 ON CONFLICT ("businessId","key") DO NOTHING;
 
 INSERT INTO "Role" ("id","businessId","key","name","description","isStarter","requiresCrf","ownDeliveriesOnly","permissions","createdAt","updatedAt")
-SELECT gen_random_uuid()::text, b."id", 'manager', 'Gerente', 'Gerencia operação, catálogo, equipe e plano. Não altera proprietários.', true, false, false, '{"inicio":"edit","conversas":"edit","analises":"view","equipe":"edit","plano":"edit","leads":"edit","imoveis":"edit","agenda":"edit","conhecimento":"edit","configuracoes":"edit","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
+SELECT gen_random_uuid()::text, b."id", 'manager', 'Gerente', 'Gerencia operação, catálogo, equipe e plano. Não altera proprietários.', true, false, false, '{"inicio":"edit","conversas":"view","analises":"view","equipe":"edit","plano":"edit","leads":"edit","imoveis":"edit","agenda":"edit","conhecimento":"edit","configuracoes":"edit","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
 FROM "Business" b WHERE b."niche"::text = 'imobiliaria'
 ON CONFLICT ("businessId","key") DO NOTHING;
 
 INSERT INTO "Role" ("id","businessId","key","name","description","isStarter","requiresCrf","ownDeliveriesOnly","permissions","createdAt","updatedAt")
-SELECT gen_random_uuid()::text, b."id", 'attendant', 'Atendente', 'Acompanha e atende pedidos, consulta catálogo e clientes.', true, false, false, '{"inicio":"view","conversas":"edit","analises":"none","equipe":"none","plano":"none","leads":"edit","imoveis":"view","agenda":"edit","conhecimento":"view","configuracoes":"none","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
+SELECT gen_random_uuid()::text, b."id", 'attendant', 'Atendente', 'Acompanha e atende pedidos, consulta catálogo e clientes.', true, false, false, '{"inicio":"view","conversas":"view","analises":"none","equipe":"none","plano":"none","leads":"edit","imoveis":"view","agenda":"edit","conhecimento":"view","configuracoes":"none","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
 FROM "Business" b WHERE b."niche"::text = 'imobiliaria'
 ON CONFLICT ("businessId","key") DO NOTHING;
 
 INSERT INTO "Role" ("id","businessId","key","name","description","isStarter","requiresCrf","ownDeliveriesOnly","permissions","createdAt","updatedAt")
-SELECT gen_random_uuid()::text, b."id", 'owner', 'Proprietário', 'Acesso total. Sempre existe ao menos um.', true, false, false, '{"inicio":"edit","conversas":"edit","analises":"view","equipe":"edit","plano":"edit","leads":"edit","imoveis":"edit","agenda":"edit","conhecimento":"edit","configuracoes":"edit","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
+SELECT gen_random_uuid()::text, b."id", 'owner', 'Proprietário', 'Acesso total. Sempre existe ao menos um.', true, false, false, '{"inicio":"edit","conversas":"view","analises":"view","equipe":"edit","plano":"edit","leads":"edit","imoveis":"edit","agenda":"edit","conhecimento":"edit","configuracoes":"edit","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
 FROM "Business" b WHERE b."niche"::text = 'concessionaria'
 ON CONFLICT ("businessId","key") DO NOTHING;
 
 INSERT INTO "Role" ("id","businessId","key","name","description","isStarter","requiresCrf","ownDeliveriesOnly","permissions","createdAt","updatedAt")
-SELECT gen_random_uuid()::text, b."id", 'manager', 'Gerente', 'Gerencia operação, catálogo, equipe e plano. Não altera proprietários.', true, false, false, '{"inicio":"edit","conversas":"edit","analises":"view","equipe":"edit","plano":"edit","leads":"edit","imoveis":"edit","agenda":"edit","conhecimento":"edit","configuracoes":"edit","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
+SELECT gen_random_uuid()::text, b."id", 'manager', 'Gerente', 'Gerencia operação, catálogo, equipe e plano. Não altera proprietários.', true, false, false, '{"inicio":"edit","conversas":"view","analises":"view","equipe":"edit","plano":"edit","leads":"edit","imoveis":"edit","agenda":"edit","conhecimento":"edit","configuracoes":"edit","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
 FROM "Business" b WHERE b."niche"::text = 'concessionaria'
 ON CONFLICT ("businessId","key") DO NOTHING;
 
 INSERT INTO "Role" ("id","businessId","key","name","description","isStarter","requiresCrf","ownDeliveriesOnly","permissions","createdAt","updatedAt")
-SELECT gen_random_uuid()::text, b."id", 'attendant', 'Atendente', 'Acompanha e atende pedidos, consulta catálogo e clientes.', true, false, false, '{"inicio":"view","conversas":"edit","analises":"none","equipe":"none","plano":"none","leads":"edit","imoveis":"view","agenda":"edit","conhecimento":"view","configuracoes":"none","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
+SELECT gen_random_uuid()::text, b."id", 'attendant', 'Atendente', 'Acompanha e atende pedidos, consulta catálogo e clientes.', true, false, false, '{"inicio":"view","conversas":"view","analises":"none","equipe":"none","plano":"none","leads":"edit","imoveis":"view","agenda":"edit","conhecimento":"view","configuracoes":"none","pedidos":"none","receitas":"none","atendimento":"none","catalogo":"none","importar":"none","classes":"none","clientes":"none","farmacia":"none"}'::jsonb, now(), now()
 FROM "Business" b WHERE b."niche"::text = 'concessionaria'
 ON CONFLICT ("businessId","key") DO NOTHING;
 

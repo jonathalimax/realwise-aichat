@@ -271,8 +271,8 @@ test("migration backfill SQL stays in sync with the starter grids in packages/sh
   const { readFileSync, readdirSync } = require("node:fs") as typeof import("node:fs");
   const { join } = require("node:path") as typeof import("node:path");
   const dir = join(__dirname, "..", "..", "..", "packages", "db", "prisma", "migrations");
-  const mig = readdirSync(dir).find((d: string) => d.endsWith("pharmacy_niche_team_access"))!;
-  const sql = readFileSync(join(dir, mig, "migration.sql"), "utf8");
+  const migs = readdirSync(dir).filter((d: string) => d.includes("pharmacy_"));
+  const sql = migs.map((m: string) => readFileSync(join(dir, m, "migration.sql"), "utf8")).join("\n");
   for (const niche of ["imobiliaria", "concessionaria", "farmacia"] as const) {
     for (const key of starterRoleKeysForNiche(niche)) {
       assert.ok(sql.includes(JSON.stringify(buildStarterPermissions(niche, key))), `${niche}/${key} grid drifted from the migration backfill`);
