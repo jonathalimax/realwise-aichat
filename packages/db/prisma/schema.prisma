@@ -13,13 +13,14 @@ datasource db {
 }
 
 generator json {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 enum Niche {
   imobiliaria
   concessionaria
+  farmacia
 }
 
 enum BusinessStatus {
@@ -89,121 +90,138 @@ enum AppointmentType {
 }
 
 model Business {
-  id              String         @id @default(uuid())
-  name            String
-  slug            String         @unique
-  niche           Niche
-  parentBusinessId String?
-  phone           String         @unique
-  ownerName       String
-  email           String?
-  logoUrl         String?
-  brandColor      String?
-  timezone        String         @default("America/Sao_Paulo")
-  defaultSlotDurationMinutes Int @default(60)
-  financingRatePercent Float? // monthly percent (e.g. 1.8); null = use the niche default in flow-calculators.ts
-  llmMonthlyBudgetUsdCents Int? // null = inherit from plan, see resolution order in apps/inference-gateway/src/budget.ts
-  address         String?
-  websiteUrl      String?
-  websiteContentHash String?
-  websiteSyncedAt DateTime?
-  cachedLocations Json?
-  cachedLocationsAt DateTime?
-  cachedFlowOptions Json?
-  trialEndsAt     DateTime?
-  trialReminderSentAt DateTime?
-  status          BusinessStatus @default(onboarding)
-  confidenceScore Int            @default(0)
-  confidenceBreakdown Json?
-  publishedAt     DateTime?
-  linkPlacedAt    DateTime?
-  createdAt       DateTime       @default(now())
-  deletedAt       DateTime?
+  id                         String         @id @default(uuid())
+  name                       String
+  slug                       String         @unique
+  niche                      Niche
+  parentBusinessId           String?
+  phone                      String         @unique
+  ownerName                  String
+  email                      String?
+  logoUrl                    String?
+  brandColor                 String?
+  // Branding (all niches): theme tokens applied to the chat widget, customer order-status page and
+  // dashboard (CSS variables). Null = fall back to the niche default (pharmacy: teal #0F766E / #0B4F4A / #F59E0B).
+  primaryColor               String?
+  secondaryColor             String?
+  tertiaryColor              String?
+  timezone                   String         @default("America/Sao_Paulo")
+  defaultSlotDurationMinutes Int            @default(60)
+  financingRatePercent       Float? // monthly percent (e.g. 1.8); null = use the niche default in flow-calculators.ts
+  llmMonthlyBudgetUsdCents   Int? // null = inherit from plan, see resolution order in apps/inference-gateway/src/budget.ts
+  address                    String?
+  websiteUrl                 String?
+  websiteContentHash         String?
+  websiteSyncedAt            DateTime?
+  cachedLocations            Json?
+  cachedLocationsAt          DateTime?
+  cachedFlowOptions          Json?
+  trialEndsAt                DateTime?
+  trialReminderSentAt        DateTime?
+  status                     BusinessStatus @default(onboarding)
+  confidenceScore            Int            @default(0)
+  confidenceBreakdown        Json?
+  publishedAt                DateTime?
+  linkPlacedAt               DateTime?
+  createdAt                  DateTime       @default(now())
+  deletedAt                  DateTime?
   // Stage 5 conversational redesign — flag-gated, default off. Toggled only via the admin-only
   // PATCH /admin/tenants/:id/conversational-mode endpoint (never the tenant-facing PATCH
   // /businesses/me). See chat.service.ts's resolveConversationalMode for the env kill-switch.
-  conversationalModeEnabled Boolean @default(false)
+  conversationalModeEnabled  Boolean        @default(false)
 
-  profile         BusinessProfile?
-  documents       KnowledgeDocument[]
-  conversations   Conversation[]
-  leads           Lead[]
-  routingNumbers  WhatsappRoutingNumber[]
-  subscription    Subscription?
-  bookingSlots    BookingSlot[]
-  appointments    Appointment[]
+  profile             BusinessProfile?
+  documents           KnowledgeDocument[]
+  conversations       Conversation[]
+  leads               Lead[]
+  routingNumbers      WhatsappRoutingNumber[]
+  subscription        Subscription?
+  bookingSlots        BookingSlot[]
+  appointments        Appointment[]
   calendarIntegration CalendarIntegration?
   unansweredQuestions UnansweredQuestion[]
-  consentRecords  ConsentRecord[]
+  consentRecords      ConsentRecord[]
   dataSubjectRequests DataSubjectRequest[]
-  alerts          BusinessAlert[]
-  listings        Listing[]
-  pushSubscriptions PushSubscription[]
+  alerts              BusinessAlert[]
+  listings            Listing[]
+  pushSubscriptions   PushSubscription[]
+  members             BusinessMember[]
+  roles               Role[]
+  memberInvites       MemberInvite[]
+  accessLog           AccessLogEntry[]
+  customerAddresses   CustomerAddress[]
+  products            Product[]
+  catalogImports      CatalogImport[]
+  orders              Order[]
+  prescriptionUploads PrescriptionUpload[]
+  pharmacistHandoffs  PharmacistHandoff[]
+  pharmacySettings    PharmacySettings?
 }
 
 model Plan {
-  id                  String  @id @default(uuid())
-  code                String  @unique
-  name                String
-  priceBrlCents       Int
-  setupFeeBrlCents    Int
-  conversationQuota   Int
-  documentQuota       Int
-  whatsappNumberQuota Int
-  features            Json
-  stripePriceId       String
-  stripeSetupPriceId  String
-  isActive            Boolean @default(true)
+  id                       String  @id @default(uuid())
+  code                     String  @unique
+  name                     String
+  priceBrlCents            Int
+  setupFeeBrlCents         Int
+  conversationQuota        Int
+  documentQuota            Int
+  whatsappNumberQuota      Int
+  features                 Json
+  stripePriceId            String
+  stripeSetupPriceId       String
+  isActive                 Boolean @default(true)
   // Per-plan monthly cap (USD cents) on LLM spend before chat answering downgrades back to the
   // cheaper managed model for the rest of the calendar month; null = use the hardcoded default in
   // apps/inference-gateway/src/budget.ts. Business.llmMonthlyBudgetUsdCents overrides this per-tenant.
   llmMonthlyBudgetUsdCents Int?
 
-  subscriptions       Subscription[]
+  subscriptions Subscription[]
 }
 
 model Subscription {
-  id                        String              @id @default(uuid())
-  businessId                String              @unique
-  business                  Business            @relation(fields: [businessId], references: [id])
-  planId                    String
-  plan                      Plan                @relation(fields: [planId], references: [id])
-  stripeCustomerId          String
-  stripeSubscriptionId      String
-  status                    SubscriptionStatus  @default(trialing)
-  currentPeriodStart        DateTime
-  currentPeriodEnd          DateTime
-  setupFeePaidAt            DateTime?
-  cancelAtPeriodEnd         Boolean             @default(false)
-  conversationsUsedThisPeriod Int               @default(0)
+  id                          String             @id @default(uuid())
+  businessId                  String             @unique
+  business                    Business           @relation(fields: [businessId], references: [id])
+  planId                      String
+  plan                        Plan               @relation(fields: [planId], references: [id])
+  stripeCustomerId            String
+  stripeSubscriptionId        String
+  status                      SubscriptionStatus @default(trialing)
+  currentPeriodStart          DateTime
+  currentPeriodEnd            DateTime
+  setupFeePaidAt              DateTime?
+  cancelAtPeriodEnd           Boolean            @default(false)
+  conversationsUsedThisPeriod Int                @default(0)
 }
 
 model KnowledgeDocument {
-  id                String          @id @default(uuid())
+  id                String         @id @default(uuid())
   businessId        String
-  business          Business        @relation(fields: [businessId], references: [id])
+  business          Business       @relation(fields: [businessId], references: [id])
   filename          String
   mimeType          String
   sizeBytes         Int
   storageKey        String
   source            String
-  status            DocumentStatus  @default(uploaded)
+  status            DocumentStatus @default(uploaded)
   extractedMarkdown String?
-  ocrUsed           Boolean         @default(false)
+  ocrUsed           Boolean        @default(false)
   pageCount         Int?
   processingError   String?
-  createdAt         DateTime        @default(now())
+  createdAt         DateTime       @default(now())
   retentionDeleteAt DateTime?
 
-  chunks            KnowledgeChunk[]
-  listings          Listing[]
+  chunks         KnowledgeChunk[]
+  listings       Listing[]
+  catalogImports CatalogImport[]
 }
 
 model KnowledgeChunk {
-  id          String            @id @default(uuid())
+  id          String                      @id @default(uuid())
   businessId  String
   documentId  String
-  document    KnowledgeDocument @relation(fields: [documentId], references: [id])
+  document    KnowledgeDocument           @relation(fields: [documentId], references: [id])
   ordinal     Int
   content     String
   tokenCount  Int
@@ -217,7 +235,7 @@ model KnowledgeChunk {
 // nullable businessId on those) so a tenant-scoped query can never accidentally reach shared
 // rows.
 model SharedKnowledgeDocument {
-  id                String          @id @default(uuid())
+  id                String         @id @default(uuid())
   niche             String
   title             String
   filename          String
@@ -225,23 +243,23 @@ model SharedKnowledgeDocument {
   sizeBytes         Int
   storageKey        String
   source            String
-  status            DocumentStatus  @default(uploaded)
+  status            DocumentStatus @default(uploaded)
   extractedMarkdown String?
   version           String?
   sourceCitation    String?
   reviewedAt        DateTime?
-  isActive          Boolean         @default(true)
-  createdAt         DateTime        @default(now())
+  isActive          Boolean        @default(true)
+  createdAt         DateTime       @default(now())
 
-  chunks            SharedKnowledgeChunk[]
+  chunks SharedKnowledgeChunk[]
 
   @@index([niche])
 }
 
 model SharedKnowledgeChunk {
-  id          String                  @id @default(uuid())
+  id          String                      @id @default(uuid())
   documentId  String
-  document    SharedKnowledgeDocument @relation(fields: [documentId], references: [id])
+  document    SharedKnowledgeDocument     @relation(fields: [documentId], references: [id])
   niche       String
   ordinal     Int
   content     String
@@ -253,183 +271,192 @@ model SharedKnowledgeChunk {
 }
 
 model BusinessProfile {
-  id               String    @id @default(uuid())
-  businessId       String    @unique
-  business         Business  @relation(fields: [businessId], references: [id])
-  templateVersion  String
-  data             Json
-  fieldStatus      Json
-  cachedSummary    String?
+  id                  String    @id @default(uuid())
+  businessId          String    @unique
+  business            Business  @relation(fields: [businessId], references: [id])
+  templateVersion     String
+  data                Json
+  fieldStatus         Json
+  cachedSummary       String?
   cachedSummaryTokens Int?
-  customInstructions String?
-  approvedAt       DateTime?
-  updatedAt        DateTime  @updatedAt
+  customInstructions  String?
+  approvedAt          DateTime?
+  updatedAt           DateTime  @updatedAt
 }
 
 model Conversation {
-  id                  String              @id @default(uuid())
-  businessId          String
-  business            Business            @relation(fields: [businessId], references: [id])
-  leadId              String?
-  lead                Lead?               @relation(fields: [leadId], references: [id])
-  visitorToken        String
+  id                      String             @id @default(uuid())
+  businessId              String
+  business                Business           @relation(fields: [businessId], references: [id])
+  leadId                  String?
+  lead                    Lead?              @relation(fields: [leadId], references: [id])
+  visitorToken            String
   // Partial unique index on (businessId, visitorToken) WHERE status IN (active, idle) lives in a
   // hand-written migration — Prisma schema DSL has no partial-unique-index support.
-  resumeToken         String?             @unique
-  status              ConversationStatus  @default(active)
-  channel             String?
-  referrer            String?
-  startedAt           DateTime            @default(now())
-  lastMessageAt       DateTime            @default(now())
-  messageCount        Int                 @default(0)
-  rollingSummary      String?
+  resumeToken             String?            @unique
+  status                  ConversationStatus @default(active)
+  channel                 String?
+  referrer                String?
+  startedAt               DateTime           @default(now())
+  lastMessageAt           DateTime           @default(now())
+  messageCount            Int                @default(0)
+  rollingSummary          String?
   summaryUpdatedAtMessage Int?
-  escalatedAt         DateTime?
-  escalationNumberId  String?
-  referenceCode       String?
-  lastReadByOwnerAt   DateTime?
-  lastOwnerReplyAt    DateTime?
-  lastVisitorSeenAt   DateTime?
-  totalInputTokens    Int                 @default(0)
-  totalOutputTokens   Int                 @default(0)
-  fixedFlowTurns      Int                 @default(0)
-  llmTurns            Int                 @default(0)
-  ollamaContext       Int[]
-  flowNodeId          String?
-  flowParams          Json                @default("{}")
-  flowStack           String[]
-  flowSnapshot        Json?
-  flowHistory         Json                @default("[]")
+  escalatedAt             DateTime?
+  escalationNumberId      String?
+  referenceCode           String?
+  lastReadByOwnerAt       DateTime?
+  lastOwnerReplyAt        DateTime?
+  lastVisitorSeenAt       DateTime?
+  totalInputTokens        Int                @default(0)
+  totalOutputTokens       Int                @default(0)
+  fixedFlowTurns          Int                @default(0)
+  llmTurns                Int                @default(0)
+  ollamaContext           Int[]
+  flowNodeId              String?
+  flowParams              Json               @default("{}")
+  flowStack               String[]
+  flowSnapshot            Json?
+  flowHistory             Json               @default("[]")
   // Explicit "Selecionar e continuar" pin — when set, follow-up questions resolve against this
   // listing directly instead of the message-history lookback in resolveContextListing.
-  pinnedListingId     String?
+  pinnedListingId         String?
   // Last explicit transaction intent ("aluguel" | "venda") the visitor stated in this
   // conversation — persists across turns so a keyword-less follow-up ("Quais imóveis
   // disponíveis?") still carries the previously stated rental/purchase intent instead of
   // dropping the transaction filter entirely.
-  pinnedTransaction   String?
+  pinnedTransaction       String?
   // Every listing the visitor explicitly tapped "Selecionar" on, most recent last (capped, see
   // chat/selection.ts). Injected into Clara's prompt every turn so follow-ups ("quanto fica o
   // total?") resolve against the selection instead of re-sending the browse carousel.
   // pinnedListingId above stays in sync with the most recent entry for backward compatibility.
-  selectedListingIds  String[]            @default([])
+  selectedListingIds      String[]           @default([])
   // Raw engagement-state reducer input (see leads/engagement-summary.ts) — preferences gathered,
   // per-listing interest, budget/finance signals, escalation/visit events.
-  engagementState     Json?
+  engagementState         Json?
   // Rendered, team-facing summary of engagementState (intent, ranked listings, what the visitor
   // is waiting for, next suggested action) — shown in the dashboard inbox and copied to the Lead.
-  teamSummary         Json?
-  teamSummaryUpdatedAt DateTime?
+  teamSummary             Json?
+  teamSummaryUpdatedAt    DateTime?
 
-  messages            Message[]
-  appointments        Appointment[]
-  pushSubscriptions   PushSubscription[]
+  messages          Message[]
+  appointments      Appointment[]
+  pushSubscriptions PushSubscription[]
 }
 
 model Message {
-  id                  String        @id @default(uuid())
-  conversationId      String
-  conversation        Conversation  @relation(fields: [conversationId], references: [id])
-  businessId          String
-  role                String
-  content             String
-  createdAt           DateTime      @default(now())
-  answerSource        AnswerSource?
-  retrievedChunkIds   String[]
+  id                String        @id @default(uuid())
+  conversationId    String
+  conversation      Conversation  @relation(fields: [conversationId], references: [id])
+  businessId        String
+  role              String
+  content           String
+  createdAt         DateTime      @default(now())
+  answerSource      AnswerSource?
+  retrievedChunkIds String[]
   // IDs of real Listing rows attached to this turn as cards. Stored as IDs, not denormalized
   // listing data, so a replayed turn reflects current price/photos instead of a stale snapshot.
   // Empty for the LLM-extraction listing path, whose items have no backing DB row.
-  listingIds          String[]      @default([])
+  listingIds        String[]      @default([])
   // Point-in-time financing-simulation breakdown (see simulator.service.ts), persisted as a
   // snapshot since the numbers themselves (installments, rate, totals) must replay exactly as
   // originally shown — only matchedListingIds inside this JSON get rehydrated against the live
   // Listing table on replay (same rule as listingIds above), the numeric breakdown never does.
-  simulationData      Json?
-  retrievalTopScore   Float?
-  modelUsed           String?
-  inputTokens         Int?
-  outputTokens        Int?
-  latencyMs           Int?
-  feedback            String?
-  flagged             Boolean       @default(false)
+  simulationData    Json?
+  retrievalTopScore Float?
+  modelUsed         String?
+  inputTokens       Int?
+  outputTokens      Int?
+  latencyMs         Int?
+  feedback          String?
+  flagged           Boolean       @default(false)
+  // Human-join (pharmacy, but niche-agnostic): standard = ordinary chat bubble; human_joined = the
+  // system banner "Nome · Função entrou na conversa" (role "system"). Messages written by a person
+  // (not the AI) carry who wrote them so the widget can show name + role instead of the AI persona.
+  kind              MessageKind   @default(standard)
+  authorMemberId    String?
+  authorRole        String? // role display name snapshot, e.g. "Farmacêutico RT"
+  authorName        String?
 }
 
 model UnansweredQuestion {
-  id                   String    @id @default(uuid())
-  businessId           String
-  business             Business  @relation(fields: [businessId], references: [id])
-  conversationId       String
-  messageId            String
-  questionText         String
-  normalizedText       String
-  occurrenceCount      Int       @default(1)
-  status               String    @default("open")
+  id                     String    @id @default(uuid())
+  businessId             String
+  business               Business  @relation(fields: [businessId], references: [id])
+  conversationId         String
+  messageId              String
+  questionText           String
+  normalizedText         String
+  occurrenceCount        Int       @default(1)
+  status                 String    @default("open")
   resolvedByProfileField String?
-  resolvedAt           DateTime?
+  resolvedAt             DateTime?
 }
 
 model Lead {
-  id                String          @id @default(uuid())
-  businessId        String
-  business          Business        @relation(fields: [businessId], references: [id])
-  name              String?
-  email             String?
-  phone             String
-  phoneNormalized   String
-  firstSeenAt       DateTime        @default(now())
-  lastSeenAt        DateTime        @default(now())
-  sessionCount      Int             @default(1)
-  commitmentScore   Int             @default(0)
-  scoreBand         String          @default("cold")
-  scoreSignals      Json?
-  consentId         String?
-  ownerNotes        String?
-  ownerOutcome       String?
-  whatsappContactedAt DateTime?
+  id                   String    @id @default(uuid())
+  businessId           String
+  business             Business  @relation(fields: [businessId], references: [id])
+  name                 String?
+  email                String?
+  phone                String
+  phoneNormalized      String
+  firstSeenAt          DateTime  @default(now())
+  lastSeenAt           DateTime  @default(now())
+  sessionCount         Int       @default(1)
+  commitmentScore      Int       @default(0)
+  scoreBand            String    @default("cold")
+  scoreSignals         Json?
+  consentId            String?
+  ownerNotes           String?
+  ownerOutcome         String?
+  whatsappContactedAt  DateTime?
   lastDigestNotifiedAt DateTime?
-  tags              String[]
-  retentionDeleteAt DateTime?
+  tags                 String[]
+  retentionDeleteAt    DateTime?
   // Lifecycle (see leads/lead-status.ts): new | contacted | visit_scheduled | negotiating |
   // closed_won | closed_lost. Closed leads are retained (never deleted) for follow-up/upsell.
-  status            String          @default("new")
-  statusUpdatedAt   DateTime?
-  closedAt          DateTime?
+  status               String    @default("new")
+  statusUpdatedAt      DateTime?
+  closedAt             DateTime?
   // rent | buy | questions — latest intent observed across this lead's conversations.
-  intent            String?
+  intent               String?
   // Listings the lead selected/showed interest in, ranked by interest (most interested first).
-  interestListingIds String[]       @default([])
+  interestListingIds   String[]  @default([])
   // Copy of the latest conversation's team summary (survives the 12-month conversation purge).
-  summary           Json?
-  summaryUpdatedAt  DateTime?
+  summary              Json?
+  summaryUpdatedAt     DateTime?
   // What the lead is waiting for (e.g. matching inventory, visit confirmation, team callback).
-  waitingFor        String?
+  waitingFor           String?
   sourceConversationId String?
 
-  conversations     Conversation[]
-  appointments      Appointment[]
+  conversations Conversation[]
+  appointments  Appointment[]
+  addresses     CustomerAddress[]
+  orders        Order[]
 
   @@unique([businessId, phoneNormalized])
   @@index([businessId, status])
 }
 
 model BookingSlot {
-  id              String    @id @default(uuid())
-  businessId      String
-  business        Business  @relation(fields: [businessId], references: [id])
-  kind            String
-  weekday         Int?
-  startTime       String?
-  endTime         String?
+  id                  String          @id @default(uuid())
+  businessId          String
+  business            Business        @relation(fields: [businessId], references: [id])
+  kind                String
+  weekday             Int?
+  startTime           String?
+  endTime             String?
   slotDurationMinutes Int
-  capacity        Int       @default(1)
-  serviceId       String?
-  validFrom       DateTime?
-  validUntil      DateTime?
-  isBlocked       Boolean   @default(false)
-  appointmentType AppointmentType @default(presencial)
-  listingId       String?
-  listing         Listing?  @relation(fields: [listingId], references: [id], onDelete: SetNull)
-  exceptionDate   DateTime?
+  capacity            Int             @default(1)
+  serviceId           String?
+  validFrom           DateTime?
+  validUntil          DateTime?
+  isBlocked           Boolean         @default(false)
+  appointmentType     AppointmentType @default(presencial)
+  listingId           String?
+  listing             Listing?        @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  exceptionDate       DateTime?
 
   @@index([businessId, appointmentType])
   @@index([businessId, listingId])
@@ -460,16 +487,16 @@ model Appointment {
 }
 
 model CalendarIntegration {
-  id          String    @id @default(uuid())
-  businessId  String    @unique
-  business    Business  @relation(fields: [businessId], references: [id])
-  provider    String    @default("google")
+  id           String   @id @default(uuid())
+  businessId   String   @unique
+  business     Business @relation(fields: [businessId], references: [id])
+  provider     String   @default("google")
   // Encrypted at rest (AES-256-GCM via apps/api/src/common/crypto.ts) — never stored/logged in plaintext.
-  accessToken String
+  accessToken  String
   refreshToken String
-  calendarId  String
-  connectedAt DateTime  @default(now())
-  syncEnabled Boolean   @default(false)
+  calendarId   String
+  connectedAt  DateTime @default(now())
+  syncEnabled  Boolean  @default(false)
 }
 
 model WhatsappRoutingNumber {
@@ -485,55 +512,55 @@ model WhatsappRoutingNumber {
 }
 
 model ConsentRecord {
-  id            String    @id @default(uuid())
-  businessId    String
-  business      Business  @relation(fields: [businessId], references: [id])
-  leadId        String?
-  phoneHash     String
+  id                 String    @id @default(uuid())
+  businessId         String
+  business           Business  @relation(fields: [businessId], references: [id])
+  leadId             String?
+  phoneHash          String
   consentTextVersion String
-  purposes      String[]
-  grantedAt     DateTime  @default(now())
-  ipAddress     String?
-  userAgent     String?
-  withdrawnAt   DateTime?
-  withdrawalReason String?
+  purposes           String[]
+  grantedAt          DateTime  @default(now())
+  ipAddress          String?
+  userAgent          String?
+  withdrawnAt        DateTime?
+  withdrawalReason   String?
 }
 
 model DataSubjectRequest {
-  id              String                  @id @default(uuid())
-  businessId      String
-  business        Business                @relation(fields: [businessId], references: [id])
-  leadId          String?
-  type            DataSubjectRequestType
-  status          String                  @default("open")
-  requestedAt     DateTime                @default(now())
-  fulfilledAt     DateTime?
+  id               String                 @id @default(uuid())
+  businessId       String
+  business         Business               @relation(fields: [businessId], references: [id])
+  leadId           String?
+  type             DataSubjectRequestType
+  status           String                 @default("open")
+  requestedAt      DateTime               @default(now())
+  fulfilledAt      DateTime?
   fulfillmentNotes String?
 }
 
 model AnalyticsEvent {
-  id             String    @id @default(uuid())
+  id             String   @id @default(uuid())
   businessId     String
   name           String
   properties     Json?
   conversationId String?
   leadId         String?
-  occurredAt     DateTime  @default(now())
+  occurredAt     DateTime @default(now())
 }
 
 model LlmCallLog {
-  id               String   @id @default(uuid())
-  businessId       String?
-  purpose          String
-  model            String
-  provider         String
-  inputTokens      Int
-  outputTokens     Int
-  latencyMs        Int
+  id                     String   @id @default(uuid())
+  businessId             String?
+  purpose                String
+  model                  String
+  provider               String
+  inputTokens            Int
+  outputTokens           Int
+  latencyMs              Int
   costEstimateMicroCents Int?
-  cachedPrefixHit  Boolean  @default(false)
-  error            String?
-  createdAt        DateTime @default(now())
+  cachedPrefixHit        Boolean  @default(false)
+  error                  String?
+  createdAt              DateTime @default(now())
 
   @@index([businessId, createdAt])
 }
@@ -578,58 +605,58 @@ model PlatformConfig {
 }
 
 model Listing {
-  id            String        @id @default(uuid())
-  businessId    String
-  business      Business      @relation(fields: [businessId], references: [id])
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
 
   referenceCode String
 
-  title         String
-  description   String?
+  title       String
+  description String?
 
-  priceText     String?
-  priceCents    Int?
-  pricePeriod   String?
+  priceText   String?
+  priceCents  Int?
+  pricePeriod String?
 
-  addressLine   String?
-  neighborhood  String?
-  city          String?
-  state         String?
-  postalCode    String?
-  latitude      Float?
-  longitude     Float?
+  addressLine  String?
+  neighborhood String?
+  city         String?
+  state        String?
+  postalCode   String?
+  latitude     Float?
+  longitude    Float?
 
-  listingType   String?
-  transaction   String?
-  bedrooms      Int?
-  parkingSpots  Int?
-  areaM2        Int?
-  brand         String?
-  model         String?
-  year          Int?
-  mileageKm     Int?
+  listingType  String?
+  transaction  String?
+  bedrooms     Int?
+  parkingSpots Int?
+  areaM2       Int?
+  brand        String?
+  model        String?
+  year         Int?
+  mileageKm    Int?
 
-  status        ListingStatus @default(active)
+  status ListingStatus @default(active)
 
-  url           String?
+  url String?
 
-  sourceDocumentId String?
-  sourceDocument   KnowledgeDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
-  sourceUrl        String?
-  dedupKey         String
-  extractedAt      DateTime?
+  sourceDocumentId   String?
+  sourceDocument     KnowledgeDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  sourceUrl          String?
+  dedupKey           String
+  extractedAt        DateTime?
   lastSeenInSourceAt DateTime?
 
-  overriddenFields Json     @default("{}")
-  manuallyCreated  Boolean  @default(false)
+  overriddenFields Json    @default("{}")
+  manuallyCreated  Boolean @default(false)
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-  images        ListingImage[]
-  bookingSlots  BookingSlot[]
-  appointments  Appointment[]
+  images       ListingImage[]
+  bookingSlots BookingSlot[]
+  appointments Appointment[]
 
   @@unique([businessId, dedupKey])
   @@unique([businessId, referenceCode])
@@ -658,14 +685,404 @@ model PushSubscription {
 }
 
 model ListingImage {
-  id         String   @id @default(uuid())
-  listingId  String
-  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  url        String
-  ordinal    Int      @default(0)
-  caption    String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  url       String
+  ordinal   Int      @default(0)
+  caption   String?
+  createdAt DateTime @default(now())
 
   @@unique([listingId, url])
   @@index([listingId, ordinal])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Team & access (all niches)
+// ---------------------------------------------------------------------------------------------
+
+enum MemberStatus {
+  invited
+  active
+  disabled
+}
+
+enum MessageKind {
+  standard
+  human_joined
+}
+
+// Permission section keys and per-section levels (none | view | edit) live in
+// packages/shared/src/permissions.ts. `permissions` is a map { [section]: "none" | "view" | "edit" }.
+model Role {
+  id                String   @id @default(uuid())
+  businessId        String
+  business          Business @relation(fields: [businessId], references: [id])
+  // Starter roles carry a stable key (owner | pharmacist | manager | attendant | courier); custom roles have null.
+  key               String?
+  name              String
+  description       String?
+  isStarter         Boolean  @default(false)
+  // Actions like validating prescriptions, confirming product classes and answering handoffs
+  // additionally require a member holding a role with requiresCrf = true AND a CRF number.
+  requiresCrf       Boolean  @default(false)
+  // Courier: the orders section is limited to orders assigned to the member (Order.courierMemberId).
+  ownDeliveriesOnly Boolean  @default(false)
+  permissions       Json
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  members BusinessMember[]
+  invites MemberInvite[]
+
+  @@unique([businessId, key])
+  @@index([businessId])
+}
+
+model BusinessMember {
+  id           String       @id @default(uuid())
+  businessId   String
+  business     Business     @relation(fields: [businessId], references: [id])
+  // Null for owners that so far only signed in by phone (Firebase); set when they add credentials.
+  email        String?
+  name         String
+  passwordHash String?
+  // Phone of the Firebase-login owner (Business.phone) so phone login resolves to this member.
+  phone        String?
+  roleId       String
+  role         Role         @relation(fields: [roleId], references: [id])
+  crf          String?
+  status       MemberStatus @default(invited)
+  lastAccessAt DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  invites        MemberInvite[]
+  assignedOrders Order[]        @relation("OrderCourier")
+
+  @@unique([businessId, email])
+  @@index([businessId, status])
+  @@index([email])
+}
+
+model MemberInvite {
+  id                String         @id @default(uuid())
+  businessId        String
+  business          Business       @relation(fields: [businessId], references: [id])
+  memberId          String
+  member            BusinessMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  email             String
+  roleId            String
+  role              Role           @relation(fields: [roleId], references: [id])
+  // SHA-256 hex of the raw token; the raw token is only ever in the invite link.
+  tokenHash         String         @unique
+  expiresAt         DateTime
+  acceptedAt        DateTime?
+  invitedByMemberId String?
+  createdAt         DateTime       @default(now())
+
+  @@index([businessId])
+}
+
+model AccessLogEntry {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  memberId   String?
+  memberName String? // snapshot so the log survives member removal
+  // Dotted action code, e.g. "prescription.approve", "team.invite", "catalog.import". See API.md.
+  action     String
+  // Coarse category used as the badge in the UI: Receita | Equipe | Catálogo | Configurações | Pedido | Atendimento | Acesso
+  category   String
+  target     String? // human target, e.g. "RX-309", "Tiago Lima"
+  detail     Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([businessId, memberId, createdAt])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Customer profile (all niches): saved addresses per lead
+// ---------------------------------------------------------------------------------------------
+
+model CustomerAddress {
+  id           String    @id @default(uuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id])
+  leadId       String
+  lead         Lead      @relation(fields: [leadId], references: [id])
+  cep          String
+  street       String
+  number       String // digits, digits+letter, or "S/N"
+  complement   String?
+  reference    String?
+  district     String
+  city         String
+  state        String
+  isDefault    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  supersededAt DateTime?
+
+  @@index([businessId, leadId, isDefault])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pharmacy niche
+// ---------------------------------------------------------------------------------------------
+
+enum ProductClass {
+  unclassified
+  otc
+  prescription
+  controlled
+}
+
+enum OrderStatus {
+  pending_pharmacist
+  confirmed
+  out_for_delivery
+  ready_for_pickup
+  delivered
+  canceled
+  rejected
+}
+
+enum Fulfillment {
+  delivery
+  pickup
+}
+
+enum CatalogImportStatus {
+  uploaded
+  mapped
+  reviewing
+  applied
+  failed
+}
+
+enum PrescriptionStatus {
+  pending
+  approved
+  rejected
+}
+
+enum HandoffReason {
+  symptom
+  rx
+  controlled
+  out_of_stock
+  other
+}
+
+enum HandoffStatus {
+  open
+  answered
+  closed
+}
+
+model Product {
+  id                  String         @id @default(uuid())
+  businessId          String
+  business            Business       @relation(fields: [businessId], references: [id])
+  ean                 String?
+  sku                 String?
+  name                String
+  activeIngredient    String?
+  presentation        String?
+  manufacturer        String?
+  category            String?
+  priceCents          Int
+  stockQty            Int?
+  stockAsOf           DateTime?
+  // Private-bucket key under LOCAL_STORAGE_DIR (products/<businessId>/...); null = placeholder icon by product type.
+  imageKey            String?
+  saleClass           ProductClass   @default(unclassified)
+  classProposed       ProductClass?
+  classProposedBy     String? // "sheet" | "ai" | "reference"
+  classProposedReason String? // e.g. 'coluna "Tarja"', "lista Portaria 344", "IA, baixa confiança"
+  classConfirmedAt    DateTime?
+  classConfirmedBy    String? // BusinessMember.id
+  pharmacistRequired  Boolean        @default(false)
+  maxQtyPerOrder      Int?
+  equivalentGroup     String?
+  active              Boolean        @default(true)
+  sourceImportId      String?
+  sourceImport        CatalogImport? @relation(fields: [sourceImportId], references: [id], onDelete: SetNull)
+  dedupKey            String
+  overriddenFields    Json           @default("{}")
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  deletedAt           DateTime?
+
+  orderItems OrderItem[]
+
+  @@unique([businessId, dedupKey])
+  @@index([businessId, saleClass, active])
+  @@index([businessId, ean])
+}
+
+model CatalogImport {
+  id                String              @id @default(uuid())
+  businessId        String
+  business          Business            @relation(fields: [businessId], references: [id])
+  documentId        String
+  document          KnowledgeDocument   @relation(fields: [documentId], references: [id])
+  filename          String
+  status            CatalogImportStatus @default(uploaded)
+  columnMapping     Json                @default("{}")
+  stats             Json                @default("{}")
+  stockAsOf         DateTime?
+  error             String?
+  createdByMemberId String?
+  createdAt         DateTime            @default(now())
+  appliedAt         DateTime?
+
+  products Product[]
+
+  @@index([businessId, createdAt])
+}
+
+model Order {
+  id                      String          @id @default(uuid())
+  businessId              String
+  business                Business        @relation(fields: [businessId], references: [id])
+  leadId                  String
+  lead                    Lead            @relation(fields: [leadId], references: [id])
+  conversationId          String?
+  // Per-business sequence (PharmacySettings.nextOrderNumber); code is "PED-" + number.
+  number                  Int
+  code                    String
+  // Unguessable token for the public order-status link (/pedido/<statusToken>).
+  statusToken             String          @unique
+  fulfillment             Fulfillment
+  status                  OrderStatus     @default(pending_pharmacist)
+  paymentMethod           String          @default("on_delivery")
+  subtotalCents           Int
+  deliveryFeeCents        Int             @default(0)
+  totalCents              Int
+  addressSnapshot         Json?
+  // True when the delivery address differs from the lead's saved default (flag shown in the order sheet).
+  addressDiffersFromSaved Boolean         @default(false)
+  notes                   String?
+  autoConfirmed           Boolean         @default(false)
+  hasPrescription         Boolean         @default(false)
+  // Age of the catalog stock sheet at order time (stale-sheet banner in the order sheet).
+  stockAsOfSnapshot       DateTime?
+  statusReason            String?
+  courierMemberId         String?
+  courier                 BusinessMember? @relation("OrderCourier", fields: [courierMemberId], references: [id], onDelete: SetNull)
+  confirmedAt             DateTime?
+  deliveredAt             DateTime?
+  canceledAt              DateTime?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  items         OrderItem[]
+  prescriptions PrescriptionUpload[]
+
+  @@unique([businessId, number])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, leadId])
+  @@index([businessId, courierMemberId])
+}
+
+model OrderItem {
+  id                String       @id @default(uuid())
+  orderId           String
+  order             Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product      @relation(fields: [productId], references: [id])
+  nameSnapshot      String
+  unitPriceCents    Int
+  qty               Int
+  saleClassSnapshot ProductClass
+
+  @@index([orderId])
+}
+
+model PrescriptionUpload {
+  id                 String             @id @default(uuid())
+  businessId         String
+  business           Business           @relation(fields: [businessId], references: [id])
+  orderId            String
+  order              Order              @relation(fields: [orderId], references: [id])
+  // Per-business sequence (PharmacySettings.nextRxNumber); code is "RX-" + number.
+  number             Int
+  // Private storage key (never served statically; download goes through the access-checked endpoint).
+  storageKey         String
+  mimeType           String
+  sizeBytes          Int                @default(0)
+  patientName        String?
+  status             PrescriptionStatus @default(pending)
+  reviewedAt         DateTime?
+  reviewedByMemberId String?
+  reviewedByName     String?
+  rejectReason       String?
+  consentId          String?
+  retentionDeleteAt  DateTime?
+  fileDeletedAt      DateTime?
+  createdAt          DateTime           @default(now())
+
+  @@unique([businessId, number])
+  @@index([businessId, status, createdAt])
+  @@index([orderId])
+  @@index([retentionDeleteAt])
+}
+
+model PharmacistHandoff {
+  id                 String        @id @default(uuid())
+  businessId         String
+  business           Business      @relation(fields: [businessId], references: [id])
+  conversationId     String
+  leadId             String?
+  reason             HandoffReason
+  urgent             Boolean       @default(false)
+  // One-line headline for the inbox list, e.g. "Dor de cabeça há 3 dias". Contains no product name.
+  summary            String        @default("")
+  // Structured brief (HANDOFF 5.4). Never written to Message.content.
+  brief              Json          @default("{}")
+  status             HandoffStatus @default(open)
+  answerText         String?
+  answeredAt         DateTime?
+  answeredByMemberId String?
+  answeredByName     String?
+  answeredByRole     String?
+  closedAt           DateTime?
+  retentionDeleteAt  DateTime?
+  createdAt          DateTime      @default(now())
+
+  @@index([businessId, status, createdAt])
+  @@index([conversationId])
+}
+
+model PharmacySettings {
+  id                        String   @id @default(uuid())
+  businessId                String   @unique
+  business                  Business @relation(fields: [businessId], references: [id])
+  legalName                 String?
+  cnpj                      String?
+  afeNumber                 String?
+  pharmacistName            String?
+  pharmacistCrf             String?
+  deliveryAreas             Json     @default("[]") // [{ type: "district"|"cep_prefix", value: string }]
+  deliveryFeeCents          Int      @default(0)
+  minOrderCents             Int      @default(0)
+  pickupEnabled             Boolean  @default(true)
+  deliveryEnabled           Boolean  @default(true)
+  autoConfirmEnabled        Boolean  @default(true)
+  stockMaxAgeHours          Int      @default(24)
+  openingHours              Json     @default("[]")
+  paymentMethods            String[] @default(["pix", "cartao", "dinheiro"])
+  exchangePolicy            String?
+  maxQtyPerItemDefault      Int?
+  prescriptionRetentionDays Int      @default(30)
+  orderReminderMinutes      Int      @default(10)
+  quickChips                Json     @default("[]")
+  // Onboarding-interview answers waiting for owner confirmation: { [fieldKey]: { value, proposedAt, confirmedAt? } }
+  proposals                 Json     @default("{}")
+  nextOrderNumber           Int      @default(1001)
+  nextRxNumber              Int      @default(1)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 }
