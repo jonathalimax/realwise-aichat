@@ -16,11 +16,81 @@ const MAX_VECTOR_DISTANCE = 0.55;
 // full-text fills remaining slots up to the same total limit as the old vector-only query.
 export type RetrievedChunk = { id: string; content: string; score?: number };
 
+// Accent-folding for the keyword fallback below. Postgres' 'portuguese' text-search config stems
+// but does not strip accents, so a visitor typing "condominio" (very common on mobile) never
+// matches a document saying "condomínio". translate() is built in — no extension/migration needed.
+const ACCENTED = "áàâãäéèêëíìîïóòôõöúùûüç";
+const UNACCENTED = "aaaaaeeeeiiiiooooouuuuc";
+const FALLBACK_RESULT_LIMIT = 3;
+// Fetched before the minimum-keyword filter, so listing-word-only hits can't crowd out a real one.
+const FALLBACK_CANDIDATES = 10;
+
+// Words that carry no topical signal for the OR-keyword fallback (they'd match almost any chunk).
+const FALLBACK_STOPWORDS = new Set([
+  "para", "pela", "pelo", "como", "qual", "quais", "quando", "onde", "quanto", "quanta", "quantos", "quantas",
+  "voce", "voces", "vcs", "tem", "tenho", "temos", "esse", "essa", "esses", "essas", "isso", "este", "esta",
+  "aqui", "sobre", "gostaria", "queria", "quero", "saber", "preciso", "pode", "podem", "seria", "seu", "sua",
+  "seus", "suas", "meu", "minha", "mais", "menos", "muito", "tambem", "ainda", "entao", "porque", "que",
+  "imovel", "imoveis", "informacao", "informacoes", "duvida", "favor", "obrigado", "obrigada", "bom", "boa",
+]);
+
+function foldAccents(text: string): string {
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+// Significant, accent-folded keywords of a query, for the OR fallback.
+export function fallbackKeywords(queryText: string): string[] {
+  const words = foldAccents(queryText)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !FALLBACK_STOPWORDS.has(w));
+  return [...new Set(words)].slice(0, 8);
+}
+
+// Common pt-BR chat abbreviations, expanded only for retrieval (never shown or stored).
+const ABBREVIATIONS: Record<string, string> = {
+  vc: "você", vcs: "vocês", qnto: "quanto", qto: "quanto", qnt: "quanto", qnts: "quantos", qts: "quartos",
+  tb: "também", tbm: "também", ap: "apartamento", apto: "apartamento", aptos: "apartamentos",
+  cond: "condomínio", pq: "porque", oq: "o que", hj: "hoje", msm: "mesmo", dorm: "dormitório", dorms: "dormitórios",
+  info: "informação", infos: "informações", doc: "documento", docs: "documentos", fin: "financiamento",
+};
+
+export function expandAbbreviations(text: string): string {
+  return text.replace(/[\p{L}\p{N}]+/gu, (word) => ABBREVIATIONS[word.toLowerCase()] ?? word);
+}
+
+// Conversation-aware retrieval query. A short follow-up that isn't a question on its own terms
+// ("para entrada", "e o de 3 quartos") borrows the two previous turns; a self-contained question
+// ("Qual o valor do condomínio?") never does — confirmed live regression: augmenting a complete
+// question with unrelated history skewed retrieval toward a different topic. The listing in focus
+// always contributes its summary so "desse imóvel" retrieves chunks about that listing.
+// `recentTextsNewestFirst` excludes the current visitor message.
+const SHORT_FOLLOW_UP_CHARS = 30;
+export function buildRetrievalQuery(visitorText: string, recentTextsNewestFirst: string[], contextListingSummary: string | null): string {
+  const expanded = expandAbbreviations(visitorText.trim());
+  const isShortFollowUp = expanded.length < SHORT_FOLLOW_UP_CHARS && !/\?\s*$/.test(expanded);
+  const history = isShortFollowUp ? recentTextsNewestFirst.slice(0, 2).reverse().join(" ") : "";
+  return [history, expanded, contextListingSummary].filter(Boolean).join(" ");
+}
+
+// `keywords.text`: what the keyword paths (AND full-text + accent-folded fallback) search for.
+// Defaults to queryText; chat passes the visitor's own words here, because the conversation-
+// augmented queryText (history + listing summary) helps the vector search but makes an AND query
+// almost never match and drowns the actual question's keywords ("e o iptu?").
+// `keywords.extra`: secondary words (e.g. the listing in focus) that may help rank fallback hits
+// but never count toward the minimum match.
+export interface KeywordOptions {
+  text?: string;
+  extra?: string | null;
+}
+
 export async function retrieveRelevantChunks(
   prisma: PrismaService,
   businessId: string,
   queryText: string,
+  keywordOptions: KeywordOptions = {},
 ): Promise<RetrievedChunk[]> {
+  const keywordText = keywordOptions.text ?? queryText;
   let vectorRows: { id: string; content: string; distance: number }[] = [];
   try {
     const embedding = await embedText(queryText);
@@ -45,7 +115,7 @@ export async function retrieveRelevantChunks(
        ORDER BY rank DESC
        LIMIT $3`,
       businessId,
-      queryText,
+      keywordText,
       RESULT_LIMIT,
     );
   } catch {
@@ -69,7 +139,41 @@ export async function retrieveRelevantChunks(
     merged.push(row);
     if (merged.length >= RESULT_LIMIT) break;
   }
-  return merged;
+  if (merged.length > 0) return merged;
+
+  // Recall fallback, only when both precise paths found nothing (e.g. embeddings down AND the
+  // AND-semantics keyword query missed because of a missing accent or an extra word): accent-folded
+  // keywords OR'ed together, top 3 by rank. Scoped by businessId like everything else; runs without
+  // the GIN index, which is fine for one tenant's chunks and only on this miss path.
+  const primary = fallbackKeywords(keywordText);
+  if (primary.length === 0) return merged;
+  const keywords = [...new Set([...primary, ...fallbackKeywords(keywordOptions.extra ?? "")])].slice(0, 8);
+  try {
+    const rows = await prisma.client.$queryRawUnsafe<{ id: string; content: string; rank: number }[]>(
+      `SELECT id, content, ts_rank(to_tsvector('portuguese', translate(lower(content), $4, $5)), websearch_to_tsquery('portuguese', $2)) AS rank FROM "KnowledgeChunk"
+       WHERE "businessId" = $1 AND to_tsvector('portuguese', translate(lower(content), $4, $5)) @@ websearch_to_tsquery('portuguese', $2)
+       ORDER BY rank DESC
+       LIMIT $3`,
+      businessId,
+      keywords.join(" or "),
+      FALLBACK_CANDIDATES,
+      ACCENTED,
+      UNACCENTED,
+    );
+    // OR semantics would let one generic shared word "ground" an unrelated chunk (and bypass the
+    // zero-context gap gate). Require the chunk to contain at least 2 of the question's own
+    // keywords (or the only one, for a one-keyword question), stem-tolerant.
+    const required = Math.min(2, primary.length);
+    return rows
+      .filter((r) => {
+        const content = foldAccents(r.content);
+        return primary.filter((w) => content.includes(w.length > 5 ? w.slice(0, w.length - 2) : w)).length >= required;
+      })
+      .slice(0, FALLBACK_RESULT_LIMIT)
+      .map((r) => ({ id: r.id, content: r.content, score: Math.max(0, Math.min(1, r.rank)) }));
+  } catch {
+    return merged;
+  }
 }
 
 // Shared/global knowledge tier (Stage 2b) — general domain content (rental/vehicle law,
@@ -164,9 +268,10 @@ export async function retrieveChunksForChat(
   businessId: string,
   niche: string,
   queryText: string,
+  keywordOptions: KeywordOptions = {},
 ): Promise<{ tenant: RetrievedChunk[]; shared: SharedRetrievedChunk[] }> {
   const [tenant, shared] = await Promise.all([
-    retrieveRelevantChunks(prisma, businessId, queryText),
+    retrieveRelevantChunks(prisma, businessId, queryText, keywordOptions),
     retrieveSharedChunks(prisma, niche, queryText),
   ]);
   return { tenant, shared };

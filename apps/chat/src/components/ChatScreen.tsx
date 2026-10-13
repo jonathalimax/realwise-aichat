@@ -546,6 +546,9 @@ export function ChatScreen({
   const [bubbles, setBubbles] = useState<FlowBubble[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [input, setInput] = useState("");
+  // Text of the last message that failed to reach the server — offered back as a one-tap retry
+  // (and restored into the input) so a network blip never loses what the visitor typed.
+  const [retryText, setRetryText] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
   const [leadCaptured, setLeadCaptured] = useState(false);
@@ -854,6 +857,26 @@ export function ChatScreen({
     setPushPrompt("done");
   }
 
+  // The send may have reached the server even though the reply never arrived (connection dropped
+  // while the answer was being prepared). Check history first so a retry never asks the same
+  // question twice; only resend when the server has no reply to it.
+  async function handleRetry(text: string) {
+    if (business && conversationId) {
+      try {
+        const history = await getConversationHistory(business.id, conversationId, resumeConversationId ? resumeToken : undefined);
+        const serverMessages: { role: string; content: string }[] = history.messages ?? [];
+        const lastVisitor = serverMessages.map((m) => m.role).lastIndexOf("visitor");
+        if (lastVisitor >= 0 && serverMessages[lastVisitor].content === text && serverMessages.slice(lastVisitor + 1).some((m) => m.role === "assistant")) {
+          setMessages((prev) => mergeServerMessages(prev, history.messages ?? []));
+          return;
+        }
+      } catch {
+        // History unavailable: fall through to a plain resend.
+      }
+    }
+    handleSend(text);
+  }
+
   async function handleManualRefresh() {
     if (!business || !conversationId) return;
     try {
@@ -892,6 +915,7 @@ export function ChatScreen({
     // silently lose what the visitor typed.
     if (isStreamingRef.current) return;
     if (!text.trim() || !business) return;
+    setRetryText(null);
     setSuggestions([]);
     setBubbles([]);
     if (text.toLowerCase().includes("agendar")) {
@@ -992,7 +1016,19 @@ export function ChatScreen({
         setBubbles([]);
       }
     } catch {
-      setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "Tive um problema para responder — tenta de novo em instantes." }]);
+      if (streamed) {
+        // Part of the answer already arrived — keep it, just say the connection dropped.
+        setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: "A conexão caiu no meio da resposta — se precisar, é só perguntar de novo." }]);
+      } else {
+        // Nothing arrived: give the typed text back (unless they already started a new one) and
+        // offer a one-tap retry instead of a dead end.
+        setInput((current) => (current.trim() ? current : text));
+        setRetryText(text);
+        setMessages((prev) => [
+          ...prev,
+          { id: nextMessageId(), role: "assistant", content: "A conexão falhou e a resposta não chegou até aqui. Toque em “Tentar de novo” — se ela já tiver sido respondida, eu só busco a resposta." },
+        ]);
+      }
     } finally {
       setSending(false);
       setBusy(false);
@@ -1333,6 +1369,24 @@ export function ChatScreen({
         </div>
       )}
 
+      {retryText && !sending && !busy && (
+        <div className="flex flex-none flex-wrap gap-2 px-4 pb-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const text = retryText;
+              setRetryText(null);
+              setInput((current) => (current === text ? "" : current));
+              handleRetry(text);
+            }}
+            className="h-auto min-h-11 rounded-full bg-surface py-2 font-normal shadow-sm"
+          >
+            ↻ Tentar de novo
+          </Button>
+        </div>
+      )}
+
       {bubbles.length === 0 && suggestions.length > 0 && !showBooking && !sending && (
         <div className="flex flex-none flex-wrap gap-2 px-4 pb-2">
           {suggestions.slice(0, 5).map((label, i) => (
@@ -1355,7 +1409,15 @@ export function ChatScreen({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          handleSend(input);
+          // Resending the restored failed message goes through the same history check as the button.
+          if (retryText && input.trim() === retryText.trim()) {
+            const text = retryText;
+            setRetryText(null);
+            setInput("");
+            handleRetry(text);
+          } else {
+            handleSend(input);
+          }
         }}
         className="flex flex-none items-center gap-2 bg-bg/80 px-4 py-3 shadow-[0_-10px_20px_-16px_rgba(20,24,21,0.18)] backdrop-blur-md"
       >

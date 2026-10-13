@@ -479,7 +479,11 @@ export class ListingsService {
     });
     if (!listing) return null;
     const parts = [listing.title];
-    if (listing.priceText) parts.push(listing.priceText);
+    // Rent vs sale is part of the facts Clara may state ("é pra alugar ou comprar?"), and the
+    // structured price must be there even when the free-text priceText isn't.
+    if (listing.transaction) parts.push(listing.transaction);
+    const price = formatListingPrice(listing.priceCents, listing.pricePeriod, listing.priceText);
+    if (price) parts.push(price);
     if (listing.bedrooms != null) parts.push(`${listing.bedrooms} dormitórios`);
     if (listing.areaM2 != null) parts.push(`${listing.areaM2}m²`);
     if (listing.neighborhood) parts.push(listing.neighborhood);
