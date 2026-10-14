@@ -12,6 +12,8 @@ import {
   startFlow,
   advanceFlow,
   setListingSelection,
+  pharmacyAction,
+  apiErrorMessage,
 } from "../lib/api";
 import { isPushSupported, enablePush } from "../lib/push";
 import { Button } from "./ui/button";
@@ -21,6 +23,11 @@ import { ListingDetailOverlay, safeHttpUrl, type Listing } from "./ListingDetail
 import { MessageContent } from "./MessageContent";
 import { SimulationCard, type SimulationData } from "./SimulationCard";
 import { SchedulePicker, type BookedVisit } from "./SchedulePicker";
+import { PharmacyUi, PHARMACY_UI_KINDS } from "./pharmacy/PharmacyUi";
+import { CartBar } from "./pharmacy/CartBar";
+import { initialsOf } from "./pharmacy/format";
+import type { MessageAuthor, PharmacyActionResult, PharmacyState, PharmacyUiPayload } from "./pharmacy/types";
+import { pharmacyThemeVars } from "../lib/pharmacy-theme";
 
 interface FlowBubble {
   label: string;
@@ -45,6 +52,27 @@ interface Message {
   // Set only for messages that originated from a server fetch (history load or poll tick) —
   // used to dedup against locally-created optimistic bubbles, which never get this field.
   serverId?: string;
+  // Pharmacy (niche "farmacia") additions, docs/pharmacy/API.md 8.1: `kind` "human_joined" marks the
+  // join banner (role "system"); `author` is set for messages written by a person (name + role);
+  // `ui` is the structured card payload persisted in Message.uiData (unknown kinds degrade to text).
+  kind?: string;
+  author?: MessageAuthor | null;
+  ui?: PharmacyUiPayload | null;
+}
+
+// Server message -> local message (history load, poll tick, pharmacy action responses).
+function fromServerMessage(m: any): Message {
+  return {
+    id: m.id,
+    serverId: m.id,
+    role: m.role,
+    content: typeof m.content === "string" ? m.content : "",
+    listings: m.listings,
+    simulationData: m.simulationData,
+    kind: m.kind,
+    author: m.author ?? null,
+    ui: m.ui ?? null,
+  };
 }
 
 // Real listing item (property/vehicle) rendered as a card — image with a sensible fallback when
@@ -380,6 +408,65 @@ function BusinessAvatar({
   );
 }
 
+// Pharmacy header (S1): Alex avatar + "IA" badge, business name, and the legal identity line
+// (CRF and responsible pharmacist) so the visitor always sees who is behind the counter.
+function PharmacyHeader({ business }: { business: any }) {
+  const rt = business.pharmacy?.pharmacistName as string | undefined;
+  const crf = business.pharmacy?.pharmacistCrf as string | undefined;
+  const [logoFailed, setLogoFailed] = useState(false);
+  return (
+    <header className="flex flex-none items-center gap-3 px-4 py-3" style={{ background: "var(--ph-primary)", color: "var(--ph-primary-fg)" }}>
+      {business.logoUrl && !logoFailed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={business.logoUrl} alt={business.name} className="h-10 w-10 flex-none rounded-full bg-white object-cover" onError={() => setLogoFailed(true)} />
+      ) : (
+        <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-white text-sm font-bold text-zinc-900" aria-hidden>
+          A
+        </span>
+      )}
+      <div className="min-w-0 flex-1 leading-snug">
+        <div className="flex items-center gap-1.5">
+          <b className="text-sm">Alex</b>
+          <span className="inline-flex h-[18px] items-center rounded-full px-1.5 text-[11px] font-bold" style={{ background: "var(--ph-tertiary)", color: "var(--ph-tertiary-fg)" }} title="Assistente virtual com inteligência artificial">
+            IA
+          </span>
+        </div>
+        <div className="truncate text-xs opacity-95">{business.name} · online</div>
+        {(crf || rt) && (
+          <div className="truncate text-xs opacity-80">
+            {crf}
+            {crf && rt ? " · " : ""}
+            {rt ? `Farm. resp. ${rt}` : ""}
+          </div>
+        )}
+      </div>
+    </header>
+  );
+}
+
+function formatCnpj(raw?: string | null): string | null {
+  const d = (raw ?? "").replace(/\D/g, "");
+  if (d.length !== 14) return null;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+}
+
+function PharmacyFooter({ business }: { business: any }) {
+  const cnpj = formatCnpj(business.pharmacy?.cnpj);
+  const legal = business.pharmacy?.legalName as string | undefined;
+  return (
+    <div className="flex-none bg-bg px-4 pb-3 pt-1 text-center text-[0.7rem] leading-snug text-ink-soft">
+      <p>Você conversa com uma IA. Ela não indica remédios nem dá orientação médica.</p>
+      {(legal || cnpj) && (
+        <p className="mt-0.5">
+          {legal}
+          {legal && cnpj ? " · " : ""}
+          {cnpj ? `CNPJ ${cnpj}` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
 let messageIdCounter = 0;
 function nextMessageId() {
   messageIdCounter += 1;
@@ -532,9 +619,14 @@ function clearStoredConversation(slug: string) {
 function mergeServerMessages(prev: Message[], serverMessages: any[]): Message[] {
   const knownServerIds = new Set(prev.map((m) => m.serverId).filter(Boolean));
   const knownByContent = new Set(prev.map((m) => `${m.role}:${m.content.trim()}`));
+  // Empty-content messages (pure card turns) can only be matched by id, never by text.
   const newOnes = (serverMessages ?? [])
-    .filter((m: any) => !knownServerIds.has(m.id) && !knownByContent.has(`${m.role}:${String(m.content ?? "").trim()}`))
-    .map((m: any) => ({ id: m.id, serverId: m.id, role: m.role, content: m.content, listings: m.listings }));
+    .filter((m: any) => {
+      if (knownServerIds.has(m.id)) return false;
+      const text = String(m.content ?? "").trim();
+      return text.length === 0 || !knownByContent.has(`${m.role}:${text}`);
+    })
+    .map(fromServerMessage);
   if (newOnes.length === 0) return prev;
   return [...prev, ...newOnes];
 }
@@ -574,6 +666,10 @@ export function ChatScreen({
   const [pollCapped, setPollCapped] = useState(false);
   const [pushPrompt, setPushPrompt] = useState<"hidden" | "asking" | "done">("hidden");
   const [businessNotFound, setBusinessNotFound] = useState(false);
+  // Pharmacy-only state (cart, checkout step, joined staff). Rebuilt from the history response.
+  const [pharmacy, setPharmacy] = useState<PharmacyState | null>(null);
+  const [handoffRequested, setHandoffRequested] = useState(false);
+  const isPharmacy = business?.niche === "farmacia";
   const bottomRef = useRef<HTMLDivElement>(null);
   // Holds the in-flight (or resolved) conversation-creation promise so a message sent before the
   // mount effect's startConversation() resolves awaits that SAME promise instead of racing a
@@ -640,14 +736,8 @@ export function ChatScreen({
       try {
         const history = await getConversationHistory(business.id, convId!, effectiveResumeToken);
         if (cancelled) return;
-        const restoredMessages: Message[] = history.messages.map((m: any) => ({
-          id: m.id,
-          serverId: m.id,
-          role: m.role,
-          content: m.content,
-          listings: m.listings,
-          simulationData: m.simulationData,
-        }));
+        const restoredMessages: Message[] = history.messages.map(fromServerMessage);
+        if (history.pharmacy) setPharmacy(history.pharmacy);
         // Older conversations that predate server-side message persistence for the scripted
         // bubble flow (or any conversation that only ever got this far via taps) have an empty
         // `messages` history even though a real flowSnapshot exists — repaint that snapshot's
@@ -703,13 +793,36 @@ export function ChatScreen({
   // flowSnapshot — a resumed conversation already restored its bubbles above.
   useEffect(() => {
     if (!business || !conversationId || !historyLoaded || flowRestored) return;
+    // Pharmacy: if the scripted start is empty or unavailable, fall back to the fixed Alex welcome
+    // (it must always say he is an AI) with the business's quick chips.
+    const pharmacyWelcome = () => {
+      const chips: string[] = Array.isArray(business.pharmacy?.quickChips) && business.pharmacy.quickChips.length
+        ? business.pharmacy.quickChips
+        : ["Fazer um pedido", "Falar com o farmacêutico", "Horários e entrega"];
+      setMessages((prev) =>
+        prev.length === 0
+          ? [{ id: nextMessageId(), role: "assistant", content: `Oi! Sou o Alex, assistente virtual da ${business.name}. Sou uma inteligência artificial. Posso ajudar a montar seu pedido ou encaminhar você ao farmacêutico. Não indico remédios.` }]
+          : prev,
+      );
+      setSuggestions(chips.slice(0, 5));
+    };
     startFlow(business.id, conversationId)
       .then((result) => {
+        if (business.niche === "farmacia" && !(typeof result?.message === "string" && result.message.trim())) {
+          pharmacyWelcome();
+          return;
+        }
         setMessages((prev) => (prev.length === 0 ? [{ id: nextMessageId(), role: "assistant", content: result.message }] : prev));
         setBubbles(result.bubbles ?? []);
-        setSuggestions([]);
+        setSuggestions(
+          business.niche === "farmacia" && !(result.bubbles ?? []).length && Array.isArray(business.pharmacy?.quickChips)
+            ? business.pharmacy.quickChips.slice(0, 5)
+            : [],
+        );
       })
-      .catch(() => {});
+      .catch(() => {
+        if (business.niche === "farmacia") pharmacyWelcome();
+      });
   }, [business, conversationId, historyLoaded, flowRestored]);
 
   // requestAnimationFrame ensures this runs after layout settles (e.g. right after the sending
@@ -745,13 +858,19 @@ export function ChatScreen({
     return () => window.visualViewport?.removeEventListener("resize", onResize);
   }, []);
 
+  // Escalated conversations poll for the owner's reply; pharmacy conversations also poll once a
+  // pharmacist was asked for (symptom lane, handoff request) or has already joined.
+  const pollingEnabled =
+    conversationStatus === "escalated" ||
+    (isPharmacy && (handoffRequested || pharmacy?.lane === "symptom" || (pharmacy?.humanJoined?.length ?? 0) > 0));
+
   // Near-live delivery of owner replies: polls history only while the conversation is escalated
   // (that's the only window where a human might actually be typing), the tab is visible, and no
   // send/stream is currently in flight. Caps continuous foreground polling at ~15min to avoid
   // hammering an abandoned-but-open tab forever; past the cap, a manual "Atualizar" affordance
   // replaces the interval.
   useEffect(() => {
-    if (!business || !conversationId || conversationStatus !== "escalated" || pollCapped) return;
+    if (!business || !conversationId || !pollingEnabled || pollCapped) return;
 
     const POLL_INTERVAL_MS = 8000;
     const POLL_CAP_MS = 15 * 60 * 1000;
@@ -768,6 +887,7 @@ export function ChatScreen({
       try {
         const history = await getConversationHistory(business.id, conversationId!, resumeConversationId ? resumeToken : undefined);
         if (history.conversation?.status) setConversationStatus(history.conversation.status);
+        if (history.pharmacy) setPharmacy(history.pharmacy);
         setMessages((prev) => mergeServerMessages(prev, history.messages ?? []));
       } catch {
         // A single failed poll tick is silently ignored — the next tick retries.
@@ -801,7 +921,7 @@ export function ChatScreen({
       stop();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [business, conversationId, conversationStatus, pollCapped, resumeConversationId, resumeToken]);
+  }, [business, conversationId, pollingEnabled, pollCapped, resumeConversationId, resumeToken]);
 
   // Conversational opt-in: once a conversation escalates to human handoff, ask the visitor (in
   // Clara's voice, in a normal chat bubble) whether they want a notification if they leave —
@@ -890,6 +1010,7 @@ export function ChatScreen({
     try {
       const history = await getConversationHistory(business.id, conversationId, resumeConversationId ? resumeToken : undefined);
       if (history.conversation?.status) setConversationStatus(history.conversation.status);
+      if (history.pharmacy) setPharmacy(history.pharmacy);
       setMessages((prev) => mergeServerMessages(prev, history.messages ?? []));
     } catch {
       // Manual refresh failing silently is fine — the button stays available to retry.
@@ -926,7 +1047,8 @@ export function ChatScreen({
     setRetryText(null);
     setSuggestions([]);
     setBubbles([]);
-    if (text.toLowerCase().includes("agendar")) {
+    // Pharmacy has no visit scheduling: "agendar" there is just text for the engine.
+    if (!isPharmacy && text.toLowerCase().includes("agendar")) {
       setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: text }]);
       setInput("");
       setBusy(true);
@@ -992,6 +1114,26 @@ export function ChatScreen({
         );
       }
 
+      if (isPharmacy && result?.message && typeof result.message === "object") {
+        // Final message of the turn: pin its server id (so polling never re-adds it) and attach the
+        // structured card + author when the engine produced one.
+        const finalMsg = result.message;
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === assistantId);
+          const patch: Partial<Message> = {
+            serverId: finalMsg.id ?? undefined,
+            kind: finalMsg.kind,
+            author: finalMsg.author ?? null,
+            ui: finalMsg.ui ?? null,
+          };
+          if (!exists) {
+            return [...prev, { id: assistantId, role: "assistant", content: typeof finalMsg.content === "string" ? finalMsg.content : "", ...patch }];
+          }
+          return prev.map((m) => (m.id === assistantId ? { ...m, ...patch } : m));
+        });
+        if (result.pharmacy) setPharmacy(result.pharmacy);
+        if (finalMsg.ui?.type === "red_flag" && finalMsg.ui.handoffId) setHandoffRequested(true);
+      }
       if (result?.listings?.length) {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, listings: result.listings } : m)));
       }
@@ -1127,6 +1269,49 @@ export function ChatScreen({
     }
   }
 
+  // Structured pharmacy visitor action (buttons, steppers, forms): the deterministic fast path of
+  // POST .../pharmacy/actions. `echo` shows the tap as a visitor bubble. Resolves instead of
+  // throwing so the calling card can show the (pt-BR) server message inline.
+  async function handlePharmacyAction(action: { type: string; [key: string]: unknown }, echo?: string): Promise<PharmacyActionResult> {
+    if (!business) return { ok: false };
+    if (isStreamingRef.current) return { ok: false, error: "Aguarde a resposta anterior terminar." };
+    isStreamingRef.current = true;
+    setBusy(true);
+    setSuggestions([]);
+    setBubbles([]);
+    const echoed = Boolean(echo);
+    if (echo) setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: echo }]);
+    try {
+      const convId = await ensureConversation();
+      if (!convId) throw new Error("conversation_unavailable");
+      const res = await pharmacyAction(business.id, convId, action);
+      const incoming = (res.messages ?? [])
+        .filter((m: any) => !(echoed && m.role === "visitor"))
+        .map(fromServerMessage);
+      setMessages((prev) => {
+        const known = new Set(prev.map((m) => m.serverId).filter(Boolean));
+        return [...prev, ...incoming.filter((m: Message) => !known.has(m.serverId))];
+      });
+      if (res.pharmacy) setPharmacy(res.pharmacy);
+      if (action.type === "handoff.request") setHandoffRequested(true);
+      return { ok: true };
+    } catch (error) {
+      const status = (error as { status?: number })?.status;
+      const fallback = status === 429 ? "Muitas tentativas seguidas. Aguarde um instante." : "Não consegui concluir agora. Tente de novo em instantes.";
+      return { ok: false, error: apiErrorMessage(error, fallback) };
+    } finally {
+      setBusy(false);
+      isStreamingRef.current = false;
+    }
+  }
+
+  function handleRxUploaded(code: string) {
+    setMessages((prev) => [
+      ...prev,
+      { id: nextMessageId(), role: "assistant", content: `Recebi sua receita (${code}). O farmacêutico vai conferir e o pedido segue depois da validação.` },
+    ]);
+  }
+
   async function handleCaptureWhatsapp(phone: string) {
     await identifyVisitor(slug, null, phone);
     setLeadCaptured(true);
@@ -1157,13 +1342,27 @@ export function ChatScreen({
     setMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: message }]);
   }
 
-  const tenantStyle = useMemo(
-    () =>
-      business?.brandColor
-        ? ({ "--tenant-accent": business.brandColor, ...tenantBubbleVars(business.brandColor) } as React.CSSProperties)
-        : undefined,
-    [business?.brandColor],
-  );
+  const tenantStyle = useMemo(() => {
+    if (business?.niche === "farmacia") {
+      // Pharmacy: the business branding (primary / secondary / tertiary, default teal) drives the
+      // whole widget through --ph-* variables; --tenant-accent follows the primary colour.
+      const vars = pharmacyThemeVars(business.branding) as Record<string, string>;
+      return { ...vars, ...tenantBubbleVars(vars["--tenant-accent"]) } as React.CSSProperties;
+    }
+    return business?.brandColor
+      ? ({ "--tenant-accent": business.brandColor, ...tenantBubbleVars(business.brandColor) } as React.CSSProperties)
+      : undefined;
+  }, [business?.brandColor, business?.niche, business?.branding]);
+
+  // Index of the newest card message: forms are live only there (older checkout cards go read-only).
+  const latestUiIndex = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const type = messages[i].ui?.type;
+      // Unknown card kinds render nothing, so they must not steal "latest" from a live form.
+      if (type && (PHARMACY_UI_KINDS as readonly string[]).includes(type) && type !== "human_joined") return i;
+    }
+    return -1;
+  }, [messages]);
 
   if (!business) {
     if (businessNotFound) {
@@ -1184,6 +1383,9 @@ export function ChatScreen({
     // of each carrying its own separate inline style. --tenant-bubble-bg/-border are the
     // luminance-aware visitor bubble tint computed once in tenantStyle above.
     <div className="flex h-dvh flex-col overflow-hidden bg-bg" style={tenantStyle}>
+      {isPharmacy ? (
+        <PharmacyHeader business={business} />
+      ) : (
       <header className="flex flex-none items-center gap-3 border-b border-border bg-bg/80 px-4 py-3 backdrop-blur-md">
         <BusinessAvatar
           name={business.name}
@@ -1198,11 +1400,22 @@ export function ChatScreen({
           </div>
         </div>
       </header>
+      )}
 
       <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
         {messages.map((m, i) => {
           const isFirstInGroup = i === 0 || messages[i - 1].role !== m.role;
-          const isFirstOwnerMessageEver = m.role === "owner" && !messages.slice(0, i).some((mm) => mm.role === "owner");
+          const isFirstOwnerMessageEver = !isPharmacy && m.role === "owner" && !messages.slice(0, i).some((mm) => mm.role === "owner");
+          const authorChanged = i > 0 && messages[i - 1].role === "owner" && m.role === "owner" && (messages[i - 1].author?.name ?? "") !== (m.author?.name ?? "");
+          if (isPharmacy && m.role === "system" && (m.kind === "human_joined" || m.ui?.type === "human_joined")) {
+            const who = m.author ?? (m.ui?.name ? { name: String(m.ui.name), roleName: m.ui.roleName } : null);
+            const label = m.content.trim() || (who ? `${who.name}${who.roleName ? ` · ${who.roleName}` : ""} entrou na conversa` : "Um atendente entrou na conversa");
+            return (
+              <div key={m.id} className="my-4 flex justify-center" role="status">
+                <span className="ph-badge ph-badge-soft h-auto py-1 text-center">{label}</span>
+              </div>
+            );
+          }
           if (m.role === "system") {
             return (
               <div key={m.id} className="my-4 flex items-center gap-2 text-[0.7rem] font-medium text-ink-soft">
@@ -1227,13 +1440,25 @@ export function ChatScreen({
                 " " +
                 (m.role === "visitor"
                   ? "ml-auto max-w-[80%]"
-                  : m.listings?.length || m.simulationData
+                  : m.listings?.length || m.simulationData || m.ui
                     ? "max-w-full"
                     : "max-w-[85%]")
               }
             >
-            {isFirstInGroup && m.role === "owner" && (
-              <div className="mb-1 text-xs font-semibold text-accent">{business.name}</div>
+            {(isFirstInGroup || authorChanged) && m.role === "owner" && (
+              isPharmacy && m.author ? (
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[0.65rem] font-bold" style={{ background: "var(--ph-secondary)", color: "var(--ph-secondary-fg)" }} aria-hidden>
+                    {initialsOf(m.author.name)}
+                  </span>
+                  <span className="text-xs font-semibold text-ink-soft">
+                    {m.author.name}
+                    {m.author.roleName ? ` · ${m.author.roleName}` : ""}
+                  </span>
+                </div>
+              ) : (
+                <div className="mb-1 text-xs font-semibold text-accent">{business.name}</div>
+              )
             )}
             {isFirstInGroup && m.role === "assistant" && (
               <div className="mb-1 text-xs font-semibold text-ink-soft">{getPersonaName(business.niche)}</div>
@@ -1243,11 +1468,26 @@ export function ChatScreen({
                 className={
                   m.role === "visitor"
                     ? "tenant-bubble rounded-3xl rounded-br-lg px-4 py-3 text-sm text-ink break-words"
-                    : "business-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
+                    : isPharmacy && m.role === "owner"
+                      ? "ph-bubble-human text-sm text-ink break-words"
+                      : "business-bubble rounded-3xl rounded-bl-lg px-4 py-3 text-sm text-ink break-words shadow-sm"
                 }
               >
                 <MessageContent text={m.content} />
               </div>
+            )}
+            {isPharmacy && m.ui && (
+              <PharmacyUi
+                ui={m.ui}
+                ctx={{
+                  businessId: business.id,
+                  conversationId,
+                  interactive: i === latestUiIndex,
+                  busy,
+                  onAction: handlePharmacyAction,
+                  onRxUploaded: handleRxUploaded,
+                }}
+              />
             )}
             {m.simulationData ? (
               <SimulationCard
@@ -1313,7 +1553,7 @@ export function ChatScreen({
             onError={handleBookingError}
           />
         )}
-        {pollCapped && conversationStatus === "escalated" && (
+        {pollCapped && pollingEnabled && (
           <div className="mt-3 flex justify-center">
             <Button type="button" variant="outline" size="sm" onClick={handleManualRefresh}>
               Atualizar
@@ -1414,6 +1654,10 @@ export function ChatScreen({
         </div>
       )}
 
+      {isPharmacy && pharmacy?.cart && pharmacy.cart.itemCount > 0 && pharmacy.checkoutStep !== "done" && (
+        <CartBar cart={pharmacy.cart} checkoutStarted={Boolean(pharmacy.checkoutStep)} busy={busy} onAction={handlePharmacyAction} />
+      )}
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -1433,13 +1677,16 @@ export function ChatScreen({
           variant="pill"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Escreva sua mensagem…"
+          placeholder={isPharmacy ? "Digite sua mensagem…" : "Escreva sua mensagem…"}
+          aria-label="Mensagem"
           className="flex-1"
         />
         <Button type="submit" variant="round" size="icon" disabled={sending || busy} className="rounded-full">
           ➤
         </Button>
       </form>
+
+      {isPharmacy && <PharmacyFooter business={business} />}
 
       {activeListing && <ListingDetailOverlay listing={activeListing} onClose={() => setActiveListing(null)} />}
     </div>

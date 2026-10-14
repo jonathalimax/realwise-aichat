@@ -23,6 +23,11 @@ export interface NicheConfig {
   capabilities: { title: string; desc: string }[];
   faqExtra: [string, string];
   earlyAccess?: boolean;
+  // Optional niche overrides. Niches that omit them keep the generic problem stats and have no
+  // safety section, so existing landing pages render exactly as before.
+  heroBadge?: string;
+  problemStats?: { value: string; text: string }[];
+  safety?: { title: string; intro: string; points: { title: string; desc: string }[] };
 }
 
 const CAPABILITY_ICON_PATHS = [
@@ -180,5 +185,21 @@ export const NICHES: Record<string, NicheConfig> = {
     ],
     faqExtra: ["O Alex indica medicamentos?", "Não. Ele nunca indica remédio nem informa dose. Sintomas e dúvidas clínicas são encaminhados ao farmacêutico responsável."],
     earlyAccess: true,
+    heroBadge: "IA",
+    problemStats: [
+      { value: "22h47", text: "é quando muita gente lembra de pedir o remédio, com a loja já fechada e ninguém para responder preço e entrega." },
+      { value: "0", text: "remédios indicados pela IA. Sintomas e dúvidas clínicas vão sempre para o farmacêutico responsável." },
+      { value: "100%", text: "dos controlados ficam fora do carrinho. É regra no código, não depende do que o modelo decide." },
+    ],
+    safety: {
+      title: "Segurança que não depende de promessa",
+      intro: "Em farmácia, o erro tem custo alto. Por isso as regras que protegem o cliente e a sua loja são código, e não instrução para a IA.",
+      points: [
+        { title: "Só venda livre entra no carrinho", desc: "Produto sem classe confirmada pelo farmacêutico fica bloqueado. Controlado nunca é vendido no chat." },
+        { title: "Sintoma vai para quem pode responder", desc: "O Alex reúne as informações e envia um resumo ao farmacêutico. Sinais de alerta mostram o 192 (SAMU) na hora." },
+        { title: "Receita privada e com validade", desc: "A foto fica em área privada, só quem tem permissão abre, e é apagada depois do prazo que você define." },
+        { title: "Avisa que é uma IA, sempre", desc: "O chat se apresenta como assistente virtual e mostra o CRF e o farmacêutico responsável da sua farmácia." },
+      ],
+    },
   },
 };
