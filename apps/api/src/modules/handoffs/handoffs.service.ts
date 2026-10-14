@@ -5,7 +5,9 @@ import type { MemberContext } from "../access/member-context";
 import { PushService } from "../push/push.service";
 import { ChatHumanService } from "../chat/chat-human.service";
 import { parseLimit, sliceCursor } from "../pharmacy-common/format";
-import { buildSuggestion, handoffDetailDto, handoffListDto, type HandoffRow } from "./handoff-dto";
+import { accessDenied } from "../access/access-errors";
+import { hasCrfOnFile } from "../access/team-rules";
+import { buildSuggestion, handoffDetailDto, handoffListDto, handoffRequiresPharmacist, type HandoffRow } from "./handoff-dto";
 import { buildWhatsappLinks, buildWhatsappMessage, firstNameOf, MAX_WHATSAPP_MESSAGE_CHARS, whatsappDigits } from "./whatsapp-message";
 
 const logger = new Logger("HandoffsService");
@@ -44,7 +46,7 @@ export class HandoffsService {
     return rows.map((r) => ({ ...r, lead: r.leadId ? byId.get(r.leadId) ?? null : null }));
   }
 
-  async list(businessId: string, q: { status?: string; limit?: string; cursor?: string }) {
+  async list(businessId: string, q: { status?: string; limit?: string; cursor?: string }, member?: MemberContext) {
     await this.reopenAnswered(businessId);
     const limit = parseLimit(q.limit);
     const status = q.status === "answered" || q.status === "closed" || q.status === "open" ? q.status : "open";
@@ -61,7 +63,19 @@ export class HandoffsService {
     ]);
     const { items, nextCursor } = sliceCursor(rows, limit);
     const withLeads = await this.withLeads(businessId, items);
-    return { items: withLeads.map((h) => handoffListDto(h as unknown as HandoffRow)), counts: { open, answered, urgent }, nextCursor };
+    return { items: withLeads.map((h) => ({ ...handoffListDto(h as unknown as HandoffRow), canHandle: this.canHandle(member, h as unknown as HandoffRow) })), counts: { open, answered, urgent }, nextCursor };
+  }
+
+  /** Clinical handoffs need a member whose role requires a CRF and who has one on file; availability checks need only Atendimento edit. */
+  private canHandle(m: MemberContext | undefined, h: { reason: string; urgent: boolean }): boolean {
+    if (!m) return false;
+    if (!handoffRequiresPharmacist(h.reason, h.urgent)) return true;
+    return Boolean(m.requiresCrf && hasCrfOnFile(m.crf));
+  }
+
+  private assertCanHandle(m: MemberContext, h: { reason: string; urgent: boolean }) {
+    if (this.canHandle(m, h)) return;
+    throw accessDenied("CRF_REQUIRED", "Este atendimento exige um farmacêutico com CRF cadastrado.", { section: "atendimento", required: "edit" });
   }
 
   private async load(businessId: string, id: string) {
@@ -71,18 +85,18 @@ export class HandoffsService {
     return withLead;
   }
 
-  private async detail(businessId: string, id: string) {
+  private async detail(businessId: string, id: string, member?: MemberContext) {
     const h = await this.load(businessId, id);
     const brief = (h.brief ?? {}) as Record<string, unknown>;
     const ids = Array.isArray(brief.suggestedProducts) ? (brief.suggestedProducts as Array<{ productId?: string }>).map((p) => p?.productId).filter((x): x is string => typeof x === "string") : [];
     const products = ids.length ? await this.prisma.client.product.findMany({ where: { businessId, id: { in: ids }, active: true, deletedAt: null }, select: { id: true, name: true, presentation: true, priceCents: true, stockQty: true } }) : [];
     const live = new Map(products.map((p) => [p.id, { name: [p.name, p.presentation].filter(Boolean).join(" "), priceCents: p.priceCents, stockQty: p.stockQty }]));
-    return handoffDetailDto(h as unknown as HandoffRow, buildSuggestion(brief, live));
+    return { ...handoffDetailDto(h as unknown as HandoffRow, buildSuggestion(brief, live)), canHandle: this.canHandle(member, h as unknown as HandoffRow) };
   }
 
-  async get(businessId: string, id: string) {
+  async get(businessId: string, id: string, member?: MemberContext) {
     await this.reopenAnswered(businessId);
-    return this.detail(businessId, id);
+    return this.detail(businessId, id, member);
   }
 
   /**
@@ -94,6 +108,7 @@ export class HandoffsService {
     if (text.length < 1 || text.length > 2000) throw new BadRequestException({ statusCode: 400, error: "Bad Request", code: "INVALID_TEXT", message: "A resposta deve ter de 1 a 2000 caracteres." });
     await this.reopenAnswered(m.businessId);
     const h = await this.load(m.businessId, id);
+    this.assertCanHandle(m, h);
     if (h.status === "closed") throw conflict("INVALID_STATE", "Este atendimento já foi encerrado.");
     const conversation = await this.prisma.client.conversation.findFirst({
       where: { id: h.conversationId, businessId: m.businessId },
@@ -119,15 +134,16 @@ export class HandoffsService {
       this.push.sendToConversation(conversation.id, { title: conversation.business.name, body: "O farmacêutico respondeu ao seu atendimento.", url, tag: `handoff-${id}` }).catch(() => {});
     }
     await this.accessLog.record({ businessId: m.businessId, actor: m, action: "handoff.answer", summary: "Respondeu atendimento", detail: { handoffId: id } });
-    return this.detail(m.businessId, id);
+    return this.detail(m.businessId, id, m);
   }
 
   async close(m: MemberContext, id: string) {
     const h = await this.load(m.businessId, id);
-    if (h.status === "closed") return this.detail(m.businessId, id);
+    this.assertCanHandle(m, h);
+    if (h.status === "closed") return this.detail(m.businessId, id, m);
     await this.prisma.client.pharmacistHandoff.update({ where: { id }, data: { status: "closed", closedAt: new Date() } });
     await this.accessLog.record({ businessId: m.businessId, actor: m, action: "handoff.close", summary: "Encerrou atendimento", detail: { handoffId: id } });
-    return this.detail(m.businessId, id);
+    return this.detail(m.businessId, id, m);
   }
 
   // -------------------------------------------------------------------------------------------
@@ -138,6 +154,7 @@ export class HandoffsService {
   /** Default message + links for the preview dialog. Logs that the number was revealed (no health data in the log). */
   async whatsappDraft(m: MemberContext, id: string) {
     const h = await this.load(m.businessId, id);
+    this.assertCanHandle(m, h);
     if (h.status === "closed") throw conflict("INVALID_STATE", "Este atendimento já foi encerrado.");
     const phone = await this.customerPhone(m.businessId, h.leadId);
     if (!phone) {
@@ -179,6 +196,7 @@ export class HandoffsService {
     const channel = channelRaw === "chat" ? "chat" : "whatsapp";
     await this.reopenAnswered(m.businessId);
     const h = await this.load(m.businessId, id);
+    this.assertCanHandle(m, h);
     if (h.status === "closed") throw conflict("INVALID_STATE", "Este atendimento já foi encerrado.");
     const brief = (h.brief && typeof h.brief === "object" ? h.brief : {}) as Record<string, unknown>;
     const inProgress = { at: new Date().toISOString(), byMemberId: m.memberId, byName: m.name, byRole: m.roleName, channel };
@@ -190,15 +208,16 @@ export class HandoffsService {
       summary: channel === "whatsapp" ? "Iniciou atendimento pelo WhatsApp" : "Iniciou atendimento pelo chat",
       detail: { handoffId: id, channel },
     });
-    return this.detail(m.businessId, id);
+    return this.detail(m.businessId, id, m);
   }
 
   /** The conversation moved to WhatsApp: close the loop (status answered) and leave one system line in the web chat. */
   async markAnswered(m: MemberContext, id: string) {
     await this.reopenAnswered(m.businessId);
     const h = await this.load(m.businessId, id);
+    this.assertCanHandle(m, h);
     if (h.status === "closed") throw conflict("INVALID_STATE", "Este atendimento já foi encerrado.");
-    if (h.status === "answered") return this.detail(m.businessId, id);
+    if (h.status === "answered") return this.detail(m.businessId, id, m);
     const now = new Date();
     await this.human.recordSystemNote({
       businessId: m.businessId,
@@ -221,6 +240,6 @@ export class HandoffsService {
       },
     });
     await this.accessLog.record({ businessId: m.businessId, actor: m, action: "handoff.whatsapp_answer", summary: "Marcou atendimento como respondido (WhatsApp)", detail: { handoffId: id } });
-    return this.detail(m.businessId, id);
+    return this.detail(m.businessId, id, m);
   }
 }

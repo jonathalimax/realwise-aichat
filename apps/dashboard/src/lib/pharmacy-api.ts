@@ -260,6 +260,10 @@ export interface HandoffList {
   /** "Em atendimento": someone started the hand-over (still status open). */
   inProgress?: { at: string; byMemberId: string | null; byName: string; byRole: string; channel: "whatsapp" | "chat" } | null;
   hasPhone?: boolean;
+  /** Clinical handoff: only a member with a CRF can handle it. Availability checks (out of stock, product request) can be handled by any member with Atendimento edit. */
+  requiresPharmacist?: boolean;
+  /** Whether the current member may reply/start/close this handoff. */
+  canHandle?: boolean;
 }
 export interface WhatsappDraft {
   customerFirstName: string | null;
@@ -271,7 +275,7 @@ export interface WhatsappDraft {
   appUrl: string;
 }
 export interface HandoffDetail extends HandoffList {
-  contact?: { firstName: string | null; phoneMasked: string | null; hasPhone: boolean };
+  contact?: { firstName: string | null; phone: string | null; phoneMasked: string | null; hasPhone: boolean };
   brief: Record<string, unknown>;
   briefRows: { label: string; value: string }[];
   suggestion: { label: string; text: string; products: { productId: string; name: string; reason: string; inStock: boolean; priceCents: number }[] } | null;

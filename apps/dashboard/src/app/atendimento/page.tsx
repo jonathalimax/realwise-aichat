@@ -122,7 +122,7 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
     setChatMode(false);
   }, [id]);
   const h = state.data?.id === id ? state.data : null;
-  const canReply = can("atendimento", "edit") && Boolean(me?.canPerformPharmacistActions);
+  const canReply = can("atendimento", "edit") && (h?.canHandle ?? Boolean(me?.canPerformPharmacistActions));
   const hasPhone = Boolean(h?.contact?.hasPhone);
   const onWhatsapp = h?.inProgress?.channel === "whatsapp";
 
@@ -215,7 +215,7 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
                   </Button>
                 )}
                 <span className="text-xs text-muted">
-                  Contato: {h.contact?.firstName ?? "cliente"} · {h.contact?.phoneMasked}
+                  Contato: {h.contact?.firstName ?? "cliente"} · {h.contact?.phone ?? h.contact?.phoneMasked}
                 </span>
               </div>
             )}
@@ -256,7 +256,16 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
           </>
         )}
         {h.status === "open" && !canReply && (
-          <Alert variant="soft">Somente um farmacêutico com CRF cadastrado pode responder ou encerrar este atendimento. Você pode acompanhar o resumo.</Alert>
+          <Alert variant="soft">
+            {h.requiresPharmacist
+              ? "Este atendimento é clínico: somente um farmacêutico com CRF cadastrado pode responder ou encerrar. Você pode acompanhar o resumo e o contato."
+              : "Você não tem permissão para responder atendimentos."}
+            {hasPhone && (
+              <span className="mt-1 block text-xs">
+                Contato: {h.contact?.firstName ?? "cliente"} · {h.contact?.phone ?? h.contact?.phoneMasked}
+              </span>
+            )}
+          </Alert>
         )}
         {h.status !== "open" && h.answer && (
           <Alert variant="soft">

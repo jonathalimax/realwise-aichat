@@ -44,3 +44,10 @@ Posso te ajudar com isso?
 ## Tests
 
 `apps/api/test/whatsapp-message.test.ts` (builder, links, masking), `pharmacy-handoffs.test.ts` (draft, start, mark answered, access log, no phone in GET), `pharmacy-access.test.ts` (guard matrix covers the three routes: attendant/courier get 403, owner/manager without CRF denied), `pharmacy-scenarios.test.ts` (contact step: new customer, returning customer, invalid number, decline, contact-card action, cancel).
+
+## Who can handle which handoff (updated 2026-10-14)
+
+- **Clinical handoffs** (reasons `symptom`, `rx`, `controlled`, `other`, or any urgent one) need a member whose role requires a CRF and who has a CRF on file. Others get 403 `CRF_REQUIRED`.
+- **Plain availability checks** (`out_of_stock`, `product_request`) can be handled by anyone with Atendimento edit: Owner, Manager and Attendant now have it by default. Pharmacist keeps it too.
+- The API sets `canHandle` (per member) and `requiresPharmacist` on every handoff; the dashboard enables or disables the actions from them. The check lives in `HandoffsService.assertCanHandle`.
+- Staff with Atendimento access now see the customer's phone **unmasked** in the handoff detail (the list still hides it). Generating the WhatsApp link is still written to the access log.

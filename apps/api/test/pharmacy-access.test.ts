@@ -50,11 +50,11 @@ const ROUTES: Row[] = [
   [PrescriptionsController, "reject", "receitas", "edit", true],
   [HandoffsController, "list", "atendimento", "view", false],
   [HandoffsController, "get", "atendimento", "view", false],
-  [HandoffsController, "reply", "atendimento", "edit", true],
-  [HandoffsController, "close", "atendimento", "edit", true],
-  [HandoffsController, "whatsappDraft", "atendimento", "edit", true],
-  [HandoffsController, "start", "atendimento", "edit", true],
-  [HandoffsController, "markAnswered", "atendimento", "edit", true],
+  [HandoffsController, "reply", "atendimento", "edit", false],
+  [HandoffsController, "close", "atendimento", "edit", false],
+  [HandoffsController, "whatsappDraft", "atendimento", "edit", false],
+  [HandoffsController, "start", "atendimento", "edit", false],
+  [HandoffsController, "markAnswered", "atendimento", "edit", false],
   [ProductsController, "list", "catalogo", "view", false],
   [ProductsController, "get", "catalogo", "view", false],
   [ProductsController, "create", "catalogo", "edit", false],
@@ -168,7 +168,9 @@ test("a role lacking the section is denied with PERMISSION_DENIED; a pharmacist 
   // an Owner / Manager cannot approve prescriptions or confirm classes: those are pharmacist actions
   assert.notEqual(runGuard(PrescriptionsController, "approve", memberOf("owner")), "allow");
   assert.notEqual(runGuard(ClassReviewController, "confirm", memberOf("manager")), "allow");
-  assert.notEqual(runGuard(HandoffsController, "reply", memberOf("owner")), "allow");
+  assert.notEqual(runGuard(HandoffsController, "reply", memberOf("courier")), "allow");
+  // the guard lets Owner / Manager / Attendant through; clinical handoffs are gated by CRF inside the service (see pharmacy-handoffs.test.ts)
+  assert.equal(runGuard(HandoffsController, "reply", memberOf("attendant")), "allow");
   // a custom role flagged requiresCrf whose member has no CRF yet is also denied
   const custom = { ...memberOf("attendant"), requiresCrf: true, crf: null, permissions: { ...buildStarterPermissions("farmacia", "pharmacist") } };
   assert.deepEqual(runGuard(PrescriptionsController, "approve", custom), { code: "CRF_REQUIRED" });

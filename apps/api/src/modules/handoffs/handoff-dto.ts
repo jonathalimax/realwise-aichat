@@ -101,7 +101,16 @@ export function readInProgress(brief: unknown): InProgressMarker | null {
   };
 }
 
-/** Display-only contact: first name + masked phone. The full number is only returned by the WhatsApp draft endpoint. */
+/**
+ * Which handoffs need a pharmacist (CRF on file): anything clinical (symptoms, prescriptions, controlled medicines,
+ * urgent). A plain availability check (out of stock, product request) can be handled by any member with Atendimento edit.
+ */
+export function handoffRequiresPharmacist(reason: string, urgent: boolean): boolean {
+  if (urgent) return true;
+  return reason !== "out_of_stock" && reason !== "product_request";
+}
+
+/** Contact shown to staff with Atendimento access: first name + the customer's phone, unmasked (staff need it to call back). */
 export function contactDto(h: Pick<HandoffRow, "lead" | "brief">) {
   const stored = ((h.brief ?? {}) as Brief).contact;
   const storedContact = stored && typeof stored === "object" ? (stored as { firstName?: unknown; phoneMasked?: unknown }) : null;
@@ -109,7 +118,7 @@ export function contactDto(h: Pick<HandoffRow, "lead" | "brief">) {
   const hasPhone = whatsappDigits(phone) !== null;
   const firstName = h.lead?.name?.trim().split(/\s+/)[0] || (typeof storedContact?.firstName === "string" ? storedContact.firstName : null);
   const phoneMasked = hasPhone ? maskPhoneBr(phone) : typeof storedContact?.phoneMasked === "string" ? storedContact.phoneMasked : null;
-  return { firstName: firstName || null, phoneMasked, hasPhone };
+  return { firstName: firstName || null, phone: hasPhone ? (phone as string) : null, phoneMasked, hasPhone };
 }
 
 export function handoffListDto(h: HandoffRow, now = Date.now()) {
@@ -131,6 +140,7 @@ export function handoffListDto(h: HandoffRow, now = Date.now()) {
     conversationId: h.conversationId,
     inProgress,
     hasPhone: contactDto(h).hasPhone,
+    requiresPharmacist: handoffRequiresPharmacist(h.reason, h.urgent),
   };
 }
 

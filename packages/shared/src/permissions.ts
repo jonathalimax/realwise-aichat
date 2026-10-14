@@ -76,7 +76,9 @@ export const NICHE_SECTIONS: Record<NicheKey, readonly PermissionSection[]> = {
 };
 
 /** Sections where "edit" is only meaningful for a role flagged requiresCrf (pharmacist actions). */
-export const CRF_SECTIONS: readonly PermissionSection[] = ["receitas", "atendimento", "classes"];
+// "atendimento" is deliberately NOT here: any member with Atendimento edit can handle plain availability checks
+// (out of stock, product request); clinical handoffs (symptoms, Rx, controlled, urgent) are gated by CRF per handoff.
+export const CRF_SECTIONS: readonly PermissionSection[] = ["receitas", "classes"];
 /** Sections that can never be "edit" for a niche (read-only mirrors). Pharmacy conversations are read-only: staff answer through handoffs / orders. */
 export function readOnlySectionsFor(niche: NicheKey): readonly PermissionSection[] {
   switch (niche) {
@@ -99,12 +101,12 @@ const L = { E: "edit", V: "view", N: "none" } as const;
 type Grid = Partial<Record<PermissionSection, keyof typeof L>>;
 
 // Pharmacy grid (prototype Main.dc.html section 4; column order Owner Pharmacist Manager Attendant Courier).
-// "receitas" mirrors "atendimento": validating needs a CRF role. Courier edits only own deliveries (ownDeliveriesOnly).
+// "receitas": validating needs a CRF role; "atendimento": edit for staff, clinical handoffs additionally need a CRF. Courier edits only own deliveries (ownDeliveriesOnly).
 const PHARMACY_GRID: Record<StarterRoleKey, Grid> = {
-  owner:      { inicio: "V", pedidos: "E", receitas: "V", atendimento: "V", catalogo: "E", importar: "E", classes: "V", clientes: "E", conversas: "V", analises: "V", farmacia: "E", equipe: "E", plano: "E" },
+  owner:      { inicio: "V", pedidos: "E", receitas: "V", atendimento: "E", catalogo: "E", importar: "E", classes: "V", clientes: "E", conversas: "V", analises: "V", farmacia: "E", equipe: "E", plano: "E" },
   pharmacist: { inicio: "V", pedidos: "E", receitas: "E", atendimento: "E", catalogo: "E", importar: "E", classes: "E", clientes: "V", conversas: "V", analises: "V", farmacia: "V", equipe: "N", plano: "N" },
-  manager:    { inicio: "V", pedidos: "E", receitas: "V", atendimento: "V", catalogo: "E", importar: "E", classes: "N", clientes: "E", conversas: "V", analises: "V", farmacia: "E", equipe: "E", plano: "E" },
-  attendant:  { inicio: "V", pedidos: "E", receitas: "V", atendimento: "N", catalogo: "V", importar: "N", classes: "N", clientes: "V", conversas: "V", analises: "N", farmacia: "N", equipe: "N", plano: "N" },
+  manager:    { inicio: "V", pedidos: "E", receitas: "V", atendimento: "E", catalogo: "E", importar: "E", classes: "N", clientes: "E", conversas: "V", analises: "V", farmacia: "E", equipe: "E", plano: "E" },
+  attendant:  { inicio: "V", pedidos: "E", receitas: "V", atendimento: "E", catalogo: "V", importar: "N", classes: "N", clientes: "V", conversas: "V", analises: "N", farmacia: "N", equipe: "N", plano: "N" },
   courier:    { inicio: "N", pedidos: "E", receitas: "N", atendimento: "N", catalogo: "N", importar: "N", classes: "N", clientes: "N", conversas: "N", analises: "N", farmacia: "N", equipe: "N", plano: "N" },
 };
 

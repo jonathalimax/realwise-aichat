@@ -108,13 +108,42 @@ test("whatsapp draft: full number + deterministic message for the permitted memb
   assert.ok(!logged.includes("991112233") && !logged.includes("Dor de cabeça") && !logged.includes("dipirona"), "the log carries no phone nor health data");
 });
 
-test("the detail GET never carries the full phone, only first name + masked number", async () => {
+test("the detail GET shows staff the full phone (not masked); the list never carries it", async () => {
   const { service } = setup();
-  const dto: any = await service.get("b1", "h1");
-  assert.deepEqual(dto.contact, { firstName: "Maria", phoneMasked: "(41) •••••-2233", hasPhone: true });
-  assert.ok(!JSON.stringify(dto).includes("991112233"));
-  const list: any = await service.list("b1", {}).catch(() => null);
+  const dto: any = await service.get("b1", "h1", pharmacist);
+  assert.equal(dto.contact.firstName, "Maria");
+  assert.equal(dto.contact.phone, "+5541991112233");
+  assert.equal(dto.contact.hasPhone, true);
+  const list: any = await service.list("b1", {}, pharmacist).catch(() => null);
   if (list) assert.ok(!JSON.stringify(list).includes("991112233"));
+});
+
+const attendant: MemberContext = {
+  ...pharmacist, memberId: "m-at", name: "Bruno Dias", crf: null, roleKey: "attendant", roleName: "Atendente", requiresCrf: false,
+  permissions: buildStarterPermissions("farmacia", "attendant"),
+};
+
+test("clinical handoffs need a CRF; plain availability checks (out of stock, product request) can be handled by any member", async () => {
+  const clinical = setup();
+  assert.equal(((await clinical.service.get("b1", "h1", attendant)) as any).canHandle, false);
+  assert.equal(((await clinical.service.get("b1", "h1", pharmacist)) as any).canHandle, true);
+  await assert.rejects(() => clinical.service.start(attendant, "h1", "whatsapp"), (e: any) => e.getResponse().code === "CRF_REQUIRED");
+  await assert.rejects(() => clinical.service.reply(attendant, "h1", "oi"), (e: any) => e.getResponse().code === "CRF_REQUIRED");
+  await assert.rejects(() => clinical.service.whatsappDraft(attendant, "h1"), (e: any) => e.getResponse().code === "CRF_REQUIRED");
+
+  for (const reason of ["out_of_stock", "product_request"]) {
+    const plain = setup();
+    plain.row.reason = reason;
+    assert.equal(((await plain.service.get("b1", "h1", attendant)) as any).canHandle, true, reason);
+    const started: any = await plain.service.start(attendant, "h1", "whatsapp");
+    assert.equal(started.inProgress.byName, "Bruno Dias");
+    const draft: any = await plain.service.whatsappDraft(attendant, "h1");
+    assert.ok(draft.message.includes("Bruno Dias"));
+  }
+  const urgent = setup();
+  urgent.row.reason = "out_of_stock";
+  urgent.row.urgent = true;
+  await assert.rejects(() => urgent.service.start(attendant, "h1", "chat"), (e: any) => e.getResponse().code === "CRF_REQUIRED");
 });
 
 test("whatsapp draft: no phone => NO_PHONE 409; closed => 409; other business => 404", async () => {
