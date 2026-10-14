@@ -138,6 +138,8 @@ export interface PharmacyState {
   pendingRx: CartLine[];
   checkoutStep: CheckoutStep | null;
   awaiting: Awaiting | null;
+  /** Quantity the visitor asked for before having to pick between several matching products ("quero 2 dipirona"). */
+  pendingQty?: number;
   contact: {
     phone?: string;
     name?: string;

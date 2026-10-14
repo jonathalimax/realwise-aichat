@@ -7,6 +7,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 import { PharmacySettingsService } from "../pharmacy-settings/pharmacy-settings.service";
 import { classifyOperationModeAnswer } from "../pharmacy-settings/proposals";
+import { loadOperationMode } from "../pharmacy-common/operation-mode";
 
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
 
@@ -14,6 +15,13 @@ const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
 const OPERATION_MODE_FIELD = "modo_operacao";
 const OPERATION_MODE_CLARIFY =
   'Não ficou claro o "Modo de operação". Você quer usar estoque e vender pelo sistema (responda "comércio") ou só o atendimento com IA, que escala tudo sobre produtos ao farmacêutico (responda "atendimento")?';
+/** The question lists ONLY the modes this pharmacy's plan allows; with a single mode available it is stated, not asked. */
+function operationModeQuestion(commerceAllowed: boolean): string {
+  return commerceAllowed
+    ? 'Qual "Modo de operação" você quer usar? 1) Comércio: estoque, catálogo, pedidos e receitas pelo sistema, com o Alex vendendo no chat. 2) Atendimento: só a IA com encaminhamento ao farmacêutico, como um WhatsApp com IA, sem estoque nem pedidos. Responda "comércio" ou "atendimento".'
+    : 'No "Modo de operação" do seu plano atual está disponível o modo Atendimento: a IA atende e encaminha tudo sobre produtos ao farmacêutico, como um WhatsApp com IA, sem estoque nem pedidos. Para vender com estoque é preciso o plano Profissional ou superior.';
+}
+
 const OPERATION_MODE_ACK = {
   commerce: "Entendi: modo comércio (estoque, catálogo e pedidos pelo sistema; depende do plano Profissional ou superior).",
   attendance: "Entendi: modo atendimento (só a IA com encaminhamento ao farmacêutico, sem estoque nem pedidos).",
@@ -185,6 +193,29 @@ export class OnboardingService {
         confidenceScore,
         readyToPublish: false,
       };
+    }
+
+    // Pharmacy: the operation mode is asked by script (never by the model) and only offers what the plan allows.
+    if (business.niche === "farmacia" && gaps[0]?.key === OPERATION_MODE_FIELD) {
+      const info = await loadOperationMode(this.prisma.client, businessId);
+      const lastIdx = history.length - 1;
+      const answered = lastIdx >= 1 && history[lastIdx].role === "owner" && history[lastIdx - 1].content.includes('"Modo de operação"');
+      const finish = async (mode: "commerce" | "attendance", ack: string) => {
+        const saved = await this.patchProfileField(businessId, OPERATION_MODE_FIELD, mode === "commerce" ? "comércio" : "atendimento", "interview");
+        const { gaps: next } = await this.findGaps(businessId);
+        const tail = next.length ? ` Pode me contar sobre "${next[0].label}"?` : " Isso foi tudo que eu precisava saber.";
+        return { reply: `${saved.ok ? ack : ""}${tail}`.trim(), allDone: next.length === 0, remainingGaps: next.length, confidenceScore };
+      };
+      if (!info.commerceAllowedByPlan) {
+        // Only one mode exists for this plan: state it, save it and move on (nothing to ask).
+        return finish("attendance", operationModeQuestion(false));
+      }
+      if (answered) {
+        const mode = classifyOperationModeAnswer(history[lastIdx].content);
+        if (mode === null) return { reply: OPERATION_MODE_CLARIFY, allDone: false, remainingGaps: gaps.length, confidenceScore };
+        return finish(mode, OPERATION_MODE_ACK[mode]);
+      }
+      return { reply: operationModeQuestion(true), allDone: false, remainingGaps: gaps.length, confidenceScore };
     }
 
     const documents = await this.prisma.client.knowledgeDocument.findMany({

@@ -1292,6 +1292,7 @@ export class PharmacyChatService {
     if (t.state.awaiting?.kind === "product_name") t.state.awaiting = null;
 
     if (resolution.status === "ambiguous") {
+      if (resolution.qty !== null) t.state.pendingQty = resolution.qty;
       t.say(COPY.ambiguous);
       t.chips(...resolution.matches.map((m) => productLabel(m.product).slice(0, 60)).slice(0, 4));
       return;
@@ -1302,7 +1303,11 @@ export class PharmacyChatService {
       productId: product.id,
       inStock: inStock(product) && (gate.kind === "otc" || gate.kind === "prescription"),
     });
-    await this.presentProduct(t, product, resolution.qty ?? 1, explicit);
+    // "quero 2 dipirona" -> pick one of several: the quantity (and the intent to buy) carries over to the pick.
+    const carried = t.state.pendingQty;
+    const qty = resolution.qty ?? carried ?? 1;
+    delete t.state.pendingQty;
+    await this.presentProduct(t, product, qty, explicit || carried !== undefined);
   }
 
   private async presentProduct(t: Turn, product: ProductRow, qty: number, explicit: boolean) {
@@ -1338,7 +1343,7 @@ export class PharmacyChatService {
       return;
     }
     t.state.focus = { productId: product.id, kind: "otc" };
-    t.say("Encontrei:", productCardUi(product, t.settings, 1));
+    t.say("Encontrei:", productCardUi(product, t.settings, qty));
     t.chips(CHIPS.addToCart, CHIPS.talkPharmacist);
   }
 
@@ -2082,17 +2087,8 @@ export class PharmacyChatService {
     if (t.state.cart.some((l) => l.viaEquivalentOf)) notices.push("O farmacêutico confirma a troca do produto sem estoque antes de separar o pedido.");
     if (isOpenNow(t.settings.openingHours, t.business.timezone ?? "America/Sao_Paulo") === false) notices.push(COPY.closedNotice);
     const paymentLabel = paymentPhrase(t.settings.paymentMethods, fulfillment);
-    const where = fulfillment === "delivery" ? `Entrega em: ${this.addressLabel(t)}` : "Retirada na loja";
-    const lines = cart.items.map((i) => `${i.qty}× ${i.name} — ${brl(i.lineTotalCents)}`);
-    const text = [
-      "Seu pedido:",
-      ...lines,
-      ...(fulfillment === "delivery" ? [`Entrega: ${brl(fee)}`] : []),
-      `Total: ${brl(total)}`,
-      where,
-      paymentLabel,
-      ...notices,
-    ].join("\n");
+    // The review card carries the items, fee, total, address and payment: the text stays short (no duplicate summary).
+    const text = ["Confira seu pedido e confirme:", ...notices].join("\n");
     t.state.checkoutStep = "review";
     t.state.awaiting = { kind: "order_confirm" };
     t.say(text, {

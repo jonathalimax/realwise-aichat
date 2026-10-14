@@ -632,6 +632,14 @@ function mergeServerMessages(prev: Message[], serverMessages: any[]): Message[] 
   return [...prev, ...newOnes];
 }
 
+/** Scroll only the message list. scrollIntoView also scrolls every ancestor, which pushed the whole page (and the input) off screen. */
+function scrollChatToBottom(anchor: HTMLElement | null) {
+  if (!anchor) return;
+  const list = anchor.closest("main");
+  if (list) list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
+  else anchor.scrollIntoView({ behavior: "smooth" });
+}
+
 export function ChatScreen({
   slug,
   resumeConversationId,
@@ -830,7 +838,7 @@ export function ChatScreen({
   // indicator can end up rendered off-screen under the keyboard.
   useEffect(() => {
     requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      scrollChatToBottom(bottomRef.current);
     });
   }, [messages, showBooking, sending]);
 
@@ -850,7 +858,7 @@ export function ChatScreen({
     if (typeof window === "undefined" || !window.visualViewport) return;
     const onResize = () => {
       requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        scrollChatToBottom(bottomRef.current);
       });
     };
     window.visualViewport.addEventListener("resize", onResize);

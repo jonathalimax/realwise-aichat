@@ -254,7 +254,7 @@ test("OTC order end to end (delivery): cart -> contact -> address via CEP -> rev
   assert.equal(ui.addressLabel, "Rua das Flores, 12B, ap 31 · Água Verde");
   assert.match(ui.paymentLabel, /Pagamento na entrega/);
   assert.equal(ui.staleStockNotice, null);
-  assert.match(review.text, /Total: R\$ 23,80/);
+  assert.ok(!/Total:/.test(review.text), "the review text no longer repeats the summary the card already shows");
 
   const done = await p.say(c, "Confirmar pedido");
   assert.equal(done.uis[0].type, "order_confirmation");
@@ -1475,4 +1475,15 @@ test("symptom lane contact step through the contact card action (widget) and 'ca
   assert.equal(q.handoffs().length, 1, "cancelling the contact step does not lose what was collected");
   assert.equal(q.db.models.lead.rows.length, 0);
   noModelCalls();
+});
+
+test("the quantity asked before choosing between several matches is kept (quero 2 dipirona -> pick one)", T, async () => {
+  net = hostileModel();
+  const p = await createPharmacy();
+  await p.addProduct({ id: "p_dipirona_gotas", name: "Dipirona Gotas 500 mg/ml", presentation: "frasco 20 ml", manufacturer: "EMS", activeIngredient: "dipirona", priceCents: 780, stockQty: 10, saleClass: "otc", maxQtyPerOrder: 5 });
+  const c = await p.conversation();
+  const first = await p.say(c, "quero 2 dipirona");
+  assert.match(first.text, /mais de uma opção/i);
+  const picked = await p.say(c, "Dipirona 500 mg · 10 comprimidos");
+  assert.match(picked.text, /Adicionei ao carrinho: 2×/);
 });
