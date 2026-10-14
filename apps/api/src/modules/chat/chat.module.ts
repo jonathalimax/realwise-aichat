@@ -13,13 +13,16 @@ import { KnowledgeModule } from "../knowledge/knowledge.module";
 import { ListingsModule } from "../listings/listings.module";
 import { AnalyticsModule } from "../analytics/analytics.module";
 import { CustomersModule } from "../customers/customers.module";
+import { OrdersModule } from "../orders/orders.module";
+import { OrdersService } from "../orders/orders.service";
+import { PharmacyNotificationsService } from "../pharmacy-notifications/pharmacy-notifications.service";
 import { ChatHumanService } from "./chat-human.service";
 import { PharmacyChatService } from "./pharmacy/pharmacy-chat.service";
 import { AlertsPharmacyNotifier, PrismaPharmacyHandoffs, PrismaPharmacyOrders } from "./pharmacy/ports";
 import { PHARMACY_HANDOFFS_PORT, PHARMACY_NOTIFIER_PORT, PHARMACY_ORDERS_PORT } from "./pharmacy/types";
 
 @Module({
-  imports: [BookingsModule, CalendarModule, LeadsModule, AlertsModule, UsageModule, KnowledgeModule, ListingsModule, AnalyticsModule, CustomersModule],
+  imports: [BookingsModule, CalendarModule, LeadsModule, AlertsModule, UsageModule, KnowledgeModule, ListingsModule, AnalyticsModule, CustomersModule, OrdersModule],
   controllers: [ChatController],
   providers: [
     ChatService,
@@ -28,14 +31,16 @@ import { PHARMACY_HANDOFFS_PORT, PHARMACY_NOTIFIER_PORT, PHARMACY_ORDERS_PORT } 
     SimulatorService,
     ChatHumanService,
     PharmacyChatService,
-    // Prisma-direct default ports of the pharmacy chat engine. Bind PHARMACY_ORDERS_PORT to 2b's
-    // OrdersService.createFromCart (same shape, API.md 8.3) to swap the implementation.
+    // The engine's ports are bound to the real domain services (wave 3): orders -> OrdersService.createFromCart
+    // (writes its own alerts/e-mails, status events, atomic PED- counter), notifications -> PharmacyNotificationsService
+    // (global module, one alert row per event so an urgent alert is never hidden by an older one).
+    // The Prisma-direct classes stay as the documented fallback implementations (see test/pharmacy-bindings.test.ts).
     PrismaPharmacyOrders,
     PrismaPharmacyHandoffs,
     AlertsPharmacyNotifier,
-    { provide: PHARMACY_ORDERS_PORT, useExisting: PrismaPharmacyOrders },
+    { provide: PHARMACY_ORDERS_PORT, useExisting: OrdersService },
     { provide: PHARMACY_HANDOFFS_PORT, useExisting: PrismaPharmacyHandoffs },
-    { provide: PHARMACY_NOTIFIER_PORT, useExisting: AlertsPharmacyNotifier },
+    { provide: PHARMACY_NOTIFIER_PORT, useExisting: PharmacyNotificationsService },
   ],
   exports: [ChatService, FlowService, FinancingRatesService, SimulatorService, ChatHumanService, PharmacyChatService],
 })

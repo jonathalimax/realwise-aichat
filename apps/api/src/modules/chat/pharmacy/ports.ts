@@ -218,7 +218,9 @@ export class AlertsPharmacyNotifier implements PharmacyNotifierPort {
         });
       } else if (event.type === "new_handoff") {
         await this.alerts.createAlert(event.businessId, {
-          type: "pharmacy_new_handoff",
+          // Urgent ones get their own type: AlertsService de-duplicates by type while an alert is active, so an
+          // older "warning" of the same type would otherwise hide a critical one.
+          type: event.urgent ? "pharmacy_urgent_handoff" : "pharmacy_new_handoff",
           severity: event.urgent ? "critical" : "warning",
           message: event.urgent ? "Atendimento URGENTE aguardando o farmacêutico." : "Novo atendimento aguardando o farmacêutico.",
           actionLabel: "Abrir atendimentos",
