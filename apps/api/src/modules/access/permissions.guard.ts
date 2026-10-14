@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { hasPermission, SECTION_LABELS } from "@realwise/shared";
+import { hasPermission, NICHE_SECTIONS, SECTION_LABELS } from "@realwise/shared";
 import { accessDenied } from "./access-errors";
 import { hasCrfOnFile } from "./team-rules";
 import { REQUIRE_CRF_KEY, REQUIRE_PERMISSION_KEY, type RequiredPermission } from "./permission.decorator";
@@ -26,7 +26,8 @@ export class PermissionsGuard implements CanActivate {
       throw accessDenied("PERMISSION_DENIED", "Sem acesso.");
     }
     if (required && !required.sections.some((s) => hasPermission(member.permissions, s, required.level))) {
-      const first = required.sections[0];
+      // Report the alternative that exists in this member's niche (e.g. "farmacia" rather than "configuracoes").
+      const first = required.sections.find((s) => NICHE_SECTIONS[member.niche].includes(s)) ?? required.sections[0];
       throw accessDenied(
         "PERMISSION_DENIED",
         `Você não tem acesso a "${SECTION_LABELS[first]}" (${required.level === "edit" ? "edição" : "visualização"}).`,
