@@ -2,6 +2,7 @@
 // the model is unavailable), model-answer validation, row normalisation. No Nest / DB / network here.
 
 import { parseBrazilianPrice } from "../listings/parse-brazilian-price";
+import { extractJsonValue } from "../../inference/json-extract";
 import { fold } from "../pharmacy-common/format";
 import { digitsOnlyEan } from "../products/product-utils";
 
@@ -171,16 +172,11 @@ export function buildMappingPrompt(headers: string[], sampleRows: string[][]): {
 
 /** Parses and validates the model's JSON; returns null on anything malformed (caller falls back to the heuristic). */
 export function parseModelMapping(text: string, headers: string[], sampleRows: string[][]): MappedColumn[] | null {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  let json: any;
-  try {
-    json = JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return null;
-  }
-  const cols = json?.columns;
+  // Tolerant: fences / <think> / prose around the JSON, and a bare array instead of {"columns": [...]}
+  // (the 7B extraction model does exactly that).
+  const json: any = extractJsonValue(text);
+  if (!json) return null;
+  const cols = Array.isArray(json) ? json : json.columns;
   if (!Array.isArray(cols)) return null;
   const byIndex = new Map<number, { field: ImportField; score: number }>();
   for (const c of cols) {

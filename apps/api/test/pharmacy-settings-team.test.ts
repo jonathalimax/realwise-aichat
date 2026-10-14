@@ -455,3 +455,40 @@ test("insights are deterministic rules over aggregated data and respect permissi
   assert.deepEqual(peakHourOf([18, 18, 18, 9, 10, 11]), { hour: 18, share: 0.5 });
   assert.equal(peakHourOf([1, 2]), null);
 });
+
+test("team regression: partial grid merges, junk input is a 400 (not a 500 or a wiped grid), own-deliveries needs pedidos", async () => {
+  const { service } = fakeTeam();
+  const owner = member("owner", { memberId: "m-owner", roleId: "r-owner" });
+  const role = await service.createRole(owner, { name: "Entregas", permissions: { inicio: "view", pedidos: "edit", catalogo: "view" }, ownDeliveriesOnly: true });
+  const merged = await service.updateRole(owner, role.id, { permissions: { catalogo: "none" } });
+  assert.equal(merged.permissions.inicio, "view", "sections left out of a partial grid keep their level");
+  assert.equal(merged.permissions.pedidos, "edit");
+  assert.equal(merged.permissions.catalogo, "none");
+  for (const permissions of ["x", 7, ["a"]]) {
+    await assert.rejects(() => service.updateRole(owner, role.id, { permissions }), (e: any) => e.getResponse().code === "INVALID_ROLE");
+    await assert.rejects(() => service.createRole(owner, { name: "Lixo", permissions }), (e: any) => e.getResponse().code === "INVALID_ROLE");
+  }
+  await assert.rejects(() => service.updateRole(owner, role.id, { name: 123 as any }), (e: any) => e.getResponse().code === "INVALID_NAME");
+  await assert.rejects(() => service.createRole(owner, { name: 5 as any, permissions: {} }), (e: any) => e.getResponse().code === "INVALID_NAME");
+  await assert.rejects(() => service.updateRole(owner, role.id, { permissions: { pedidos: "none" } }), (e: any) => e.getResponse().code === "INVALID_ROLE");
+});
+
+test("team regression: an invitee disabled before ever accepting can still be removed", async () => {
+  const { service, members } = fakeTeam();
+  const owner = member("owner", { memberId: "m-owner", roleId: "r-owner" });
+  const invited = await service.invite(owner, { email: "never@x.com" });
+  await service.setDisabled(owner, invited.member.id, true);
+  assert.deepEqual(await service.removeInvited(owner, invited.member.id), { ok: true });
+  assert.equal(members.some((m) => m.email === "never@x.com"), false);
+});
+
+test("team regression: access log tolerates junk limits and a date-only 'to' covers the whole day", async () => {
+  const { service } = fakeTeam();
+  const seen: any[] = [];
+  (service as any).accessLog.list = async (_b: string, opts: any) => (seen.push(opts), { items: [], nextCursor: null });
+  await service.listAccessLog(member("manager"), { limit: "abc", to: "2026-10-14" });
+  assert.equal(seen[0].limit, undefined);
+  assert.equal(seen[0].to.toISOString(), "2026-10-14T23:59:59.999Z");
+  await service.listAccessLog(member("manager"), { limit: "25.7" });
+  assert.equal(seen[1].limit, 25);
+});

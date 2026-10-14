@@ -13,6 +13,26 @@ export type PharmacyAlertType = "pharmacy_new_order" | "pharmacy_order_waiting" 
  * the business address and to every active member whose role can see the section, and sidebar counts.
  * Staff web-push is not in v1. No health text ever goes into an alert or an email subject.
  */
+const REASON_TEXT: Record<string, string> = {
+  symptom: "dúvida clínica",
+  rx: "receita",
+  controlled: "medicamento controlado",
+  out_of_stock: "produto em falta",
+  product_request: "pedido de produto",
+};
+
+export function firstNameOf(name: string | null | undefined): string | null {
+  const first = (name ?? "").trim().split(/\s+/)[0] ?? "";
+  return /^[\p{L}'-]{2,30}$/u.test(first) ? first : null;
+}
+
+/** Generic on purpose: first name + non-clinical reason category, never health text. */
+export function handoffAlertMessage(urgent: boolean, firstName: string | null, reason?: string): string {
+  const who = firstName ? ` de ${firstName}` : "";
+  const why = reason && REASON_TEXT[reason] ? ` (${REASON_TEXT[reason]})` : "";
+  return urgent ? `Atendimento farmacêutico URGENTE${who}${why} aguardando resposta` : `Novo atendimento farmacêutico${who}${why} aguardando resposta`;
+}
+
 @Global()
 @Injectable()
 export class PharmacyNotificationsService {
@@ -68,7 +88,7 @@ export class PharmacyNotificationsService {
    * themselves (handlesNotifications = true), so only handoffs need work here.
    */
   async notify(event: { type: "new_order"; businessId: string; orderCode: string; status: string } | { type: "new_handoff"; businessId: string; handoffId: string; urgent: boolean; reason: string }): Promise<void> {
-    if (event.type === "new_handoff") await this.newHandoff({ businessId: event.businessId, urgent: event.urgent });
+    if (event.type === "new_handoff") await this.newHandoff({ businessId: event.businessId, urgent: event.urgent, handoffId: event.handoffId, reason: event.reason });
   }
 
   async newOrder(order: { businessId: string; code: string; totalCents: number; fulfillment: string; autoConfirmed: boolean }) {
@@ -99,11 +119,35 @@ export class PharmacyNotificationsService {
     });
   }
 
-  /** `urgent` raises a critical alert. NEVER pass symptom text: the message is generic on purpose. */
-  async newHandoff(handoff: { businessId: string; urgent: boolean }) {
-    const message = handoff.urgent ? "Atendimento farmacêutico URGENTE aguardando resposta" : "Novo atendimento farmacêutico aguardando resposta";
-    await this.createAlert(handoff.businessId, "pharmacy_new_handoff", handoff.urgent ? "critical" : "warning", message, "Abrir atendimento", "/atendimento");
+  /**
+   * `urgent` raises a critical alert. NEVER pass symptom text: the message names only the customer's first
+   * name and a non-clinical reason category. One alert per handoff (the href carries the handoff id), so a
+   * retried/duplicated notification never stacks near-identical banners.
+   */
+  async newHandoff(handoff: { businessId: string; urgent: boolean; handoffId?: string; reason?: string }) {
+    const href = handoff.handoffId ? `/atendimento?handoff=${handoff.handoffId}` : "/atendimento";
+    if (handoff.handoffId) {
+      const existing = await this.prisma.client.businessAlert.findFirst({
+        where: { businessId: handoff.businessId, type: "pharmacy_new_handoff", actionHref: href, dismissedAt: null },
+        select: { id: true },
+      });
+      if (existing) return;
+    }
+    const firstName = handoff.handoffId ? await this.handoffFirstName(handoff.businessId, handoff.handoffId) : null;
+    const message = handoffAlertMessage(handoff.urgent, firstName, handoff.reason);
+    await this.createAlert(handoff.businessId, "pharmacy_new_handoff", handoff.urgent ? "critical" : "warning", message, "Abrir atendimento", href);
     await this.emailAll(handoff.businessId, "atendimento", handoff.urgent ? "Atendimento urgente" : "Novo atendimento farmacêutico", `<p>${escapeHtml(message)}.</p>`, "/atendimento", "Abrir atendimento");
+  }
+
+  private async handoffFirstName(businessId: string, handoffId: string): Promise<string | null> {
+    try {
+      const h = await this.prisma.client.pharmacistHandoff.findFirst({ where: { id: handoffId, businessId }, select: { leadId: true } });
+      if (!h?.leadId) return null;
+      const lead = await this.prisma.client.lead.findFirst({ where: { id: h.leadId, businessId }, select: { name: true } });
+      return firstNameOf(lead?.name);
+    } catch {
+      return null;
+    }
   }
 
   async rxUploaded(rx: { businessId: string; code: string }) {

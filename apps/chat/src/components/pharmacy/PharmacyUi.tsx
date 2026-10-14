@@ -320,7 +320,7 @@ function RedFlagCard({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContex
           <p className="text-sm font-medium text-zinc-700">✓ O farmacêutico foi avisado.</p>
         ) : (
           <div>
-            <button type="button" className="ph-btn ph-btn-outline border-red-300 text-red-800" disabled={pending || ctx.busy} onClick={() => run({ type: "handoff.request", reason: "symptom" }, "Avisar o farmacêutico")}>
+            <button type="button" className="ph-btn ph-btn-outline border-red-300 text-red-800" disabled={!ctx.interactive || pending || ctx.busy} onClick={() => run({ type: "handoff.request", reason: "symptom" }, "Avisar o farmacêutico")}>
               {pending ? "Avisando…" : "Avisar o farmacêutico"}
             </button>
           </div>
@@ -359,7 +359,7 @@ function ControlledInfoCard({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyU
         {done ? (
           <p className="text-sm font-medium text-zinc-700">✓ Pedido de contato enviado ao farmacêutico.</p>
         ) : (
-          <button type="button" className="ph-chip" disabled={pending || ctx.busy} onClick={() => run({ type: "handoff.request", reason: "other" }, "Falar com o farmacêutico")}>
+          <button type="button" className="ph-chip" disabled={!ctx.interactive || pending || ctx.busy} onClick={() => run({ type: "handoff.request", reason: "other" }, "Falar com o farmacêutico")}>
             Falar com o farmacêutico
           </button>
         )}
@@ -712,7 +712,7 @@ function AddressCapture({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiCon
           </label>
           <input id={ids.num} className="ph-input" value={noNumber ? "" : number} placeholder={noNumber ? "sem número" : "12 ou 12B"} disabled={locked || noNumber} onChange={(e) => setNumber(e.target.value)} maxLength={10} aria-describedby={`${ids.num}-hint`} />
         </div>
-        <label className="flex min-h-[42px] items-center gap-2 text-sm">
+        <label className="flex min-h-[44px] items-center gap-2 text-sm">
           <input type="checkbox" className="h-5 w-5 accent-[var(--ph-primary)]" checked={noNumber} disabled={locked} onChange={(e) => setNoNumber(e.target.checked)} />
           sem número
         </label>

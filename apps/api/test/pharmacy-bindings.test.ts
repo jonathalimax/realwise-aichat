@@ -41,7 +41,7 @@ function fakePrisma() {
         alerts.push({ ...data, dismissedAt: null });
         return data;
       },
-      findFirst: async ({ where }: { where: Record<string, unknown> }) => alerts.find((a) => a.type === where.type && a.businessId === where.businessId && !a.dismissedAt) ?? null,
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => alerts.find((a) => a.type === where.type && a.businessId === where.businessId && (where.actionHref === undefined || a.actionHref === where.actionHref) && !a.dismissedAt) ?? null,
     },
     business: { findUnique: async () => ({ email: null }) },
     businessMember: { findMany: async () => [] },

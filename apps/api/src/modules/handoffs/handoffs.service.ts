@@ -198,7 +198,11 @@ export class HandoffsService {
     const h = await this.load(m.businessId, id);
     this.assertCanHandle(m, h);
     if (h.status === "closed") throw conflict("INVALID_STATE", "Este atendimento já foi encerrado.");
+    if (h.status === "answered") throw conflict("INVALID_STATE", "Este atendimento já foi respondido.");
     const brief = (h.brief && typeof h.brief === "object" ? h.brief : {}) as Record<string, unknown>;
+    // Same person, same channel: already marked (a double click must not rewrite the marker or the log).
+    const current = brief.inProgress as { byMemberId?: string; channel?: string } | undefined;
+    if (current?.byMemberId === m.memberId && current.channel === channel) return this.detail(m.businessId, id, m);
     const inProgress = { at: new Date().toISOString(), byMemberId: m.memberId, byName: m.name, byRole: m.roleName, channel };
     await this.prisma.client.pharmacistHandoff.update({ where: { id }, data: { brief: { ...brief, inProgress } as object } });
     await this.accessLog.record({

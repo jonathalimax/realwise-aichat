@@ -62,6 +62,10 @@ interface Message {
 }
 
 // Server message -> local message (history load, poll tick, pharmacy action responses).
+function foldLabel(v: string): string {
+  return v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+}
+
 function fromServerMessage(m: any): Message {
   return {
     id: m.id,
@@ -1317,6 +1321,9 @@ export function ChatScreen({
       ...prev,
       { id: nextMessageId(), role: "assistant", content: `Recebi sua receita (${code}). O farmacêutico vai conferir e o pedido segue depois da validação.` },
     ]);
+    // The upload itself moves the prescription line into the cart: no extra tap needed ("Já enviei a
+    // receita" stays as a fallback chip). Fire-and-forget; errors are non-fatal for the visitor.
+    void handlePharmacyAction({ type: "rx.check" }).catch(() => undefined);
   }
 
   async function handleCaptureWhatsapp(phone: string) {
@@ -1369,6 +1376,24 @@ export function ChatScreen({
       if (type && (PHARMACY_UI_KINDS as readonly string[]).includes(type) && type !== "human_joined") return i;
     }
     return -1;
+  }, [messages]);
+
+  // Labels of the buttons already visible in the newest card; a chip with the same label is a duplicate.
+  const visibleCardLabels = useMemo(() => {
+    const last = messages[messages.length - 1];
+    const ui = last?.ui;
+    const labels = new Set<string>();
+    if (!ui || typeof ui.type !== "string") return labels;
+    const add = (v: unknown) => {
+      if (typeof v === "string") labels.add(foldLabel(v));
+    };
+    if (ui.type === "symptom_question" && Array.isArray(ui.chips)) ui.chips.forEach(add);
+    if (ui.type === "controlled_info") add("Falar com o farmacêutico");
+    if (ui.type === "red_flag" && ui.offerPharmacist !== false) add("Avisar o farmacêutico");
+    if (ui.type === "fulfillment_choice" && Array.isArray(ui.options)) ui.options.forEach((o: any) => add(o?.label));
+    if (ui.type === "order_review") add("Confirmar pedido");
+    if (ui.type === "rx_upload") add("Tirar foto"), add("Escolher arquivo");
+    return labels;
   }, [messages]);
 
   if (!business) {
@@ -1608,9 +1633,9 @@ export function ChatScreen({
         </div>
       )}
 
-      {bubbles.length > 0 && !showBooking && (
+      {bubbles.filter((b) => !visibleCardLabels.has(foldLabel(b.label))).length > 0 && !showBooking && (
         <div className="flex flex-none flex-wrap gap-2 px-4 pb-2">
-          {bubbles.slice(0, 5).map((bubble, i) => (
+          {bubbles.filter((b) => !visibleCardLabels.has(foldLabel(b.label))).slice(0, 5).map((bubble, i) => (
             <Button
               key={`${bubble.goto}-${i}`}
               variant="outline"
@@ -1642,9 +1667,9 @@ export function ChatScreen({
         </div>
       )}
 
-      {bubbles.length === 0 && suggestions.length > 0 && !showBooking && !sending && (
+      {bubbles.length === 0 && suggestions.filter((l) => !visibleCardLabels.has(foldLabel(l))).length > 0 && !showBooking && !sending && (
         <div className="flex flex-none flex-wrap gap-2 px-4 pb-2">
-          {suggestions.slice(0, 5).map((label, i) => (
+          {suggestions.filter((l) => !visibleCardLabels.has(foldLabel(l))).slice(0, 5).map((label, i) => (
             <Button
               key={`suggestion-${i}`}
               variant="outline"

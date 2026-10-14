@@ -132,7 +132,7 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    min-height: 40px;
+    min-height: 44px;
     padding: 0 16px;
     border-radius: 9999px;
     border: 1px solid var(--ph-primary);
@@ -141,7 +141,7 @@
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    white-space: nowrap;
+    padding-top: 6px; padding-bottom: 6px; text-align: center; max-width: 100%;
   }
   .ph-btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .ph-btn:focus-visible, .ph-chip:focus-visible, .ph-input:focus-visible, .ph-iconbtn:focus-visible, .ph-link:focus-visible {
@@ -155,7 +155,7 @@
     color: var(--ph-secondary);
     background: #fff;
     border-radius: 9999px;
-    min-height: 40px;
+    min-height: 44px;
     padding: 6px 14px;
     font-size: 13px;
     font-weight: 500;
@@ -164,12 +164,12 @@
   .ph-chip:hover:not(:disabled) { background: var(--ph-soft); }
   .ph-chip:disabled { opacity: 0.45; cursor: not-allowed; }
   .ph-iconbtn {
-    width: 40px; height: 40px; border-radius: 9999px; border: 1px solid #d4d4d8; background: #fff;
+    width: 44px; height: 44px; border-radius: 9999px; border: 1px solid #d4d4d8; background: #fff;
     font-size: 18px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
   }
   .ph-iconbtn:disabled { opacity: 0.4; cursor: not-allowed; }
   .ph-input {
-    width: 100%; min-height: 42px; border: 1px solid #d4d4d8; border-radius: 10px; padding: 0 12px;
+    width: 100%; min-height: 44px; border: 1px solid #d4d4d8; border-radius: 10px; padding: 0 12px;
     font-size: 16px; background: #fff; color: #09090b;
   }
   .ph-input:disabled { background: #f4f4f5; color: #71717a; }
@@ -189,7 +189,7 @@
     width: 52px; height: 52px; flex: none; border-radius: 10px; background: var(--ph-soft); color: var(--ph-secondary);
     display: inline-flex; align-items: center; justify-content: center; overflow: hidden;
   }
-  .ph-link { color: var(--ph-primary); text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
+  .ph-link { color: var(--ph-primary); text-decoration: underline; text-underline-offset: 2px; font-weight: 600; min-height: 44px; display: inline-flex; align-items: center; }
   .ph-bubble-human {
     background: var(--ph-soft); border: 1px solid var(--ph-soft-border); border-radius: 14px; padding: 10px 12px;
   }

@@ -398,3 +398,26 @@ test("allowedActions is empty for every action on closed orders", () => {
     }
   }
 });
+
+test("OrdersService reads: a courier's list, counts and detail are scoped to their own deliveries", async () => {
+  const wheres: any[] = [];
+  const prisma: any = {
+    client: {
+      order: {
+        findMany: async ({ where }: any) => (wheres.push(["list", where]), []),
+        groupBy: async ({ where }: any) => (wheres.push(["counts", where]), []),
+        findFirst: async ({ where }: any) => (wheres.push(["detail", where]), null),
+      },
+    },
+  };
+  const settings: any = { getRow: async () => ({ stockMaxAgeHours: 24 }) };
+  const service = new OrdersService(prisma, {} as any, {} as any, settings, {} as any);
+  const courier = member({ memberId: "c1", roleKey: "courier", ownDeliveriesOnly: true });
+  await service.list(courier, { q: "PED" });
+  await assert.rejects(() => service.get(courier, "someone-elses"), (e: any) => e.getStatus() === 404, "other deliveries look nonexistent");
+  for (const [, w] of wheres) assert.equal(w.courierMemberId, "c1");
+  assert.equal(wheres.filter(([k]) => k === "counts").length, 1, "counts are scoped too");
+  wheres.length = 0;
+  await service.list(member(), {});
+  for (const [, w] of wheres) assert.equal("courierMemberId" in w, false, "staff is not scoped");
+});

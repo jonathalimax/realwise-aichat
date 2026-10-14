@@ -47,6 +47,7 @@ export function InterviewChat({
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [savingUrl, setSavingUrl] = useState(false);
+  const [slow, setSlow] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const started = useRef(false);
@@ -76,6 +77,15 @@ export function InterviewChat({
       setSending(false);
     }
   }
+
+  useEffect(() => {
+    if (!sending) {
+      setSlow(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlow(true), 6000);
+    return () => clearTimeout(timer);
+  }, [sending]);
 
   useEffect(() => {
     if (started.current) return;
@@ -199,10 +209,13 @@ export function InterviewChat({
           </div>
         ))}
         {sending && (
-          <div className="flex max-w-[60%] items-center gap-1 rounded-xl rounded-bl-sm bg-surface px-3 py-2">
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.3s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.15s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft" />
+          <div role="status" aria-live="polite" className="flex max-w-[85%] items-center gap-2 rounded-xl rounded-bl-sm bg-surface px-3 py-2">
+            <span className="flex items-center gap-1" aria-hidden="true">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft" />
+            </span>
+            <span className="text-xs italic text-ink-soft">{assistantName} está pensando…{slow ? " isso pode levar alguns segundos" : ""}</span>
           </div>
         )}
         {uploadStatus && <p className="text-xs italic text-ink-soft">{uploadStatus}</p>}

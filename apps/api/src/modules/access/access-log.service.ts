@@ -71,7 +71,7 @@ export class AccessLogService {
     businessId: string,
     opts: { memberId?: string; category?: string; from?: Date; to?: Date; limit?: number; cursor?: string },
   ) {
-    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+    const limit = Math.min(Math.max(Number.isFinite(opts.limit) ? (opts.limit as number) : 50, 1), 200);
     const rows = await this.prisma.client.accessLogEntry.findMany({
       where: {
         businessId,

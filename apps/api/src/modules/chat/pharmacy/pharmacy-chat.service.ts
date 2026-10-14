@@ -805,6 +805,22 @@ export class PharmacyChatService {
       await this.startSymptomLane(t, "");
     }
     const s = t.state.symptom!;
+    // The consent card's own chips travel as answers of step "symptom": they are decisions, never symptom text.
+    const decision = fold(value);
+    if (!s.consent && decision === fold(CHIPS.onlyPharmacist)) {
+      t.state.awaiting = null;
+      s.active = false;
+      await this.handoffGeneric(t, "Cliente pediu para falar com o farmacêutico.");
+      return;
+    }
+    if (!s.consent && decision === fold(CHIP.consentYes)) {
+      if (!consent) {
+        this.symptomConsentPrompt(t, true);
+        return;
+      }
+      await this.grantSymptomConsent(t);
+      return;
+    }
     if (!s.consent) {
       if (!consent) {
         this.symptomConsentPrompt(t, true);

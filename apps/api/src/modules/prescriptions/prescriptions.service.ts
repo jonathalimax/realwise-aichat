@@ -239,7 +239,7 @@ export class PrescriptionsService {
     if (res.count === 0) throw new ConflictException({ statusCode: 409, error: "Conflict", code: "INVALID_STATE", message: "Esta receita já foi analisada." });
     let cascaded = false;
     if (rx.orderId) cascaded = await this.orders.rejectForPrescription(m.businessId, rx.orderId, reason, { memberId: m.memberId, name: m.name });
-    await this.tellCustomer(m.businessId, rx.conversationId, `Sua receita RX-${rx.number} foi recusada pela farmácia. Motivo: ${reason}.${cascaded ? ` O pedido ${rx.order?.code} foi encerrado.` : ""} Se quiser, envie uma nova receita ou fale com o farmacêutico.`);
+    await this.tellCustomer(m.businessId, rx.conversationId, `Sua receita RX-${rx.number} foi recusada pela farmácia. Motivo: ${reason.replace(/[.\s]+$/, "")}.${cascaded ? ` O pedido ${rx.order?.code} foi encerrado.` : ""} Se quiser, envie uma nova receita ou fale com o farmacêutico.`);
     await this.accessLog.record({
       businessId: m.businessId,
       actor: m,

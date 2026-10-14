@@ -173,8 +173,11 @@ test("start marks the handoff in progress (status stays open), records who and l
   assert.ok(!JSON.stringify(calls.logs).includes("Dor de cabeça"));
   const chat: any = await service.start(pharmacist, "h1", "anything-else");
   assert.equal(chat.inProgress.channel, "whatsapp", "unknown channel defaults to whatsapp");
+  assert.equal(calls.logs.filter((l: any) => l.action === "handoff.start").length, 1, "same person + same channel again: no second log line, marker untouched");
   const closed = setup("closed");
   await assert.rejects(() => closed.service.start(pharmacist, "h1"), (e: any) => e.getStatus() === 409);
+  const answered = setup("answered");
+  await assert.rejects(() => answered.service.start(pharmacist, "h1"), (e: any) => e.getResponse().code === "INVALID_STATE", "an answered handoff cannot be started again");
 });
 
 test("mark answered: one system line in the web chat, status answered, marker cleared, idempotent, logged", async () => {

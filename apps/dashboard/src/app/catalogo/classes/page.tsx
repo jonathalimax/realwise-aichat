@@ -70,6 +70,17 @@ export default function ClassReviewPage() {
   );
 }
 
+const confirmedText = (n: number) => `${n} ${n === 1 ? "produto confirmado" : "produtos confirmados"}`;
+
+/** Badge text that never contradicts the (pending-only) list below it. */
+function countLabel(g: ClassGroup): string {
+  const pending = Math.max(0, g.count - g.confirmedCount);
+  if (g.key === "unclassified") return `${g.count} ${g.count === 1 ? "produto" : "produtos"}`;
+  if (g.confirmedCount === 0) return `${g.count} ${g.count === 1 ? "produto" : "produtos"}`;
+  if (pending === 0) return `${g.confirmedCount} ${g.confirmedCount === 1 ? "confirmado" : "confirmados"}`;
+  return `${pending} a revisar · ${g.confirmedCount} ${g.confirmedCount === 1 ? "confirmado" : "confirmados"}`;
+}
+
 function GroupCard({ group: g, canConfirm, onChanged }: { group: ClassGroup; canConfirm: boolean; onChanged: () => void }) {
   const [open, setOpen] = useState(g.key === "controlled");
   const [busy, setBusy] = useState(false);
@@ -94,7 +105,7 @@ function GroupCard({ group: g, canConfirm, onChanged }: { group: ClassGroup; can
       title={
         <span className="flex flex-wrap items-center gap-2">
           {g.title}
-          <Badge variant={toneVariant(g.badge)}>{g.count} produtos</Badge>
+          <Badge variant={toneVariant(g.badge)}>{countLabel(g)}</Badge>
         </span>
       }
       description={g.hint}
@@ -123,7 +134,10 @@ function GroupCard({ group: g, canConfirm, onChanged }: { group: ClassGroup; can
           {products.loading && !products.data ? (
             <TableSkeleton rows={3} />
           ) : (products.data?.items.length ?? 0) === 0 ? (
-            <EmptyState title="Nenhum produto neste grupo" />
+            <EmptyState
+              title={g.confirmedCount > 0 ? "Nada pendente neste grupo" : "Nenhum produto neste grupo"}
+              description={g.confirmedCount > 0 ? `${confirmedText(g.confirmedCount)}. Esta lista mostra só os que ainda precisam de decisão.` : undefined}
+            />
           ) : (
             <Table bare>
               <TableHeader>

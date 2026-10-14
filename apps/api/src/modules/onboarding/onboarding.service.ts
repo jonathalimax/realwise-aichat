@@ -5,6 +5,7 @@ import { getPersona } from "../chat/personas";
 import { nicheBehavior } from "../chat/niche-behavior";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
+import { extractJsonObject } from "../../inference/json-extract";
 import { PharmacySettingsService } from "../pharmacy-settings/pharmacy-settings.service";
 import { classifyOperationModeAnswer } from "../pharmacy-settings/proposals";
 import { loadOperationMode } from "../pharmacy-common/operation-mode";
@@ -73,6 +74,10 @@ function validateFieldValue(type: string | undefined, value: unknown): { ok: tru
       return trimmed.length > 0 && trimmed.length <= 1000 ? { ok: true } : { ok: false, reason: "value must be a non-empty reasonable-length string" };
   }
 }
+
+// Reasoning model: hidden thinking eats max_tokens (a small cap returns EMPTY text) and answers take 15 s+.
+export const INTERVIEW_MAX_TOKENS = 3000;
+export const INTERVIEW_TIMEOUT_MS = 90_000;
 
 @Injectable()
 export class OnboardingService {
@@ -253,8 +258,9 @@ export class OnboardingService {
     let value: string | null = null;
     let modelAnswered = false;
     try {
-      const result = await generateFromGateway({ purpose: "chat", businessId, systemPrompt, prompt, maxTokens: 300, timeoutMs: 60000 });
-      const parsed = JSON.parse(result.text.trim());
+      const result = await generateFromGateway({ purpose: "chat", businessId, systemPrompt, prompt, maxTokens: INTERVIEW_MAX_TOKENS, timeoutMs: INTERVIEW_TIMEOUT_MS });
+      // The chat model reasons before answering (~15 s) and may wrap the JSON in fences/prose.
+      const parsed: any = extractJsonObject(result.text) ?? {};
       if (typeof parsed.reply === "string") reply = parsed.reply;
       if (typeof parsed.fieldKey === "string") fieldKey = parsed.fieldKey;
       if (typeof parsed.value === "string") value = parsed.value;

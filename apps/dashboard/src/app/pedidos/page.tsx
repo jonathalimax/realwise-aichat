@@ -90,7 +90,9 @@ function Pedidos() {
 }
 
 function OrdersTab({ version, onOpen }: { version: number; onOpen: (id: string) => void }) {
-  const [status, setStatus] = useState<OrderTab>("new");
+  const { me } = useSession();
+  // A courier never has "new"/"confirmed" orders (they only see deliveries already assigned to them): open on "Em entrega".
+  const [status, setStatus] = useState<OrderTab>(me?.role.ownDeliveriesOnly ? "out" : "new");
   const [fulfillment, setFulfillment] = useState("");
   const [q, setQ] = useState("");
   const dq = useDebounced(q, 300);

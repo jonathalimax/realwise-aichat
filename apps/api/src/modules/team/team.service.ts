@@ -243,7 +243,9 @@ export class TeamService {
   async removeInvited(actor: MemberContext, memberId: string) {
     const member = await this.loadMember(actor.businessId, memberId);
     assertCanModifyMember(actor, this.asTarget(member));
-    if (member.status !== "invited") throw conflict("MEMBER_HAS_HISTORY", "Este membro já tem histórico. Desative o acesso em vez de remover.");
+    // A pending invite, or one that was disabled before ever being accepted (no password/phone yet), has no history.
+    const neverAccepted = member.status === "invited" || (member.status === "disabled" && !member.passwordHash && !member.phone && !member.lastAccessAt);
+    if (!neverAccepted) throw conflict("MEMBER_HAS_HISTORY", "Este membro já tem histórico. Desative o acesso em vez de remover.");
     await this.prisma.client.businessMember.delete({ where: { id: member.id } });
     await this.accessLog.record({ businessId: actor.businessId, actor, action: "team.remove", target: member.name, summary: `Removeu o convite de ${member.name}` });
     return { ok: true as const };
@@ -372,13 +374,18 @@ export class TeamService {
   }
 
   private validateRoleInput(niche: NicheKey, input: { permissions: unknown; requiresCrf: boolean; ownDeliveriesOnly: boolean }) {
+    // A string/array/number grid used to be read as "{}" and silently wiped every permission.
+    if (input.permissions !== undefined && input.permissions !== null && (typeof input.permissions !== "object" || Array.isArray(input.permissions))) {
+      throw bad("INVALID_ROLE", "Permissões inválidas.", { errors: ["Permissões inválidas."] });
+    }
     const errors = validateRoleDefinition({ permissions: input.permissions, requiresCrf: input.requiresCrf, niche });
     if (input.ownDeliveriesOnly && !NICHE_SECTIONS[niche].includes("pedidos" as PermissionSection)) errors.push("Entregas só existem para farmácias.");
+    else if (input.ownDeliveriesOnly && normalizePermissions(input.permissions)["pedidos"] === "none") errors.push("\"Somente as próprias entregas\" exige acesso a Pedidos (ver ou editar).");
     if (errors.length) throw bad("INVALID_ROLE", errors[0], { errors });
   }
 
   async createRole(actor: MemberContext, body: { name?: string; description?: string; requiresCrf?: boolean; permissions?: unknown; ownDeliveriesOnly?: boolean }) {
-    const name = (body.name ?? "").trim();
+    const name = typeof body.name === "string" ? body.name.trim() : "";
     if (name.length < 2 || name.length > 60) throw bad("INVALID_NAME", "Informe um nome de função (2 a 60 caracteres).");
     const requiresCrf = body.requiresCrf === true;
     const ownDeliveriesOnly = body.ownDeliveriesOnly === true;
@@ -388,7 +395,7 @@ export class TeamService {
       data: {
         businessId: actor.businessId,
         name,
-        description: body.description?.trim().slice(0, 300) || null,
+        description: typeof body.description === "string" ? body.description.trim().slice(0, 300) || null : null,
         isStarter: false,
         requiresCrf,
         ownDeliveriesOnly,
@@ -407,11 +414,18 @@ export class TeamService {
   async updateRole(actor: MemberContext, id: string, body: { name?: string; description?: string | null; requiresCrf?: boolean; permissions?: unknown; ownDeliveriesOnly?: boolean }) {
     const role = await this.loadRole(actor.businessId, id);
     assertRoleEditable(role, "update");
+    if (body.name !== undefined && typeof body.name !== "string") throw bad("INVALID_NAME", "Informe um nome de função (2 a 60 caracteres).");
     const name = body.name !== undefined ? body.name.trim() : role.name;
     if (name.length < 2 || name.length > 60) throw bad("INVALID_NAME", "Informe um nome de função (2 a 60 caracteres).");
     const requiresCrf = body.requiresCrf ?? role.requiresCrf;
     const ownDeliveriesOnly = body.ownDeliveriesOnly ?? role.ownDeliveriesOnly;
-    const permissions = body.permissions !== undefined ? body.permissions : role.permissions;
+    // A partial grid is merged over the stored one (sections left out keep their level) instead of resetting them to "none".
+    const permissions =
+      body.permissions !== undefined && body.permissions !== null && typeof body.permissions === "object" && !Array.isArray(body.permissions)
+        ? { ...normalizePermissions(role.permissions), ...(body.permissions as Record<string, unknown>) }
+        : body.permissions !== undefined
+          ? body.permissions
+          : role.permissions;
     this.validateRoleInput(actor.niche, { permissions, requiresCrf, ownDeliveriesOnly });
     if (name !== role.name) await this.assertRoleNameFree(actor.businessId, name, role.id);
     // Removing the CRF flag from a role whose active members hold it would silently strip pharmacist powers.
@@ -419,7 +433,7 @@ export class TeamService {
       where: { id },
       data: {
         name,
-        ...(body.description !== undefined ? { description: body.description?.trim().slice(0, 300) || null } : {}),
+        ...(body.description !== undefined ? { description: typeof body.description === "string" ? body.description.trim().slice(0, 300) || null : null } : {}),
         requiresCrf,
         ownDeliveriesOnly,
         permissions: normalizePermissions(permissions) as object,
@@ -447,14 +461,15 @@ export class TeamService {
       throw accessDenied("PERMISSION_DENIED", "O registro de acessos é visível apenas para proprietários e gerentes.", { section: "equipe", required: "view" });
     }
     const from = q.from ? new Date(q.from) : undefined;
-    const to = q.to ? new Date(q.to) : undefined;
+    // A date-only "to" means the whole day (otherwise it silently meant 00:00 and dropped that day's entries).
+    const to = q.to ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(q.to) ? `${q.to}T23:59:59.999Z` : q.to) : undefined;
     if ((from && isNaN(from.getTime())) || (to && isNaN(to.getTime()))) throw bad("INVALID_DATE", "Data inválida.");
     const res = await this.accessLog.list(actor.businessId, {
       memberId: q.memberId,
       category: q.category,
       from,
       to,
-      limit: q.limit ? Number(q.limit) : undefined,
+      limit: q.limit && Number.isFinite(Number(q.limit)) ? Math.trunc(Number(q.limit)) : undefined,
       cursor: q.cursor,
     });
     return {
