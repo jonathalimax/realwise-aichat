@@ -81,7 +81,12 @@ start worker apps/worker pnpm dev
 start dashboard apps/dashboard env NEXT_PUBLIC_DEFAULT_NICHE=farmacia NEXT_DIST_DIR=.next-farmacia pnpm dev
 start chat apps/chat pnpm dev
 start marketing apps/marketing pnpm dev
-[ "${WITH_GATEWAY:-0}" = "1" ] && start gateway apps/inference-gateway pnpm dev
+# The model gateway starts automatically when a managed API key is filled in the local .env (same provider as
+# real estate: MANAGED_API_KEY / MANAGED_MODEL / INFERENCE_GATEWAY_TOKEN, or OLLAMA_URL). Force with WITH_GATEWAY=1.
+if [ "${WITH_GATEWAY:-0}" = "1" ] || grep -qE '^MANAGED_API_KEY=.{8,}' .env 2>/dev/null; then
+  start gateway apps/inference-gateway pnpm dev
+  GATEWAY_STARTED=1
+fi
 [ "${WITH_ADMIN:-0}" = "1" ] && start admin apps/admin pnpm dev
 
 wait_http() { # url name seconds
@@ -98,6 +103,12 @@ wait_http http://localhost:3006/api/health "API" 90 && echo "  API ok"
 wait_http http://localhost:3003/farmacia/app/login "dashboard" 120 && echo "  dashboard ok"
 wait_http http://localhost:3005/client/conversation/farmacia-exemplo "chat widget" 120 && echo "  chat ok"
 wait_http http://localhost:3007/farmacia "marketing" 120 && echo "  marketing ok"
+
+if [ "${GATEWAY_STARTED:-0}" = "1" ]; then
+  MODEL_NOTE="Model gateway started on :3002 (provider from your .env). Check .local-logs/gateway.log if replies look canned."
+else
+  MODEL_NOTE="No model key in .env: the chat uses its deterministic paths. Fill MANAGED_API_KEY (see docs/pharmacy/LOCAL.md) and rerun."
+fi
 
 cat <<URLS
 
@@ -117,8 +128,8 @@ cat <<URLS
    Atendente      atendente@farmaciaexemplo.test
    Entregador     entregador@farmaciaexemplo.test
 
- No language model is configured: the chat works through its deterministic
- paths (see docs/pharmacy/LOCAL.md). Press Ctrl-C to stop everything.
+ ${MODEL_NOTE}
+ Press Ctrl-C to stop everything.
 ========================================================================
 URLS
 wait

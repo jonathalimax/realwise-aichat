@@ -102,3 +102,17 @@ With a model, imports also get column mapping and class proposals from the model
 - Dark mode is not styled for the pharmacy palette. Staff web push is not implemented (alerts, badges and e-mail only).
 - The curated reference list of controlled/prescription substances is NOT legally reviewed; the pharmacist confirms every class.
 - `next dev` shows a dev-tools bubble that overlaps the bottom-left corner of the pages; it does not exist in a production build.
+
+## Plugging in the same model as real estate
+
+The API talks to the inference gateway (`apps/inference-gateway`, port 3002), which uses either a managed API (OpenRouter by default) or Ollama. Fill these in the git-ignored root `.env` (same values your production uses; never commit them):
+
+```
+MANAGED_API_KEY=...            # the provider key
+MANAGED_MODEL=...              # e.g. the same model id production uses
+MANAGED_API_URL=...            # only if you do not use OpenRouter
+INFERENCE_GATEWAY_URL=http://localhost:3002
+INFERENCE_GATEWAY_TOKEN=...    # any shared secret, same value for API and gateway
+```
+
+`scripts/dev-pharmacy.sh` then starts the gateway automatically (or force it with `WITH_GATEWAY=1`). For Ollama set `OLLAMA_URL` / `OLLAMA_MODEL` instead and use `WITH_GATEWAY=1`.
