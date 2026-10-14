@@ -42,6 +42,8 @@ interface SectionRow {
   readOnly: boolean;
 }
 
+const COMMERCE_SECTIONS: PermissionSection[] = ["pedidos", "receitas", "catalogo", "importar", "classes"];
+
 const LEVELS: { value: PermissionLevel; label: string }[] = [
   { value: "none", label: "Nenhum" },
   { value: "view", label: "Ver" },
@@ -58,7 +60,9 @@ function RoleEditor() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const from = useSearchParams().get("from");
-  const { niche, can } = useSession();
+  const { niche, can, me } = useSession();
+  // Attendance mode: commerce sections do nothing for this pharmacy, so they are greyed out (kept as stored).
+  const attendance = niche === "farmacia" && me?.business.operationMode?.effective === "attendance";
   const creating = id === "nova";
   const rolesState = useLoad(() => getRoles(), []);
   const sectionsState = useLoad(() => getPermissionSections(), []);
@@ -218,15 +222,16 @@ function RoleEditor() {
                 <TableBody>
                   {rows.map((r) => {
                     const level = perms[r.key] ?? "none";
-                    const editLocked = (r.crfOnly && !requiresCrf) || r.readOnly;
+                    const inactive = attendance && COMMERCE_SECTIONS.includes(r.key);
+                    const editLocked = (r.crfOnly && !requiresCrf) || r.readOnly || inactive;
                     return (
-                      <TableRow key={r.key}>
+                      <TableRow key={r.key} className={inactive ? "opacity-50" : undefined} aria-disabled={inactive || undefined}>
                         <TableCell>
                           <b>{r.label}</b>
                         </TableCell>
                         {LEVELS.map((l) => {
                           const selected = level === l.value;
-                          const locked = !canEdit || (l.value === "edit" && editLocked);
+                          const locked = !canEdit || (l.value === "edit" && editLocked) || inactive;
                           return (
                             <TableCell key={l.value}>
                               <button
@@ -250,6 +255,7 @@ function RoleEditor() {
                           {r.note}
                           {r.crfOnly && !requiresCrf && <span className="block text-amber-800">Editar exige função com CRF.</span>}
                           {r.readOnly && <span className="block">Somente leitura.</span>}
+                          {inactive && <span className="block">Não se aplica no modo atendimento.</span>}
                         </TableCell>
                       </TableRow>
                     );

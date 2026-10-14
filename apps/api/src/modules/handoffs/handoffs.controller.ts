@@ -35,4 +35,25 @@ export class HandoffsController {
   close(@CurrentMember() m: MemberContext, @Param("id") id: string) {
     return this.handoffs.close(m, id);
   }
+
+  @RequirePermission("atendimento", "edit")
+  @RequireCrf()
+  @Post(":id/whatsapp/draft")
+  whatsappDraft(@CurrentMember() m: MemberContext, @Param("id") id: string) {
+    return this.handoffs.whatsappDraft(m, id);
+  }
+
+  @RequirePermission("atendimento", "edit")
+  @RequireCrf()
+  @Post(":id/start")
+  start(@CurrentMember() m: MemberContext, @Param("id") id: string, @Body("channel") channel?: string) {
+    return this.handoffs.start(m, id, channel);
+  }
+
+  @RequirePermission("atendimento", "edit")
+  @RequireCrf()
+  @Post(":id/mark-answered")
+  markAnswered(@CurrentMember() m: MemberContext, @Param("id") id: string) {
+    return this.handoffs.markAnswered(m, id);
+  }
 }

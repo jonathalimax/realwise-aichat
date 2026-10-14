@@ -23,6 +23,8 @@ export const PRODUCTS = {
 
 export interface PharmacyOptions extends Omit<ScenarioOptions, "niche"> {
   settings?: Row;
+  /** Plan of the business' subscription (default "profissional" = commerce allowed). null = no subscription (trial = entry tier). */
+  plan?: "essencial" | "profissional" | "studio" | null;
   /** Catalog keys (of PRODUCTS) to seed; default: all. */
   products?: (keyof typeof PRODUCTS)[];
 }
@@ -33,8 +35,10 @@ export async function createPharmacy(options: PharmacyOptions = {}) {
   const clara = createClara({ ...options, niche: "farmacia" });
   const { db, businessId } = clara;
   await db.models.pharmacySettings.create({
-    data: { businessId, deliveryFeeCents: 600, minOrderCents: 0, stockMaxAgeHours: 24, ...options.settings },
+    data: { businessId, deliveryFeeCents: 600, minOrderCents: 0, stockMaxAgeHours: 24, operationMode: "commerce", ...options.settings },
   });
+  const planCode = options.plan === undefined ? "profissional" : options.plan;
+  if (planCode) await db.models.subscription.create({ data: { businessId, plan: { code: planCode } } });
   clara.cep.book.set(CEP_RUA.cep, { ...CEP_RUA });
   clara.cep.book.set("80010000", { cep: "80010000", street: "", district: "Centro", city: "Curitiba", state: "PR", provider: "viacep" });
 
@@ -55,6 +59,12 @@ export async function createPharmacy(options: PharmacyOptions = {}) {
 
   async function setSettings(patch: Row) {
     await db.models.pharmacySettings.updateMany({ where: { businessId }, data: patch });
+  }
+
+  /** Plan change (upgrade/downgrade); null removes the subscription. */
+  async function setPlan(code: "essencial" | "profissional" | "studio" | null) {
+    db.models.subscription.rows.splice(0, db.models.subscription.rows.length);
+    if (code) await db.models.subscription.create({ data: { businessId, plan: { code } } });
   }
 
   const conversation = () => clara.newConversation();
@@ -122,7 +132,7 @@ export async function createPharmacy(options: PharmacyOptions = {}) {
     return turn;
   }
 
-  return { ...clara, addProduct, setSettings, conversation, say, act, summarize, stateOf, orders, handoffs, assistantTexts, allMessages, toReview };
+  return { ...clara, addProduct, setSettings, setPlan, conversation, say, act, summarize, stateOf, orders, handoffs, assistantTexts, allMessages, toReview };
 }
 
 export type Pharmacy = Awaited<ReturnType<typeof createPharmacy>>;

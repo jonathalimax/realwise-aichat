@@ -5,6 +5,7 @@ import { deleteFile, getFile, looksLikeSvg, putFile, sniffFileType } from "../ph
 import { isEffectivelySuspended, isValidHexColor, resolveBranding, type NicheKey } from "@realwise/shared";
 import { StarterRolesService } from "../access/starter-roles.service";
 import { getPersona } from "../chat/personas";
+import { loadOperationMode } from "../pharmacy-common/operation-mode";
 
 @Injectable()
 export class BusinessesService {
@@ -51,7 +52,10 @@ export class BusinessesService {
   /** Public, non-sensitive pharmacy facts for the chat footer/about and checkout copy (null-safe defaults when unset). */
   private async publicPharmacyBlock(businessId: string) {
     const st = await this.prisma.client.pharmacySettings.findUnique({ where: { businessId } });
+    const mode = await loadOperationMode(this.prisma.client, businessId);
     return {
+      // Effective mode only (never the plan details): the widget hides cart/product UI in "attendance".
+      operationMode: mode.effective,
       legalName: st?.legalName ?? null,
       cnpj: st?.cnpj ?? null,
       pharmacistName: st?.pharmacistName ?? null,

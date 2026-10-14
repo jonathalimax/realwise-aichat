@@ -71,6 +71,7 @@ test("feature flags per plan", () => {
     suggestedDrafts: false,
     whatsappAlerts: false,
     crmWebhook: false,
+    pharmacyCommerce: false,
   });
   assert.deepEqual(profissional, {
     analytics: "full",
@@ -84,6 +85,7 @@ test("feature flags per plan", () => {
     suggestedDrafts: false,
     whatsappAlerts: false,
     crmWebhook: false,
+    pharmacyCommerce: true,
   });
   assert.deepEqual(studio, {
     ...profissional,

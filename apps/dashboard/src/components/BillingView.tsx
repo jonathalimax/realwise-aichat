@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PRICING_COPY, formatPlanPriceBrl, getPlanDefinition } from "@realwise/shared";
+import { PRICING_COPY, formatPlanPriceBrl, getPlanDefinition, pharmacyPlanHighlights } from "@realwise/shared";
 import { getMe, getPlans, startCheckout, openBillingPortal } from "../lib/api";
 import { useSession } from "../lib/session";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
@@ -36,8 +36,13 @@ interface Subscription {
 
 /** Plan + billing. Used by /billing (real estate) and /plano (pharmacy); Stripe handles invoices and payment methods. */
 export function BillingView({ title = "Plano e cobrança" }: { title?: string }) {
-  const { can } = useSession();
+  const { can, niche } = useSession();
   const canEdit = can("plano", "edit");
+  // Pharmacy: also say what each plan allows (commerce mode needs Profissional or Studio).
+  const highlightsOf = (plan: PublicPlan): string[] => {
+    const def = getPlanDefinition(plan.code);
+    return niche === "farmacia" && def ? [...plan.highlights, ...pharmacyPlanHighlights(def)] : plan.highlights;
+  };
   const [plans, setPlans] = useState<PublicPlan[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -186,7 +191,7 @@ export function BillingView({ title = "Plano e cobrança" }: { title?: string })
                   <span className="font-sans text-sm text-muted">/mês</span>
                 </div>
                 <ul className="mb-4 flex flex-1 flex-col gap-1.5 text-sm text-ink-soft">
-                  {plan.highlights.map((item) => (
+                  {highlightsOf(plan).map((item) => (
                     <li key={item}>— {item}</li>
                   ))}
                 </ul>

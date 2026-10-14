@@ -78,4 +78,25 @@ export class ChatHumanService {
     });
     return { joinMessage, message };
   }
+
+  /** One neutral system line in the conversation (e.g. "Nome · Função continuou o atendimento pelo WhatsApp"). Carries no health data. */
+  async recordSystemNote(input: { businessId: string; conversationId: string; author: HumanAuthor; text: string }) {
+    await this.assertConversation(input.businessId, input.conversationId);
+    const message = await this.prisma.client.message.create({
+      data: {
+        conversationId: input.conversationId,
+        businessId: input.businessId,
+        role: "system",
+        content: input.text.trim().slice(0, 300),
+        authorMemberId: input.author.memberId,
+        authorRole: input.author.roleName,
+        authorName: input.author.name,
+      },
+    });
+    await this.prisma.client.conversation.update({
+      where: { id: input.conversationId },
+      data: { lastMessageAt: new Date(), messageCount: { increment: 1 } },
+    });
+    return message;
+  }
 }

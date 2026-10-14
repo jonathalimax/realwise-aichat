@@ -227,6 +227,7 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
 
       {/* PRICING */}
       <PricingSection
+        pharmacy={niche.slug === "farmacias"}
         cta={(plan) =>
           niche.earlyAccess
             ? { href: WHATSAPP_URL, label: "Entrar na lista de espera" }

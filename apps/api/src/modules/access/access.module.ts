@@ -1,4 +1,5 @@
 import { Global, Module } from "@nestjs/common";
+import { CommerceModeGuard } from "./commerce-mode.guard";
 import { AccessLogService } from "./access-log.service";
 import { MemberAuthService } from "./member-auth.service";
 import { MemberContextService } from "./member-context.service";
@@ -11,7 +12,7 @@ import { StarterRolesService } from "./starter-roles.service";
  */
 @Global()
 @Module({
-  providers: [AccessLogService, MemberContextService, StarterRolesService, MemberAuthService, PermissionsGuard],
-  exports: [AccessLogService, MemberContextService, StarterRolesService, MemberAuthService, PermissionsGuard],
+  providers: [AccessLogService, MemberContextService, StarterRolesService, MemberAuthService, PermissionsGuard, CommerceModeGuard],
+  exports: [AccessLogService, MemberContextService, StarterRolesService, MemberAuthService, PermissionsGuard, CommerceModeGuard],
 })
 export class AccessModule {}

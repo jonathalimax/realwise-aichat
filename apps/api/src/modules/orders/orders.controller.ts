@@ -4,12 +4,13 @@ import { InternalTokenGuard } from "../../common/guards/internal-token.guard";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import { CurrentMember } from "../../common/decorators/current-business.decorator";
 import { PermissionsGuard } from "../access/permissions.guard";
+import { CommerceModeGuard } from "../access/commerce-mode.guard";
 import { RequirePermission } from "../access/permission.decorator";
 import type { MemberContext } from "../access/member-context";
 import { OrdersService } from "./orders.service";
 
 @Controller("orders")
-@UseGuards(BusinessSessionGuard, PermissionsGuard)
+@UseGuards(BusinessSessionGuard, PermissionsGuard, CommerceModeGuard)
 @RequirePermission("pedidos", "view")
 export class OrdersController {
   constructor(private readonly orders: OrdersService) {}

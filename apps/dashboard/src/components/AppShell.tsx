@@ -4,11 +4,12 @@ import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "./shell/Sidebar";
 import { NoAccess } from "./shell/NoAccess";
+import { ModeBlocked } from "./shell/ModeBlocked";
 import { AlertsStrip } from "./shell/AlertsStrip";
 import { BrandingApplier } from "./shell/BrandingApplier";
 import { TrialEndedGate } from "./TrialEndedGate";
 import { SessionProvider, useSession } from "../lib/session";
-import { homeFor, isPublicRoute, requirementFor } from "../lib/nav";
+import { homeFor, isCommerceRoute, isPublicRoute, modeOf, requirementFor } from "../lib/nav";
 
 // Pages reachable even when the trial has expired and there's no active subscription.
 const ALLOWED_WHEN_SUSPENDED = ["/billing", "/plano", "/profile"];
@@ -45,6 +46,7 @@ function ShellInner({ pathname, children }: { pathname: string; children: ReactN
 
   const req = requirementFor(pathname);
   const denied = req && me ? !can(req.section, req.level) : false;
+  const modeBlocked = isPharmacy && !denied && modeOf(me) === "attendance" && isCommerceRoute(pathname);
   const redirecting = (isPharmacy && pathname === "/") || (business?.status === "onboarding" && pathname !== "/onboarding");
 
   return (
@@ -53,7 +55,7 @@ function ShellInner({ pathname, children }: { pathname: string; children: ReactN
       <Sidebar />
       <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 md:px-8 md:py-8">
         {isPharmacy && <AlertsStrip />}
-        {redirecting ? null : gated ? <TrialEndedGate /> : denied && req ? <NoAccess section={req.section} /> : children}
+        {redirecting ? null : gated ? <TrialEndedGate /> : denied && req ? <NoAccess section={req.section} /> : modeBlocked ? <ModeBlocked /> : children}
       </main>
     </div>
   );

@@ -10,11 +10,13 @@ export const CONSENT_TEXTS: Record<string, string> = {
     "Para encaminhar você ao farmacêutico, vou registrar o que você me contar sobre sua saúde (sintomas, alergias, outros medicamentos). São dados sensíveis (LGPD): ficam acessíveis só à equipe da farmácia, são usados apenas neste atendimento e podem ser apagados a seu pedido.",
   prescription_upload:
     "Autorizo o envio da foto da minha receita para validação pelo farmacêutico (LGPD). A imagem fica guardada com acesso restrito à equipe da farmácia e é apagada depois do prazo de retenção.",
+  pharmacy_contact:
+    "Autorizo o farmacêutico a me chamar no WhatsApp informado, só para continuar este atendimento (LGPD). O número fica guardado com acesso restrito à equipe da farmácia e pode ser apagado a seu pedido.",
   order_contact:
     "Vou guardar seu nome, telefone, e-mail e endereço só para entregar e acompanhar este pedido e avisar você sobre ele (LGPD). Você pode pedir a exclusão a qualquer momento.",
 };
 
-export function consentCard(purpose: "pharmacy_triage" | "prescription_upload" | "order_contact"): ConsentCard {
+export function consentCard(purpose: "pharmacy_triage" | "prescription_upload" | "order_contact" | "pharmacy_contact"): ConsentCard {
   return { purpose, version: CONSENT_VERSION, text: CONSENT_TEXTS[purpose], required: true };
 }
 
@@ -68,6 +70,10 @@ export const COPY = {
     "Entendi. Não posso indicar remédios, mas vou reunir algumas informações para o farmacêutico te responder por aqui.",
   symptomConsentAsk: "Posso registrar o que você me contar?",
   symptomConsentRetry: "Para seguir com as perguntas preciso da sua concordância. Posso registrar o que você me contar?",
+  symptomAskPhone:
+    "Qual seu WhatsApp (com DDD) para o farmacêutico te chamar? Se preferir, ele responde só por aqui no chat. Ao informar o número você autoriza esse contato (LGPD).",
+  symptomAskName: "Como posso te chamar? É opcional.",
+  handoffDoneWhatsapp: "Passei suas informações ao farmacêutico. Ele responde por aqui ou te chama no WhatsApp em instantes.",
   askPhone: "Para finalizar, qual o seu WhatsApp (com DDD)?",
   badPhone: "Não consegui entender esse número. Pode enviar com DDD, por exemplo (41) 99999-9999?",
   askName: "Qual o seu nome?",

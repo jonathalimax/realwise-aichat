@@ -123,13 +123,15 @@ const KEY_LABELS: Partial<Record<keyof PharmacySettings, string>> = {
   prescriptionRetentionDays: "Guarda das receitas (dias)",
   orderReminderMinutes: "Lembrete de pedido parado (min)",
   quickChips: "Atalhos do chat",
+  operationMode: "Modo de operação",
 };
 
 /** Human text for one proposed value (shown on the proposal card). */
 export function describeProposed(key: string, value: unknown): string {
   const label = KEY_LABELS[key as keyof PharmacySettings] ?? key;
   let text: string;
-  if (typeof value === "boolean") text = value ? "ligado" : "desligado";
+  if (key === "operationMode") text = value === "commerce" ? "Comércio (estoque e vendas pelo sistema)" : "Atendimento (só a IA, com encaminhamento ao farmacêutico)";
+  else if (typeof value === "boolean") text = value ? "ligado" : "desligado";
   else if (key.endsWith("Cents") && typeof value === "number") text = `R$ ${centsToInput(value)}`;
   else if (key === "deliveryAreas" && Array.isArray(value)) text = (value as { value: string }[]).map((a) => a.value).join(", ");
   else if (key === "openingHours" && Array.isArray(value))

@@ -880,6 +880,14 @@ enum HandoffReason {
   controlled
   out_of_stock
   other
+  // Attendance mode: the customer asked about a product/price/availability; the pharmacist confirms.
+  product_request
+}
+
+// Pharmacy operation mode chosen by the owner (what the plan allows is PlanFeatures.pharmacyCommerce).
+enum PharmacyOperationMode {
+  commerce
+  attendance
 }
 
 enum HandoffStatus {
@@ -1090,6 +1098,11 @@ model PharmacySettings {
   prescriptionRetentionDays Int      @default(30)
   orderReminderMinutes      Int      @default(10)
   quickChips                Json     @default("[]")
+  // commerce = stock + selling through the system; attendance = AI attendant with escalation only.
+  // The effective mode also depends on the plan (see packages/shared/src/pharmacy-mode.ts).
+  operationMode             PharmacyOperationMode @default(attendance)
+  // When the owner confirmed the mode (null = never explicitly decided: backfilled or seeded).
+  operationModeChosenAt     DateTime?
   // Onboarding-interview answers waiting for owner confirmation: { [fieldKey]: { value, proposedAt, confirmedAt? } }
   proposals                 Json     @default("{}")
   nextOrderNumber           Int      @default(1001)

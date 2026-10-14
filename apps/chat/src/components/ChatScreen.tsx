@@ -25,6 +25,7 @@ import { SimulationCard, type SimulationData } from "./SimulationCard";
 import { SchedulePicker, type BookedVisit } from "./SchedulePicker";
 import { PharmacyUi, PHARMACY_UI_KINDS } from "./pharmacy/PharmacyUi";
 import { CartBar } from "./pharmacy/CartBar";
+import { isAttendanceMode, welcomeChips, welcomeText } from "./pharmacy/mode";
 import { initialsOf } from "./pharmacy/format";
 import type { MessageAuthor, PharmacyActionResult, PharmacyState, PharmacyUiPayload } from "./pharmacy/types";
 import { pharmacyThemeVars } from "../lib/pharmacy-theme";
@@ -796,12 +797,10 @@ export function ChatScreen({
     // Pharmacy: if the scripted start is empty or unavailable, fall back to the fixed Alex welcome
     // (it must always say he is an AI) with the business's quick chips.
     const pharmacyWelcome = () => {
-      const chips: string[] = Array.isArray(business.pharmacy?.quickChips) && business.pharmacy.quickChips.length
-        ? business.pharmacy.quickChips
-        : ["Fazer um pedido", "Falar com o farmacêutico", "Horários e entrega"];
+      const chips: string[] = welcomeChips(business);
       setMessages((prev) =>
         prev.length === 0
-          ? [{ id: nextMessageId(), role: "assistant", content: `Oi! Sou o Alex, assistente virtual da ${business.name}. Sou uma inteligência artificial. Posso ajudar a montar seu pedido ou encaminhar você ao farmacêutico. Não indico remédios.` }]
+          ? [{ id: nextMessageId(), role: "assistant", content: welcomeText(business.name, isAttendanceMode(business)) }]
           : prev,
       );
       setSuggestions(chips.slice(0, 5));
@@ -816,7 +815,7 @@ export function ChatScreen({
         setBubbles(result.bubbles ?? []);
         setSuggestions(
           business.niche === "farmacia" && !(result.bubbles ?? []).length && Array.isArray(business.pharmacy?.quickChips)
-            ? business.pharmacy.quickChips.slice(0, 5)
+            ? welcomeChips(business)
             : [],
         );
       })
@@ -1654,7 +1653,7 @@ export function ChatScreen({
         </div>
       )}
 
-      {isPharmacy && pharmacy?.cart && pharmacy.cart.itemCount > 0 && pharmacy.checkoutStep !== "done" && (
+      {isPharmacy && !isAttendanceMode(business) && pharmacy?.operationMode !== "attendance" && pharmacy?.cart && pharmacy.cart.itemCount > 0 && pharmacy.checkoutStep !== "done" && (
         <CartBar cart={pharmacy.cart} checkoutStarted={Boolean(pharmacy.checkoutStep)} busy={busy} onAction={handlePharmacyAction} />
       )}
 

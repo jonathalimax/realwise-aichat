@@ -1,5 +1,6 @@
 import { HANDOFF_REASON_LABEL, handoffTag } from "../pharmacy-common/labels";
 import { formatBRL, minutesSince } from "../pharmacy-common/format";
+import { maskPhoneBr, whatsappDigits } from "./whatsapp-message";
 
 type Brief = Record<string, unknown>;
 
@@ -68,7 +69,7 @@ export interface HandoffRow {
   answeredByName: string | null;
   answeredByRole: string | null;
   createdAt: Date;
-  lead: { name: string | null } | null;
+  lead: { name: string | null; phone?: string | null } | null;
 }
 
 export function whoLabel(h: Pick<HandoffRow, "lead" | "brief">): string {
@@ -77,8 +78,43 @@ export function whoLabel(h: Pick<HandoffRow, "lead" | "brief">): string {
   return age ? `${first}, ${age}` : first;
 }
 
+export interface InProgressMarker {
+  at: string;
+  byMemberId: string | null;
+  byName: string;
+  byRole: string;
+  channel: "whatsapp" | "chat";
+}
+
+/** "Em atendimento" marker kept in brief.inProgress (no schema column; status stays open/answered/closed). */
+export function readInProgress(brief: unknown): InProgressMarker | null {
+  const m = brief && typeof brief === "object" ? (brief as Brief).inProgress : null;
+  if (!m || typeof m !== "object") return null;
+  const v = m as Record<string, unknown>;
+  if (typeof v.byName !== "string" || !v.byName) return null;
+  return {
+    at: typeof v.at === "string" ? v.at : "",
+    byMemberId: typeof v.byMemberId === "string" ? v.byMemberId : null,
+    byName: v.byName,
+    byRole: typeof v.byRole === "string" ? v.byRole : "",
+    channel: v.channel === "chat" ? "chat" : "whatsapp",
+  };
+}
+
+/** Display-only contact: first name + masked phone. The full number is only returned by the WhatsApp draft endpoint. */
+export function contactDto(h: Pick<HandoffRow, "lead" | "brief">) {
+  const stored = ((h.brief ?? {}) as Brief).contact;
+  const storedContact = stored && typeof stored === "object" ? (stored as { firstName?: unknown; phoneMasked?: unknown }) : null;
+  const phone = h.lead?.phone ?? null;
+  const hasPhone = whatsappDigits(phone) !== null;
+  const firstName = h.lead?.name?.trim().split(/\s+/)[0] || (typeof storedContact?.firstName === "string" ? storedContact.firstName : null);
+  const phoneMasked = hasPhone ? maskPhoneBr(phone) : typeof storedContact?.phoneMasked === "string" ? storedContact.phoneMasked : null;
+  return { firstName: firstName || null, phoneMasked, hasPhone };
+}
+
 export function handoffListDto(h: HandoffRow, now = Date.now()) {
   const tag = handoffTag(h.reason, h.urgent);
+  const inProgress = h.status === "open" ? readInProgress(h.brief) : null;
   return {
     id: h.id,
     who: whoLabel(h),
@@ -93,6 +129,8 @@ export function handoffListDto(h: HandoffRow, now = Date.now()) {
     createdAt: h.createdAt.toISOString(),
     waitingMinutes: h.status === "open" ? minutesSince(h.createdAt, now) : 0,
     conversationId: h.conversationId,
+    inProgress,
+    hasPhone: contactDto(h).hasPhone,
   };
 }
 
@@ -131,6 +169,7 @@ export function handoffDetailDto(
     ...handoffListDto(h, now),
     brief,
     briefRows: buildBriefRows(brief),
+    contact: contactDto(h),
     suggestion,
     conversationLink: `/conversas?open=${h.conversationId}`,
     answer: h.answeredAt && h.answerText ? { text: h.answerText, at: h.answeredAt.toISOString(), byName: h.answeredByName, byRole: h.answeredByRole } : null,

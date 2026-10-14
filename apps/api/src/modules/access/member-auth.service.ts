@@ -13,6 +13,7 @@ import {
   type NicheKey,
 } from "@realwise/shared";
 import { PrismaService } from "../../prisma/prisma.service";
+import { loadOperationMode } from "../pharmacy-common/operation-mode";
 import { AccessLogService } from "./access-log.service";
 import { MemberContextService } from "./member-context.service";
 import type { MemberContext } from "./member-context";
@@ -148,6 +149,10 @@ export class MemberAuthService {
       select: { id: true, name: true, slug: true, niche: true, status: true, logoUrl: true, primaryColor: true, secondaryColor: true, tertiaryColor: true, brandColor: true },
     });
     const niche = business.niche as NicheKey;
+    const operationMode = niche === "farmacia" ? await loadOperationMode(this.prisma.client, business.id) : null;
+    // Attendance mode hides the commerce sections (the API refuses them too).
+    const COMMERCE_SECTIONS = ["pedidos", "receitas", "catalogo", "importar", "classes"];
+    const sections = visibleSections(ctx.permissions, niche).filter((sec) => operationMode?.effective !== "attendance" || !COMMERCE_SECTIONS.includes(sec));
     return {
       member: { id: ctx.memberId, name: ctx.name, email: ctx.email, crf: ctx.crf },
       role: {
@@ -158,7 +163,7 @@ export class MemberAuthService {
         ownDeliveriesOnly: ctx.ownDeliveriesOnly,
       },
       permissions: ctx.permissions,
-      visibleSections: visibleSections(ctx.permissions, niche),
+      visibleSections: sections,
       canPerformPharmacistActions: ctx.requiresCrf && !!ctx.crf && ctx.crf.trim().length >= 3,
       business: {
         id: business.id,
@@ -169,6 +174,8 @@ export class MemberAuthService {
         logoUrl: business.logoUrl,
         branding: resolveBranding(niche, business),
         brandingIsCustom: [business.primaryColor, business.secondaryColor, business.tertiaryColor].some(isValidHexColor),
+        // Pharmacy only: chosen + effective operation mode and whether the plan allows commerce (null for other niches).
+        operationMode,
       },
     };
   }

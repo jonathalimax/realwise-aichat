@@ -31,6 +31,23 @@ seeds the demo pharmacy (idempotent, refreshes the stock sheet date so auto-conf
 marketing site and prints the URLs. Ctrl-C stops only what the script started (not Postgres/Redis). Logs: `.local-logs/<app>.log`.
 The first load of each Next page compiles it (can take 10 to 30 s).
 
+Operation mode of the demo (see `OPERATION_MODE.md`): it starts as `commerce` on the `profissional` plan. Flip it (applied on every run, no data is deleted):
+
+```
+DEMO_MODE=attendance scripts/dev-pharmacy.sh        # AI attendant only, no catalog/orders
+DEMO_PLAN=essencial scripts/dev-pharmacy.sh         # plan without commerce: forced to attendance (banner + upgrade CTA)
+DEMO_MODE=commerce DEMO_PLAN=profissional scripts/dev-pharmacy.sh   # back to the default
+# or only the seed, with the stack already running:
+cd apps/api && DEMO_MODE=attendance pnpm run seed:pharmacy     (or: pnpm run seed:pharmacy -- --mode=attendance --plan=essencial)
+```
+
+| Plan | Commerce allowed | Mode the demo runs in |
+| --- | --- | --- |
+| `essencial` (and trial / no subscription) | no | attendance (even if "commerce" is chosen) |
+| `profissional`, `studio` | yes | the chosen one (`DEMO_MODE`, default commerce) |
+
+You can also change it in the dashboard as the owner: Farmácia > Modo de operação (commerce is disabled on a plan without it).
+
 Options: `RESET_DEMO=1 scripts/dev-pharmacy.sh` recreates the demo pharmacy's data; `WITH_GATEWAY=1` also starts the inference gateway; `WITH_ADMIN=1` the platform admin app (:3004).
 
 | What | URL |
@@ -70,6 +87,20 @@ The demo business: "Farmácia Exemplo", slug `farmacia-exemplo`, 41 products (OT
 13. **Notifications and numbers.** Sidebar badges (Pedidos, Atendimento) update every 20 s; alerts strip on every page; Início KPIs (orders today, waiting, open handoffs, revenue of delivered orders).
 14. **Retention purge** (internal job, normally daily at 03:30 by the worker): set `PrescriptionUpload.retentionDeleteAt` to the past in SQL, then
     `curl -X POST localhost:3006/api/internal/pharmacy/retention-purge -H "x-internal-token: $INFERENCE_GATEWAY_TOKEN"`. The file disappears, the download answers 410.
+
+### 3.1 WhatsApp hand-over (Atendimento farmacêutico)
+
+1. Log in as the pharmacist (`Dra. Carla`, see demo logins) at `/farmacia/app/atendimento`, open the "Dor de cabeça há 3 dias" handoff (the demo customers have phones).
+2. Click **Iniciar atendimento**: a preview dialog shows the message ("Olá, Maria! Aqui é <seu nome>, <função> da <farmácia>. ... Posso te ajudar com isso?"). Edit it if you like and click **Abrir no WhatsApp Web** (new tab to `web.whatsapp.com/send?phone=...`; "Abrir no app" uses `wa.me`). The row now shows "Em atendimento · <nome>".
+3. Click **Marcar como respondido**: the handoff moves to "Respondidos" and the customer's web chat shows "<Nome> · <Função> continuou o atendimento pelo WhatsApp".
+4. In the chat widget, start a symptom ("estou com dor de cabeça"), answer the questions: before the handoff Alex asks "Qual seu WhatsApp (com DDD)..." (type a number, or "Prefiro continuar só pelo chat"). The new handoff then shows the contact in the dashboard.
+5. The audit log (Equipe > Registro) lists `handoff.whatsapp_link`, `handoff.start`, `handoff.whatsapp_answer`. Details in `docs/pharmacy/WHATSAPP_HANDOFF.md`.
+
+### Trying attendance mode (after `DEMO_MODE=attendance`)
+
+1. Dashboard as the owner: the menu has no Pedidos or Catálogo, "Atendimento farmacêutico" comes first, Início shows open handoffs / answered today / average response / conversations. `/pedidos` shows the "modo atendimento" panel; the API answers 403 `MODE_ATTENDANCE` (or `PLAN_FEATURE` with `DEMO_PLAN=essencial`).
+2. Widget: chips are "Falar com o farmacêutico", "Horários e entrega", "Perguntar sobre um produto". Type "tem dipirona 500mg? quanto custa?": Alex says he does not look up stock or price, asks to register the request, and "Sim, pode registrar" creates an Atendimento "Pedido de produto" for the pharmacist. "quero 2 dipirona" never reaches a cart. A red flag ("dor no peito") still gives SAMU 192 and an urgent handoff.
+3. Farmácia > Modo de operação: switch back to commerce (plan permitting).
 
 ## 4. Reset local data
 

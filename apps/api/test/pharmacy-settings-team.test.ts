@@ -112,8 +112,10 @@ function fakeSettings() {
       pharmacySettings: {
         upsert: async () => state.row,
         findUniqueOrThrow: async () => ({ ...state.row }),
+        findUnique: async () => ({ ...state.row }),
         update: async ({ data }: any) => Object.assign(state.row, data),
       },
+      subscription: { findUnique: async () => ({ plan: { code: "profissional" } }) },
       catalogImport: { findFirst: async () => null },
       product: {
         findMany: async () => state.products.map((p: any) => ({ id: p.id, name: p.name })),

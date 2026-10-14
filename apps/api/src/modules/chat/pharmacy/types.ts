@@ -95,6 +95,10 @@ export type Awaiting =
   | { kind: "order_confirm" }
   | { kind: "symptom_consent" }
   | { kind: "symptom_answer"; step: SymptomStep }
+  | { kind: "symptom_phone" }
+  | { kind: "symptom_name" }
+  | { kind: "product_request" }
+  | { kind: "product_request_consent" }
   | { kind: "rx_upload" };
 
 export type SymptomStep =
@@ -159,8 +163,15 @@ export interface PharmacyState {
     /** First message of the visitor, held until consent is given (never processed before). */
     pendingText?: string;
     startedAt: string;
+    /** The WhatsApp question (before the handoff) was asked / the customer chose to stay in the web chat only. */
+    contactAsked?: boolean;
+    contactDeclined?: boolean;
   };
   handoffId?: string | null;
+  /** Attendance mode: what the customer asked about (their own words, max 5), sent to the pharmacist as a product_request handoff. */
+  productRequests?: string[];
+  /** Attendance mode: text held until the customer agrees to register it. */
+  pendingProductRequest?: string;
   redFlagAt?: string | null;
   humanJoined: HumanJoined[];
   /** Product under discussion: drives "Adicionar ao carrinho" and the pharmacist follow-up chips. */
@@ -215,6 +226,8 @@ export interface OutMessage {
 }
 
 export interface PharmacyView {
+  /** Effective operation mode: "attendance" = no cart/products in the widget. */
+  operationMode?: "commerce" | "attendance";
   lane: Lane | null;
   cart: CartDto;
   checkoutStep: CheckoutStep | null;
@@ -279,7 +292,7 @@ export interface CreateHandoffInput {
   businessId: string;
   conversationId: string;
   leadId?: string | null;
-  reason: "symptom" | "rx" | "controlled" | "out_of_stock" | "other";
+  reason: "symptom" | "rx" | "controlled" | "out_of_stock" | "product_request" | "other";
   urgent: boolean;
   summary: string;
   brief: Record<string, unknown>;

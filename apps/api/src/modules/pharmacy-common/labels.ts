@@ -93,6 +93,7 @@ export const HANDOFF_REASON_LABEL = {
   controlled: "Medicamento controlado",
   out_of_stock: "Sem estoque",
   rx: "Receita",
+  product_request: "Pedido de produto",
   other: "Outro",
 } as const;
 

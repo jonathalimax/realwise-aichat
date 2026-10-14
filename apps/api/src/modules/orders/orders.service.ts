@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { loadOperationMode } from "../pharmacy-common/operation-mode";
 import { randomBytes } from "crypto";
 import { Prisma } from "@realwise/db";
 import { resolveBranding, type NicheKey } from "@realwise/shared";
@@ -482,7 +483,11 @@ export class OrdersService {
       take: 2000,
     });
     if (!pending.length) return { reminded: 0 };
-    const businessIds = [...new Set(pending.map((p) => p.businessId))];
+    // Attendance-mode pharmacies (chosen or forced by plan) have no order workflow: no reminders for old orders.
+    const commerceIds = new Set<string>();
+    for (const id of new Set(pending.map((p) => p.businessId))) if ((await loadOperationMode(this.prisma.client, id)).effective === "commerce") commerceIds.add(id);
+    const businessIds = [...commerceIds];
+    if (!businessIds.length) return { reminded: 0 };
     const [settingsRows, alerts] = await Promise.all([
       this.prisma.client.pharmacySettings.findMany({ where: { businessId: { in: businessIds } }, select: { businessId: true, orderReminderMinutes: true } }),
       this.prisma.client.businessAlert.findMany({ where: { businessId: { in: businessIds }, type: "pharmacy_order_waiting", dismissedAt: null }, select: { businessId: true, message: true, createdAt: true } }),
@@ -490,6 +495,7 @@ export class OrdersService {
     const interval = new Map(settingsRows.map((s) => [s.businessId, s.orderReminderMinutes]));
     let reminded = 0;
     for (const o of pending) {
+      if (!commerceIds.has(o.businessId)) continue;
       const everyMin = interval.get(o.businessId) ?? 10;
       const waited = Math.floor((now - o.createdAt.getTime()) / 60000);
       if (waited < everyMin) continue;
@@ -506,6 +512,7 @@ export class OrdersService {
     const settingsRows = await this.prisma.client.pharmacySettings.findMany({ where: { business: { niche: "farmacia", status: "live" } }, select: { businessId: true, stockMaxAgeHours: true } });
     let alerted = 0;
     for (const s of settingsRows) {
+      if ((await loadOperationMode(this.prisma.client, s.businessId)).effective !== "commerce") continue;
       const sheet = await this.settings.latestSheet(s.businessId, s.stockMaxAgeHours);
       if (sheet.stale && sheet.ageHours !== null) {
         if (await this.notifications.staleSheet(s.businessId, sheet.ageHours, s.stockMaxAgeHours)) alerted++;

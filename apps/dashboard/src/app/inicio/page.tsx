@@ -43,7 +43,7 @@ export default function InicioPage() {
         actions={<Tabs label="Período" value={range} onValueChange={setRange} options={RANGES} />}
       />
       <LoadState state={state} section="inicio" what="o resumo" skeleton={<HomeSkeleton />}>
-        {s && <Summary s={s} canImport={can("importar", "edit")} />}
+        {s && <Summary s={s} canImport={can("importar", "edit")} forcedByPlan={Boolean(me?.business.operationMode?.forcedByPlan)} />}
       </LoadState>
     </PageStack>
   );
@@ -62,11 +62,17 @@ function HomeSkeleton() {
   );
 }
 
-function Summary({ s, canImport }: { s: DashboardSummary; canImport: boolean }) {
+function Summary({ s, canImport, forcedByPlan }: { s: DashboardSummary; canImport: boolean; forcedByPlan: boolean }) {
+  const attendance = s.mode === "attendance";
   const handoffsFirst = s.roleFocus === "handoffs";
   return (
     <>
-      <StockAlert stock={s.stock} canImport={canImport} />
+      {forcedByPlan && (
+        <Alert variant="amber" action={<LinkButton href="/plano" variant="outline" size="sm">Ver planos</LinkButton>}>
+          O plano atual só permite o modo atendimento: o Alex atende e encaminha ao farmacêutico, sem catálogo, estoque ou pedidos. Os dados já cadastrados continuam guardados e voltam com o upgrade.
+        </Alert>
+      )}
+      {!attendance && <StockAlert stock={s.stock} canImport={canImport} />}
 
       {s.kpis.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
@@ -77,8 +83,8 @@ function Summary({ s, canImport }: { s: DashboardSummary; canImport: boolean }) 
       )}
 
       <div className="flex flex-wrap items-stretch gap-4">
-        <NeedsAction items={s.needsAction} className={handoffsFirst ? "order-2" : ""} />
-        {s.handoffs && <Handoffs items={s.handoffs} className={handoffsFirst ? "order-1" : ""} />}
+        {!attendance && <NeedsAction items={s.needsAction} className={handoffsFirst ? "order-2" : ""} />}
+        {s.handoffs && <Handoffs items={s.handoffs} className={attendance ? "flex-[1_1_100%]" : handoffsFirst ? "order-1" : ""} />}
       </div>
 
       {(s.chart || s.funnel) && (

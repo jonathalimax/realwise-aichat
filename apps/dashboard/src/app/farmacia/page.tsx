@@ -26,19 +26,26 @@ import { Tabs } from "../../components/ui/segmented";
 import { Textarea } from "../../components/ui/textarea";
 import { Field, LinkButton, LoadState, PageHeader, PageStack, SectionCard } from "../../components/page-kit";
 import { NotificationsAlwaysOn } from "../../components/page-notifications";
+import { ModeTab } from "../../components/pharmacy/settings/ModeTab";
 import { AppearanceTab } from "../../components/pharmacy/settings/AppearanceTab";
 import { FIELD_KEY, describeProposed, pendingKeys, toForm, toPatch, type SettingsForm } from "../../components/pharmacy/settings/model";
 
 const TABS = [
+  { value: "modo", label: "Modo de operação" },
   { value: "identidade", label: "Identidade e legal" },
   { value: "entrega", label: "Entrega" },
   { value: "retirada", label: "Retirada" },
+  { value: "informacoes", label: "Entrega e retirada" },
   { value: "limites", label: "Limites" },
   { value: "estoque", label: "Estoque" },
   { value: "horarios", label: "Horários" },
   { value: "aparencia", label: "Aparência" },
 ] as const;
 type TabKey = (typeof TABS)[number]["value"];
+// Attendance mode has no orders or stock: delivery, pickup, limits and stock collapse into one informational tab
+// (Alex only answers questions with them); the mode tab is always there.
+const ATTENDANCE_HIDDEN: TabKey[] = ["entrega", "retirada", "limites", "estoque"];
+const COMMERCE_HIDDEN: TabKey[] = ["informacoes"];
 
 export default function FarmaciaPage() {
   return (
@@ -52,8 +59,10 @@ function Farmacia() {
   const router = useRouter();
   const params = useSearchParams();
   const tabParam = params.get("tab") as TabKey | null;
-  const tab: TabKey = TABS.some((t) => t.value === tabParam) ? tabParam! : "identidade";
   const { me, can, refresh } = useSession();
+  const attendance = me?.business.operationMode?.effective === "attendance";
+  const tabs = TABS.filter((t) => !(attendance ? ATTENDANCE_HIDDEN : COMMERCE_HIDDEN).includes(t.value));
+  const tab: TabKey = tabs.some((t) => t.value === tabParam) ? tabParam! : "identidade";
   const canEdit = can("farmacia", "edit");
   const isOwner = me?.role.key === "owner";
   const state = useLoad(() => getPharmacySettings(), []);
@@ -114,7 +123,7 @@ function Farmacia() {
       <PageHeader
         title="Farmácia"
         subtitle="Regras que o sistema aplica no chat e nos pedidos"
-        actions={canEdit && tab !== "aparencia" ? <Button disabled={busy || !dirty} onClick={save}>{busy ? "Salvando…" : "Salvar alterações"}</Button> : undefined}
+        actions={canEdit && tab !== "aparencia" && tab !== "modo" ? <Button disabled={busy || !dirty} onClick={save}>{busy ? "Salvando…" : "Salvar alterações"}</Button> : undefined}
       />
       <NotificationsAlwaysOn text={dto?.banner ? `${dto.banner.replace(/\.$/, "")}. Não podem ser desligadas.` : undefined} />
       {!canEdit && <Alert variant="amber">Você pode ver estas regras, mas a sua função não permite alterá-las.</Alert>}
@@ -163,7 +172,67 @@ function Farmacia() {
               </SectionCard>
             )}
 
-            <Tabs label="Seções" value={tab} onValueChange={setTab} options={TABS} className="w-fit" />
+            {dto.mode?.forcedByPlan && tab !== "modo" && (
+              <Alert variant="amber" action={<LinkButton href="/plano" variant="outline" size="sm">Ver planos</LinkButton>}>
+                O plano atual só permite o modo atendimento: catálogo, estoque e pedidos ficam guardados e voltam com o upgrade.
+              </Alert>
+            )}
+            <Tabs label="Seções" value={tab} onValueChange={setTab} options={tabs} className="w-fit" />
+
+            {tab === "modo" && (
+              <ModeTab
+                dto={dto}
+                isOwner={isOwner}
+                onSaved={(next) => {
+                  state.setData(next);
+                  void refresh();
+                }}
+              />
+            )}
+
+            {tab === "informacoes" && (
+              <>
+                <SectionCard
+                  title="Entrega e retirada (informativo)"
+                  description="O Alex só usa isto para responder dúvidas: não há pedidos nem entrega pelo sistema neste modo"
+                  action={<Switch checked={form.deliveryEnabled} disabled={!canEdit} onCheckedChange={(v) => set("deliveryEnabled", v)} aria-label="Entrega ligada" />}
+                >
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+                    <Field label="Taxa de entrega" htmlFor="i1" badge={badge("deliveryFee")}>
+                      <Input id="i1" inputMode="decimal" value={form.deliveryFee} disabled={!canEdit} onChange={(e) => set("deliveryFee", e.target.value)} placeholder="6,00" />
+                    </Field>
+                    <Field label="Bairros e faixas de CEP atendidos" htmlFor="i2" className="col-span-full" badge={badge("areas")} hint="Separe por vírgula.">
+                      <Textarea id="i2" rows={3} value={form.areas} disabled={!canEdit} onChange={(e) => set("areas", e.target.value)} placeholder="Água Verde, Batel, Centro, 80250" />
+                    </Field>
+                    <label className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                      <span>Retirada em loja</span>
+                      <Switch checked={form.pickupEnabled} disabled={!canEdit} onCheckedChange={(v) => set("pickupEnabled", v)} aria-label="Retirada ligada" />
+                    </label>
+                  </div>
+                </SectionCard>
+                <SectionCard title="Pagamento e trocas" description="Informação que o Alex repassa ao cliente">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-wrap gap-5" role="group" aria-label="Formas de pagamento">
+                      {PAYMENT_METHODS.map((m) => (
+                        <label key={m.value} className="flex cursor-pointer items-center gap-2">
+                          <Checkbox
+                            checked={form.payments.includes(m.value)}
+                            disabled={!canEdit}
+                            onCheckedChange={(v) => set("payments", v === true ? [...form.payments, m.value] : form.payments.filter((x) => x !== m.value))}
+                            aria-label={m.label}
+                          />
+                          {m.label}
+                        </label>
+                      ))}
+                      {badge("payments")}
+                    </div>
+                    <Field label="Política de troca" htmlFor="i3" badge={badge("exchangePolicy")}>
+                      <Textarea id="i3" rows={3} value={form.exchangePolicy} disabled={!canEdit} onChange={(e) => set("exchangePolicy", e.target.value)} />
+                    </Field>
+                  </div>
+                </SectionCard>
+              </>
+            )}
 
             {tab === "identidade" && (
               <SectionCard title="Identidade e legal" description="Aparece no rodapé do chat para o cliente">

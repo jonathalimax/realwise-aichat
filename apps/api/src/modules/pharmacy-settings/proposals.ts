@@ -7,6 +7,7 @@ import { fold } from "../pharmacy-common/format";
 import { isValidCnpj, onlyDigits } from "./settings-validation";
 
 export const PROPOSAL_LABELS: Record<string, string> = {
+  modo_operacao: "Modo de operação",
   razao_social_cnpj: "Razão social e CNPJ",
   afe_licenca: "AFE",
   farmaceutico_responsavel: "Farmacêutico responsável (RT)",
@@ -135,11 +136,36 @@ function parseMoney(raw: string, zeroWords: RegExp): number | null {
   return parsed ? parsed.priceCents : null;
 }
 
+// ---- Operation mode (interview field `modo_operacao`) ------------------------------------------------
+// Deterministic pt-BR classifier (works without a model). Returns null when the answer is missing,
+// unclear or says both things: the interview then asks the owner to confirm explicitly.
+const NEGATED_COMMERCE = /\b(sem|nao|nem)\b(?:\s+\w+){0,4}?\s+(estoque|vender|vendemos|vendo|venda|vendas|pedidos?|catalogo|comercio|carrinho|loja virtual)\b/g;
+const COMMERCE_WORDS = /\b(estoque|vender|vendemos|vendo|venda|vendas|vendendo|pedidos?|catalogo|comercio|carrinho|ecommerce|e commerce|loja virtual|cadastrar produtos|controlar estoque|checkout)\b/;
+const ATTENDANCE_WORDS = /\b(so|apenas|somente)\b(?:\s+\w+){0,2}\s+(atendimento|ia|escalar|escalacao|encaminh\w*|atendente|whatsapp)\b|\batendimento\b|\b(escalar|escalacao|escalonar|encaminhar|encaminhamos|encaminho)\b|\bwhatsapp\b|\bmodo atendimento\b/;
+
+export function classifyOperationModeAnswer(raw: string): "commerce" | "attendance" | null {
+  const f = fold(raw);
+  if (!f) return null;
+  const negated = new RegExp(NEGATED_COMMERCE.source, "g");
+  const negHit = negated.test(f);
+  const rest = f.replace(new RegExp(NEGATED_COMMERCE.source, "g"), " ");
+  const commerce = COMMERCE_WORDS.test(rest);
+  const attendance = negHit || ATTENDANCE_WORDS.test(rest);
+  if (commerce && attendance) return null;
+  if (commerce) return "commerce";
+  if (attendance) return "attendance";
+  return null;
+}
+
 /** Builds the `proposed` object for one interview field. `{}` = nothing parsable. */
 export function parseProposal(fieldKey: string, raw: string): Proposed {
   const text = raw.trim();
   if (!text) return {};
   switch (fieldKey) {
+    case "modo_operacao": {
+      const mode = classifyOperationModeAnswer(text);
+      return mode ? { operationMode: mode } : {};
+    }
     case "razao_social_cnpj":
       return parseIdentity(text);
     case "afe_licenca": {

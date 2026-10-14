@@ -154,6 +154,11 @@ class FakeModel {
     this.guard("findUnique", args);
     return this.rows.find((r) => matchesWhere(r, args?.where)) ?? null;
   }
+  async findUniqueOrThrow(args: any) {
+    const row = await this.findUnique(args);
+    if (!row) throw Object.assign(new Error(`${this.name} not found`), { code: "P2025" });
+    return row;
+  }
   async findFirst(args: any) {
     this.guard("findFirst", args);
     return sortRows(this.rows.filter((r) => matchesWhere(r, args?.where)), args?.orderBy)[0] ?? null;
@@ -279,6 +284,7 @@ export function createFakePrisma() {
     lead: new FakeModel("lead"),
     appointment: new FakeModel("appointment"),
     alert: new FakeModel("alert"),
+    subscription: new FakeModel("subscription"),
   };
 
   const kb: KbChunk[] = [];

@@ -5,6 +5,11 @@
  *   pnpm --filter @realwise/api seed:pharmacy            idempotent: creates what is missing, refreshes stock dates
  *   pnpm --filter @realwise/api seed:pharmacy -- --reset deletes the demo business' own rows first, then recreates
  *
+ * Operation mode (docs/pharmacy/OPERATION_MODE.md): the demo is "commerce" on the "profissional" plan.
+ *   DEMO_MODE=attendance  (or --mode=attendance)  flips the demo to attendance mode (AI attendant only)
+ *   DEMO_PLAN=essencial   (or --plan=essencial)   puts the demo on another plan (essencial forces attendance)
+ * Both are applied on every run (also without --reset); data is never deleted by a mode or plan change.
+ *
  * Refuses to run unless DATABASE_URL points at localhost / 127.0.0.1 / ::1.
  */
 import bcrypt from "bcrypt";
@@ -18,6 +23,13 @@ import { dedupKeyFor } from "../src/modules/products/product-utils";
 import { DEMO_AREAS, DEMO_CUSTOMERS, DEMO_HOURS, DEMO_MEMBERS, DEMO_PASSWORD, DEMO_PRODUCTS, type DemoProduct } from "./pharmacy-demo-data";
 
 const SLUG = "farmacia-exemplo";
+
+function option(name: string, envName: string): string | undefined {
+  const arg = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return arg ? arg.slice(name.length + 3) : process.env[envName] || undefined;
+}
+const DEMO_OPERATION_MODE = option("mode", "DEMO_MODE") === "attendance" ? "attendance" : "commerce";
+const DEMO_PLAN_CODE = ["essencial", "profissional", "studio"].includes(option("plan", "DEMO_PLAN") ?? "") ? (option("plan", "DEMO_PLAN") as string) : "profissional";
 const PHONE = "+5541999990000";
 
 function assertLocal() {
@@ -192,11 +204,11 @@ async function main() {
   }
 
   // ---- subscription (so /plano has something to show)
-  const plan = await prisma.plan.findFirst({ where: { code: "profissional" } });
+  const plan = await prisma.plan.findFirst({ where: { code: DEMO_PLAN_CODE } });
   if (plan) {
     await prisma.subscription.upsert({
       where: { businessId },
-      update: {},
+      update: { planId: plan.id },
       create: {
         businessId,
         planId: plan.id,
@@ -569,6 +581,9 @@ async function main() {
     for (const e of E) await log(e[0], e[1], e[2], e[3], e[4], e[5], e[6]);
   }
 
+  // ---- operation mode (chosen) of the demo; the plan above decides what is allowed
+  await prisma.pharmacySettings.update({ where: { businessId }, data: { operationMode: DEMO_OPERATION_MODE, operationModeChosenAt: new Date() } });
+
   // ---- counters: never move backwards
   const maxOrder = Math.max(...ORDERS.map((o) => o.n));
   const maxRx = Math.max(...Object.values(nextRx));
@@ -580,7 +595,7 @@ async function main() {
     },
   });
 
-  console.log(`Seeded "Farmácia Exemplo" (slug ${SLUG}, id ${businessId}). Stock sheet date refreshed to now.`);
+  console.log(`Seeded "Farmácia Exemplo" (slug ${SLUG}, id ${businessId}). Stock sheet date refreshed to now. Mode: ${DEMO_OPERATION_MODE}, plan: ${DEMO_PLAN_CODE}.`);
 }
 
 main()

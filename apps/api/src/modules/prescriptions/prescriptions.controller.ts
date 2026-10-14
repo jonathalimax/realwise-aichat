@@ -7,12 +7,13 @@ import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import { VisitorSessionGuard } from "../../common/guards/visitor-session.guard";
 import { CurrentMember, CurrentVisitor } from "../../common/decorators/current-business.decorator";
 import { PermissionsGuard } from "../access/permissions.guard";
+import { CommerceModeGuard } from "../access/commerce-mode.guard";
 import { RequireCrf, RequirePermission } from "../access/permission.decorator";
 import type { MemberContext } from "../access/member-context";
 import { PrescriptionsService, RX_MAX_BYTES } from "./prescriptions.service";
 
 @Controller("prescriptions")
-@UseGuards(BusinessSessionGuard, PermissionsGuard)
+@UseGuards(BusinessSessionGuard, PermissionsGuard, CommerceModeGuard)
 @RequirePermission("receitas", "view")
 export class PrescriptionsController {
   constructor(private readonly rx: PrescriptionsService) {}
@@ -56,7 +57,7 @@ export class PrescriptionsController {
 
 /** Visitor-side upload (widget). The file goes to the private tree; nothing is chunked or embedded. */
 @Controller("chat/:businessId/conversations/:conversationId/prescriptions")
-@UseGuards(VisitorSessionGuard, RateLimitGuard)
+@UseGuards(VisitorSessionGuard, RateLimitGuard, CommerceModeGuard)
 export class PrescriptionUploadController {
   constructor(private readonly rx: PrescriptionsService) {}
 

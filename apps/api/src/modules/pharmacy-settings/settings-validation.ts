@@ -23,6 +23,7 @@ export const SETTING_LABELS: Record<string, string> = {
   prescriptionRetentionDays: "retenção de receitas",
   orderReminderMinutes: "lembrete de pedido parado",
   quickChips: "atalhos do chat",
+  operationMode: "modo de operação",
 };
 
 export const PAYMENT_METHODS = ["pix", "cartao", "dinheiro", "vale"] as const;
@@ -151,6 +152,10 @@ export function buildSettingsPatch(current: Record<string, unknown>, patch: Reco
       case "pickupEnabled":
       case "autoConfirmEnabled":
         data[key] = bool(raw, key);
+        break;
+      case "operationMode":
+        if (raw !== "commerce" && raw !== "attendance") throw bad("Modo de operação inválido (use commerce ou attendance).", key);
+        data[key] = raw;
         break;
       case "deliveryAreas":
         data[key] = normalizeDeliveryAreas(raw);

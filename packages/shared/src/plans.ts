@@ -30,6 +30,9 @@ export interface PlanFeatures {
   suggestedDrafts: boolean;
   whatsappAlerts: boolean;
   crmWebhook: boolean;
+  // Pharmacy niche: stock, catalog, orders, prescriptions and the cart/checkout in chat. Plans
+  // without it run the pharmacy in "attendance" mode (AI attendant + pharmacist handoffs only).
+  pharmacyCommerce: boolean;
 }
 
 export type PlanFeatureKey = keyof PlanFeatures;
@@ -64,6 +67,7 @@ const BASE_FEATURES: PlanFeatures = {
   suggestedDrafts: false,
   whatsappAlerts: false,
   crmWebhook: false,
+  pharmacyCommerce: false,
 };
 
 const PROFISSIONAL_FEATURES: PlanFeatures = {
@@ -75,6 +79,7 @@ const PROFISSIONAL_FEATURES: PlanFeatures = {
   prioritySupport: true,
   learningLoop: "full",
   learningSavedAnswersCap: null,
+  pharmacyCommerce: true,
 };
 
 // Ordered cheapest -> most expensive; this order is the upgrade path.
@@ -217,6 +222,14 @@ export function planHighlights(plan: PlanDefinition): string[] {
   if (f.dedicatedSupport) items.push("Suporte dedicado");
   else if (f.prioritySupport) items.push("Suporte prioritário");
   return items;
+}
+
+// Extra pricing bullets for the pharmacy niche (marketing pharmacy page, pharmacy billing page).
+// Kept apart from planHighlights() so the generic bullets stay untouched.
+export function pharmacyPlanHighlights(plan: PlanDefinition): string[] {
+  return plan.features.pharmacyCommerce
+    ? ["Catálogo, estoque e pedidos pelo chat (modo comércio)", "Receitas e revisão de classes pelo farmacêutico"]
+    : ["Atendimento com IA e encaminhamento ao farmacêutico (modo atendimento)", "Sem catálogo, estoque ou pedidos online"];
 }
 
 // --- Conversation quota alerts ------------------------------------------------------------

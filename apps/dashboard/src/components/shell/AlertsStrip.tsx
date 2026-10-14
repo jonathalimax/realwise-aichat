@@ -7,12 +7,16 @@ import { dismissAlert, getAlerts, type BusinessAlert } from "../../lib/pharmacy-
 import { Alert } from "../ui/alert";
 import { Button, buttonVariants } from "../ui/button";
 import { cn } from "../../lib/utils";
+import { modeOf } from "../../lib/nav";
+import { useSession } from "../../lib/session";
 
 const POLL_MS = 60_000;
 
 /** Active business alerts (BusinessAlert rows: new order waiting, urgent handoff, stale sheet...) above the page. */
 export function AlertsStrip() {
   const [alerts, setAlerts] = useState<BusinessAlert[]>([]);
+  // Attendance mode: alerts about orders, prescriptions and stock sheets (older ones may still be active) are hidden.
+  const attendance = modeOf(useSession().me) === "attendance";
 
   const denied = useRef(false);
   const load = useCallback(async () => {
@@ -22,7 +26,7 @@ export function AlertsStrip() {
       const rank = { critical: 0, warning: 1, info: 2 } as Record<string, number>;
       // Critical first (an urgent handoff must never be pushed out by older warnings), then newest first.
       const sorted = list
-        .filter((a) => a.type.startsWith("pharmacy_"))
+        .filter((a) => a.type.startsWith("pharmacy_") && !(attendance && /order|rx|prescription|stock|sheet/i.test(a.type)))
         .sort((a, b) => (rank[a.severity] ?? 3) - (rank[b.severity] ?? 3) || String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));
       setAlerts(sorted.slice(0, 3));
     } catch (e) {
@@ -30,7 +34,7 @@ export function AlertsStrip() {
       if ((e as { status?: number })?.status === 403) denied.current = true;
       setAlerts([]);
     }
-  }, []);
+  }, [attendance]);
 
   useEffect(() => {
     void load();

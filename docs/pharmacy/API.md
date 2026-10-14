@@ -93,7 +93,7 @@ Default Nest shape: `{ "statusCode": 400, "message": "...", "error": "Bad Reques
   "message": "Você não tem acesso a \"Catálogo\" (edição).", "section": "catalogo", "required": "edit" }
 ```
 
-`code` is one of `PERMISSION_DENIED` (+`section`, `required`), `CRF_REQUIRED` (+`section`,`required`: needs a pharmacist with CRF), `OWNER_PROTECTED` (manager touching an owner / granting owner / editing the Owner role), `LAST_OWNER`, `OWN_DELIVERIES_ONLY` (courier touching an order that is not theirs), `VISITOR_NOT_IDENTIFIED` (visitor routes needing a lead). The dashboard renders **"Sem acesso"** for a 403 on page load and hides the actions the member cannot perform (use `/auth/me` permissions).
+`code` is one of `PERMISSION_DENIED` (+`section`, `required`), `CRF_REQUIRED` (+`section`,`required`: needs a pharmacist with CRF), `OWNER_PROTECTED` (manager touching an owner / granting owner / editing the Owner role), `LAST_OWNER`, `OWN_DELIVERIES_ONLY` (courier touching an order that is not theirs), `VISITOR_NOT_IDENTIFIED` (visitor routes needing a lead). Operation mode adds two more 403 codes on commerce-only routes (products, class review, catalog imports, orders, prescriptions, visitor prescription upload): `PLAN_FEATURE` (the plan lacks `pharmacyCommerce`; body has `upgradeTo`) and `MODE_ATTENDANCE` (the owner chose attendance). See `OPERATION_MODE.md`. The dashboard renders **"Sem acesso"** for a 403 on page load and hides the actions the member cannot perform (use `/auth/me` permissions).
 
 ### 1.4 Permission sections and levels
 
@@ -486,15 +486,20 @@ Upload (visitor side) is in section 8.4. Uploaded files are stored privately und
 | `GET /handoffs/:id` | `atendimento:view` | 2b | none | `HandoffDetailDto` |
 | `POST /handoffs/:id/reply` | `atendimento:edit` + CRF | 2b | `{ text: string (1..2000) }` | `HandoffDetailDto`. Creates `Message{ role:"owner", content:text, authorMemberId, authorRole: role name, authorName }` in the conversation; if this member has no `human_joined` system message in the conversation yet, first creates `Message{ role:"system", kind:"human_joined", content:"<Nome> · <Função> entrou na conversa", authorMemberId, authorRole, authorName }`; sets `status = answered`, `answerText`, `answeredAt`, `answeredBy*`; sends the visitor push (existing push service) and stores NO brief text in any message. Log `handoff.answer` (summary "Respondeu atendimento" with no content). |
 | `POST /handoffs/:id/close` | `atendimento:edit` + CRF | 2b | none | `HandoffDetailDto`. Log `handoff.close`. |
+| `POST /handoffs/:id/whatsapp/draft` | `atendimento:edit` + CRF | WhatsApp hand-over | none | `{ customerFirstName, phone, message, maxChars, webUrl, appUrl }`. `phone` is E.164 digits (the **only** place the full number is returned). `message` is built by `buildWhatsappMessage` (customer-said content only). `409 NO_PHONE` when the customer gave no WhatsApp, `409 INVALID_STATE` when closed. Log `handoff.whatsapp_link` (no phone, no health text). |
+| `POST /handoffs/:id/start` | `atendimento:edit` + CRF | WhatsApp hand-over | `{ channel?: "whatsapp"\|"chat" }` (default `whatsapp`) | `HandoffDetailDto` with `inProgress`. Status stays `open`; the marker lives in `brief.inProgress`. Log `handoff.start`. |
+| `POST /handoffs/:id/mark-answered` | `atendimento:edit` + CRF | WhatsApp hand-over | none | `HandoffDetailDto` (`answered`, `answer.text = "Atendimento continuado pelo WhatsApp."`). Posts one system line in the web chat via `ChatHumanService.recordSystemNote`: "Nome · Função continuou o atendimento pelo WhatsApp". Idempotent. Log `handoff.whatsapp_answer`. |
 
 ```jsonc
 // HandoffListDto
 { "id": "…", "who": "Maria, 34", "customerName": "Maria", "urgent": true,
   "tag": "Urgente", "tagBadge": "red", "reason": "symptom", "reasonLabel": "Sintoma",
-  "summary": "Dor de cabeça há 3 dias", "status": "open", "createdAt": "…", "waitingMinutes": 4, "conversationId": "…" }
+  "summary": "Dor de cabeça há 3 dias", "status": "open", "createdAt": "…", "waitingMinutes": 4, "conversationId": "…",
+  "inProgress": null /* or { at, byMemberId, byName, byRole, channel: "whatsapp"|"chat" } while status is open */, "hasPhone": true }
 
 // HandoffDetailDto = HandoffListDto +
-{ "brief": { /* raw JSON stored by the chat engine, see below */ },
+{ "contact": { "firstName": "Maria", "phoneMasked": "(41) •••••-2233", "hasPhone": true },   // never the full number
+  "brief": { /* raw JSON stored by the chat engine, see below */ },
   "briefRows": [ { "label": "Sintoma", "value": "Dor de cabeça forte" }, { "label": "Duração", "value": "Há 3 dias" },
                  { "label": "Intensidade", "value": "Forte, piora à noite" }, { "label": "Para quem", "value": "Ela mesma, 34 anos" },
                  { "label": "Gestante", "value": "Não" }, { "label": "Alergias", "value": "Dipirona" },
@@ -505,6 +510,8 @@ Upload (visitor side) is in section 8.4. Uploaded files are stored privately und
   "conversationLink": "/conversas?open=<conversationId>",
   "answer": null /* or { "text", "at", "byName", "byRole" } */ }
 ```
+
+The symptom questionnaire now asks for the customer's WhatsApp (phone-first, optional name, returning customers recognized) before the handoff is created; see `docs/pharmacy/WHATSAPP_HANDOFF.md`. The brief gains `contact: { firstName, phoneMasked }` and, once started, `inProgress` (both display data; the full phone lives only on the `Lead`).
 
 `brief` (JSON written by 2a in `PharmacistHandoff.brief`, **never** written to any `Message`): `{ symptoms, duration, severity, forWhom: { relation, age, pregnant? }, allergies: string[], otherMedicines: string[], alreadyTried: string[], redFlags: string[], suggestedProducts: [{ productId, name, reason, inStock, priceCents }], medication?, availability?, priceInformedCents?, onlineSaleAllowed?, customerRequest? }` (controlled / out-of-stock handoffs use the second group of keys: the prototype rows "Medicamento", "Disponibilidade", "Preço informado", "Venda online", "Pedido do cliente", "Produto pedido", "Estoque", "Equivalentes"). 2b builds `briefRows` from whichever keys exist, in this order with these pt-BR labels. `suggestion.products` must come only from in-stock catalog rows; equivalents shown only when flagged `equivalentGroup`.
 
@@ -555,7 +562,7 @@ All money in cents. `product.imageUrl` is the public product image URL (or `null
 { "type": "symptom_question","step": "symptom|duration|severity|for_whom|age|pregnancy|allergies|other_medicines|already_tried", "prompt": "Há quanto tempo você sente isso?", "chips": ["Hoje","1–3 dias","Mais de 3 dias"], "allowFreeText": true, "consent": ConsentCardOrNull }
 { "type": "red_flag",        "headline": "Isso pode ser urgente", "body": "Ligue 192 (SAMU) ou vá ao pronto-socorro agora.", "samuNumber": "192", "offerPharmacist": true, "handoffId": "…|null" }
 { "type": "controlled_info", "product": { "name", "presentation" }, "available": true, "priceCents": 2490, "message": "Este medicamento é controlado e não pode ser vendido online. Venha à farmácia com a receita." }
-{ "type": "contact_capture", "fields": ["phone","name","email"], "recognized": null /* or { "firstName": "João", "address": MaskedAddress|null } */, "consent": ConsentCard }
+{ "type": "contact_capture", /* symptom lane (WhatsApp step): also "purpose": "pharmacy_triage", "fields": ["phone","name"], consent purpose "pharmacy_contact" */ "fields": ["phone","name","email"], "recognized": null /* or { "firstName": "João", "address": MaskedAddress|null } */, "consent": ConsentCard }
 { "type": "address_capture", "saved": MaskedAddress|null, "askConfirmSaved": true, "fields": ["cep","number","complement","reference"], "numberHint": "Use só números, 12B ou \"sem número\"" }
 { "type": "fulfillment_choice", "options": [ { "value": "delivery", "label": "Entrega", "feeCents": 600, "etaLabel": "30–50 min" }, { "value": "pickup", "label": "Retirada em loja", "feeCents": 0 } ] }
 { "type": "order_review",    "items": [...], "subtotalCents", "deliveryFeeCents", "totalCents", "fulfillment": "delivery", "addressLabel": "Rua X, 120B · Água Verde", "etaLabel": "30–50 min", "paymentLabel": "Pagamento na entrega (Pix/cartão/dinheiro, conforme a farmácia)", "staleStockNotice": null /* honest message when the sheet is old */ }
@@ -736,7 +743,7 @@ Read together with section 8. Deviations are small and additive.
 
 - **Text turns** (`POST .../messages`, `.../messages/stream` `done` event) for a pharmacy return `{ message, messages, suggestions, pharmacy, escalated: false }`. `message` is the first assistant message of the turn; `messages` is the whole list (usually 1; out-of-stock-with-equivalents sends a text message followed by one `product_card` message per equivalent). **2d must render `messages` when present.** General questions that go to the model return the usual `{ message, suggestions }` (no `pharmacy` key; `GET .../messages` always has it).
 - **Extra visitor actions** (same endpoint as 8.3): `cart.view {}`, `cart.clear {}`, `rx.check {}` (call it right after a prescription upload so the engine moves the pending prescription line into the cart immediately; without it the next visitor turn does the same). `handoff.request {reason: "other"}` creates a handoff straight away; `"symptom"` (default) starts the questionnaire.
-- **ConsentCard purposes**: besides `pharmacy_triage` and `prescription_upload` the checkout customer step uses `order_contact` (card inside `contact_capture`). `GET /chat/:businessId/consent-text?purpose=` accepts the three.
+- **ConsentCard purposes**: besides `pharmacy_triage` and `prescription_upload` the checkout customer step uses `order_contact` (card inside `contact_capture`). `GET /chat/:businessId/consent-text?purpose=` accepts the three, plus `pharmacy_contact` (symptom lane WhatsApp step).
 - **Prescription uploads are detected by DB state**: a `PrescriptionUpload` with `conversationId = <this conversation>`, `orderId = null`, `status != rejected` counts as attached. 2b's upload endpoint MUST set `conversationId`. At order creation the engine passes those ids to `createFromCart(prescriptionIds)`.
 - **Handoff brief keys** (all in `PharmacistHandoff.brief`, never in a message): symptom handoffs as in 7.3 plus `suggestionNote`, `customerText` (red flag only) and `followUps: string[]` (extra symptom messages sent after the handoff). Controlled / pharmacist-required: `{ medication, availability, priceInformedCents, onlineSaleAllowed: false, customerRequest, conversationLink }`. Out of stock: `{ requestedProduct, medication, stock, availability, equivalents: [{productId, name, stockQty?, priceCents?}], customerRequest, conversationLink }`. `other`: `{ customerRequest, conversationLink }`. Reasons used: `symptom` (questionnaire, red flag), `controlled` (controlled product only), `out_of_stock` (also the equivalent-swap confirmation created together with the order), `other` (unclassified/pharmacist-required products, "só chamar o farmacêutico"). `rx` is not created by the chat (the prescription is an upload on the order).
 - **Order creation** uses `PHARMACY_ORDERS_PORT` (chat/pharmacy/types.ts). The default implementation is Prisma-direct inside chat/. Extra input fields beyond API.md 8.3: `items[].viaEquivalentOf`, `requirePharmacist`, `addressDiffersFromSaved`; extra output: `staleSheet`, `pendingReasons`. 2b's `OrdersService.createFromCart` can be bound to the same token (set `handlesNotifications = true` on it if it writes its own alerts).

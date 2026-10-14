@@ -754,7 +754,7 @@ test("contact form with name and an empty e-mail field does not ask for the e-ma
 // Lane E: symptom-first
 // ---------------------------------------------------------------------------------------------
 
-async function runQuestionnaire(p: Pharmacy, c: { id: string; visitorToken: string }, answers: Record<string, string>) {
+async function runQuestionnaire(p: Pharmacy, c: { id: string; visitorToken: string }, answers: Record<string, string>, contact: { phone?: string; name?: string } | "decline" = "decline") {
   const log: { step: string; text: string; chips: string[] }[] = [];
   let turn = await p.say(c, "estou com dor de cabeça");
   log.push({ step: "consent", text: turn.text, chips: turn.suggestions });
@@ -766,6 +766,15 @@ async function runQuestionnaire(p: Pharmacy, c: { id: string; visitorToken: stri
     if (!ui || ui.type !== "symptom_question") break;
     log.push({ step: ui.step, text: turn.text, chips: turn.suggestions });
     turn = await p.say(c, answers[ui.step] ?? "Não");
+  }
+  // Explicit contact step before the handoff: WhatsApp number (optional name) or "stay in the web chat".
+  if (turn.uis[0]?.type === "contact_capture" && turn.uis[0].purpose === "pharmacy_triage") {
+    log.push({ step: "contact", text: turn.text, chips: turn.suggestions });
+    if (contact === "decline") turn = await p.say(c, "Prefiro continuar só pelo chat");
+    else {
+      turn = await p.say(c, contact.phone ?? "(41) 99111-2233");
+      if (contact.name !== undefined && turn.suggestions.includes("Pular")) turn = await p.say(c, contact.name || "Pular");
+    }
   }
   return { log, last: turn };
 }
@@ -785,7 +794,7 @@ test("symptom-first: consent first, one question per turn with chips, then a han
     already_tried: "ibuprofeno sem melhora",
   });
   // One question per turn, in the contract order.
-  assert.deepEqual(log.slice(1).map((l) => l.step), ["duration", "severity", "for_whom", "age", "pregnancy", "allergies", "other_medicines", "already_tried"]);
+  assert.deepEqual(log.slice(1).map((l) => l.step), ["duration", "severity", "for_whom", "age", "pregnancy", "allergies", "other_medicines", "already_tried", "contact"]);
   assert.deepEqual(log[1].chips, ["Hoje", "1–3 dias", "Mais de 3 dias"]);
   // The visitor's first message (the symptom) was kept, not asked again.
   assert.equal(p.db.models.pharmacistHandoff.rows[0].brief.symptoms, "estou com dor de cabeça");
@@ -884,7 +893,10 @@ test("symptom lane: 'quero falar com o farmacêutico' mid-questionnaire hands of
   await p.say(c, "estou com dor de cabeça");
   await p.say(c, "Concordo e quero continuar");
   await p.say(c, "Hoje");
-  const turn = await p.say(c, "quero falar com o farmacêutico agora");
+  const ask = await p.say(c, "quero falar com o farmacêutico agora");
+  assert.equal(ask.uis[0].type, "contact_capture", "the WhatsApp question comes before the handoff");
+  assert.equal(p.handoffs().length, 0);
+  const turn = await p.say(c, "Prefiro continuar só pelo chat");
   assert.equal(p.handoffs().length, 1);
   assert.equal(p.handoffs()[0].brief.duration, "Hoje");
   assert.match(turn.text, /Passei suas informa/);
@@ -1371,5 +1383,96 @@ test("small talk is answered without the model: start-an-order phrasing, thanks"
   assert.match(start.text, /Qual produto/);
   const thanks = await p.say(c, "obrigado!");
   assert.match(thanks.text, /Por nada/);
+  noModelCalls();
+});
+
+// ---------------------------------------------------------------------------------------------
+// Symptom lane: WhatsApp contact step before the handoff
+// ---------------------------------------------------------------------------------------------
+
+test("symptom lane asks the WhatsApp before the handoff: new customer (phone + optional name) -> lead, consent, masked contact in the brief", T, async () => {
+  net = hostileModel();
+  const p = await createPharmacy();
+  const c = await p.conversation();
+  const { log, last } = await runQuestionnaire(p, c, { allergies: "dipirona" }, { phone: "(41) 99111-2233", name: "maria clara souza" });
+  const ask = log.find((l) => l.step === "contact")!;
+  assert.match(ask.text, /Qual seu WhatsApp \(com DDD\) para o farmac/);
+  assert.deepEqual(ask.chips, ["Prefiro continuar só pelo chat"]);
+  assert.equal(p.handoffs().length, 1);
+  const lead = p.db.models.lead.rows[0];
+  assert.equal(lead.phoneNormalized, "+5541991112233");
+  assert.equal(lead.name, "Maria Clara Souza");
+  const h = p.handoffs()[0];
+  assert.equal(h.leadId, lead.id, "the handoff references the lead (phone lives only there)");
+  assert.deepEqual(h.brief.contact, { firstName: "Maria", phoneMasked: "(41) •••••-2233" });
+  assert.ok(!JSON.stringify(h.brief).includes("991112233"), "the brief never stores the full number");
+  assert.ok(p.db.models.consentRecord.rows.some((r) => r.purposes.includes("pharmacy_triage") && r.purposes.includes("contact")));
+  assert.match(last.text, /te chama no WhatsApp/);
+  assert.equal(p.db.models.conversation.rows.find((r) => r.id === c.id)!.leadId, lead.id);
+  assertNoProductOrDose(p, p.assistantTexts(c), "contact step");
+  assertBriefNeverInMessages(p, c);
+  noModelCalls();
+});
+
+test("symptom lane contact step: a returning customer is recognized by phone and the name is not asked again", T, async () => {
+  net = hostileModel();
+  const p = await createPharmacy();
+  const { lead } = await seedReturning(p);
+  const c = await p.conversation();
+  const { last } = await runQuestionnaire(p, c, {}, { phone: "41998123344" });
+  assert.equal(p.db.models.lead.rows.length, 1, "no duplicate lead");
+  assert.equal(p.handoffs().length, 1);
+  assert.equal(p.handoffs()[0].leadId, lead.id);
+  assert.equal(p.handoffs()[0].brief.contact.firstName, "João");
+  assert.match(last.text, /Passei suas informa/);
+  noModelCalls();
+});
+
+test("symptom lane contact step: an invalid number is asked again, 'Pular' skips the name, declining keeps the web-chat-only path", T, async () => {
+  net = hostileModel();
+  const p = await createPharmacy();
+  const c = await p.conversation();
+  const { last } = await runQuestionnaire(p, c, {}, { phone: "123" });
+  assert.equal(p.handoffs().length, 0, "still waiting for a valid number");
+  assert.match(last.text, /N[ãa]o consegui entender esse n[úu]mero/);
+  const askName = await p.say(c, "(41) 99111-2233");
+  assert.equal(askName.suggestions[0], "Pular");
+  assert.equal(p.handoffs().length, 0);
+  await p.say(c, "Pular");
+  assert.equal(p.handoffs().length, 1);
+  assert.equal(p.db.models.lead.rows[0].name, null, "the name is optional");
+
+  const d = await createPharmacy();
+  const c2 = await d.conversation();
+  const res = await runQuestionnaire(d, c2, {}, "decline");
+  assert.equal(d.handoffs().length, 1);
+  assert.equal(d.handoffs()[0].leadId ?? null, null, "no phone, no lead");
+  assert.equal(d.handoffs()[0].brief.contact, undefined);
+  assert.equal(d.db.models.lead.rows.length, 0);
+  assert.equal(res.last.text, "Passei suas informações ao farmacêutico. Ele responde por aqui em instantes.");
+  noModelCalls();
+});
+
+test("symptom lane contact step through the contact card action (widget) and 'cancelar' as decline", T, async () => {
+  net = hostileModel();
+  const p = await createPharmacy();
+  const c = await p.conversation();
+  await p.say(c, "estou com dor de cabeça");
+  await p.say(c, "Concordo e quero continuar");
+  for (const a of ["Hoje", "Leve", "Para mim", "30", "Não", "Não", "Não", "Não"]) await p.say(c, a);
+  assert.equal(p.stateOf(c).awaiting?.kind, "symptom_phone");
+  const sent = await p.act(c, { type: "checkout.contact", phone: "(41) 99111-2233", name: "Paulo", consent: true });
+  assert.equal(p.handoffs().length, 1);
+  assert.equal(p.db.models.lead.rows[0].name, "Paulo");
+  assert.match(sent.text, /Passei suas informa/);
+
+  const q = await createPharmacy();
+  const c2 = await q.conversation();
+  await q.say(c2, "estou com dor de cabeça");
+  await q.say(c2, "Concordo e quero continuar");
+  for (const a of ["Hoje", "Leve", "Para mim", "30", "Não", "Não", "Não", "Não"]) await q.say(c2, a);
+  await q.say(c2, "cancelar");
+  assert.equal(q.handoffs().length, 1, "cancelling the contact step does not lose what was collected");
+  assert.equal(q.db.models.lead.rows.length, 0);
   noModelCalls();
 });

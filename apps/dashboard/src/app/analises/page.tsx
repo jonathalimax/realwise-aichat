@@ -60,13 +60,15 @@ export default function AnalisesPage() {
               ))}
             </div>
             <div className="flex flex-wrap gap-4">
-              <SectionCard className="min-w-0 flex-[2_1_480px]" title="Faturamento por dia" description={a.label}>
-                {bars.every((b) => b.segments[0]!.value === 0) ? (
-                  <EmptyState title="Sem faturamento neste período" description="Pedidos concluídos entram aqui." />
-                ) : (
-                  <Bars data={bars} height={170} ariaLabel={`Faturamento: ${a.label}`} />
-                )}
-              </SectionCard>
+              {a.mode !== "attendance" && (
+                <SectionCard className="min-w-0 flex-[2_1_480px]" title="Faturamento por dia" description={a.label}>
+                  {bars.every((b) => b.segments[0]!.value === 0) ? (
+                    <EmptyState title="Sem faturamento neste período" description="Pedidos concluídos entram aqui." />
+                  ) : (
+                    <Bars data={bars} height={170} ariaLabel={`Faturamento: ${a.label}`} />
+                  )}
+                </SectionCard>
+              )}
               <SectionCard className="min-w-0 flex-[1_1_320px]" title="Triagem do Alex" description="Como as conversas terminaram">
                 {a.triage.every((t) => t.count === 0) ? (
                   <EmptyState title="Sem conversas neste período" />
@@ -85,6 +87,7 @@ export default function AnalisesPage() {
                 )}
               </SectionCard>
             </div>
+            {a.mode !== "attendance" && (
             <div className="flex flex-wrap gap-4">
               <SectionCard className="min-w-0 flex-[1_1_420px]" title="Mais vendidos" flush>
                 {a.topProducts.length === 0 ? (
@@ -141,6 +144,7 @@ export default function AnalisesPage() {
                 )}
               </SectionCard>
             </div>
+            )}
           </>
         )}
       </LoadState>

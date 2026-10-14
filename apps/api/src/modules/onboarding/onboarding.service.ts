@@ -6,8 +6,18 @@ import { nicheBehavior } from "../chat/niche-behavior";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
 import { PharmacySettingsService } from "../pharmacy-settings/pharmacy-settings.service";
+import { classifyOperationModeAnswer } from "../pharmacy-settings/proposals";
 
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
+
+// Pharmacy interview field that picks the operation mode: an unclear answer is never saved, the owner is asked to confirm.
+const OPERATION_MODE_FIELD = "modo_operacao";
+const OPERATION_MODE_CLARIFY =
+  'Não ficou claro o "Modo de operação". Você quer usar estoque e vender pelo sistema (responda "comércio") ou só o atendimento com IA, que escala tudo sobre produtos ao farmacêutico (responda "atendimento")?';
+const OPERATION_MODE_ACK = {
+  commerce: "Entendi: modo comércio (estoque, catálogo e pedidos pelo sistema; depende do plano Profissional ou superior).",
+  attendance: "Entendi: modo atendimento (só a IA com encaminhamento ao farmacêutico, sem estoque nem pedidos).",
+} as const;
 
 const ABSTENTION_MARKERS = [
   "não tenho essa informação",
@@ -229,18 +239,28 @@ export class OnboardingService {
       const lastOwner = lastOwnerIdx >= 0 ? history[lastOwnerIdx] : undefined;
       const lastAsked = lastOwnerIdx > 0 ? history.slice(0, lastOwnerIdx).reverse().find((m) => m.role !== "owner") : undefined;
       const askedGap = lastAsked ? gaps.find((g) => lastAsked.content.includes(`"${g.label}"`)) : undefined;
+      const modeAnswer = askedGap?.key === OPERATION_MODE_FIELD && lastOwner ? classifyOperationModeAnswer(lastOwner.content) : undefined;
+      if (lastOwner && askedGap && modeAnswer === null) {
+        return { reply: OPERATION_MODE_CLARIFY, allDone: false, remainingGaps: gaps.length, confidenceScore };
+      }
       if (lastOwner && askedGap) {
         const saved = await this.patchProfileField(businessId, askedGap.key, lastOwner.content.trim(), "interview");
         if (!saved.ok) {
           reply = `Não consegui usar essa resposta para "${askedGap.label}". Pode escrever de outro jeito?`;
         } else {
           const { gaps: next } = await this.findGaps(businessId);
-          reply = next.length ? `Anotado! Pode me contar sobre "${next[0].label}"?` : "Anotado! Isso foi tudo que eu precisava saber.";
+          const ack = modeAnswer ? `${OPERATION_MODE_ACK[modeAnswer]} ` : "";
+          reply = next.length ? `${ack}Anotado! Pode me contar sobre "${next[0].label}"?` : `${ack}Anotado! Isso foi tudo que eu precisava saber.`;
           return { reply, allDone: next.length === 0, remainingGaps: next.length, confidenceScore: (await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { confidenceScore: true } }))?.confidenceScore ?? confidenceScore };
         }
       }
     }
 
+    if (fieldKey === OPERATION_MODE_FIELD && value && classifyOperationModeAnswer(value) === null) {
+      // The model extracted something unclear for the operation mode: ask instead of saving a guess.
+      reply = OPERATION_MODE_CLARIFY;
+      fieldKey = null;
+    }
     if (fieldKey && value) {
       const result = await this.patchProfileField(businessId, fieldKey, value, "interview");
       // Invalid extraction (e.g. LLM drift) — skip the write rather than corrupt the field, keep the conversation going.

@@ -1,7 +1,7 @@
 // Typed client for the pharmacy REST contract (docs/pharmacy/API.md). Field names match the contract exactly.
 // Everything goes through `request` (credentials: include) so a 401 sends the user to /login and a 403 surfaces
 // as ApiError { status: 403, code: "PERMISSION_DENIED" } which pages render as "Sem acesso".
-import type { PermissionLevel, PermissionSection } from "@realwise/shared";
+import type { OperationModeInfo, PermissionLevel, PermissionSection } from "@realwise/shared";
 import { request, requestForm } from "./api";
 
 const qs = (params: Record<string, string | number | boolean | null | undefined>) => {
@@ -36,6 +36,8 @@ export interface Me {
     logoUrl: string | null;
     branding: Branding;
     brandingIsCustom: boolean;
+    /** Pharmacy only: chosen + effective operation mode and the plan rule (null for other niches / older API). */
+    operationMode?: OperationModeInfo | null;
   };
 }
 
@@ -86,6 +88,8 @@ export type Range = "today" | "7d" | "30d";
 export interface DashboardSummary {
   range: Range;
   generatedAt: string;
+  /** Effective operation mode ("attendance": no orders, stock or catalog numbers). */
+  mode?: "commerce" | "attendance";
   roleFocus: "orders" | "handoffs" | "deliveries";
   kpis: Kpi[];
   stock: { asOf: string | null; ageHours: number | null; maxAgeHours: number; stale: boolean; display: string } | null;
@@ -110,6 +114,7 @@ export const getDashboardSummary = (range: Range): Promise<DashboardSummary> => 
 export interface PharmacyAnalytics {
   range: Range;
   label: string;
+  mode?: "commerce" | "attendance";
   kpis: Kpi[];
   chart: { buckets: ChartBucket[] };
   triage: { key: string; label: string; count: number; percent: number }[];
@@ -252,8 +257,21 @@ export interface HandoffList {
   createdAt: string;
   waitingMinutes: number;
   conversationId: string | null;
+  /** "Em atendimento": someone started the hand-over (still status open). */
+  inProgress?: { at: string; byMemberId: string | null; byName: string; byRole: string; channel: "whatsapp" | "chat" } | null;
+  hasPhone?: boolean;
+}
+export interface WhatsappDraft {
+  customerFirstName: string | null;
+  /** E.164 digits, e.g. 5541991112233. Only returned to members who can start an atendimento. */
+  phone: string;
+  message: string;
+  maxChars: number;
+  webUrl: string;
+  appUrl: string;
 }
 export interface HandoffDetail extends HandoffList {
+  contact?: { firstName: string | null; phoneMasked: string | null; hasPhone: boolean };
   brief: Record<string, unknown>;
   briefRows: { label: string; value: string }[];
   suggestion: { label: string; text: string; products: { productId: string; name: string; reason: string; inStock: boolean; priceCents: number }[] } | null;
@@ -265,6 +283,9 @@ export const getHandoffs = (p: { status?: HandoffStatus; cursor?: string }): Pro
 export const getHandoff = (id: string): Promise<HandoffDetail> => request(`/handoffs/${id}`);
 export const replyHandoff = (id: string, text: string): Promise<HandoffDetail> => request(`/handoffs/${id}/reply`, json("POST", { text }));
 export const closeHandoff = (id: string): Promise<HandoffDetail> => request(`/handoffs/${id}/close`, json("POST"));
+export const whatsappDraft = (id: string): Promise<WhatsappDraft> => request(`/handoffs/${id}/whatsapp/draft`, json("POST"));
+export const startHandoff = (id: string, channel: "whatsapp" | "chat"): Promise<HandoffDetail> => request(`/handoffs/${id}/start`, json("POST", { channel }));
+export const markHandoffAnswered = (id: string): Promise<HandoffDetail> => request(`/handoffs/${id}/mark-answered`, json("POST"));
 
 // ---------------------------------------------------------------- catalog
 export type SaleClass = "unclassified" | "otc" | "prescription" | "controlled";
@@ -465,6 +486,9 @@ export interface PharmacySettings {
   prescriptionRetentionDays: number;
   orderReminderMinutes: number;
   quickChips: string[];
+  /** Mode the owner chose; the effective one is `PharmacySettingsDto.mode.effective`. */
+  operationMode?: "commerce" | "attendance";
+  operationModeChosenAt?: string | null;
 }
 export interface SettingsProposal {
   fieldKey: string;
@@ -477,6 +501,7 @@ export interface SettingsProposal {
 }
 export interface PharmacySettingsDto {
   settings: PharmacySettings;
+  mode?: OperationModeInfo;
   proposals: Record<string, SettingsProposal>;
   sheet: { stockAsOf: string | null; ageHours: number | null; maxAgeHours: number; stale: boolean } | null;
   banner: string;

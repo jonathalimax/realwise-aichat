@@ -40,6 +40,8 @@ import { resolveVisitAppointmentType } from "../bookings/slot-generation";
 import { buildCostPackage, buildCostPackageReply, transactionKind } from "./selection";
 import { findUnsupportedFigures, stripUnsupportedFigures } from "./grounding-guard";
 import { leaksSystemPrompt } from "./safe-replies";
+import { ATT_COPY } from "./pharmacy/attendance";
+import { loadOperationMode } from "../pharmacy-common/operation-mode";
 import {
   TRIAGE_NODE_IDS,
   TRIAGE_START_NODE_ID,
@@ -2486,10 +2488,14 @@ export class FlowService {
     // Computed BEFORE the flowNodeId bootstrap write below, per the plan's exact condition.
     const firstContact = !conversation.flowNodeId;
 
-    const snapshot = await this.emit(businessId, conversationId, business.niche, nodeId, params, {
+    let snapshot = await this.emit(businessId, conversationId, business.niche, nodeId, params, {
       firstContact,
       conversationalModeEnabled: business.conversationalModeEnabled,
     });
+    // Pharmacy in attendance mode: no "fazer um pedido" welcome/bubbles (no catalog or cart there).
+    if (business.niche === "farmacia" && (await loadOperationMode(this.prisma.client, businessId)).effective === "attendance") {
+      snapshot = { ...snapshot, message: ATT_COPY.welcome(business.name), bubbles: [] } as typeof snapshot;
+    }
 
     if (!conversation.flowNodeId) {
       await this.prisma.client.conversation.update({

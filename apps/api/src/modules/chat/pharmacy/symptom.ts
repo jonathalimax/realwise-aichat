@@ -18,6 +18,8 @@ export const CHIP = {
   consentYes: "Concordo e quero continuar",
   talkToPharmacistNow: "Falar com o farmacêutico agora",
   cancel: "Cancelar",
+  chatOnly: "Prefiro continuar só pelo chat",
+  skipName: "Pular",
   severity: ["Leve", "Moderada", "Forte"],
   duration: ["Hoje", "1–3 dias", "Mais de 3 dias"],
   forWhom: ["Para mim", "Para outra pessoa adulta", "Para uma criança", "Para um bebê"],
@@ -216,7 +218,7 @@ export function summaryLine(answers: SymptomAnswers): string {
 export function buildSymptomBrief(
   answers: SymptomAnswers,
   suggestions: BriefSuggestion[],
-  extras: { redFlags?: string[]; conversationId: string },
+  extras: { redFlags?: string[]; conversationId: string; contact?: { firstName: string | null; phoneMasked: string | null } | null },
 ): Record<string, unknown> {
   const pregnantText = fold(answers.pregnancy ?? "");
   return {
@@ -236,6 +238,7 @@ export function buildSymptomBrief(
     redFlags: extras.redFlags ?? [],
     suggestedProducts: suggestions,
     suggestionNote: "Sugestão para o farmacêutico, não enviada ao cliente.",
+    ...(extras.contact ? { contact: extras.contact } : {}),
     conversationLink: `/conversas?open=${extras.conversationId}`,
   };
 }

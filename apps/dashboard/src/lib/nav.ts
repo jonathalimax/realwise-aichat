@@ -34,6 +34,8 @@ export interface NavItem {
   section: PermissionSection;
   level?: "view" | "edit"; // minimum level (default view)
   badge?: BadgeKey;
+  /** Only exists in commerce mode (stock, catalog, orders): hidden when the pharmacy runs in attendance mode. */
+  commerceOnly?: boolean;
 }
 export interface NavGroup {
   label: string | null;
@@ -46,9 +48,9 @@ const PHARMACY_NAV: NavGroup[] = [
     items: [
       { label: "Assistente", href: "/assistente", icon: Sparkles, section: "farmacia", level: "edit" },
       { label: "Início", href: "/inicio", icon: Home, section: "inicio" },
-      { label: "Pedidos", href: "/pedidos", icon: Package, section: "pedidos", badge: "pedidos" },
+      { label: "Pedidos", href: "/pedidos", icon: Package, section: "pedidos", badge: "pedidos", commerceOnly: true },
       { label: "Atendimento farmacêutico", href: "/atendimento", icon: Activity, section: "atendimento", badge: "atendimento" },
-      { label: "Catálogo", href: "/catalogo", icon: Boxes, section: "catalogo" },
+      { label: "Catálogo", href: "/catalogo", icon: Boxes, section: "catalogo", commerceOnly: true },
       { label: "Clientes", href: "/clientes", icon: Users, section: "clientes" },
       { label: "Conversas", href: "/conversas", icon: MessageCircle, section: "conversas" },
       { label: "Análises", href: "/analises", icon: BarChart3, section: "analises" },
@@ -99,11 +101,32 @@ export function can(me: Me | null, section: PermissionSection, level: "view" | "
   return RANK[levelOf(me, section)] >= RANK[level];
 }
 
+/** Effective pharmacy operation mode ("commerce" when unknown, e.g. an older API or another niche). */
+export function modeOf(me: Me | null): "commerce" | "attendance" {
+  return me?.business.operationMode?.effective ?? "commerce";
+}
+
 /** Items of a niche the member may open (everything when the member payload is not available, e.g. an older API). */
 export function visibleNav(niche: Niche, me: Me | null): NavGroup[] {
+  const attendance = niche === "farmacia" && modeOf(me) === "attendance";
   return navFor(niche)
-    .map((g) => ({ ...g, items: g.items.filter((i) => !me || can(me, i.section, i.level ?? "view")) }))
+    .map((g) => {
+      const items = g.items.filter((i) => (!me || can(me, i.section, i.level ?? "view")) && !(attendance && i.commerceOnly));
+      if (!attendance) return { ...g, items };
+      // Attendance mode: "Atendimento farmacêutico" is the hero screen, right after the assistant.
+      const hero = items.find((i) => i.href === "/atendimento");
+      if (!hero) return { ...g, items };
+      const rest = items.filter((i) => i !== hero);
+      const at = rest.findIndex((i) => i.href !== "/assistente" && i.href !== "/assistant");
+      return { ...g, items: at < 0 ? [...rest, hero] : [...rest.slice(0, at), hero, ...rest.slice(at)] };
+    })
     .filter((g) => g.items.length > 0);
+}
+
+/** Routes that only work in commerce mode (the API answers 403 PLAN_FEATURE / MODE_ATTENDANCE for their data). */
+const COMMERCE_ROUTES = ["/pedidos", "/catalogo"];
+export function isCommerceRoute(pathname: string): boolean {
+  return COMMERCE_ROUTES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 /** Where a member lands after login / on "/": the first section they can open. */

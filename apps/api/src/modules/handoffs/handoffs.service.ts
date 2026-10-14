@@ -6,6 +6,7 @@ import { PushService } from "../push/push.service";
 import { ChatHumanService } from "../chat/chat-human.service";
 import { parseLimit, sliceCursor } from "../pharmacy-common/format";
 import { buildSuggestion, handoffDetailDto, handoffListDto, type HandoffRow } from "./handoff-dto";
+import { buildWhatsappLinks, buildWhatsappMessage, firstNameOf, MAX_WHATSAPP_MESSAGE_CHARS, whatsappDigits } from "./whatsapp-message";
 
 const logger = new Logger("HandoffsService");
 const VISITOR_LIVE_WINDOW_MS = 45_000;
@@ -36,7 +37,7 @@ export class HandoffsService {
   }
 
 
-  private async withLeads<T extends { leadId: string | null }>(businessId: string, rows: T[]): Promise<Array<T & { lead: { name: string | null } | null }>> {
+  private async withLeads<T extends { leadId: string | null }>(businessId: string, rows: T[]): Promise<Array<T & { lead: { name: string | null; phone?: string | null } | null }>> {
     const ids = [...new Set(rows.map((r) => r.leadId).filter((x): x is string => !!x))];
     const leads = ids.length ? await this.prisma.client.lead.findMany({ where: { businessId, id: { in: ids } }, select: { id: true, name: true } }) : [];
     const byId = new Map(leads.map((l) => [l.id, l]));
@@ -104,9 +105,10 @@ export class HandoffsService {
     // owner message carrying name + role. No brief text is ever written to any Message.
     const now = new Date();
     await this.human.recordHumanReply({ businessId: m.businessId, conversationId: conversation.id, author: { memberId: m.memberId, name: m.name, roleName: m.roleName }, text });
+    const { inProgress: _clear, ...briefWithoutMarker } = (h.brief && typeof h.brief === "object" ? h.brief : {}) as Record<string, unknown>;
     await this.prisma.client.pharmacistHandoff.update({
       where: { id },
-      data: { status: "answered", answerText: text, answeredAt: now, answeredByMemberId: m.memberId, answeredByName: m.name, answeredByRole: m.roleName },
+      data: { status: "answered", answerText: text, answeredAt: now, answeredByMemberId: m.memberId, answeredByName: m.name, answeredByRole: m.roleName, ...(_clear ? { brief: briefWithoutMarker as object } : {}) },
     });
 
     // Push only when the visitor is not looking at the chat. The body is deliberately generic: a lock screen must not show health text.
@@ -125,6 +127,100 @@ export class HandoffsService {
     if (h.status === "closed") return this.detail(m.businessId, id);
     await this.prisma.client.pharmacistHandoff.update({ where: { id }, data: { status: "closed", closedAt: new Date() } });
     await this.accessLog.record({ businessId: m.businessId, actor: m, action: "handoff.close", summary: "Encerrou atendimento", detail: { handoffId: id } });
+    return this.detail(m.businessId, id);
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // WhatsApp hand-over ("Iniciar atendimento"): the conversation continues on WhatsApp Web.
+  // The full phone number is returned ONLY here (atendimento:edit + CRF) and every call is access-logged.
+  // -------------------------------------------------------------------------------------------
+
+  /** Default message + links for the preview dialog. Logs that the number was revealed (no health data in the log). */
+  async whatsappDraft(m: MemberContext, id: string) {
+    const h = await this.load(m.businessId, id);
+    if (h.status === "closed") throw conflict("INVALID_STATE", "Este atendimento já foi encerrado.");
+    const phone = await this.customerPhone(m.businessId, h.leadId);
+    if (!phone) {
+      throw conflict("NO_PHONE", "Este cliente não informou o WhatsApp. Responda pelo chat.");
+    }
+    const business = await this.prisma.client.business.findFirst({ where: { id: m.businessId }, select: { name: true } });
+    const message = buildWhatsappMessage({
+      customerName: h.lead?.name ?? null,
+      attendantName: m.name,
+      attendantRole: m.roleName,
+      pharmacyName: business?.name ?? "",
+      reason: h.reason,
+      brief: (h.brief ?? {}) as Record<string, unknown>,
+    });
+    const links = buildWhatsappLinks(phone, message)!;
+    await this.accessLog.record({ businessId: m.businessId, actor: m, action: "handoff.whatsapp_link", summary: "Abriu o contato por WhatsApp de um atendimento", detail: { handoffId: id } });
+    return {
+      customerFirstName: firstNameOf(h.lead?.name) || null,
+      phone: links.phoneDigits,
+      message,
+      maxChars: MAX_WHATSAPP_MESSAGE_CHARS,
+      webUrl: links.webUrl,
+      appUrl: links.appUrl,
+    };
+  }
+
+  private async customerPhone(businessId: string, leadId: string | null): Promise<string | null> {
+    if (!leadId) return null;
+    const lead = await this.prisma.client.lead.findFirst({ where: { id: leadId, businessId }, select: { phone: true, phoneNormalized: true } });
+    const phone = lead?.phoneNormalized || lead?.phone || null;
+    return whatsappDigits(phone) ? phone : null;
+  }
+
+  /**
+   * Marks the handoff "em atendimento" (brief.inProgress; the status machine stays open/answered/closed) and records who
+   * started it. `channel`: "whatsapp" (opened WhatsApp Web) or "chat" (answering in the web chat).
+   */
+  async start(m: MemberContext, id: string, channelRaw?: unknown) {
+    const channel = channelRaw === "chat" ? "chat" : "whatsapp";
+    await this.reopenAnswered(m.businessId);
+    const h = await this.load(m.businessId, id);
+    if (h.status === "closed") throw conflict("INVALID_STATE", "Este atendimento já foi encerrado.");
+    const brief = (h.brief && typeof h.brief === "object" ? h.brief : {}) as Record<string, unknown>;
+    const inProgress = { at: new Date().toISOString(), byMemberId: m.memberId, byName: m.name, byRole: m.roleName, channel };
+    await this.prisma.client.pharmacistHandoff.update({ where: { id }, data: { brief: { ...brief, inProgress } as object } });
+    await this.accessLog.record({
+      businessId: m.businessId,
+      actor: m,
+      action: "handoff.start",
+      summary: channel === "whatsapp" ? "Iniciou atendimento pelo WhatsApp" : "Iniciou atendimento pelo chat",
+      detail: { handoffId: id, channel },
+    });
+    return this.detail(m.businessId, id);
+  }
+
+  /** The conversation moved to WhatsApp: close the loop (status answered) and leave one system line in the web chat. */
+  async markAnswered(m: MemberContext, id: string) {
+    await this.reopenAnswered(m.businessId);
+    const h = await this.load(m.businessId, id);
+    if (h.status === "closed") throw conflict("INVALID_STATE", "Este atendimento já foi encerrado.");
+    if (h.status === "answered") return this.detail(m.businessId, id);
+    const now = new Date();
+    await this.human.recordSystemNote({
+      businessId: m.businessId,
+      conversationId: h.conversationId,
+      author: { memberId: m.memberId, name: m.name, roleName: m.roleName },
+      text: `${m.name} · ${m.roleName} continuou o atendimento pelo WhatsApp`,
+    });
+    const brief = (h.brief && typeof h.brief === "object" ? h.brief : {}) as Record<string, unknown>;
+    const { inProgress: _drop, ...rest } = brief;
+    await this.prisma.client.pharmacistHandoff.update({
+      where: { id },
+      data: {
+        status: "answered",
+        answerText: "Atendimento continuado pelo WhatsApp.",
+        answeredAt: now,
+        answeredByMemberId: m.memberId,
+        answeredByName: m.name,
+        answeredByRole: m.roleName,
+        brief: rest as object,
+      },
+    });
+    await this.accessLog.record({ businessId: m.businessId, actor: m, action: "handoff.whatsapp_answer", summary: "Marcou atendimento como respondido (WhatsApp)", detail: { handoffId: id } });
     return this.detail(m.businessId, id);
   }
 }

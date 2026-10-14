@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { farmaciaSettingsFieldMap } from "@realwise/profile-schema";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AccessLogService } from "../access/access-log.service";
@@ -6,6 +6,7 @@ import type { MemberContext } from "../access/member-context";
 import { accessDenied } from "../access/access-errors";
 import { ensureSettingsRow } from "../pharmacy-common/counters";
 import { fold } from "../pharmacy-common/format";
+import { commerceBlocked, loadOperationMode } from "../pharmacy-common/operation-mode";
 import { sheetStatus } from "../pharmacy-common/sheet";
 import { PROPOSAL_LABELS, parseProposal } from "./proposals";
 import { IDENTITY_KEYS, buildSettingsPatch, settingsSummary } from "./settings-validation";
@@ -16,7 +17,7 @@ const SETTINGS_KEYS = [
   "legalName", "cnpj", "afeNumber", "pharmacistName", "pharmacistCrf",
   "deliveryEnabled", "deliveryFeeCents", "minOrderCents", "deliveryAreas", "pickupEnabled",
   "maxQtyPerItemDefault", "autoConfirmEnabled", "stockMaxAgeHours", "openingHours", "paymentMethods",
-  "exchangePolicy", "prescriptionRetentionDays", "orderReminderMinutes", "quickChips",
+  "exchangePolicy", "prescriptionRetentionDays", "orderReminderMinutes", "quickChips", "operationMode", "operationModeChosenAt",
 ] as const;
 
 type ProposalRecord = {
@@ -58,8 +59,11 @@ export class PharmacySettingsService {
     for (const k of SETTINGS_KEYS) settings[k] = (row as any)[k];
     const proposals = await this.proposalsDto(businessId, (row.proposals ?? {}) as Record<string, ProposalRecord>);
     const sheet = await this.latestSheet(businessId, row.stockMaxAgeHours);
+    // Chosen mode + plan = effective mode (commerce needs the plan feature `pharmacyCommerce`).
+    const mode = await loadOperationMode(this.prisma.client, businessId);
     return {
       settings,
+      mode,
       proposals,
       sheet: { stockAsOf: sheet.asOf, ageHours: sheet.ageHours, maxAgeHours: sheet.maxAgeHours, stale: sheet.stale },
       banner: BANNER,
@@ -98,8 +102,9 @@ export class PharmacySettingsService {
     if (changedKeys.some((k) => (IDENTITY_KEYS as readonly string[]).includes(k)) && actor.roleKey !== "owner") {
       throw accessDenied("OWNER_PROTECTED", "Identidade legal só para proprietário.");
     }
-    if (changedKeys.length > 0) {
-      const toWrite = Object.fromEntries(changedKeys.map((k) => [k, data[k]]));
+    const modeExtra = await this.operationModeRules(actor, row as unknown as Record<string, unknown>, data, changedKeys, "operationMode" in (patch ?? {}));
+    if (changedKeys.length > 0 || Object.keys(modeExtra).length > 0) {
+      const toWrite = { ...Object.fromEntries(changedKeys.map((k) => [k, data[k]])), ...modeExtra };
       await this.prisma.client.pharmacySettings.update({ where: { businessId: actor.businessId }, data: toWrite as any });
       await this.accessLog.record({
         businessId: actor.businessId,
@@ -110,6 +115,38 @@ export class PharmacySettingsService {
       });
     }
     return this.dto(actor.businessId);
+  }
+
+  /**
+   * Operation mode rules, shared by PUT and proposal confirmation: only the owner changes it, commerce
+   * needs a plan with `pharmacyCommerce` (otherwise 403 PLAN_FEATURE + upgradeTo), and the moment the
+   * owner decided is recorded (operationModeChosenAt). Returns the extra columns to write.
+   */
+  private async operationModeRules(
+    actor: MemberContext,
+    row: Record<string, unknown>,
+    data: Record<string, unknown>,
+    changedKeys: string[],
+    mentioned: boolean,
+  ): Promise<Record<string, unknown>> {
+    if (!mentioned || !("operationMode" in data)) return {};
+    const changed = changedKeys.includes("operationMode");
+    if (changed && actor.roleKey !== "owner") throw accessDenied("OWNER_PROTECTED", "Só o proprietário muda o modo de operação.");
+    if (data.operationMode === "commerce" && changed) {
+      const info = await loadOperationMode(this.prisma.client, actor.businessId);
+      if (!info.commerceAllowedByPlan) {
+        const blocked = commerceBlocked(info);
+        throw new ForbiddenException({
+          statusCode: 403,
+          error: "Forbidden",
+          code: blocked.code,
+          message: "Disponível a partir do plano Profissional.",
+          ...(info.upgradeToPlanCode ? { upgradeTo: info.upgradeToPlanCode } : {}),
+        });
+      }
+    }
+    if (changed || (!row.operationModeChosenAt && actor.roleKey === "owner")) return { operationModeChosenAt: new Date() };
+    return {};
   }
 
   // ------------------------------------------------------------- proposals
@@ -164,10 +201,11 @@ export class PharmacySettingsService {
         flagged = res.count;
       }
     }
+    const modeExtra = await this.operationModeRules(actor, row as unknown as Record<string, unknown>, data, changedKeys, "operationMode" in columns);
     proposals[fieldKey] = { ...p, proposed: merged, status: "confirmed", confirmedAt: new Date().toISOString() };
     await this.prisma.client.pharmacySettings.update({
       where: { businessId: actor.businessId },
-      data: { ...(Object.fromEntries(changedKeys.map((k) => [k, data[k]])) as any), proposals: proposals as object },
+      data: { ...(Object.fromEntries(changedKeys.map((k) => [k, data[k]])) as any), ...modeExtra, proposals: proposals as object },
     });
     await this.accessLog.record({
       businessId: actor.businessId,

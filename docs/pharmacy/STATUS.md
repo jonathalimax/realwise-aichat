@@ -39,6 +39,7 @@ Branch `feat/pharmacy-niche`. Local only: nothing deployed, nothing merged. How 
 | Dashboard summary, notifications, badges | done, verified; analytics page loads, numbers not audited by hand |
 | Worker jobs | reminders ran by themselves; stale sheet and purge called manually; the 03:30 schedule not waited for |
 | Seed, one-command start, docs | done |
+| Operation mode `commerce` / `attendance` tied to the plan (`pharmacyCommerce`: essencial = attendance only; profissional/studio = either), interview field, settings tab, guards, attendance chat lane, dashboard and widget adaptation | done, see `OPERATION_MODE.md`; verified with API tests (`pharmacy-attendance.test.ts`), over HTTP (login, 403 codes, summary, chat product request) and in the browser (sidebar, Modo de operação tab, blocked page); the plan-forced banner and the role editor greying were typechecked/built but not clicked |
 | Language-model paths (RAG answers, model mapping, model class proposals, insights rewrite) | **not done / not tested** (no model locally; graceful fallbacks verified) |
 | Payment online, WhatsApp channel, staff web push, customer e-mail on status change (logs only) | not done (out of scope for v1) |
 | Dark mode for the pharmacy palette | not done |
@@ -60,9 +61,10 @@ Branch `feat/pharmacy-niche`. Local only: nothing deployed, nothing merged. How 
 ## Decisions that need the owner (HANDOFF OPEN list)
 
 1. Who the responsible pharmacist is and whether handoffs are answered from the dashboard (built that way).
-2. Pharmacy pricing/plan and quota rules (the demo uses the existing "Profissional" plan).
+2. Pharmacy pricing/plan and quota rules (the demo uses the existing "Profissional" plan). Decided for the mode only: essencial = attendance, profissional and studio = commerce allowed (`OPERATION_MODE.md`); prices and quotas are unchanged.
 3. Prescription photo retention period and legal basis (30 days after closing, configurable).
 4. Which OTC items always need a pharmacist (per-product switch exists in Catálogo; no bulk list).
 5. Customer order updates without WhatsApp (status link works; e-mail only logs without `RESEND_API_KEY`).
 6. Pickup payment (assumed in store).
+7. Attendance mode: whether the product-request lane should also ask for the customer's phone (the WhatsApp hand-over feature owns phone capture, not integrated here), and whether the Essencial plan should keep the order status page for old orders (today the public status link keeps working).
 Also open: hiding pharmacy conversations from platform admins; whether orders outside opening hours may be accepted (currently yes); whether the e-mail on new orders should skip the courier role; whether abandoned prescription uploads should auto-expire sooner.

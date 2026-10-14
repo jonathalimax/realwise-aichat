@@ -17,8 +17,12 @@ import {
   normalizeAddressNumber,
   normalizeCep,
 } from "../../customers/address-utils";
+import type { OperationModeInfo } from "@realwise/shared";
+import { loadOperationMode } from "../../pharmacy-common/operation-mode";
 import { getPersona } from "../personas";
 import { isGreeting } from "../safe-replies";
+import { maskPhoneBr } from "../../handoffs/whatsapp-message";
+import { ATT_CHIPS, ATT_COPY, COMMERCE_ACTIONS, asksAboutProduct, attendanceChips, attendancePickupLine, buildProductRequestBrief, hasProductMention, isBareProductIntent } from "./attendance";
 import { PharmacyCatalog, productLabel, scoreProduct, type Resolution } from "./catalog";
 import { CHIPS, COPY, CONSENT_VERSION, consentCard, paymentPhrase } from "./copy";
 import { DOSAGE_REFUSAL, asksForDosage, guardSymptomLaneText } from "./guards";
@@ -86,6 +90,7 @@ class Turn {
     readonly business: { id: string; name: string; slug: string; timezone?: string | null; niche: string },
     readonly conversation: { id: string; leadId: string | null; visitorToken: string },
     readonly settings: PharmacySettingsView,
+    readonly mode: OperationModeInfo,
   ) {}
   /** Text glued in front of the next message (e.g. the greeting for a recognized customer). */
   prefix = "";
@@ -181,7 +186,7 @@ export class PharmacyChatService {
 
   /** Fixed LGPD wording per purpose (GET /chat/:businessId/consent-text). */
   consentText(purpose: string) {
-    if (purpose !== "pharmacy_triage" && purpose !== "prescription_upload" && purpose !== "order_contact") {
+    if (purpose !== "pharmacy_triage" && purpose !== "prescription_upload" && purpose !== "order_contact" && purpose !== "pharmacy_contact") {
       throw new BadRequestException("Finalidade inválida.");
     }
     const card = consentCard(purpose);
@@ -198,7 +203,10 @@ export class PharmacyChatService {
     const conversation = await this.db.conversation.findFirst({ where: { id: conversationId, businessId } });
     if (!conversation) throw new NotFoundException("Conversation not found");
     const settings = await this.catalogFor().settings(businessId);
-    return new Turn(normalizeState(conversation.pharmacyState), business, conversation, settings);
+    const mode = await loadOperationMode(this.db, businessId);
+    const turn = new Turn(normalizeState(conversation.pharmacyState), business, conversation, settings, mode);
+    if (mode.effective === "attendance") this.resetCommerceState(turn);
+    return turn;
   }
 
   private async saveState(turn: Turn) {
@@ -228,13 +236,16 @@ export class PharmacyChatService {
         messageCount: { increment: visitorMessages + rows.length },
       },
     });
-    const pharmacy = await this.buildView(turn.business.id, turn.conversation.id, turn.state);
-    return { message: rows[0] ?? null, messages: rows, suggestions: turn.suggestions, pharmacy, escalated: false };
+    const pharmacy = await this.buildView(turn.business.id, turn.conversation.id, turn.state, turn.mode.effective);
+    const suggestions = turn.mode.effective === "attendance" ? attendanceChips(turn.suggestions) : turn.suggestions;
+    return { message: rows[0] ?? null, messages: rows, suggestions, pharmacy, escalated: false };
   }
 
-  async buildView(businessId: string, conversationId: string, state: PharmacyState): Promise<PharmacyView> {
+  async buildView(businessId: string, conversationId: string, state: PharmacyState, knownMode?: "commerce" | "attendance"): Promise<PharmacyView> {
     const catalog = this.catalogFor();
-    const products = await catalog.getMany(businessId, state.cart.map((l) => l.productId));
+    const operationMode = knownMode ?? (await loadOperationMode(this.db, businessId)).effective;
+    // Attendance mode never shows a cart, even if an old commerce-mode state still has lines.
+    const products = operationMode === "attendance" ? [] : await catalog.getMany(businessId, state.cart.map((l) => l.productId));
     const joined = await this.db.message.findMany({ where: { conversationId, kind: "human_joined" }, orderBy: { createdAt: "asc" } });
     const seen = new Set<string>();
     const humanJoined = [];
@@ -244,8 +255,9 @@ export class PharmacyChatService {
       humanJoined.push({ memberId: m.authorMemberId, name: m.authorName ?? "", roleName: m.authorRole ?? "" });
     }
     return {
+      operationMode,
       lane: state.lane,
-      cart: buildCartDto(state.cart, products),
+      cart: buildCartDto(operationMode === "attendance" ? [] : state.cart, products),
       checkoutStep: state.checkoutStep,
       orderCode: state.order?.code ?? null,
       statusUrl: state.order?.statusUrl ?? null,
@@ -287,7 +299,8 @@ export class PharmacyChatService {
     if (consumed === "done") return true;
 
     // 4. Intents.
-    if (await this.routeIntent(t, text, consumed === "invalid")) return true;
+    const routed = t.mode.effective === "attendance" ? await this.routeAttendance(t, text, consumed === "invalid") : await this.routeIntent(t, text, consumed === "invalid");
+    if (routed) return true;
 
     if (consumed === "invalid") {
       await this.promptAwaiting(t, true);
@@ -427,6 +440,12 @@ export class PharmacyChatService {
 
   private async onAction(t: Turn, action: PharmacyAction) {
     const type = String(action?.type ?? "");
+    if (t.mode.effective === "attendance" && COMMERCE_ACTIONS.has(type)) {
+      // No catalog, cart or checkout in attendance mode (also if an old widget still sends these).
+      t.say(ATT_COPY.cartAction);
+      t.chips(ATT_CHIPS.askProduct, ATT_CHIPS.talkPharmacist);
+      return;
+    }
     switch (type) {
       case "cart.add": {
         const product = await this.requireProduct(t, String(action.productId ?? ""));
@@ -577,7 +596,7 @@ export class PharmacyChatService {
 
   private async createHandoff(
     t: Turn,
-    input: { reason: "symptom" | "rx" | "controlled" | "out_of_stock" | "other"; urgent: boolean; summary: string; brief: Record<string, unknown> },
+    input: { reason: "symptom" | "rx" | "controlled" | "out_of_stock" | "product_request" | "other"; urgent: boolean; summary: string; brief: Record<string, unknown> },
   ): Promise<{ id: string } | null> {
     try {
       const created = await this.handoffs.create({
@@ -794,6 +813,10 @@ export class PharmacyChatService {
       await this.grantSymptomConsent(t, !value);
       if (!value) return;
     }
+    if (t.state.awaiting?.kind === "symptom_phone" || t.state.awaiting?.kind === "symptom_name") {
+      this.askSymptomPhone(t, false);
+      return;
+    }
     if (!value) {
       await this.askSymptomStep(t);
       return;
@@ -812,27 +835,125 @@ export class PharmacyChatService {
 
   private async finalizeSymptom(t: Turn) {
     const s = t.state.symptom!;
+    // Explicit contact step BEFORE the handoff: the pharmacist may continue on WhatsApp. Declining keeps the web-chat-only path.
+    if (!s.contactAsked && !t.state.contact.leadId && !t.conversation.leadId) {
+      s.contactAsked = true;
+      this.askSymptomPhone(t, false);
+      return;
+    }
+    const contact = await this.symptomBriefContact(t);
     const catalog = this.catalogFor();
     let suggestions: ReturnType<typeof filterSuggestions> = [];
     try {
-      const candidates = await catalog.searchOtcInStock(t.business.id, suggestionKeywords(s.answers.symptom ?? ""));
+      // Attendance mode has no catalog: no stock-based suggestions for the pharmacist either.
+      const candidates = t.mode.effective === "attendance" ? [] : await catalog.searchOtcInStock(t.business.id, suggestionKeywords(s.answers.symptom ?? ""));
       suggestions = filterSuggestions(candidates, s.answers);
     } catch (error) {
       this.logger.warn(`pharmacist suggestions skipped: ${error instanceof Error ? error.message : String(error)}`);
     }
-    const brief = buildSymptomBrief(s.answers, suggestions, { conversationId: t.conversation.id });
+    const brief = buildSymptomBrief(s.answers, suggestions, { conversationId: t.conversation.id, contact });
     const handoff = await this.createHandoff(t, { reason: "symptom", urgent: false, summary: summaryLine(s.answers), brief });
     t.state.handoffId = handoff?.id ?? t.state.handoffId ?? null;
     s.active = false;
     t.state.awaiting = null;
     t.state.lane = "symptom";
     const terms = await catalog.forbiddenTerms(t.business.id).catch(() => [] as string[]);
-    const safe = guardSymptomLaneText(COPY.handoffDone, terms);
+    const safe = guardSymptomLaneText(contact?.phoneMasked ? COPY.handoffDoneWhatsapp : COPY.handoffDone, terms);
     t.say(safe.text);
     t.chips(CHIPS.makeOrder, CHIPS.hoursDelivery);
   }
 
+  // ---- contact step of the symptom lane (WhatsApp hand-over) ----
+
+  private askSymptomPhone(t: Turn, invalid: boolean) {
+    t.state.awaiting = { kind: "symptom_phone" };
+    t.say(invalid ? COPY.badPhone : COPY.symptomAskPhone, {
+      type: "contact_capture",
+      purpose: "pharmacy_triage",
+      fields: ["phone", "name"],
+      recognized: null,
+      consent: consentCard("pharmacy_contact"),
+    });
+    t.chips(CHIP.chatOnly);
+  }
+
+  private async symptomBriefContact(t: Turn): Promise<{ firstName: string | null; phoneMasked: string | null } | null> {
+    const leadId = t.state.contact.leadId ?? t.conversation.leadId;
+    if (!leadId) return null;
+    const lead = await this.loadLead(t, leadId).catch(() => null);
+    if (!lead) return null;
+    return { firstName: firstName(lead.name), phoneMasked: maskPhoneBr(lead.phoneNormalized || lead.phone) };
+  }
+
+  /** Phone (typed or from the contact card) -> recognize the returning customer or ask the optional name. */
+  private async symptomContact(t: Turn, input: { phone?: string; name?: string }) {
+    const c = t.state.contact;
+    if (t.state.awaiting?.kind === "symptom_phone") {
+      const canonical = input.phone ? canonicalPhone(input.phone) : null;
+      if (!canonical || !input.phone || pickDigits(input.phone).length < 10) {
+        this.askSymptomPhone(t, !!input.phone);
+        return;
+      }
+      c.phone = canonical;
+      const lead = await this.db.lead.findFirst({ where: { businessId: t.business.id, phoneNormalized: canonical } });
+      if (lead) {
+        c.leadId = lead.id;
+        c.name = lead.name ?? c.name;
+        c.returningFirstName = firstName(lead.name) ?? undefined;
+        await this.db.lead.update({ where: { id: lead.id }, data: { lastSeenAt: new Date(), sessionCount: { increment: 1 } } }).catch(() => undefined);
+        await this.db.conversation.update({ where: { id: t.conversation.id }, data: { leadId: lead.id } }).catch(() => undefined);
+        if (c.returningFirstName) t.prefix = `Oi, ${c.returningFirstName}! Que bom te ver de novo.`;
+        await this.recordConsent(t, ["pharmacy_triage", "contact"]);
+        await this.finalizeSymptom(t);
+        return;
+      }
+      const typedName = input.name?.replace(/\s+/g, " ").trim();
+      if (typedName && typedName.length >= 2 && typedName.length <= 80 && !/[0-9@]/.test(typedName)) c.name = titleCaseName(typedName);
+      if (!c.name) {
+        t.state.awaiting = { kind: "symptom_name" };
+        t.say(COPY.symptomAskName);
+        t.chips(CHIP.skipName);
+        return;
+      }
+    } else if (input.name?.trim()) {
+      c.name = titleCaseName(input.name.replace(/\s+/g, " ").trim().slice(0, 80));
+    }
+    await this.createSymptomLead(t);
+    await this.finalizeSymptom(t);
+  }
+
+  /** Creates the Lead (phone normalized, optional name) and records the contact consent. */
+  private async createSymptomLead(t: Turn) {
+    const c = t.state.contact;
+    const phoneNormalized = c.phone!;
+    let lead = await this.db.lead.findFirst({ where: { businessId: t.business.id, phoneNormalized } });
+    if (!lead) {
+      try {
+        lead = await this.db.lead.create({ data: { businessId: t.business.id, name: c.name ?? null, phone: phoneNormalized, phoneNormalized } });
+      } catch (error) {
+        if ((error as { code?: string }).code !== "P2002") throw error;
+        lead = await this.db.lead.findFirst({ where: { businessId: t.business.id, phoneNormalized } });
+      }
+    }
+    c.leadId = lead.id;
+    t.state.awaiting = null;
+    await this.recordConsent(t, ["pharmacy_triage", "contact"]);
+    await this.db.conversation.update({ where: { id: t.conversation.id }, data: { leadId: lead.id } }).catch(() => undefined);
+  }
+
+  /** The customer prefers the web chat only: keep the old path (handoff without a phone). */
+  private async declineSymptomContact(t: Turn) {
+    const s = t.state.symptom;
+    if (s) s.contactDeclined = true;
+    t.state.awaiting = null;
+    await this.finalizeSymptom(t);
+  }
+
   private async cancelFlow(t: Turn): Promise<boolean> {
+    if (t.state.awaiting?.kind === "symptom_phone" || t.state.awaiting?.kind === "symptom_name") {
+      await this.declineSymptomContact(t);
+      return true;
+    }
     if (t.state.symptom?.active || t.state.awaiting?.kind === "symptom_consent") {
       if (t.state.symptom) t.state.symptom.active = false;
       t.state.awaiting = null;
@@ -888,6 +1009,12 @@ export class PharmacyChatService {
       case "qty":
         return "skip";
 
+      case "product_request":
+        return this.consumeProductRequest(t, text);
+
+      case "product_request_consent":
+        return this.consumeProductRequestConsent(t, text);
+
       case "symptom_consent": {
         if (isAffirmative(text) || f === fold(CHIP.consentYes)) {
           await this.grantSymptomConsent(t);
@@ -912,6 +1039,31 @@ export class PharmacyChatService {
         }
         if (!text.trim()) return "invalid";
         await this.answerSymptom(t, aw.step, text);
+        return "done";
+      }
+
+      case "symptom_phone": {
+        if (f === fold(CHIP.chatOnly) || isNegative(text) || /\b(so pelo chat|so aqui|prefiro (o )?chat|nao quero informar|prefiro nao)\b/.test(f)) {
+          await this.declineSymptomContact(t);
+          return "done";
+        }
+        const phone = canonicalPhone(text);
+        if (!phone || pickDigits(text).length < 10) return "invalid";
+        await this.symptomContact(t, { phone: text.trim() });
+        return "done";
+      }
+
+      case "symptom_name": {
+        const typed = text.replace(/\s+/g, " ").trim();
+        if (f === fold(CHIP.skipName) || isNegative(text) || /^(pular|sem nome|prefiro nao)$/.test(f)) {
+          await this.createSymptomLead(t);
+          await this.finalizeSymptom(t);
+          return "done";
+        }
+        if (typed.length < 2 || typed.length > 80 || /[0-9@]/.test(typed) || typed.split(" ").length > 6) return "invalid";
+        t.state.contact.name = titleCaseName(typed);
+        await this.createSymptomLead(t);
+        await this.finalizeSymptom(t);
         return "done";
       }
 
@@ -1061,6 +1213,13 @@ export class PharmacyChatService {
     const aw: Awaiting | null = t.state.awaiting;
     if (!aw) return;
     switch (aw.kind) {
+      case "symptom_phone":
+        this.askSymptomPhone(t, invalid);
+        return;
+      case "symptom_name":
+        t.say(COPY.symptomAskName);
+        t.chips(CHIP.skipName);
+        return;
       case "phone":
         t.say(invalid ? COPY.badPhone : COPY.askPhone, this.contactUi(t));
         return;
@@ -1109,6 +1268,14 @@ export class PharmacyChatService {
         return;
       case "rx_upload":
         t.say(COPY.rxNeeded, this.rxUploadUi(null));
+        return;
+      case "product_request":
+        t.say(ATT_COPY.askProduct);
+        t.chips(ATT_CHIPS.talkPharmacist, ATT_CHIPS.hoursDelivery);
+        return;
+      case "product_request_consent":
+        t.say(ATT_COPY.retryConfirm);
+        t.chips(ATT_CHIPS.confirmRequest, CHIPS.onlyPharmacist);
         return;
       default:
         return;
@@ -1260,7 +1427,7 @@ export class PharmacyChatService {
 
   /** A prescription arrived (visitor upload endpoint): prescription lines move from "pending" into the cart. */
   private async syncPrescriptions(t: Turn) {
-    if (t.state.pendingRx.length === 0 || this.inRedFlagCooldown(t)) return;
+    if (t.mode.effective === "attendance" || t.state.pendingRx.length === 0 || this.inRedFlagCooldown(t)) return;
     const uploads = await this.listRxUploads(t);
     if (uploads.length === 0) return;
     for (const line of t.state.pendingRx) this.mergeLine(t.state.cart, line);
@@ -1593,6 +1760,10 @@ export class PharmacyChatService {
   }
 
   private async submitContact(t: Turn, input: { phone?: string; name?: string; email?: string; consent: boolean }) {
+    if (t.state.awaiting?.kind === "symptom_phone" || t.state.awaiting?.kind === "symptom_name") {
+      await this.symptomContact(t, { phone: input.phone, name: input.name });
+      return;
+    }
     const c = t.state.contact;
     if (input.name?.trim() && !c.leadId) c.name = titleCaseName(input.name.slice(0, 80));
     if (input.email?.trim()) {
@@ -2080,6 +2251,164 @@ export class PharmacyChatService {
   }
 
   // -------------------------------------------------------------------------------------------
+  // Attendance mode: AI attendant with escalation only. No catalog, stock, price, cart, order or prescription.
+  // Red flag, symptom lane and general facts (lane F) are shared with commerce mode; the new part is the
+  // product-request lane: free text -> consent -> PharmacistHandoff `product_request` (never a stock/price claim).
+  // -------------------------------------------------------------------------------------------
+
+  /** Mode is (or became) attendance: park old commerce state in the conversation (DB rows of orders/products stay untouched). */
+  private resetCommerceState(t: Turn) {
+    const s = t.state;
+    const keep = new Set(["symptom_consent", "symptom_answer", "symptom_phone", "symptom_name", "product_request", "product_request_consent"]);
+    const staleAwaiting = !!s.awaiting && !keep.has(s.awaiting.kind);
+    if (s.cart.length === 0 && s.pendingRx.length === 0 && !s.checkoutStep && !s.focus && !s.equivalentOffer && !staleAwaiting) return;
+    s.cart = [];
+    s.pendingRx = [];
+    s.checkoutStep = null;
+    s.focus = null;
+    s.equivalentOffer = null;
+    if (staleAwaiting) s.awaiting = null;
+    t.dirty = true;
+  }
+
+  private async routeAttendance(t: Turn, text: string, midStep: boolean): Promise<boolean> {
+    const f = fold(text);
+
+    if (f === fold(ATT_CHIPS.askProduct) || f === fold(CHIPS.makeOrder) || RE.startOrder.test(f)) {
+      this.askProductRequest(t);
+      return true;
+    }
+    if (f === fold(CHIPS.hoursDelivery)) {
+      this.answerGeneral(t, "hours+delivery");
+      return true;
+    }
+    if (RE.thanks.test(f) && f.split(" ").length <= 6) {
+      t.say("Por nada! Se precisar de algo, é só chamar.");
+      t.chips(ATT_CHIPS.askProduct, ATT_CHIPS.talkPharmacist);
+      return true;
+    }
+    if (isGreeting(text)) {
+      t.say(ATT_COPY.welcome(t.business.name));
+      t.chips(ATT_CHIPS.talkPharmacist, ATT_CHIPS.hoursDelivery, ATT_CHIPS.askProduct);
+      return true;
+    }
+    if (asksForDosage(text)) {
+      t.say(COPY.dosageRefusal);
+      t.chips(CHIPS.talkPharmacist, ATT_CHIPS.askProduct);
+      return true;
+    }
+    if (RE.orderStatus.test(f) && !midStep) {
+      t.say(ATT_COPY.orderStatus);
+      t.chips(CHIPS.talkPharmacist, CHIPS.hoursDelivery);
+      return true;
+    }
+    if (RE.talkPharmacist.test(f)) {
+      await this.requestPharmacist(t, text);
+      return true;
+    }
+    if (!t.state.symptom?.active && detectsSymptomIntent(text)) {
+      // A symptom message while a handoff is still open is extra information for that same handoff.
+      if (t.state.handoffId && (await this.acknowledgeHandoffFollowUp(t, text))) return true;
+      await this.startSymptomLane(t, text);
+      return true;
+    }
+    if (!t.state.symptom?.active) {
+      // "tem X?", "quanto custa X": Alex does not look anything up. The pharmacist confirms availability and price.
+      if (asksAboutProduct(text) && hasProductMention(text)) {
+        this.startProductRequest(t, text);
+        return true;
+      }
+      if (this.answerGeneralFromText(t, f)) return true;
+      if (isBareProductIntent(text)) {
+        this.askProductRequest(t);
+        return true;
+      }
+    } else if (this.answerGeneralFromText(t, f)) {
+      return true;
+    }
+    if (this.inRedFlagCooldown(t) && (isAffirmative(text) || RE.purchaseVerb.test(f))) {
+      t.say(COPY.redFlagCooldown);
+      t.chips(CHIPS.talkPharmacist);
+      return true;
+    }
+    if (t.state.handoffId && !t.state.symptom?.active) {
+      if (await this.acknowledgeHandoffFollowUp(t)) return true;
+    }
+    return false;
+  }
+
+  private askProductRequest(t: Turn) {
+    t.state.lane = "general";
+    t.state.awaiting = { kind: "product_request" };
+    t.say(ATT_COPY.askProduct);
+    t.chips(ATT_CHIPS.talkPharmacist, ATT_CHIPS.hoursDelivery);
+  }
+
+  private startProductRequest(t: Turn, text: string) {
+    t.state.lane = "general";
+    t.state.pendingProductRequest = text.replace(/\s+/g, " ").trim().slice(0, 300);
+    t.state.awaiting = { kind: "product_request_consent" };
+    t.say(ATT_COPY.confirmRequest);
+    t.chips(ATT_CHIPS.confirmRequest, "Agora não");
+  }
+
+  private consumeProductRequest(t: Turn, text: string): "done" | "invalid" | "skip" {
+    const f = fold(text);
+    if (isNegative(text)) {
+      t.state.awaiting = null;
+      t.say(ATT_COPY.declined);
+      t.chips(ATT_CHIPS.talkPharmacist, ATT_CHIPS.hoursDelivery);
+      return "done";
+    }
+    if (RE.talkPharmacist.test(f) || asksForDosage(text) || detectsSymptomIntent(text)) return "skip";
+    if (hasProductMention(text) && !RE.hours.test(f) && !RE.deliveryInfo.test(f) && !RE.paymentInfo.test(f)) {
+      this.startProductRequest(t, text);
+      return "done";
+    }
+    return RE.hours.test(f) || RE.deliveryInfo.test(f) || RE.pickupInfo.test(f) || RE.paymentInfo.test(f) ? "skip" : "invalid";
+  }
+
+  private async consumeProductRequestConsent(t: Turn, text: string): Promise<"done" | "invalid" | "skip"> {
+    const f = fold(text);
+    if (isAffirmative(text) || f === fold(ATT_CHIPS.confirmRequest)) {
+      const pending = t.state.pendingProductRequest ?? "";
+      t.state.awaiting = null;
+      t.state.pendingProductRequest = undefined;
+      if (!pending) {
+        this.askProductRequest(t);
+        return "done";
+      }
+      await this.recordConsent(t, ["product_request"]);
+      const requests = [...(t.state.productRequests ?? []), pending].slice(-5);
+      t.state.productRequests = requests;
+      this.track(t, "pharmacy_product_request", {});
+      const handoff = await this.createHandoff(t, {
+        reason: "product_request",
+        urgent: false,
+        summary: `Produto: ${pending}`.slice(0, 80),
+        brief: buildProductRequestBrief(requests.join("; "), this.conversationLink(t)),
+      });
+      if (!handoff) {
+        t.say(COPY.genericError);
+        t.chips(CHIPS.talkPharmacist);
+        return "done";
+      }
+      t.state.handoffId = handoff.id;
+      t.say(ATT_COPY.done);
+      t.chips(ATT_CHIPS.askProduct, CHIPS.hoursDelivery);
+      return "done";
+    }
+    if (isNegative(text) || f === fold("Agora não")) {
+      t.state.awaiting = null;
+      t.state.pendingProductRequest = undefined;
+      t.say(ATT_COPY.declined);
+      t.chips(ATT_CHIPS.talkPharmacist, ATT_CHIPS.hoursDelivery);
+      return "done";
+    }
+    return "invalid";
+  }
+
+  // -------------------------------------------------------------------------------------------
   // General questions (lane F): deterministic facts from PharmacySettings; the rest goes to the model
   // -------------------------------------------------------------------------------------------
 
@@ -2101,9 +2430,9 @@ export class PharmacyChatService {
           lines.push(`Entrega: taxa de ${brl(s.deliveryFeeCents)}.${min}${areas}`);
         }
       } else if (topic === "pickup") {
-        lines.push(s.pickupEnabled ? "Você pode retirar o pedido na loja." : "A retirada em loja não está disponível no momento.");
+        lines.push(t.mode.effective === "attendance" ? attendancePickupLine(s.pickupEnabled) : s.pickupEnabled ? "Você pode retirar o pedido na loja." : "A retirada em loja não está disponível no momento.");
       } else if (topic === "payment") {
-        lines.push(`${paymentPhrase(s.paymentMethods, "delivery")}. O pagamento é feito só na entrega ou na retirada.`);
+        lines.push(t.mode.effective === "attendance" ? `${paymentPhrase(s.paymentMethods, "delivery")}.` : `${paymentPhrase(s.paymentMethods, "delivery")}. O pagamento é feito só na entrega ou na retirada.`);
       } else if (topic === "exchange" && s.exchangePolicy) {
         lines.push(`Trocas e devoluções: ${s.exchangePolicy}`);
       } else if (topic === "min" && s.minOrderCents > 0) {

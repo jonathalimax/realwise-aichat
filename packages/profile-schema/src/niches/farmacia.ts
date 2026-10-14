@@ -9,6 +9,8 @@ export const farmaciaTemplate: NicheTemplate = {
   niche: "farmacia",
   version: "0.1.0",
   fields: [
+    // Asked first: it decides what the rest of the setup is for (stock/orders or attendance only).
+    { key: "modo_operacao", label: "Modo de operação", weight: "required" },
     { key: "razao_social_cnpj", label: "Razão social e CNPJ", weight: "required" },
     { key: "afe_licenca", label: "Licença / Autorização de Funcionamento (AFE)", weight: "required" },
     { key: "farmaceutico_responsavel", label: "Farmacêutico responsável (RT) e CRF", weight: "required" },
@@ -23,6 +25,12 @@ export const farmaciaTemplate: NicheTemplate = {
     { key: "politica_troca_devolucao", label: "Política de troca e devolução", weight: "optional" },
   ],
   interviewQuestions: [
+    {
+      id: "iq0",
+      prompt:
+        "A farmácia pretende usar estoque e vender pelo sistema (catálogo, pedidos e receitas no chat), ou só o atendimento com IA, que encaminha tudo sobre produtos ao farmacêutico (como um WhatsApp com IA)?",
+      fillsField: "modo_operacao",
+    },
     { id: "iq1", prompt: "Qual é a razão social e o CNPJ da farmácia?", fillsField: "razao_social_cnpj" },
     { id: "iq2", prompt: "Qual o número da licença de funcionamento (AFE) da farmácia?", fillsField: "afe_licenca" },
     { id: "iq3", prompt: "Quem é o farmacêutico responsável e qual o número do CRF?", fillsField: "farmaceutico_responsavel" },
@@ -64,6 +72,7 @@ export const farmaciaTemplate: NicheTemplate = {
  * "proposals"). The owner must confirm every proposal; nothing is applied silently.
  */
 export const farmaciaSettingsFieldMap: Record<string, string[]> = {
+  modo_operacao: ["operationMode"],
   razao_social_cnpj: ["legalName", "cnpj"],
   afe_licenca: ["afeNumber"],
   farmaceutico_responsavel: ["pharmacistName", "pharmacistCrf"],

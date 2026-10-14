@@ -176,7 +176,7 @@ export class PrismaPharmacyHandoffs implements PharmacyHandoffsPort {
         const flags = [...new Set([...(Array.isArray(old.redFlags) ? (old.redFlags as string[]) : []), ...(Array.isArray(incoming.redFlags) ? (incoming.redFlags as string[]) : [])])];
         brief = { ...incoming, ...old, redFlags: flags, customerText: incoming.customerText ?? old.customerText };
       } else {
-        brief = { ...incoming, ...(old.followUps ? { followUps: old.followUps } : {}) };
+        brief = { ...incoming, ...(old.followUps ? { followUps: old.followUps } : {}), ...(old.inProgress ? { inProgress: old.inProgress } : {}), ...(!incoming.contact && old.contact ? { contact: old.contact } : {}) };
       }
       await client.pharmacistHandoff.update({
         where: { id: existing.id },

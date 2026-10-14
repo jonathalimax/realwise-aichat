@@ -8,6 +8,7 @@ import { PharmacySettingsService } from "../pharmacy-settings/pharmacy-settings.
 import { ORDER_STATUS_BADGE, ORDER_STATUS_LABEL, handoffTag, type OrderStatus } from "../pharmacy-common/labels";
 import { formatBRL, formatBRLShort, minutesSince } from "../pharmacy-common/format";
 import { sheetAgeLabel } from "../pharmacy-common/sheet";
+import { loadOperationMode } from "../pharmacy-common/operation-mode";
 import { kindLabel, rxPendingOf, staleAtOrderTime, type OrderRow } from "../orders/order-dto";
 import { whoLabel } from "../handoffs/handoff-dto";
 import { buildInsights, peakHourOf } from "./insights";
@@ -39,14 +40,17 @@ export class PharmacyDashboardService {
     const yesterdayStart = addDays(todayStart, -1);
     const settings = await this.settings.getRow(m.businessId);
     const sheet = await this.settings.latestSheet(m.businessId, settings.stockMaxAgeHours);
+    // Attendance mode (chosen or forced by the plan): no orders, stock or catalog numbers at all.
+    const mode = await loadOperationMode(this.prisma.client, m.businessId);
+    const commerce = mode.effective === "commerce";
     const can = {
-      pedidos: hasPermission(m.permissions, "pedidos", "view"),
+      pedidos: commerce && hasPermission(m.permissions, "pedidos", "view"),
       atendimento: hasPermission(m.permissions, "atendimento", "view"),
-      receitas: hasPermission(m.permissions, "receitas", "view"),
+      receitas: commerce && hasPermission(m.permissions, "receitas", "view"),
       analises: hasPermission(m.permissions, "analises", "view"),
-      catalogo: hasPermission(m.permissions, "catalogo", "view"),
-      classes: hasPermission(m.permissions, "classes", "view"),
-      importar: hasPermission(m.permissions, "importar", "view"),
+      catalogo: commerce && hasPermission(m.permissions, "catalogo", "view"),
+      classes: commerce && hasPermission(m.permissions, "classes", "view"),
+      importar: commerce && hasPermission(m.permissions, "importar", "view"),
     };
     const stock = { asOf: sheet.asOf, ageHours: sheet.ageHours, maxAgeHours: sheet.maxAgeHours, stale: sheet.stale, display: sheetAgeLabel(sheet.ageHours) };
     const roleFocus: "orders" | "handoffs" | "deliveries" = m.ownDeliveriesOnly ? "deliveries" : m.roleKey === "pharmacist" || (m.requiresCrf && m.permissions.atendimento === "edit") ? "handoffs" : "orders";
@@ -103,7 +107,10 @@ export class PharmacyDashboardService {
         return { id: h.id, who: whoLabel({ lead: h.leadId ? leadById.get(h.leadId) ?? null : null, brief: h.brief }), tag: tag.tag, badge: tag.tagBadge, summary: h.summary, createdAt: h.createdAt.toISOString() };
       });
     }
-    if (can.analises) {
+    if (!commerce) {
+      kpis.push(...(await this.attendanceKpis(m.businessId, win.from, todayStart, can.atendimento)));
+    }
+    if (can.analises && commerce) {
       const delivered = await this.prisma.client.order.aggregate({ where: { businessId: m.businessId, status: "delivered", deliveredAt: { gte: todayStart } }, _sum: { totalCents: true }, _count: { _all: true } });
       const revenue = delivered._sum.totalCents ?? 0;
       const n = delivered._count._all;
@@ -111,9 +118,45 @@ export class PharmacyDashboardService {
     }
 
     const chart = can.pedidos ? await this.chart(m, range, now, timeZone, win.title, can.analises) : null;
-    const funnel = can.analises ? await this.funnel(m.businessId, win.from) : null;
+    const funnel = can.analises && commerce ? await this.funnel(m.businessId, win.from) : null;
     const insights = await this.insights(m, win.days, win.from, now, timeZone, settings, sheet, can);
-    return { range, generatedAt: now.toISOString(), roleFocus, kpis, stock, needsAction, handoffs: handoffsList, chart, funnel, insights };
+    return {
+      range,
+      generatedAt: now.toISOString(),
+      mode: mode.effective,
+      roleFocus: commerce ? roleFocus : "handoffs",
+      kpis,
+      stock: commerce ? stock : null,
+      needsAction,
+      handoffs: handoffsList,
+      chart,
+      funnel,
+      insights,
+    };
+  }
+
+  /** Attendance KPIs: open handoffs come from the shared block; these add answered today, average first response, conversations. */
+  private async attendanceKpis(businessId: string, from: Date, todayStart: Date, withHandoffs: boolean) {
+    const [conversations, answeredToday, answeredInRange] = await Promise.all([
+      this.prisma.client.conversation.count({ where: { businessId, startedAt: { gte: from } } }),
+      withHandoffs ? this.prisma.client.pharmacistHandoff.count({ where: { businessId, answeredAt: { gte: todayStart } } }) : Promise.resolve(0),
+      withHandoffs ? this.prisma.client.pharmacistHandoff.findMany({ where: { businessId, answeredAt: { gte: from } }, select: { createdAt: true, answeredAt: true }, take: 5000 }) : Promise.resolve([]),
+    ]);
+    const kpis: Array<{ key: string; label: string; value: number; display: string; note: string }> = [];
+    if (withHandoffs) {
+      kpis.push({ key: "answered_today", label: "Respondidos hoje", value: answeredToday, display: String(answeredToday), note: answeredToday ? "Atendimentos respondidos pela equipe" : "Nenhuma resposta ainda hoje" });
+      const waits = answeredInRange.filter((h) => h.answeredAt).map((h) => ((h.answeredAt as Date).getTime() - h.createdAt.getTime()) / 60000);
+      const avg = waits.length ? waits.reduce((a, b) => a + b, 0) / waits.length : null;
+      kpis.push({
+        key: "avg_first_response",
+        label: "Tempo médio de resposta",
+        value: avg === null ? 0 : Math.round(avg),
+        display: avg === null ? "-" : avg < 60 ? `${Math.max(1, Math.round(avg))} min` : `${Math.floor(avg / 60)} h ${Math.round(avg % 60)} min`,
+        note: avg === null ? "Sem respostas no período" : `${waits.length} ${waits.length === 1 ? "resposta" : "respostas"} no período`,
+      });
+    }
+    kpis.push({ key: "conversations", label: "Conversas", value: conversations, display: String(conversations), note: "Iniciadas no período" });
+    return kpis;
   }
 
   private async courierSummary(m: MemberContext, range: Range, now: Date, stock: unknown, roleFocus: string) {
@@ -223,6 +266,7 @@ export class PharmacyDashboardService {
     const timeZone = await this.tz(m.businessId);
     const win = windowFor(range, now, timeZone);
     const businessId = m.businessId;
+    if ((await loadOperationMode(this.prisma.client, businessId)).effective === "attendance") return this.attendanceOverview(m, range, win.title, win.from);
     const labels = bucketLabels(range, now, timeZone);
     const buckets = labels.map((label) => ({ label, revenueCents: 0 }));
     const [delivered, orderCount, conversations, handoffs, controlled, redFlag, top, unmetDemand] = await Promise.all([
@@ -267,6 +311,38 @@ export class PharmacyDashboardService {
     };
   }
 
+  /** Analytics of an attendance-mode pharmacy: conversations and pharmacist handoffs only (no revenue, orders or products). */
+  private async attendanceOverview(m: MemberContext, range: Range, label: string, from: Date) {
+    const businessId = m.businessId;
+    const [conversations, handoffs, redFlag, productRequests, answered] = await Promise.all([
+      this.prisma.client.conversation.count({ where: { businessId, startedAt: { gte: from } } }),
+      this.prisma.client.pharmacistHandoff.count({ where: { businessId, createdAt: { gte: from } } }),
+      this.prisma.client.analyticsEvent.count({ where: { businessId, name: "pharmacy_red_flag", occurredAt: { gte: from } } }),
+      this.prisma.client.pharmacistHandoff.count({ where: { businessId, reason: "product_request", createdAt: { gte: from } } }),
+      this.prisma.client.pharmacistHandoff.count({ where: { businessId, answeredAt: { gte: from } } }),
+    ]);
+    const pct = (n: number) => (conversations ? Math.round((n / conversations) * 100) : 0);
+    return {
+      range,
+      label,
+      mode: "attendance" as const,
+      kpis: [
+        { key: "conversations", label: "Conversas", value: conversations, display: String(conversations), note: "Iniciadas no período" },
+        { key: "handoffs", label: "Encaminhadas ao farmacêutico", value: handoffs, display: String(handoffs), note: `${pct(handoffs)}% das conversas` },
+        { key: "product_requests", label: "Perguntas sobre produtos", value: productRequests, display: String(productRequests), note: "O farmacêutico confirma estoque e preço" },
+        { key: "answered", label: "Respondidos", value: answered, display: String(answered), note: "Atendimentos respondidos" },
+      ],
+      chart: { buckets: [] },
+      triage: [
+        { key: "handoff", label: "Encaminhadas ao farmacêutico", count: handoffs, percent: pct(handoffs) },
+        { key: "red_flag", label: "Sinal de alerta (urgente)", count: redFlag, percent: pct(redFlag) },
+        { key: "general", label: "Dúvidas gerais", count: Math.max(0, conversations - handoffs), percent: pct(Math.max(0, conversations - handoffs)) },
+      ],
+      topProducts: [],
+      unmetDemand: [],
+    };
+  }
+
   private async topProducts(businessId: string, from: Date) {
     const rows = await this.prisma.client.$queryRaw<Array<{ productId: string; units: bigint; revenue: bigint }>>(Prisma.sql`
       SELECT i."productId" AS "productId", SUM(i."qty")::bigint AS units, SUM(i."qty" * i."unitPriceCents")::bigint AS revenue
@@ -285,8 +361,9 @@ export class PharmacyDashboardService {
     const out: Record<string, unknown> = {};
     if (m.niche !== "farmacia") return out;
     const settings = await this.settings.getRow(m.businessId);
+    const commerce = (await loadOperationMode(this.prisma.client, m.businessId)).effective === "commerce";
     const scope = m.ownDeliveriesOnly ? { courierMemberId: m.memberId } : {};
-    if (hasPermission(m.permissions, "pedidos", "view")) {
+    if (commerce && hasPermission(m.permissions, "pedidos", "view")) {
       const cutoff = new Date(Date.now() - settings.orderReminderMinutes * 60000);
       const [newCount, waiting] = await Promise.all([
         this.prisma.client.order.count({ where: { businessId: m.businessId, status: "pending_pharmacist", ...scope } }),
@@ -302,10 +379,10 @@ export class PharmacyDashboardService {
       ]);
       out.handoffs = { open, urgent };
     }
-    if (hasPermission(m.permissions, "receitas", "view")) {
+    if (commerce && hasPermission(m.permissions, "receitas", "view")) {
       out.prescriptions = { pending: await this.prisma.client.prescriptionUpload.count({ where: { businessId: m.businessId, status: "pending" } }) };
     }
-    if (hasPermission(m.permissions, "importar", "view") || hasPermission(m.permissions, "catalogo", "view") || hasPermission(m.permissions, "farmacia", "view")) {
+    if (commerce && (hasPermission(m.permissions, "importar", "view") || hasPermission(m.permissions, "catalogo", "view") || hasPermission(m.permissions, "farmacia", "view"))) {
       const sheet = await this.settings.latestSheet(m.businessId, settings.stockMaxAgeHours);
       out.sheet = { stale: sheet.stale, ageHours: sheet.ageHours };
     }

@@ -5,13 +5,14 @@ import { BusinessSessionGuard } from "../../common/guards/business-session.guard
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import { CurrentMember } from "../../common/decorators/current-business.decorator";
 import { PermissionsGuard } from "../access/permissions.guard";
+import { CommerceModeGuard } from "../access/commerce-mode.guard";
 import { RequireCrf, RequirePermission } from "../access/permission.decorator";
 import type { MemberContext } from "../access/member-context";
 import { ProductsService } from "./products.service";
 import { ClassReviewService } from "./class-review.service";
 
 @Controller("products")
-@UseGuards(BusinessSessionGuard, PermissionsGuard)
+@UseGuards(BusinessSessionGuard, PermissionsGuard, CommerceModeGuard)
 @RequirePermission("catalogo", "view")
 export class ProductsController {
   constructor(private readonly products: ProductsService) {}
@@ -77,7 +78,7 @@ export class PublicProductImageController {
 }
 
 @Controller("catalog/class-review")
-@UseGuards(BusinessSessionGuard, PermissionsGuard)
+@UseGuards(BusinessSessionGuard, PermissionsGuard, CommerceModeGuard)
 @RequirePermission("classes", "view")
 export class ClassReviewController {
   constructor(private readonly review: ClassReviewService) {}

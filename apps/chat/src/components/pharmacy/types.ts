@@ -44,6 +44,8 @@ export interface PharmacyHumanJoined {
 }
 
 export interface PharmacyState {
+  /** Effective operation mode; "attendance" = no cart or product cards. */
+  operationMode?: "commerce" | "attendance";
   lane?: "otc" | "rx" | "controlled" | "symptom" | "general" | null;
   cart?: CartDto | null;
   checkoutStep?: null | "contact" | "fulfillment" | "address" | "review" | "done";

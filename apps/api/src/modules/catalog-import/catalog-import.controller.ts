@@ -5,12 +5,13 @@ import { BusinessSessionGuard } from "../../common/guards/business-session.guard
 import { InternalTokenGuard } from "../../common/guards/internal-token.guard";
 import { CurrentMember } from "../../common/decorators/current-business.decorator";
 import { PermissionsGuard } from "../access/permissions.guard";
+import { CommerceModeGuard } from "../access/commerce-mode.guard";
 import { RequirePermission } from "../access/permission.decorator";
 import type { MemberContext } from "../access/member-context";
 import { CatalogImportService } from "./catalog-import.service";
 
 @Controller("catalog-imports")
-@UseGuards(BusinessSessionGuard, PermissionsGuard)
+@UseGuards(BusinessSessionGuard, PermissionsGuard, CommerceModeGuard)
 @RequirePermission("importar", "view")
 export class CatalogImportController {
   constructor(private readonly imports: CatalogImportService) {}

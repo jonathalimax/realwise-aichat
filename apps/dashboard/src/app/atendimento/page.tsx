@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { closeHandoff, getHandoff, getHandoffs, replyHandoff, type HandoffDetail, type HandoffList, type HandoffStatus } from "../../lib/pharmacy-api";
+import { closeHandoff, getHandoff, getHandoffs, markHandoffAnswered, replyHandoff, startHandoff, type HandoffDetail, type HandoffList, type HandoffStatus } from "../../lib/pharmacy-api";
 import { ApiError } from "../../lib/api";
 import { errorMessage, useLoad } from "../../lib/use-load";
 import { useSession } from "../../lib/session";
@@ -15,6 +15,7 @@ import { Textarea } from "../../components/ui/textarea";
 import { Tabs } from "../../components/ui/segmented";
 import { Card } from "../../components/ui/card";
 import { Skeleton } from "../../components/ui/skeleton";
+import { WhatsappDialog } from "../../components/atendimento/WhatsappDialog";
 import { EmptyState, ErrorState, LoadState, PageHeader, PageStack, TableSkeleton } from "../../components/page-kit";
 import { cn } from "../../lib/utils";
 
@@ -97,7 +98,10 @@ function HandoffRow({ h, active, onPick }: { h: HandoffList; active: boolean; on
           <Badge variant={toneVariant(h.tagBadge)}>{h.tag}</Badge>
         </span>
         <span className="text-[13px] text-muted">{h.summary}</span>
-        <span className="text-xs text-muted">{timeAgo(h.createdAt)}</span>
+        <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
+          {timeAgo(h.createdAt)}
+          {h.inProgress && <Badge variant="soft">Em atendimento · {h.inProgress.byName}</Badge>}
+        </span>
       </button>
     </li>
   );
@@ -107,20 +111,36 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
   const { me, can, refreshNotifications } = useSession();
   const state = useLoad<HandoffDetail>(() => getHandoff(id), [id]);
   const [text, setText] = useState("");
-  const [busy, setBusy] = useState<"reply" | "close" | null>(null);
+  const [busy, setBusy] = useState<"reply" | "close" | "answered" | null>(null);
   const [error, setError] = useState("");
+  const [waOpen, setWaOpen] = useState(false);
+  const [chatMode, setChatMode] = useState(false);
   useEffect(() => {
     setText("");
     setError("");
+    setWaOpen(false);
+    setChatMode(false);
   }, [id]);
   const h = state.data?.id === id ? state.data : null;
   const canReply = can("atendimento", "edit") && Boolean(me?.canPerformPharmacistActions);
+  const hasPhone = Boolean(h?.contact?.hasPhone);
+  const onWhatsapp = h?.inProgress?.channel === "whatsapp";
 
-  async function act(kind: "reply" | "close") {
+  async function onWhatsappStarted() {
+    state.setData(await startHandoff(id, "whatsapp"));
+    onChanged();
+  }
+
+  async function replyInChat() {
+    setChatMode(true);
+    if (!h?.inProgress) startHandoff(id, "chat").then((u) => { state.setData(u); onChanged(); }).catch(() => undefined);
+  }
+
+  async function act(kind: "reply" | "close" | "answered") {
     setBusy(kind);
     setError("");
     try {
-      const updated = kind === "reply" ? await replyHandoff(id, text.trim()) : await closeHandoff(id);
+      const updated = kind === "reply" ? await replyHandoff(id, text.trim()) : kind === "close" ? await closeHandoff(id) : await markHandoffAnswered(id);
       state.setData(updated);
       setText("");
       onChanged();
@@ -171,27 +191,68 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
         )}
         <hr className="border-border" />
         {error && <Alert variant="red">{error}</Alert>}
+        {h.status === "open" && h.inProgress && (
+          <Alert variant="soft">
+            Em atendimento · {h.inProgress.byName} · {h.inProgress.byRole}
+            {onWhatsapp ? " (WhatsApp)" : " (chat)"}.
+          </Alert>
+        )}
         {h.status === "open" && canReply && (
           <>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="reply" className="text-sm font-medium">
-                Responder ao cliente
-              </label>
-              <Textarea id="reply" rows={3} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Sua resposta aparece no chat com seu nome e função" />
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs text-muted">
-                Será enviado como {me?.member.name} · {me?.role.name}
-              </span>
-              <span className="flex gap-2">
-                <Button variant="outline" disabled={busy !== null} onClick={() => act("close")}>
+            {hasPhone && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={() => setWaOpen(true)} disabled={busy !== null}>
+                  {onWhatsapp ? "Abrir WhatsApp novamente" : "Iniciar atendimento"}
+                </Button>
+                {onWhatsapp && (
+                  <Button variant="outline" disabled={busy !== null} onClick={() => act("answered")}>
+                    {busy === "answered" ? "Salvando…" : "Marcar como respondido"}
+                  </Button>
+                )}
+                {!chatMode && (
+                  <Button variant="outline" disabled={busy !== null} onClick={replyInChat}>
+                    Responder aqui no chat
+                  </Button>
+                )}
+                <span className="text-xs text-muted">
+                  Contato: {h.contact?.firstName ?? "cliente"} · {h.contact?.phoneMasked}
+                </span>
+              </div>
+            )}
+            {!hasPhone && (
+              <p className="text-xs text-muted">Este cliente não informou o WhatsApp: a resposta vai pelo chat.</p>
+            )}
+            {(chatMode || !hasPhone) && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="reply" className="text-sm font-medium">
+                    Responder ao cliente
+                  </label>
+                  <Textarea id="reply" rows={3} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Sua resposta aparece no chat com seu nome e função" />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs text-muted">
+                    Será enviado como {me?.member.name} · {me?.role.name}
+                  </span>
+                  <span className="flex gap-2">
+                    <Button variant="outline" disabled={busy !== null} onClick={() => act("close")}>
+                      {busy === "close" ? "Encerrando…" : "Encerrar sem responder"}
+                    </Button>
+                    <Button disabled={busy !== null || text.trim().length === 0} onClick={() => act("reply")}>
+                      {busy === "reply" ? "Enviando…" : "Enviar resposta"}
+                    </Button>
+                  </span>
+                </div>
+              </>
+            )}
+            {hasPhone && !chatMode && (
+              <div>
+                <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => act("close")}>
                   {busy === "close" ? "Encerrando…" : "Encerrar sem responder"}
                 </Button>
-                <Button disabled={busy !== null || text.trim().length === 0} onClick={() => act("reply")}>
-                  {busy === "reply" ? "Enviando…" : "Enviar resposta"}
-                </Button>
-              </span>
-            </div>
+              </div>
+            )}
+            {hasPhone && <WhatsappDialog handoffId={id} open={waOpen} onOpenChange={setWaOpen} onStarted={onWhatsappStarted} />}
           </>
         )}
         {h.status === "open" && !canReply && (
@@ -199,8 +260,14 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
         )}
         {h.status !== "open" && h.answer && (
           <Alert variant="soft">
-            Respondido por {h.answer.byName} · {h.answer.byRole}. O cliente viu a mensagem no chat.
-            <span className="mt-1 block text-[13px] opacity-80">“{h.answer.text}”</span>
+            {h.answer.text.startsWith("Atendimento continuado pelo WhatsApp") ? (
+              <>Respondido por {h.answer.byName} · {h.answer.byRole}. A conversa continuou pelo WhatsApp e o cliente viu um aviso no chat.</>
+            ) : (
+              <>
+                Respondido por {h.answer.byName} · {h.answer.byRole}. O cliente viu a mensagem no chat.
+                <span className="mt-1 block text-[13px] opacity-80">“{h.answer.text}”</span>
+              </>
+            )}
           </Alert>
         )}
         {h.status === "closed" && !h.answer && <Alert variant="soft">Atendimento encerrado.</Alert>}
