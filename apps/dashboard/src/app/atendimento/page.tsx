@@ -19,6 +19,15 @@ import { WhatsappDialog } from "../../components/atendimento/WhatsappDialog";
 import { EmptyState, ErrorState, LoadState, PageHeader, PageStack, TableSkeleton } from "../../components/page-kit";
 import { cn } from "../../lib/utils";
 
+/** +5541999990001 -> (41) 99999-0001 */
+function formatPhone(raw?: string | null): string | null {
+  if (!raw) return null;
+  const d = raw.replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return raw;
+}
+
 export default function AtendimentoPage() {
   return (
     <Suspense fallback={null}>
@@ -215,7 +224,7 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
                   </Button>
                 )}
                 <span className="text-xs text-muted">
-                  Contato: {h.contact?.firstName ?? "cliente"} · {h.contact?.phone ?? h.contact?.phoneMasked}
+                  Contato: {h.contact?.firstName ?? "cliente"} · {formatPhone(h.contact?.phone) ?? h.contact?.phoneMasked}
                 </span>
               </div>
             )}
@@ -262,7 +271,7 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
               : "Você não tem permissão para responder atendimentos."}
             {hasPhone && (
               <span className="mt-1 block text-xs">
-                Contato: {h.contact?.firstName ?? "cliente"} · {h.contact?.phone ?? h.contact?.phoneMasked}
+                Contato: {h.contact?.firstName ?? "cliente"} · {formatPhone(h.contact?.phone) ?? h.contact?.phoneMasked}
               </span>
             )}
           </Alert>

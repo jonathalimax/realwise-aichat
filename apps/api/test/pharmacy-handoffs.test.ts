@@ -27,7 +27,11 @@ function setup(status: "open" | "answered" | "closed" = "open") {
         update: async ({ data }: any) => Object.assign(row, data),
       },
       lead: {
-        findMany: async () => [{ id: "l1", name: "Maria Souza", phone: leadPhone }],
+        // Regression: the real query must select the phone columns (a fake that ignores `select` once hid a missing phone).
+        findMany: async ({ select }: any) => {
+          assert.ok(select?.phone && select?.phoneNormalized, "withLeads must select phone and phoneNormalized");
+          return [{ id: "l1", name: "Maria Souza", phone: leadPhone, phoneNormalized: leadPhone }];
+        },
         findFirst: async ({ where }: any) => (where.id === "l1" && where.businessId === "b1" ? { phone: leadPhone, phoneNormalized: leadPhone } : null),
       },
       business: { findFirst: async () => ({ name: "Farmácia X" }) },

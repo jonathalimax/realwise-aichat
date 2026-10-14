@@ -41,8 +41,8 @@ export class HandoffsService {
 
   private async withLeads<T extends { leadId: string | null }>(businessId: string, rows: T[]): Promise<Array<T & { lead: { name: string | null; phone?: string | null } | null }>> {
     const ids = [...new Set(rows.map((r) => r.leadId).filter((x): x is string => !!x))];
-    const leads = ids.length ? await this.prisma.client.lead.findMany({ where: { businessId, id: { in: ids } }, select: { id: true, name: true } }) : [];
-    const byId = new Map(leads.map((l) => [l.id, l]));
+    const leads = ids.length ? await this.prisma.client.lead.findMany({ where: { businessId, id: { in: ids } }, select: { id: true, name: true, phone: true, phoneNormalized: true } }) : [];
+    const byId = new Map(leads.map((l) => [l.id, { name: l.name, phone: l.phoneNormalized || l.phone }]));
     return rows.map((r) => ({ ...r, lead: r.leadId ? byId.get(r.leadId) ?? null : null }));
   }
 
