@@ -32,7 +32,8 @@ export default function InicioPage() {
   const [range, setRange] = useState<Range>("7d");
   const state = useLoad(() => getDashboardSummary(range), [range]);
   const s = state.data;
-  const firstName = me?.member.name.split(" ")[0] ?? "";
+  // Skip honorifics ("Dra. Carla Menezes" -> "Carla").
+  const firstName = me?.member.name.split(" ").find((w) => !/^(dr|dra|sr|sra|prof|profa)\.?$/i.test(w)) ?? "";
 
   return (
     <PageStack>

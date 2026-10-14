@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { dismissAlert, getAlerts, type BusinessAlert } from "../../lib/pharmacy-api";
@@ -14,11 +14,20 @@ const POLL_MS = 60_000;
 export function AlertsStrip() {
   const [alerts, setAlerts] = useState<BusinessAlert[]>([]);
 
+  const denied = useRef(false);
   const load = useCallback(async () => {
+    if (denied.current) return;
     try {
       const list = await getAlerts();
-      setAlerts(list.filter((a) => a.type.startsWith("pharmacy_")).slice(0, 3));
-    } catch {
+      const rank = { critical: 0, warning: 1, info: 2 } as Record<string, number>;
+      // Critical first (an urgent handoff must never be pushed out by older warnings), then newest first.
+      const sorted = list
+        .filter((a) => a.type.startsWith("pharmacy_"))
+        .sort((a, b) => (rank[a.severity] ?? 3) - (rank[b.severity] ?? 3) || String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));
+      setAlerts(sorted.slice(0, 3));
+    } catch (e) {
+      // Roles without access to alerts (courier) get a 403: stop asking instead of polling a forbidden route.
+      if ((e as { status?: number })?.status === 403) denied.current = true;
       setAlerts([]);
     }
   }, []);

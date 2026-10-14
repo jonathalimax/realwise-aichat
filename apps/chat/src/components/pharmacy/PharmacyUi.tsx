@@ -375,6 +375,53 @@ function ControlledInfoCard({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyU
 
 function ContactCapture({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContext }) {
   const fields: string[] = Array.isArray(ui.fields) ? ui.fields : ["phone", "name", "email"];
+  // The engine already has the phone (typed in chat): only the missing e-mail / consent is asked, never the phone again.
+  if (!fields.includes("phone")) return <ContactFollowUp ui={ui} ctx={ctx} fields={fields} />;
+  return <ContactCaptureFull ui={ui} ctx={ctx} />;
+}
+
+function ContactFollowUp({ ui, ctx, fields }: { ui: PharmacyUiPayload; ctx: PharmacyUiContext; fields: string[] }) {
+  const consent: ConsentCardData | null = ui.consent && typeof ui.consent.text === "string" ? ui.consent : null;
+  const [email, setEmail] = useState("");
+  const [accepted, setAccepted] = useState(false);
+  const { pending, error, done, run } = useCardAction(ctx);
+  const emailId = useId();
+  const live = ctx.interactive && !done;
+  const locked = !live || pending || ctx.busy;
+  const needsConsent = Boolean(consent && consent.required !== false);
+  async function submit() {
+    if (needsConsent && !accepted) return;
+    const payload: { type: string; [key: string]: unknown } = { type: "checkout.contact", consent: true };
+    if (email.trim()) payload.email = email.trim();
+    await run(payload, email.trim() ? `E-mail: ${email.trim()}` : "Concordo");
+  }
+  return (
+    <form
+      className="ph-card flex flex-col gap-2.5 p-3.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      {fields.includes("email") && (
+        <div>
+          <label htmlFor={emailId} className="ph-label">
+            E-mail (opcional)
+          </label>
+          <input id={emailId} className="ph-input" type="email" autoComplete="email" value={email} disabled={locked} onChange={(e) => setEmail(e.target.value)} maxLength={120} />
+        </div>
+      )}
+      {consent && <ConsentCheck consent={consent} checked={accepted} onChange={setAccepted} disabled={locked} />}
+      <button type="submit" className="ph-btn" disabled={locked || (needsConsent && !accepted)}>
+        {pending ? "Enviando…" : "Continuar"}
+      </button>
+      <ErrorLine message={error} />
+    </form>
+  );
+}
+
+function ContactCaptureFull({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContext }) {
+  const fields: string[] = Array.isArray(ui.fields) ? ui.fields : ["phone", "name", "email"];
   const consent: ConsentCardData | null = ui.consent && typeof ui.consent.text === "string" ? ui.consent : null;
   const initial = ui.recognized && typeof ui.recognized.firstName === "string" ? ui.recognized : null;
   const [phone, setPhone] = useState("");
