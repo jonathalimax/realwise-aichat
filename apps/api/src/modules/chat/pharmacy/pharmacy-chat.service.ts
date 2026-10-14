@@ -75,7 +75,7 @@ import {
   type SymptomStep,
   type UiPayload,
 } from "./types";
-import { buildCartDto, cartUi, productCardUi } from "./ui";
+import { buildCartDto, cartUi, catalogListUi, productCardUi } from "./ui";
 
 const RED_FLAG_COOLDOWN_MS = 30 * 60_000;
 const MAX_CART_LINES = 15;
@@ -118,6 +118,7 @@ const RE = {
   checkout: /\b(finalizar|fechar|concluir|encerrar|prosseguir)\b.{0,20}\b(pedido|compra|carrinho)\b|^(finalizar|fechar pedido|continuar|prosseguir|pagar|fechar)$|\bquero finalizar\b|\bquero fechar\b/,
   removeItem: /^(remover|tirar|retirar|excluir|remove)\s+(.+)/,
   changeItems: /^(alterar itens|mudar itens|editar carrinho|mudar pedido)$/,
+  browseCatalog: /\b(catalogo|cardapio)\b|\b(ver|mostrar|mostra|listar|lista|conhecer)\b.{0,14}\b(produtos|catalogo|remedios|medicamentos|itens)\b|\bquais\b.{0,14}\b(produtos|remedios|medicamentos|itens)\b|\bo ?que\b.{0,3}\b(voces|vcs|voce|vc|a farmacia|a loja)?\s?(tem|temos|vendem|vende)\b(?! (pra|para|contra|de bom))/,
   startOrder: /\b(fazer|montar|iniciar|comecar|novo)\b.{0,12}\bpedido\b|^(quero )?pedir$/,
   thanks: /^(muito )?(obrigad[oa]|brigad[oa]|valeu|vlw|tchau|ate mais|ate logo|ok obrigad[oa]|certo obrigad[oa])\b/,
   orderStatus: /\b(status|acompanhar|acompanhamento|rastrear|onde esta|cade|como esta|andamento|ja saiu|chegou)\b.{0,25}\b(pedido|entrega|encomenda|compra)\b|\bmeu pedido\b/,
@@ -313,9 +314,11 @@ export class PharmacyChatService {
     const f = fold(text);
 
     if (f === fold(CHIPS.makeOrder) || RE.startOrder.test(f)) {
-      t.say(COPY.askProduct);
-      t.chips(CHIPS.talkPharmacist, CHIPS.hoursDelivery);
-      t.state.awaiting = { kind: "product_name" };
+      await this.showCatalog(t, { intro: COPY.catalogIntro });
+      return true;
+    }
+    if (!t.state.symptom?.active && f.split(" ").length <= 10 && RE.browseCatalog.test(f) && !asksRecommendation(text) && !detectsSymptomIntent(text)) {
+      await this.showCatalog(t, { intro: COPY.catalogIntro, categoryText: f });
       return true;
     }
     if (f === fold(CHIPS.hoursDelivery)) {
@@ -399,9 +402,7 @@ export class PharmacyChatService {
       }
       // "quero X" where X is not in the catalog: say so (deterministic), do not hand a purchase to the model.
       if ((RE.purchaseVerb.test(f) || t.state.awaiting?.kind === "product_name") && !wantsRecommendation && this.looksLikeProductRequest(f)) {
-        if (t.state.awaiting?.kind === "product_name") t.state.awaiting = null;
-        t.say(COPY.notFound);
-        t.chips(CHIPS.talkPharmacist, CHIPS.makeOrder);
+        await this.showCatalog(t, { intro: COPY.catalogNotFound, fallback: COPY.notFound });
         return true;
       }
     }
@@ -421,6 +422,27 @@ export class PharmacyChatService {
       if (await this.acknowledgeHandoffFollowUp(t)) return true;
     }
     return false;
+  }
+
+  /**
+   * Commerce mode: the browsable catalog (confirmed OTC first, then confirmed prescription; never controlled,
+   * unclassified or out-of-stock). Deterministic, no model. The visitor can still type a product name.
+   */
+  private async showCatalog(t: Turn, opts: { intro: string; fallback?: string; category?: string | null; categoryText?: string; offset?: number }) {
+    const rows = await this.catalogFor().listable(t.business.id);
+    t.state.awaiting = { kind: "product_name" };
+    if (rows.length === 0) {
+      t.say(opts.fallback ?? COPY.catalogEmpty);
+      t.chips(CHIPS.talkPharmacist, CHIPS.hoursDelivery);
+      return;
+    }
+    let category = opts.category ?? null;
+    if (!category && opts.categoryText) {
+      const ui = catalogListUi(rows, t.settings) as unknown as { categories: string[] };
+      category = ui.categories.find((c) => new RegExp(`\\b${fold(c).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(opts.categoryText!)) ?? null;
+    }
+    t.say(opts.intro, catalogListUi(rows, t.settings, { category, offset: opts.offset }));
+    t.chips(CHIPS.talkPharmacist, CHIPS.hoursDelivery);
   }
 
   /** A purchase sentence naming something (not a pure question about hours/delivery/etc.). */
@@ -447,6 +469,20 @@ export class PharmacyChatService {
       return;
     }
     switch (type) {
+      case "catalog.browse": {
+        const offset = Number(action.offset);
+        await this.showCatalog(t, {
+          intro: offset > 0 ? COPY.catalogMore : COPY.catalogIntro,
+          category: typeof action.category === "string" && action.category.trim() ? action.category : null,
+          offset: Number.isFinite(offset) && offset > 0 ? offset : 0,
+        });
+        return;
+      }
+      case "product.view": {
+        const product = await this.requireProduct(t, String(action.productId ?? ""));
+        await this.presentProduct(t, product, 1, false);
+        return;
+      }
       case "cart.add": {
         const product = await this.requireProduct(t, String(action.productId ?? ""));
         await this.addToCart(t, product, toQty(action.qty), true);

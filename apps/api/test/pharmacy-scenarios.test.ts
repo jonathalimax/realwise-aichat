@@ -1380,7 +1380,7 @@ test("small talk is answered without the model: start-an-order phrasing, thanks"
   const p = await createPharmacy();
   const c = await p.conversation();
   const start = await p.say(c, "Quero fazer um pedido");
-  assert.match(start.text, /Qual produto/);
+  assert.match(start.text, /alguns dos nossos produtos/);
   const thanks = await p.say(c, "obrigado!");
   assert.match(thanks.text, /Por nada/);
   noModelCalls();

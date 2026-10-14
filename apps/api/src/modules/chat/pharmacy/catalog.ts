@@ -157,6 +157,31 @@ export class PharmacyCatalog {
       .sort((a, b) => b.score - a.score || (b.product.stockQty ?? 0) - (a.product.stockQty ?? 0));
   }
 
+  /**
+   * Rows the visitor may browse: active, in stock, class CONFIRMED as over-the-counter (not pharmacistRequired)
+   * or prescription. Controlled / unclassified / out-of-stock rows NEVER appear. Order: OTC first, then
+   * prescription; inside each, category then name (deterministic, no model).
+   */
+  async listable(businessId: string): Promise<ProductRow[]> {
+    const rows = (await this.prisma.client.product.findMany({
+      where: { ...this.baseWhere(businessId), saleClass: { in: ["otc", "prescription"] } },
+      take: 3000,
+    })) as ProductRow[];
+    const kindRank = (p: ProductRow) => (gateForProduct(p).kind === "otc" ? 0 : 1);
+    return rows
+      .filter((r) => {
+        const k = gateForProduct(r).kind;
+        return (k === "otc" || k === "prescription") && (r.stockQty ?? 0) > 0;
+      })
+      .sort(
+        (a, b) =>
+          kindRank(a) - kindRank(b) ||
+          fold(a.category ?? "\uffff").localeCompare(fold(b.category ?? "\uffff")) ||
+          fold(a.name).localeCompare(fold(b.name)) ||
+          a.id.localeCompare(b.id),
+      );
+  }
+
   /** Equivalents flagged by the pharmacy (same equivalentGroup), orderable and in stock. NEVER inferred. */
   async equivalentsOf(businessId: string, product: ProductRow): Promise<ProductRow[]> {
     if (!product.equivalentGroup) return [];

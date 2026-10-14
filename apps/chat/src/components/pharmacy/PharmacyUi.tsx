@@ -14,6 +14,7 @@ import type { ConsentCardData, MaskedAddress, PharmacyActionResult, PharmacyUiCo
 
 export const PHARMACY_UI_KINDS = [
   "product_card",
+  "catalog_list",
   "cart",
   "symptom_question",
   "red_flag",
@@ -51,6 +52,8 @@ function renderKind(ui: PharmacyUiPayload, ctx: PharmacyUiContext): ReactNode {
   switch (ui.type) {
     case "product_card":
       return ui.product ? <ProductCard ui={ui} ctx={ctx} /> : null;
+    case "catalog_list":
+      return Array.isArray(ui.items) && ui.items.length > 0 ? <CatalogList ui={ui} ctx={ctx} /> : null;
     case "cart":
       return ui.cart ? <CartSummaryCard cart={ui.cart} /> : null;
     case "symptom_question":
@@ -198,6 +201,71 @@ function ProductCard({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContex
         </button>
       </div>
       {qty >= maxQty && inStock && <p className="mt-1.5 text-xs text-zinc-500">Máximo de {maxQty} por pedido.</p>}
+      <ErrorLine message={error} />
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------------------------------
+// Catalog list: what the pharmacy has (compact rows, price right-aligned). Only the newest list is live.
+// ------------------------------------------------------------------------------------------
+
+function CatalogList({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContext }) {
+  const items: any[] = ui.items.filter((it: any) => it && typeof it.id === "string" && typeof it.name === "string");
+  const categories: string[] = Array.isArray(ui.categories) ? ui.categories.filter((c: unknown) => typeof c === "string") : [];
+  const active: string | null = typeof ui.activeCategory === "string" ? ui.activeCategory : null;
+  const { pending, error, run } = useCardAction(ctx);
+  const [added, setAdded] = useState<Record<string, boolean>>({});
+  const locked = !ctx.interactive || ctx.busy || pending;
+  const nextOffset = typeof ui.nextOffset === "number" ? ui.nextOffset : null;
+  async function add(it: any) {
+    const res = await run({ type: "cart.add", productId: it.id, qty: 1 }, `Adicionar ${it.name}`);
+    if (res.ok) setAdded((a) => ({ ...a, [it.id]: true }));
+  }
+  return (
+    <div className="ph-card p-3" role="group" aria-label={typeof ui.title === "string" ? ui.title : "Produtos"}>
+      {typeof ui.title === "string" && <div className="mb-2 text-sm font-semibold text-zinc-900">{ui.title}</div>}
+      {categories.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="Categorias">
+          <button type="button" className="ph-chip" aria-pressed={!active} disabled={locked} style={!active ? { background: "var(--ph-soft)" } : undefined} onClick={() => run({ type: "catalog.browse" }, "Todos")}>
+            Todos
+          </button>
+          {categories.map((c) => (
+            <button key={c} type="button" className="ph-chip" aria-pressed={active === c} disabled={locked} style={active === c ? { background: "var(--ph-soft)" } : undefined} onClick={() => run({ type: "catalog.browse", category: c }, c)}>
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
+      <ul className="m-0 flex list-none flex-col divide-y divide-zinc-100 p-0">
+        {items.map((it) => (
+          <li key={it.id} className="flex items-center gap-2.5 py-2">
+            <Thumb imageUrl={it.imageUrl} icon={it.placeholderIcon} alt="" />
+            <button
+              type="button"
+              className="min-h-[44px] min-w-0 flex-1 bg-transparent p-0 text-left"
+              disabled={locked}
+              aria-label={`Ver ${it.name}${it.presentation ? `, ${it.presentation}` : ""}`}
+              onClick={() => run({ type: "product.view", productId: it.id }, `Ver ${it.name}`)}
+            >
+              <span className="block text-sm font-semibold leading-tight text-zinc-900 break-words">{it.name}</span>
+              {it.presentation && <span className="block text-xs text-zinc-500 break-words">{it.presentation}</span>}
+              {it.requiresPrescription && <span className="ph-badge ph-badge-amber mt-0.5">Exige receita</span>}
+            </button>
+            <div className="flex flex-none flex-col items-end gap-1">
+              <span className="text-sm font-bold text-zinc-900">{formatBRL(it.priceCents)}</span>
+              <button type="button" className="ph-btn !min-h-[44px] !px-3" disabled={locked || it.inStock === false} aria-label={`Adicionar ${it.name} ao carrinho`} onClick={() => add(it)}>
+                {added[it.id] ? "Adicionado ✓" : "Adicionar"}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {nextOffset !== null && (
+        <button type="button" className="ph-btn ph-btn-outline mt-2 w-full" disabled={locked} onClick={() => run({ type: "catalog.browse", ...(active ? { category: active } : {}), offset: nextOffset }, "Ver mais")}>
+          Ver mais
+        </button>
+      )}
       <ErrorLine message={error} />
     </div>
   );

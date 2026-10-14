@@ -558,6 +558,8 @@ All money in cents. `product.imageUrl` is the public product image URL (or `null
 
 ```jsonc
 { "type": "product_card",    "product": { "id", "name", "presentation", "priceCents", "inStock": true, "maxQty": 5, "imageUrl", "placeholderIcon" }, "qty": 1 }
+{ "type": "catalog_list",    "title": "Nossos produtos", "categories": ["Dor e febre", "Alergia"] /* max 6, distinct Product.category of listable rows */, "activeCategory": null|"Alergia", "items": [ { "id", "name", "presentation", "priceCents", "inStock": true, "maxQty", "imageUrl", "placeholderIcon", "requiresPrescription": false } ] /* max 8 */, "offset": 0, "total": 14, "nextOffset": 8|null }
+// catalog_list (commerce mode only): sent when the visitor taps "Fazer um pedido" / asks "o que vocês têm?", "catálogo", ... or names a product that is not found. Rows: in stock, active, class CONFIRMED otc (not pharmacistRequired) first, then confirmed prescription (requiresPrescription=true); inside each group ordered by category then name. Controlled, unclassified and out-of-stock rows NEVER appear (they stay reachable by name). Deterministic, no model call. Row actions: "Adicionar" = cart.add {productId, qty:1} (Rx rows start the Rx flow), tap on the row = product.view {productId} (product card with the qty stepper). Chips: catalog.browse {category?}; "Ver mais" = catalog.browse {category?, offset: nextOffset}. Only the newest list is interactive in the widget.
 { "type": "cart",            "cart": CartDto }       // CartDto = { items: [{ productId, name, qty, unitPriceCents, lineTotalCents, imageUrl }], itemCount, subtotalCents, requiresPrescription: boolean }
 { "type": "symptom_question","step": "symptom|duration|severity|for_whom|age|pregnancy|allergies|other_medicines|already_tried", "prompt": "Há quanto tempo você sente isso?", "chips": ["Hoje","1–3 dias","Mais de 3 dias"], "allowFreeText": true, "consent": ConsentCardOrNull }
 { "type": "red_flag",        "headline": "Isso pode ser urgente", "body": "Ligue 192 (SAMU) ou vá ao pronto-socorro agora.", "samuNumber": "192", "offerPharmacist": true, "handoffId": "…|null" }
@@ -581,6 +583,8 @@ Chips ("suggestions") continue to use the existing `suggestions: string[]` field
 | `type` | Payload | Effect |
 | --- | --- | --- |
 | `cart.add` | `{ productId, qty }` | validates class gate (`otc`+confirmed, in stock, `qty <= maxQtyPerOrder`, not `pharmacistRequired`); controlled/unclassified => `controlled_info` / handoff offer, never added |
+| `catalog.browse` | `{ category?, offset? }` | commerce mode: replies with a `catalog_list` page (8 per page; `category` filters by Product.category) |
+| `product.view` | `{ productId }` | commerce mode: the same product card / Rx / controlled-info reply as naming the product |
 | `cart.set_qty` | `{ productId, qty }` | `0` removes |
 | `cart.remove` | `{ productId }` | |
 | `checkout.start` | `{}` | begins checkout (customer step) |

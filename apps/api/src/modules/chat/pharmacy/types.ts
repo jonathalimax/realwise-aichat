@@ -13,6 +13,7 @@ export interface ProductRow {
   presentation: string | null;
   manufacturer: string | null;
   activeIngredient: string | null;
+  category?: string | null;
   ean?: string | null;
   priceCents: number;
   stockQty: number | null;

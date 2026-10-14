@@ -1,5 +1,6 @@
 // Builders for the UI payloads (Message.uiData) exactly as docs/pharmacy/API.md 8.2 defines them.
 
+import { fold } from "./text";
 import { placeholderIconFor, productImageUrl } from "./catalog";
 import { effectiveMaxQty, gateForProduct } from "./rules";
 import type { CartDto, CartItemDto, CartLine, PharmacySettingsView, ProductRow, UiPayload } from "./types";
@@ -18,6 +19,49 @@ export function productCardUi(product: ProductRow, settings: PharmacySettingsVie
       placeholderIcon: placeholderIconFor(product),
     },
     qty,
+  };
+}
+
+export const CATALOG_PAGE_SIZE = 8;
+const MAX_CATEGORY_CHIPS = 6;
+
+/** `catalog_list` payload (API.md 8.2): one page of the browsable rows plus category chips. Pure. */
+export function catalogListUi(rows: ProductRow[], settings: PharmacySettingsView, opts: { category?: string | null; offset?: number; title?: string } = {}): UiPayload {
+  const counts = new Map<string, { label: string; n: number }>();
+  for (const r of rows) {
+    const label = r.category?.trim();
+    if (!label) continue;
+    const key = fold(label);
+    const cur = counts.get(key);
+    if (cur) cur.n++;
+    else counts.set(key, { label, n: 1 });
+  }
+  const categories = [...counts.values()].sort((a, b) => b.n - a.n || fold(a.label).localeCompare(fold(b.label))).slice(0, MAX_CATEGORY_CHIPS).map((c) => c.label);
+  const wanted = opts.category ? fold(opts.category) : "";
+  const active = categories.find((c) => fold(c) === wanted) ?? null;
+  const filtered = active ? rows.filter((r) => r.category && fold(r.category.trim()) === fold(active)) : rows;
+  const offset = Math.max(0, Math.floor(opts.offset ?? 0));
+  const page = filtered.slice(offset, offset + CATALOG_PAGE_SIZE);
+  const next = offset + CATALOG_PAGE_SIZE;
+  return {
+    type: "catalog_list",
+    title: opts.title ?? (active ? active : "Nossos produtos"),
+    categories,
+    activeCategory: active,
+    items: page.map((p) => ({
+      id: p.id,
+      name: p.name,
+      presentation: p.presentation,
+      priceCents: p.priceCents,
+      inStock: true,
+      maxQty: effectiveMaxQty(p, settings),
+      imageUrl: productImageUrl(p),
+      placeholderIcon: placeholderIconFor(p),
+      requiresPrescription: gateForProduct(p).kind === "prescription",
+    })),
+    offset,
+    total: filtered.length,
+    nextOffset: next < filtered.length ? next : null,
   };
 }
 

@@ -50,6 +50,10 @@ export const COPY = {
   askProduct: "Claro! Qual produto você quer pedir? Me diga o nome (por exemplo: Dipirona 500 mg).",
   notFound:
     "Não encontrei esse produto no catálogo. Pode me dizer o nome de outra forma (nome e concentração)? Se preferir, chamo o farmacêutico para ajudar.",
+  catalogIntro: "Estes são alguns dos nossos produtos. Toque em um para pedir, ou me diga o nome do que você procura:",
+  catalogMore: "Mais produtos:",
+  catalogNotFound: "Não encontrei esse produto. Veja o que temos disponível agora, ou me diga o nome de outra forma:",
+  catalogEmpty: "No momento não tenho produtos para listar aqui. Me diga o nome do que você procura ou chame o farmacêutico.",
   ambiguous: "Encontrei mais de uma opção. Qual delas você quer?",
   cartEmpty: "Seu carrinho está vazio. Me diga o nome do produto que você quer pedir.",
   cartCleared: "Pronto, esvaziei o carrinho.",

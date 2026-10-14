@@ -1256,6 +1256,13 @@ export function ChatScreen({
     if (!business) return;
     if (isStreamingRef.current) return;
 
+    // Pharmacy (commerce): the order chip must show what the pharmacy has, not ask for a product name.
+    if (isPharmacy && !isAttendanceMode(business) && pharmacy?.operationMode !== "attendance" && /fazer um pedido/i.test(bubble.label)) {
+      setBubbles([]);
+      await handlePharmacyAction({ type: "catalog.browse" }, bubble.label);
+      return;
+    }
+
     setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: bubble.label }]);
     setSending(true);
     setBusy(true);
@@ -1375,6 +1382,12 @@ export function ChatScreen({
       // Unknown card kinds render nothing, so they must not steal "latest" from a live form.
       if (type && (PHARMACY_UI_KINDS as readonly string[]).includes(type) && type !== "human_joined") return i;
     }
+    return -1;
+  }, [messages]);
+
+  // The catalog list stays live while later cards (cart, product) appear below it; only the newest list is.
+  const latestCatalogIndex = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].ui?.type === "catalog_list") return i;
     return -1;
   }, [messages]);
 
@@ -1514,7 +1527,7 @@ export function ChatScreen({
                 ctx={{
                   businessId: business.id,
                   conversationId,
-                  interactive: i === latestUiIndex,
+                  interactive: m.ui?.type === "catalog_list" ? i === latestCatalogIndex : i === latestUiIndex,
                   busy,
                   onAction: handlePharmacyAction,
                   onRxUploaded: handleRxUploaded,

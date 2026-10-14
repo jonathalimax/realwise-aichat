@@ -98,6 +98,8 @@ export function isBareProductIntent(text: string): boolean {
 
 /** Commerce-only structured actions of the widget: refused (politely) in attendance mode. */
 export const COMMERCE_ACTIONS = new Set([
+  "catalog.browse",
+  "product.view",
   "cart.add",
   "cart.set_qty",
   "cart.remove",
