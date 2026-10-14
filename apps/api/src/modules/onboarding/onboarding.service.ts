@@ -210,14 +210,35 @@ export class OnboardingService {
     let reply = `Pode me contar sobre "${gaps[0].label}"?`;
     let fieldKey: string | null = null;
     let value: string | null = null;
+    let modelAnswered = false;
     try {
       const result = await generateFromGateway({ purpose: "chat", businessId, systemPrompt, prompt, maxTokens: 300, timeoutMs: 60000 });
       const parsed = JSON.parse(result.text.trim());
       if (typeof parsed.reply === "string") reply = parsed.reply;
       if (typeof parsed.fieldKey === "string") fieldKey = parsed.fieldKey;
       if (typeof parsed.value === "string") value = parsed.value;
+      modelAnswered = typeof parsed.reply === "string";
     } catch {
-      // keep the generic fallback reply; don't block the conversation on a parsing/inference hiccup
+      // don't block the conversation on a parsing/inference hiccup: fall back to the scripted interview below
+    }
+
+    // No model (local dev, outage): run the interview by script. The last question named a field by its label,
+    // so the owner's next message is that field's answer; then ask for the next missing field.
+    if (!modelAnswered) {
+      const lastOwnerIdx = history.map((m) => m.role).lastIndexOf("owner");
+      const lastOwner = lastOwnerIdx >= 0 ? history[lastOwnerIdx] : undefined;
+      const lastAsked = lastOwnerIdx > 0 ? history.slice(0, lastOwnerIdx).reverse().find((m) => m.role !== "owner") : undefined;
+      const askedGap = lastAsked ? gaps.find((g) => lastAsked.content.includes(`"${g.label}"`)) : undefined;
+      if (lastOwner && askedGap) {
+        const saved = await this.patchProfileField(businessId, askedGap.key, lastOwner.content.trim(), "interview");
+        if (!saved.ok) {
+          reply = `Não consegui usar essa resposta para "${askedGap.label}". Pode escrever de outro jeito?`;
+        } else {
+          const { gaps: next } = await this.findGaps(businessId);
+          reply = next.length ? `Anotado! Pode me contar sobre "${next[0].label}"?` : "Anotado! Isso foi tudo que eu precisava saber.";
+          return { reply, allDone: next.length === 0, remainingGaps: next.length, confidenceScore: (await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { confidenceScore: true } }))?.confidenceScore ?? confidenceScore };
+        }
+      }
     }
 
     if (fieldKey && value) {
