@@ -250,11 +250,14 @@ function SymptomQuestion({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiCo
   const blocked = !live || pending || ctx.busy || Boolean(consent && consent.required !== false && !accepted);
   const inputId = useId();
 
+  // Declining the health-data notice ("Só chamar o farmacêutico") needs no consent: it is always available.
+  const isDecline = (c: string) => /^s[óo] chamar o farmac/i.test(c.trim());
+
   async function answer(value: string) {
     if (!value.trim()) return;
     const payload: { type: string; [key: string]: unknown } = { type: "symptom.answer", step: ui.step, value: value.trim() };
     // The first question carries the LGPD consent card; the choice travels with the answer.
-    if (consent) payload.consent = true;
+    if (consent && !isDecline(value)) payload.consent = true;
     const result = await run(payload, value.trim());
     if (result.ok) setAnswered(value.trim());
   }
@@ -269,7 +272,7 @@ function SymptomQuestion({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiCo
       {chips.length > 0 && (
         <div className="flex flex-wrap gap-2" role="group" aria-label="Respostas sugeridas">
           {chips.map((c) => (
-            <button key={c} type="button" className="ph-chip" disabled={blocked} onClick={() => answer(c)}>
+            <button key={c} type="button" className="ph-chip" disabled={isDecline(c) ? !live || pending || ctx.busy : blocked} onClick={() => answer(c)}>
               {c}
             </button>
           ))}
@@ -292,7 +295,7 @@ function SymptomQuestion({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiCo
           </button>
         </form>
       )}
-      {consent && live && !accepted && <p className="text-xs text-zinc-500">Aceite o aviso acima para responder.</p>}
+      {consent && live && !accepted && <p className="text-xs text-zinc-500">Aceite o aviso acima para continuar, ou chame o farmacêutico direto.</p>}
       <ErrorLine message={error} />
     </div>
   );
