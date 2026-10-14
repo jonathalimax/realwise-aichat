@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { randomBytes } from "crypto";
 import {
   buildCustomerEscalationMessage,
@@ -66,6 +66,8 @@ import {
   type SelectedListingDetails,
 } from "./selection";
 import { detectIntent, extractPreferencesFromText, triagePromptFragment } from "./triage";
+import { PharmacyChatService, serializePharmacyMessage } from "./pharmacy/pharmacy-chat.service";
+import { guardPharmacyText } from "./pharmacy/guards";
 
 // Stage 5 conversational redesign — flag-gated, default off (Business.conversationalModeEnabled).
 // The env kill-switch forces the flag false for every tenant regardless of its own DB value, for
@@ -251,6 +253,8 @@ export class ChatService {
     private readonly simulator: SimulatorService,
     private readonly teamSummary: TeamSummaryService,
     private readonly availability: AvailabilityService,
+    // Pharmacy engine (niche `farmacia` only); optional so the real-estate/vehicle harness is unchanged.
+    @Optional() private readonly pharmacy?: PharmacyChatService,
   ) {}
 
   // Fire-and-forget (TeamSummaryService.record never throws) — the team summary must never slow
@@ -508,6 +512,12 @@ export class ChatService {
     this.knowledge.recordUnanswered(businessId, conversationId, messageId, questionText).catch(() => {});
   }
 
+  /** Throws unless the business is a pharmacy (pharmacy-only endpoints). */
+  async assertPharmacy(businessId: string) {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } });
+    if (business?.niche !== "farmacia") throw new NotFoundException("Not found");
+  }
+
   async getOrCreateConversation(businessId: string, visitorToken: string, leadId?: string) {
     let conversation = await this.prisma.client.conversation.findFirst({
       // "escalated" is included so an escalated conversation isn't orphaned from cookie/
@@ -645,6 +655,9 @@ export class ChatService {
       return listings.length > 0 ? { ...m, listings } : m;
     });
 
+    const historyNiche = (await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } }))?.niche;
+    const isPharmacy = historyNiche === "farmacia";
+    const pharmacyView = isPharmacy && this.pharmacy ? await this.pharmacy.getView(businessId, conversationId) : undefined;
     return {
       // resumeToken is included so the client can persist a same-device localStorage pointer
       // (id + resumeToken) that works even if the visitor cookie doesn't round-trip (cross-origin
@@ -657,7 +670,8 @@ export class ChatService {
         hasLead: Boolean(conversation.leadId),
         selectedListingIds: conversation.selectedListingIds,
       },
-      messages: messagesWithListings,
+      messages: isPharmacy ? messagesWithListings.map((m) => serializePharmacyMessage(m)) : messagesWithListings,
+      ...(pharmacyView ? { pharmacy: pharmacyView } : {}),
       flowSnapshot: conversation.flowSnapshot ?? null,
       resumedViaToken: ownsViaResumeToken && !ownsViaVisitor,
     };
@@ -726,7 +740,14 @@ export class ChatService {
       this.messageEngagementEvents(turnNiche, visitorText, await this.selectedIdsFor(businessId, conversationId)),
     );
 
-    if (detectsEscalation(visitorText) || (offeredHandoff && confirmsEscalation(visitorText))) {
+    // Pharmacy: the code-driven engine owns the turn (red flag -> lanes -> cart/checkout). It returns
+    // null only for general questions that go to the model (below), whose output is guarded.
+    if (turnNiche === "farmacia" && this.pharmacy) {
+      const pharmacyTurn = await this.pharmacy.handleText(businessId, conversationId, visitorText);
+      if (pharmacyTurn) return pharmacyTurn;
+    }
+
+    if (turnNiche !== "farmacia" && (detectsEscalation(visitorText) || (offeredHandoff && confirmsEscalation(visitorText)))) {
       return this.escalate(businessId, conversationId, visitorText);
     }
 
@@ -1450,7 +1471,7 @@ export class ChatService {
           // a figure stated as fact is not (no grounding data at all on this turn).
           const vetted = stripUnsupportedFigures(text, "", { allowQuestions: true });
           const persona = getPersona(niche);
-          const discoveryText = !leaksSystemPrompt(text) && vetted.text.trim() ? vetted.text : persona.openingQuestion;
+          const discoveryText = !leaksSystemPrompt(text) && vetted.text.trim() ? this.pharmacySafeText(niche, vetted.text) : persona.openingQuestion;
           return {
             ...EMPTY_ANSWER,
             text: discoveryText,
@@ -1552,7 +1573,7 @@ export class ChatService {
     const suggestions = vetted.suggestions ?? (quickReplyOptions.length > 0 ? quickReplyOptions : this.buildSuggestions(niche, listings));
     return {
       ...EMPTY_ANSWER,
-      text: vetted.text,
+      text: this.pharmacySafeText(niche, vetted.text),
       abstained: vetted.abstained,
       notifyTeam: vetted.notifyTeam,
       model: result.model,
@@ -1564,6 +1585,15 @@ export class ChatService {
       listings,
       suggestions,
     };
+  }
+
+  // Pharmacy only: whatever the model phrased must carry no dosage/posology advice and no medicine
+  // recommendation (the sentences are dropped; nothing usable left => fixed refusal).
+  private pharmacySafeText(niche: Niche, text: string): string {
+    if (niche !== "farmacia") return text;
+    const guarded = guardPharmacyText(text);
+    if (guarded.removed.length > 0) this.logger.warn(`pharmacy guard dropped ${guarded.removed.length} sentence(s) from a model answer`);
+    return guarded.text;
   }
 
   // Persists a model-path answer and runs the gap/escalation bookkeeping — shared by sendMessage
@@ -1732,7 +1762,15 @@ export class ChatService {
       this.messageEngagementEvents(streamTurnBusiness?.niche ?? "imobiliaria", visitorText, await this.selectedIdsFor(businessId, conversationId)),
     );
 
-    if (detectsEscalation(visitorText) || (offeredHandoff && confirmsEscalation(visitorText))) {
+    if (streamTurnBusiness?.niche === "farmacia" && this.pharmacy) {
+      const pharmacyTurn = await this.pharmacy.handleText(businessId, conversationId, visitorText);
+      if (pharmacyTurn) {
+        if (pharmacyTurn.message) onDelta(pharmacyTurn.message.content);
+        return pharmacyTurn;
+      }
+    }
+
+    if (streamTurnBusiness?.niche !== "farmacia" && (detectsEscalation(visitorText) || (offeredHandoff && confirmsEscalation(visitorText)))) {
       const result = await this.escalate(businessId, conversationId, visitorText);
       if (result.message) onDelta(result.message.content);
       return result;

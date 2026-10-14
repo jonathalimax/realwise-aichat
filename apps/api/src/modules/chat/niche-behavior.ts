@@ -129,9 +129,9 @@ const VEHICLE: NicheBehavior = {
   listingQueryWords: "carro veículo",
 };
 
-// TODO(wave2:chat-engine): replace these neutral stubs with the real pharmacy behavior (lane router,
-// product search, red-flag reply, handoff). Until then the pharmacy chat only offers: talk to the
-// pharmacist, general questions answered from the profile/KB, and nothing that recommends a product.
+// Pharmacy: the lane router, cart/checkout, red flags and handoffs live in chat/pharmacy/ (code-driven).
+// This entry only supplies the neutral wording used by the generic (model-path / degraded) replies:
+// it never offers visits, listings or financing and never recommends a product.
 const PHARMACY: NicheBehavior = {
   businessDescriptor: "farmácia",
   sharedKnowledgeMarket: "farmacêutico",

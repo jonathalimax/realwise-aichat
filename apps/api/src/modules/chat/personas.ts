@@ -45,7 +45,7 @@ const PERSONAS: Record<Niche, Persona> = {
   },
   // Pharmacy persona: Alex (a man). Always identifies himself as an AI assistant (welcome message
   // in the flow + the "IA" badge in the chat header) and NEVER recommends medicine.
-  // TODO(wave2:chat-engine): the lane router drives the conversation; these rules only frame the free-text turns.
+  // The code-driven pharmacy engine (chat/pharmacy/) owns safety and orders; these rules only frame the free-text (model) turns.
   farmacia: {
     name: "Alex",
     tone:

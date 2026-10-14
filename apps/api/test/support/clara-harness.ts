@@ -10,6 +10,11 @@ import { FinancingRatesService } from "../../src/modules/chat/financing-rates.se
 import { ListingsService } from "../../src/modules/listings/listings.service";
 import { TeamSummaryService } from "../../src/modules/leads/team-summary.service";
 import { OwnerAssistantService } from "../../src/modules/owner-assistant/owner-assistant.service";
+import { PharmacyChatService } from "../../src/modules/chat/pharmacy/pharmacy-chat.service";
+import { AlertsPharmacyNotifier, PrismaPharmacyHandoffs, PrismaPharmacyOrders } from "../../src/modules/chat/pharmacy/ports";
+import { CustomerProfileService } from "../../src/modules/customers/customer-profile.service";
+import { FallbackCepLookup, type CepLookup, type CepResult } from "../../src/modules/customers/cep-lookup";
+import { ChatHumanService } from "../../src/modules/chat/chat-human.service";
 
 type Row = Record<string, any>;
 
@@ -88,6 +93,9 @@ function matchesWhere(row: Row, where: any): boolean {
     } else if (key === "NOT") {
       const list = Array.isArray(condition) ? condition : [condition];
       if (list.some((c) => matchesWhere(row, c))) return false;
+    } else if (!(key in row) && key.includes("_") && condition && typeof condition === "object" && !Array.isArray(condition) && !(condition instanceof Date)) {
+      // Prisma compound unique selector (e.g. businessId_phoneNormalized: { businessId, phoneNormalized }).
+      if (!matchesWhere(row, condition)) return false;
     } else if (!matchesValue(row[key], condition)) {
       return false;
     }
@@ -165,6 +173,12 @@ class FakeModel {
     this.guard("create", args);
     const createdAt = nextDate();
     const row: Row = { id: `${this.name}_${++idCounter}`, createdAt, ...this.defaults(), ...args.data };
+    // Nested `{ create: [...] }` relations (e.g. Order.items) are stored as plain arrays.
+    for (const [key, value] of Object.entries(row)) {
+      if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date) && Array.isArray((value as any).create)) {
+        row[key] = (value as any).create.map((v: Row) => ({ id: `${key}_${++idCounter}`, ...v }));
+      }
+    }
     this.rows.push(row);
     return row;
   }
@@ -234,8 +248,30 @@ export function createFakePrisma() {
       leadId: null,
       engagementState: null,
       pinnedTransaction: null,
+      pharmacyState: null,
     })),
-    message: new FakeModel("message", () => ({ listingIds: [], answerSource: null, simulationData: null, retrievedChunkIds: [] })),
+    message: new FakeModel("message", () => ({ listingIds: [], answerSource: null, simulationData: null, retrievedChunkIds: [], kind: "standard", uiData: null })),
+    pharmacySettings: new FakeModel("pharmacySettings", () => ({
+      nextOrderNumber: 1001,
+      nextRxNumber: 1,
+      deliveryAreas: [],
+      deliveryFeeCents: 0,
+      minOrderCents: 0,
+      pickupEnabled: true,
+      deliveryEnabled: true,
+      autoConfirmEnabled: true,
+      stockMaxAgeHours: 24,
+      openingHours: [],
+      paymentMethods: ["pix", "cartao", "dinheiro"],
+      quickChips: [],
+    })),
+    product: new FakeModel("product", () => ({ active: true, deletedAt: null, saleClass: "unclassified", classConfirmedAt: null, pharmacistRequired: false, maxQtyPerOrder: null, equivalentGroup: null, stockQty: null, stockAsOf: null, imageKey: null, presentation: null, manufacturer: null, activeIngredient: null })),
+    pharmacistHandoff: new FakeModel("pharmacistHandoff", () => ({ status: "open", urgent: false, brief: {}, summary: "" })),
+    order: new FakeModel("order", () => ({ status: "pending_pharmacist", items: [] })),
+    orderStatusEvent: new FakeModel("orderStatusEvent"),
+    prescriptionUpload: new FakeModel("prescriptionUpload"),
+    consentRecord: new FakeModel("consentRecord"),
+    customerAddress: new FakeModel("customerAddress", () => ({ isDefault: false, supersededAt: null, complement: null, reference: null })),
     listing: new FakeModel("listing", () => ({ status: "active", deletedAt: null, images: [] })),
     analyticsEvent: new FakeModel("analyticsEvent"),
     whatsappRoutingNumber: new FakeModel("whatsappRoutingNumber"),
@@ -251,8 +287,17 @@ export function createFakePrisma() {
 
   const client: any = new Proxy(
     {
+      // Interactive transactions run against the same in-memory client (no isolation needed here).
+      $transaction: async (fn: (tx: any) => Promise<unknown>) => fn(client),
       $queryRawUnsafe: async (sql: string, ...params: unknown[]) => {
         rawQueries.push({ sql, params });
+        if (/UPDATE "PharmacySettings"/.test(sql)) {
+          const settingsRow = models.pharmacySettings.rows.find((r) => r.businessId === params[0]);
+          if (!settingsRow) return [];
+          const n = settingsRow.nextOrderNumber;
+          settingsRow.nextOrderNumber = n + 1;
+          return [{ n }];
+        }
         if (/SharedKnowledgeChunk/.test(sql)) return [];
         const businessId = params[0];
         const chunks = kb.filter((c) => c.businessId === businessId);
@@ -441,7 +486,7 @@ function spy<T extends Record<string, (...args: any[]) => any>>(impl: T) {
 }
 
 export interface ScenarioOptions {
-  niche?: "imobiliaria" | "concessionaria";
+  niche?: "imobiliaria" | "concessionaria" | "farmacia";
   profileSummary?: string;
   conversationalModeEnabled?: boolean;
   quota?: number;
@@ -453,8 +498,8 @@ export function createClara(options: ScenarioOptions = {}) {
   const businessId = "biz_1";
   db.models.business.rows.push({
     id: businessId,
-    name: "Imobiliária Horizonte",
-    slug: "horizonte",
+    name: options.niche === "farmacia" ? "Farmácia Exemplo" : "Imobiliária Horizonte",
+    slug: options.niche === "farmacia" ? "farmacia-exemplo" : "horizonte",
     niche: options.niche ?? "imobiliaria",
     email: "dono@example.com",
     timezone: "America/Sao_Paulo",
@@ -516,6 +561,28 @@ export function createClara(options: ScenarioOptions = {}) {
     teamSummary,
   );
   const simulator = new SimulatorService(listings, new FinancingRatesService(db.prisma));
+
+  // Pharmacy engine with every external piece stubbed: CEP provider, notifier alerts, in-memory DB.
+  const cepBook = new Map<string, CepResult>();
+  const cepControl = { mode: "ok" as "ok" | "fail" };
+  const cepProvider: CepLookup = {
+    name: "fake",
+    async lookup(cep8: string) {
+      if (cepControl.mode === "fail") throw new Error("cep provider down");
+      return cepBook.get(cep8) ?? null;
+    },
+  };
+  const customers = new CustomerProfileService(db.prisma, new FallbackCepLookup([cepProvider]));
+  const pharmacy = new PharmacyChatService(
+    db.prisma,
+    customers,
+    new PrismaPharmacyOrders(db.prisma),
+    new PrismaPharmacyHandoffs(db.prisma),
+    new AlertsPharmacyNotifier(alerts.service as any),
+    analytics.service as any,
+  );
+  const human = new ChatHumanService(db.prisma);
+
   const chat = new ChatService(
     db.prisma,
     bookings.service as any,
@@ -530,6 +597,7 @@ export function createClara(options: ScenarioOptions = {}) {
     simulator,
     teamSummary,
     availability.service as any,
+    pharmacy,
   );
   const businesses = spy({ isSlugAvailable: async () => true });
   const owner = new OwnerAssistantService(db.prisma, analytics.service as any, leads.service as any, businesses.service as any);
@@ -586,6 +654,10 @@ export function createClara(options: ScenarioOptions = {}) {
     flow,
     owner,
     listings,
+    pharmacy,
+    human,
+    customers,
+    cep: { book: cepBook, control: cepControl },
     spies: { leads, alerts, usage, knowledge, analytics, calendar, bookings, availability, businesses },
     newConversation,
     addListing,
