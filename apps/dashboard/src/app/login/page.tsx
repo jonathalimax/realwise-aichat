@@ -22,6 +22,14 @@ export default function LoginPage() {
   );
 }
 
+// Each niche gets its own login look (persona, colours) on the same shared login. The niche comes from
+// the link (?niche=farmacia); real estate stays the default so existing links look unchanged.
+type LoginNiche = "imobiliaria" | "farmacia";
+const LOGIN_THEMES: Record<LoginNiche, { brand: string; lead: string; persona: string; tail: string; panelClass: string; accent: string; defaultMode: "email" | null }> = {
+  imobiliaria: { brand: "Realwise", lead: "Enquanto você dorme,", persona: "a Clara", tail: "responde.", panelClass: "bg-ink", accent: "#15803D", defaultMode: null },
+  farmacia: { brand: "Realwise Farmácia", lead: "Enquanto você atende no balcão,", persona: "o Alex", tail: "cuida do chat.", panelClass: "bg-[#0B4F4A]", accent: "#F59E0B", defaultMode: "email" },
+};
+
 const WHATSAPP_URL = "https://wa.me/5585992265544?text=" + encodeURIComponent("Oi! Estou tentando entrar no painel da Realwise e deu erro.");
 
 function isRateLimitError(err: unknown): boolean {
@@ -42,17 +50,20 @@ function LoginPageInner() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   // "email" = team member (e-mail + senha); "phone" = existing owner flow (Firebase SMS code), untouched.
   const firebaseConfigured = Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-  const [mode, setMode] = useState<"phone" | "email">(firebaseConfigured ? "phone" : "email");
+  const nicheParam = searchParams.get("niche");
+  const niche: LoginNiche = nicheParam === "farmacia" ? "farmacia" : "imobiliaria";
+  const theme = LOGIN_THEMES[niche];
+  const [mode, setMode] = useState<"phone" | "email">(theme.defaultMode ?? (firebaseConfigured ? "phone" : "email"));
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem("rw_login_mode");
-      if (searchParams.get("mode") === "email") setMode("email");
+      if (searchParams.get("mode") === "email" || theme.defaultMode === "email") setMode("email");
       else if (saved === "email" || (saved === "phone" && firebaseConfigured)) setMode(saved);
     } catch {
       /* private mode: keep default */
     }
-  }, [searchParams, firebaseConfigured]);
+  }, [searchParams, firebaseConfigured, theme]);
 
   function changeMode(next: "phone" | "email") {
     setMode(next);
@@ -124,17 +135,17 @@ function LoginPageInner() {
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-ink lg:flex-row">
       {/* BRAND PANEL */}
-      <div className="hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-between bg-ink px-12 py-10 text-bg">
-        <a href="/" className="font-serif text-xl font-bold text-bg">Realwise</a>
+      <div className={`hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-between ${theme.panelClass} px-12 py-10 text-bg`}>
+        <a href="/" className="font-serif text-xl font-bold text-bg">{theme.brand}</a>
         <p className="max-w-sm font-serif text-2xl leading-[1.2] text-bg/80">
-          Enquanto você dorme, <em className="italic text-[#15803D]">a Clara</em> responde.
+          {theme.lead} <em className="italic" style={{ color: theme.accent }}>{theme.persona}</em> {theme.tail}
         </p>
       </div>
 
       {/* FORM PANEL */}
       <div className="flex w-full flex-1 flex-col items-center justify-center px-6 py-10 sm:px-12 lg:w-1/2">
         <div className="w-full max-w-[380px]">
-          <a href="/" className="mb-8 block font-serif text-lg font-bold text-ink lg:hidden">Realwise</a>
+          <a href="/" className="mb-8 block font-serif text-lg font-bold text-ink lg:hidden">{theme.brand}</a>
           <Tabs
             className="mb-6 w-full [&>button]:flex-1 [&>button]:justify-center"
             label="Forma de entrar"
