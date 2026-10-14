@@ -78,7 +78,7 @@ trap cleanup INT TERM EXIT
 say "Starting apps..."
 start api apps/api pnpm dev
 start worker apps/worker pnpm dev
-start dashboard apps/dashboard pnpm dev
+start dashboard apps/dashboard env NEXT_PUBLIC_DEFAULT_NICHE=farmacia NEXT_DIST_DIR=.next-farmacia pnpm dev
 start chat apps/chat pnpm dev
 start marketing apps/marketing pnpm dev
 [ "${WITH_GATEWAY:-0}" = "1" ] && start gateway apps/inference-gateway pnpm dev
@@ -95,7 +95,7 @@ wait_http() { # url name seconds
 }
 say "Waiting for the servers (the first page load of each Next app compiles it and can take a while)..."
 wait_http http://localhost:3006/api/health "API" 90 && echo "  API ok"
-wait_http http://localhost:3003/imobiliaria/app/login?niche=farmacia "dashboard" 120 && echo "  dashboard ok"
+wait_http http://localhost:3003/farmacia/app/login "dashboard" 120 && echo "  dashboard ok"
 wait_http http://localhost:3005/client/conversation/farmacia-exemplo "chat widget" 120 && echo "  chat ok"
 wait_http http://localhost:3007/farmacia "marketing" 120 && echo "  marketing ok"
 
@@ -104,7 +104,7 @@ cat <<URLS
 ========================================================================
  Farmácia Exemplo is running (local only)
 ------------------------------------------------------------------------
- Dashboard      http://localhost:3003/imobiliaria/app/login?niche=farmacia
+ Dashboard      http://localhost:3003/farmacia/app/login
  Chat widget    http://localhost:3005/client/conversation/farmacia-exemplo
  Landing page   http://localhost:3007/farmacia
  API health     http://localhost:3006/api/health

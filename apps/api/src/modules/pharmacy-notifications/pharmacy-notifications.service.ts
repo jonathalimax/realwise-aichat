@@ -54,7 +54,7 @@ export class PharmacyNotificationsService {
   private async emailAll(businessId: string, section: PermissionSection, subject: string, bodyHtml: string, href: string, label: string) {
     try {
       const to = await this.recipients(businessId, section);
-      const link = dashboardLink(`/imobiliaria/app${href}`);
+      const link = dashboardLink(`/farmacia/app${href}`);
       const html = `${bodyHtml}${renderEmailButton(label, link)}`;
       for (const email of to) sendEmail(email, subject, html).catch(() => {});
     } catch (e) {
@@ -119,7 +119,7 @@ export class PharmacyNotificationsService {
     const message = `O estoque do catálogo está desatualizado (${ageHours}h, limite ${maxAgeHours}h). Pedidos novos passam pelo farmacêutico até você importar uma planilha nova.`;
     await this.createAlert(businessId, "pharmacy_stale_sheet", "warning", message, "Importar planilha", "/catalogo/importar");
     const to = await this.recipients(businessId, "importar", "edit");
-    const link = dashboardLink("/imobiliaria/app/catalogo/importar");
+    const link = dashboardLink("/farmacia/app/catalogo/importar");
     for (const email of to) sendEmail(email, "Estoque desatualizado", `<p>${escapeHtml(message)}</p>${renderEmailButton("Importar planilha", link)}`).catch(() => {});
     return true;
   }

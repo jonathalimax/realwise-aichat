@@ -51,7 +51,7 @@ function LoginPageInner() {
   // "email" = team member (e-mail + senha); "phone" = existing owner flow (Firebase SMS code), untouched.
   const firebaseConfigured = Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
   const nicheParam = searchParams.get("niche");
-  const niche: LoginNiche = nicheParam === "farmacia" ? "farmacia" : "imobiliaria";
+  const niche: LoginNiche = (nicheParam ?? process.env.NEXT_PUBLIC_DEFAULT_NICHE) === "farmacia" ? "farmacia" : "imobiliaria";
   const theme = LOGIN_THEMES[niche];
   const [mode, setMode] = useState<"phone" | "email">(theme.defaultMode ?? (firebaseConfigured ? "phone" : "email"));
 

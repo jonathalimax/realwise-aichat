@@ -3,7 +3,8 @@ import { PricingSection } from "./PricingSection";
 import { CAPABILITY_ICON_PATHS, type NicheConfig } from "../lib/niches";
 
 const WHATSAPP_NUMBER = "5585992265544";
-const DASHBOARD_LOGIN_URL = "/imobiliaria/app/login";
+const DASHBOARD_LOGIN_URLS: Record<string, string> = { farmacias: "/farmacia/app/login" };
+const DEFAULT_DASHBOARD_LOGIN_URL = "/imobiliaria/app/login";
 
 function waUrl(context: string) {
   const msg = encodeURIComponent(`Oi! Vi o site da Realwise (${context}) e quero saber mais.`);
@@ -55,6 +56,7 @@ const DEFAULT_PROBLEM_STATS = [
 ];
 
 export function LandingPage({ niche }: { niche: NicheConfig }) {
+  const DASHBOARD_LOGIN_URL = DASHBOARD_LOGIN_URLS[niche.slug] ?? DEFAULT_DASHBOARD_LOGIN_URL;
   const WHATSAPP_URL = waUrl(niche.label);
   const ctaLabel = niche.earlyAccess ? "Entrar na lista de espera" : "Entrar no painel";
   const navCtaHref = niche.earlyAccess ? WHATSAPP_URL : DASHBOARD_LOGIN_URL;

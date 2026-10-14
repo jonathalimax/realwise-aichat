@@ -21,7 +21,7 @@ import {
   assertRoleEditable,
   hasCrfOnFile,
 } from "../access/team-rules";
-import { dashboardLink, renderEmailButton } from "../../common/email-links";
+import { dashboardBasePath, dashboardLink, renderEmailButton } from "../../common/email-links";
 import { escapeHtml, sendEmail } from "../../common/email";
 import { INVITE_TTL_MS, RESET_TTL_MS, canViewAccessLog, hashToken, memberDto, newToken, permissionSectionsFor, roleChangeSummary, roleDto } from "./team-helpers";
 
@@ -124,7 +124,8 @@ export class TeamService {
         },
       }),
     ]);
-    const url = dashboardLink(`/imobiliaria/app/convite/${raw}`);
+    const biz = await this.prisma.client.business.findUnique({ where: { id: args.actor.businessId }, select: { niche: true } });
+    const url = dashboardLink(`${dashboardBasePath(biz?.niche)}/convite/${raw}`);
     return { url, emailConfigured: !!process.env.RESEND_API_KEY };
   }
 
@@ -314,7 +315,7 @@ export class TeamService {
     try {
       const members = await this.prisma.client.businessMember.findMany({
         where: { email: normalized, status: "active", passwordHash: { not: null }, ...(businessSlug ? { business: { slug: businessSlug } } : {}) },
-        include: { business: { select: { name: true } }, role: true },
+        include: { business: { select: { name: true, niche: true } }, role: true },
       });
       for (const m of members) {
         const { raw, hash } = newToken();
@@ -324,7 +325,7 @@ export class TeamService {
             data: { businessId: m.businessId, memberId: m.id, email: normalized, roleId: m.roleId, tokenHash: hash, kind: "password_reset", expiresAt: new Date(Date.now() + RESET_TTL_MS) },
           }),
         ]);
-        const link = dashboardLink(`/imobiliaria/app/redefinir-senha?token=${raw}`);
+        const link = dashboardLink(`${dashboardBasePath(m.business.niche)}/redefinir-senha?token=${raw}`);
         const html = `<p>Recebemos um pedido para redefinir a sua senha em <strong>${escapeHtml(m.business.name)}</strong>.</p>${renderEmailButton("Redefinir senha", link)}<p>O link vale por 1 hora. Se não foi você, ignore este e-mail.</p>`;
         sendEmail(normalized, "Redefinição de senha", html).catch(() => {});
         if (!process.env.RESEND_API_KEY) logger.log(`[dev] password reset link for ${normalized}: ${link ?? "(DASHBOARD_URL not set)"}`);

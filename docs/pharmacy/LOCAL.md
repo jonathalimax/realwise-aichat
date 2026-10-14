@@ -35,7 +35,7 @@ Options: `RESET_DEMO=1 scripts/dev-pharmacy.sh` recreates the demo pharmacy's da
 
 | What | URL |
 | --- | --- |
-| Dashboard | http://localhost:3003/imobiliaria/app/login?niche=farmacia |
+| Dashboard | http://localhost:3003/farmacia/app/login |
 | Chat widget (Alex) | http://localhost:3005/client/conversation/farmacia-exemplo |
 | Landing page | http://localhost:3007/farmacia |
 | API health | http://localhost:3006/api/health |

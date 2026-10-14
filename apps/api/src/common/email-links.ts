@@ -13,6 +13,11 @@ export function dashboardLink(path: string): string | undefined {
   return safeHttpUrl(url);
 }
 
+// The dashboard is the same app served under one prefix per niche (/imobiliaria/app, /farmacia/app).
+export function dashboardBasePath(niche: string | null | undefined): string {
+  return niche === "farmacia" ? "/farmacia/app" : "/imobiliaria/app";
+}
+
 export function renderEmailButton(label: string, url: string | undefined): string {
   if (!url) return "";
   return `<p><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 16px;background:#111827;color:#ffffff;border-radius:6px;text-decoration:none;font-weight:600;">${escapeHtml(label)}</a></p>`;
