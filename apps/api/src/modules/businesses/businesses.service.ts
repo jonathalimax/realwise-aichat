@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { assertPublicHttpUrl } from "../../common/url-safety";
+import { deleteFile, getFile, looksLikeSvg, putFile, sniffFileType } from "../pharmacy-common/storage";
 import { isEffectivelySuspended, isValidHexColor, resolveBranding, type NicheKey } from "@realwise/shared";
 import { StarterRolesService } from "../access/starter-roles.service";
 import { getPersona } from "../chat/personas";
@@ -221,5 +222,35 @@ export class BusinessesService {
     if (data.primaryColor !== undefined && data.brandColor === undefined) data.brandColor = data.primaryColor;
     await this.prisma.client.business.update({ where: { id: businessId }, data });
     return this.getBranding(businessId);
+  }
+
+  // -------------------------------------------------------------------- logo file (one file per business)
+
+  private logoKey(businessId: string, ext: string) {
+    return `branding/${businessId}/logo.${ext}`;
+  }
+
+  /** Stores the uploaded logo (type decided by the bytes, never by the client) and points Business.logoUrl at the public route. */
+  async setLogoFile(businessId: string, buffer: Buffer) {
+    const sniffed = sniffFileType(buffer);
+    const type = sniffed && sniffed.mime.startsWith("image/") ? sniffed : looksLikeSvg(buffer) ? { mime: "image/svg+xml", ext: "svg" } : null;
+    if (!type) throw new BadRequestException({ statusCode: 400, error: "Bad Request", code: "INVALID_IMAGE", message: "Use PNG, JPEG, WebP ou SVG." });
+    for (const ext of ["png", "jpg", "webp", "svg"]) if (ext !== type.ext) await deleteFile(this.logoKey(businessId, ext));
+    await putFile(this.logoKey(businessId, type.ext), buffer);
+    const logoUrl = `/api/public/businesses/${businessId}/logo?v=${Date.now()}`;
+    await this.prisma.client.business.update({ where: { id: businessId }, data: { logoUrl } });
+    return { logoUrl };
+  }
+
+  async readLogoFile(businessId: string): Promise<{ data: Buffer; mime: string }> {
+    const mimes: Record<string, string> = { png: "image/png", jpg: "image/jpeg", webp: "image/webp", svg: "image/svg+xml" };
+    for (const [ext, mime] of Object.entries(mimes)) {
+      try {
+        return { data: await getFile(this.logoKey(businessId, ext)), mime };
+      } catch {
+        // try the next extension
+      }
+    }
+    throw new NotFoundException();
   }
 }

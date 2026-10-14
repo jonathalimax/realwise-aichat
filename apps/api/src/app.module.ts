@@ -23,6 +23,15 @@ import { InboxModule } from "./modules/inbox/inbox.module";
 import { PushModule } from "./modules/push/push.module";
 import { AccessModule } from "./modules/access/access.module";
 import { CustomersModule } from "./modules/customers/customers.module";
+import { TeamModule } from "./modules/team/team.module";
+import { PharmacySettingsModule } from "./modules/pharmacy-settings/pharmacy-settings.module";
+import { PharmacyNotificationsModule } from "./modules/pharmacy-notifications/pharmacy-notifications.service";
+import { ProductsModule } from "./modules/products/products.module";
+import { CatalogImportModule } from "./modules/catalog-import/catalog-import.module";
+import { OrdersModule } from "./modules/orders/orders.module";
+import { PrescriptionsModule } from "./modules/prescriptions/prescriptions.module";
+import { HandoffsModule } from "./modules/handoffs/handoffs.module";
+import { PharmacyDashboardModule } from "./modules/pharmacy-dashboard/pharmacy-dashboard.module";
 
 @Module({
   imports: [
@@ -49,6 +58,16 @@ import { CustomersModule } from "./modules/customers/customers.module";
     InboxModule,
     PushModule,
     CustomersModule,
+    // pharmacy niche, wave 2b (docs/pharmacy/API.md)
+    TeamModule,
+    PharmacySettingsModule,
+    PharmacyNotificationsModule,
+    ProductsModule,
+    CatalogImportModule,
+    OrdersModule,
+    PrescriptionsModule,
+    HandoffsModule,
+    PharmacyDashboardModule,
   ],
   controllers: [HealthController],
 })

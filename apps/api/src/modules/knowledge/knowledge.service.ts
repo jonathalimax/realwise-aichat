@@ -14,10 +14,11 @@ export class KnowledgeService {
   async listDocuments(businessId: string) {
     // Exclude "website_sync" documents — those are internal artifacts created by the
     // listing-extraction worker (one per crawled page, used as RAG source material) rather
-    // than something the business owner uploaded or pasted. Owners have no reason to see,
+    // than something the business owner uploaded or pasted ("catalog_import" = pharmacy stock sheets,
+    // managed in the catalog import screen). Owners have no reason to see,
     // edit, or remove them here.
     return this.prisma.client.knowledgeDocument.findMany({
-      where: { businessId, source: { not: "website_sync" } },
+      where: { businessId, source: { notIn: ["website_sync", "catalog_import"] } },
       orderBy: { createdAt: "desc" },
     });
   }

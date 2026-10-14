@@ -10,6 +10,8 @@ import { processBcbRateSync } from "./processors/bcb-rate-sync";
 import { processSharedKnowledgeIngestion } from "./processors/shared-knowledge-ingestion";
 import { processConversationRetentionPurge } from "./processors/conversation-retention-purge";
 import { listingExtractionQueue } from "./queues";
+import { processCatalogImport } from "./processors/catalog-import";
+import { PHARMACY_JOBS, pharmacyJobProcessor } from "./processors/pharmacy-jobs";
 
 // concurrency:1 — embedding generation is CPU-bound against a single-instance Ollama on a small
 // VPS; two documents embedding simultaneously forces requests to queue inside Ollama itself,
@@ -108,6 +110,19 @@ const conversationRetentionPurgeWorker = new Worker(
 conversationRetentionPurgeWorker.on("completed", (job) => console.log(`conversation-retention-purge ${job.id} completed`));
 conversationRetentionPurgeWorker.on("failed", (job, err) => console.error(`conversation-retention-purge ${job?.id} failed`, err));
 
+// Pharmacy catalog import (map / apply). One at a time: both steps are CPU/IO heavy and share the model.
+const catalogImportWorker = new Worker("catalog-import", processCatalogImport, { connection: redisConnection, concurrency: 1 });
+catalogImportWorker.on("completed", (job) => console.log(`catalog-import ${job.name} ${job.id} completed`));
+catalogImportWorker.on("failed", (job, err) => console.error(`catalog-import ${job?.name} ${job?.id} failed`, err));
+
+// Pharmacy scheduled jobs: order reminders (every minute), stale-sheet check (hourly), retention purge (daily).
+const pharmacyQueues = PHARMACY_JOBS.map((job) => {
+  const queue = new Queue(job.queue, { connection: redisConnection });
+  const worker = new Worker(job.queue, pharmacyJobProcessor(job.path), { connection: redisConnection, concurrency: 1 });
+  worker.on("failed", (j, err) => console.error(`${job.queue} ${j?.id} failed`, err));
+  return { queue, job };
+});
+
 async function main() {
   await scheduleQueue.add(
     "weekly-scan",
@@ -139,7 +154,10 @@ async function main() {
     {},
     { repeat: { pattern: "0 3 * * 0" }, jobId: "weekly-purge", removeOnComplete: true, removeOnFail: 10 },
   );
-  console.log("Realwise worker running — listening on queues: document-ingestion, website-sync, website-sync-schedule, website-sync-schedule-daily, listing-extraction, trial-watch, cold-lead-digest, bcb-rate-sync, shared-knowledge-ingestion, conversation-retention-purge");
+  for (const { queue, job } of pharmacyQueues) {
+    await queue.add("tick", {}, { repeat: { pattern: job.cron }, jobId: job.queue, removeOnComplete: true, removeOnFail: 10 });
+  }
+  console.log("Realwise worker running — listening on queues: document-ingestion, website-sync, website-sync-schedule, website-sync-schedule-daily, listing-extraction, trial-watch, cold-lead-digest, bcb-rate-sync, shared-knowledge-ingestion, conversation-retention-purge, catalog-import, pharmacy-order-reminders, pharmacy-stale-sheet, pharmacy-retention-purge");
 }
 
 main();

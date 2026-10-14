@@ -5,6 +5,7 @@ import { getPersona } from "../chat/personas";
 import { nicheBehavior } from "../chat/niche-behavior";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
+import { PharmacySettingsService } from "../pharmacy-settings/pharmacy-settings.service";
 
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
 
@@ -57,7 +58,10 @@ function validateFieldValue(type: string | undefined, value: unknown): { ok: tru
 
 @Injectable()
 export class OnboardingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pharmacySettings: PharmacySettingsService,
+  ) {}
 
   async getProfile(businessId: string) {
     const profile = await this.prisma.client.businessProfile.findUnique({ where: { businessId } });
@@ -96,6 +100,10 @@ export class OnboardingService {
         fieldStatus: fieldStatus as any,
       },
     });
+    // Pharmacy: an interview answer becomes a PROPOSED setting the owner must confirm (never applied silently).
+    if (business.niche === "farmacia" && typeof value === "string") {
+      await this.pharmacySettings.proposeFromField(businessId, fieldKey, value).catch(() => {});
+    }
     return { ok: true, profile };
   }
 

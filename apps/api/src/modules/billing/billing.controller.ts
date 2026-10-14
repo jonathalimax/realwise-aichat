@@ -4,12 +4,17 @@ import { BillingService } from "./billing.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
 import { PermissionsGuard } from "../access/permissions.guard";
 import { RequirePermission } from "../access/permission.decorator";
-import { CurrentBusiness } from "../../common/decorators/current-business.decorator";
+import { CurrentBusiness, CurrentMember } from "../../common/decorators/current-business.decorator";
+import { AccessLogService } from "../access/access-log.service";
+import type { MemberContext } from "../access/member-context";
 import type { BusinessSessionClaims } from "@realwise/auth";
 
 @Controller("billing")
 export class BillingController {
-  constructor(private readonly billing: BillingService) {}
+  constructor(
+    private readonly billing: BillingService,
+    private readonly accessLog: AccessLogService,
+  ) {}
 
   @Get("plans")
   plans() {
@@ -19,15 +24,19 @@ export class BillingController {
   @UseGuards(BusinessSessionGuard, PermissionsGuard)
   @RequirePermission("plano", "edit")
   @Post("checkout")
-  checkout(@CurrentBusiness() session: BusinessSessionClaims, @Body("planCode") planCode: string) {
-    return this.billing.createCheckoutSession(session.businessId, planCode);
+  async checkout(@CurrentBusiness() session: BusinessSessionClaims, @CurrentMember() member: MemberContext, @Body("planCode") planCode: string) {
+    const result = await this.billing.createCheckoutSession(session.businessId, planCode);
+    await this.accessLog.record({ businessId: session.businessId, actor: member, action: "billing.change", summary: "Iniciou a troca de plano" });
+    return result;
   }
 
   @UseGuards(BusinessSessionGuard, PermissionsGuard)
   @RequirePermission("plano", "edit")
   @Post("portal")
-  portal(@CurrentBusiness() session: BusinessSessionClaims) {
-    return this.billing.createPortalSession(session.businessId);
+  async portal(@CurrentBusiness() session: BusinessSessionClaims, @CurrentMember() member: MemberContext) {
+    const result = await this.billing.createPortalSession(session.businessId);
+    await this.accessLog.record({ businessId: session.businessId, actor: member, action: "billing.change", summary: "Abriu o portal de cobrança" });
+    return result;
   }
 
   @Post("webhook")
