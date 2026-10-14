@@ -3,19 +3,22 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../../lib/utils";
 
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-40",
   {
     variants: {
       variant: {
-        default: "bg-accent text-white hover:opacity-90",
-        outline: "border border-border text-ink-soft hover:bg-bg-2",
-        destructive: "border border-negative text-negative hover:bg-negative-soft",
-        ghost: "text-ink-soft hover:bg-bg-2",
+        default: "border-accent bg-accent text-white hover:brightness-95",
+        outline: "border-border bg-surface text-ink hover:bg-bg-2",
+        destructive: "border-red-200 bg-surface text-red-700 hover:bg-red-50",
+        ghost: "border-transparent bg-transparent text-ink hover:bg-bg-2",
+        link: "h-auto border-transparent bg-transparent p-0 text-accent hover:underline",
       },
       size: {
-        default: "h-9 px-4",
-        sm: "h-8 px-3 text-xs",
-        pill: "h-12 px-8 text-base rounded-pill",
+        default: "h-9 px-3.5",
+        sm: "h-[30px] px-2.5 text-[13px]",
+        lg: "h-11 px-5 text-[15px]",
+        icon: "h-9 w-9 p-0",
+        pill: "h-12 rounded-pill px-8 text-base",
       },
     },
     defaultVariants: { variant: "default", size: "default" },
@@ -25,8 +28,8 @@ export const buttonVariants = cva(
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant, size, ...props },
+  { className, variant, size, type = "button", ...props },
   ref,
 ) {
-  return <button ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+  return <button ref={ref} type={type} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 });

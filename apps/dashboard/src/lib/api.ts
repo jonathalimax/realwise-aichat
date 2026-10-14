@@ -1,23 +1,55 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3006/api";
-const BASE_PATH = "/imobiliaria/app";
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "/imobiliaria/app";
 
-async function request(path: string, options?: RequestInit) {
+export const BASE_PATH_PREFIX = BASE_PATH;
+export const API_BASE_URL = API_URL;
+
+/** Error thrown by every dashboard request. `code` is the stable domain code (e.g. PERMISSION_DENIED, INVALID_TRANSITION). */
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  body: any;
+  constructor(message: string, status: number, body: any) {
+    super(message);
+    this.status = status;
+    this.code = body?.code;
+    this.body = body;
+  }
+}
+
+// Pages that must stay reachable without a session (no redirect to /login on 401).
+const PUBLIC_PATHS = ["/login", "/convite", "/redefinir-senha"];
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some((p) => pathname === `${BASE_PATH}${p}` || pathname.startsWith(`${BASE_PATH}${p}/`));
+}
+
+async function handle(res: Response) {
+  if (res.status === 401 && typeof window !== "undefined" && !isPublicPath(window.location.pathname)) {
+    window.location.href = `${BASE_PATH}/login`;
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new ApiError(body?.message ?? `Request failed: ${res.status}`, res.status, body);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+export async function request(path: string, options?: RequestInit) {
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     credentials: "include",
     headers: { "content-type": "application/json", ...options?.headers },
     cache: "no-store",
   });
-  if (res.status === 401 && typeof window !== "undefined" && window.location.pathname !== `${BASE_PATH}/login`) {
-    window.location.href = `${BASE_PATH}/login`;
-  }
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    const err = new Error(body?.message ?? `Request failed: ${res.status}`) as Error & { status?: number };
-    err.status = res.status;
-    throw err;
-  }
-  return res.json();
+  return handle(res);
+}
+
+/** multipart upload (the browser sets the content-type boundary). */
+export async function requestForm(path: string, form: FormData, method: "POST" | "PUT" = "POST") {
+  const res = await fetch(`${API_URL}${path}`, { method, credentials: "include", body: form, cache: "no-store" });
+  return handle(res);
 }
 
 export const getMe = () => request("/businesses/me");

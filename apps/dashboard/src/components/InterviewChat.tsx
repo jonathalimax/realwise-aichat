@@ -22,7 +22,10 @@ export function InterviewChat({
   prefill,
   prefillNonce,
   onStateChange,
+  assistantName = "Clara",
 }: {
+  // Persona name used in the helper copy (the pharmacy niche's assistant is "Alex").
+  assistantName?: string;
   onFieldFilled?: () => void;
   // When `prefillNonce` changes, `prefill` is sent as an owner message — used to target a specific
   // field from outside the chat. The nonce lets the same prefill text be re-sent (e.g. clicking
@@ -129,7 +132,7 @@ export function InterviewChat({
     }
 
     setMessages((prev) => [...prev, { role: "owner", content: `📎 ${file.name}` }]);
-    setUploadStatus("Clara está lendo…");
+    setUploadStatus(`${assistantName} está lendo…`);
 
     try {
       const uploaded = await uploadDocumentFile(file);
@@ -149,7 +152,7 @@ export function InterviewChat({
 
       if (!processed) {
         setUploadStatus(null);
-        setUploadError(`Não consegui confirmar que "${file.name}" terminou de ser processado a tempo. Pode continuar a conversa — a Clara vai usar o conteúdo assim que estiver pronto.`);
+        setUploadError(`Não consegui confirmar que "${file.name}" terminou de ser processado a tempo. Pode continuar a conversa — ${assistantName} vai usar o conteúdo assim que estiver pronto.`);
         return;
       }
 
@@ -213,7 +216,7 @@ export function InterviewChat({
 
       {showUrlInput && !allDone && (
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg-2 p-3">
-          <p className="text-xs text-ink-soft">Esse é o site do seu negócio? Posso salvar pra Clara usar também.</p>
+          <p className="text-xs text-ink-soft">Esse é o site do seu negócio? Posso salvar para {assistantName} usar também.</p>
           <div className="flex gap-2">
             <Input value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="https://seusite.com.br" />
             <Button variant="outline" size="sm" onClick={handleSaveUrl} disabled={savingUrl || !urlInput.trim()}>
