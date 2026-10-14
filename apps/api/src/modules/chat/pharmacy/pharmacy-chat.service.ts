@@ -450,9 +450,10 @@ export class PharmacyChatService {
         return;
       }
       case "rx.check": {
-        const before = t.out.length;
         await this.syncPrescriptions(t);
-        if (t.out.length === before) {
+        // The turn may already have synced the upload before this action ran (then `out` is not empty or the
+        // pending line is gone): only claim "not received" when there really is no upload for this conversation.
+        if ((await this.listRxUploads(t)).length === 0) {
           t.say("Ainda não recebi a foto da receita. Assim que você enviar, eu sigo com o pedido.", this.rxUploadUi(null));
         }
         return;
@@ -1601,6 +1602,9 @@ export class PharmacyChatService {
         return;
       }
     }
+    // The widget form sends phone + name + consent in one go and labels the e-mail field "(opcional)":
+    // a submitted name with an empty e-mail means "skip the e-mail", not "ask me again".
+    else if (input.name?.trim() && !c.email) c.emailSkipped = true;
     if (input.consent) c.consent = true;
     if (input.phone?.trim()) {
       const phone = canonicalPhone(input.phone);

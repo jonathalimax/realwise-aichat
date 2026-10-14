@@ -6,6 +6,7 @@ import { AccessLogService } from "../access/access-log.service";
 import type { MemberContext } from "../access/member-context";
 import { OrdersService } from "../orders/orders.service";
 import { PharmacyNotificationsService } from "../pharmacy-notifications/pharmacy-notifications.service";
+import { resolveUploadOwner } from "./upload-owner";
 import { PharmacySettingsService } from "../pharmacy-settings/pharmacy-settings.service";
 import { nextRxNumber } from "../pharmacy-common/counters";
 import { parseLimit, sliceCursor } from "../pharmacy-common/format";
@@ -94,8 +95,8 @@ export class PrescriptionsService {
     userAgent?: string;
   }) {
     const { businessId, visitor } = input;
-    if (!visitor?.leadId || visitor.businessId !== businessId) {
-      throw new ForbiddenException({ statusCode: 403, error: "Forbidden", code: "VISITOR_NOT_IDENTIFIED", message: "Informe seu telefone primeiro." });
+    if (!visitor || (visitor.businessId && visitor.businessId !== businessId) || (!visitor.leadId && !visitor.visitorToken)) {
+      throw new ForbiddenException({ statusCode: 403, error: "Forbidden", code: "VISITOR_NOT_IDENTIFIED", message: "Abra a conversa novamente para enviar a receita." });
     }
     if (!(input.consent === true || input.consent === "true")) {
       throw bad("CONSENT_REQUIRED", "É preciso concordar com o uso da receita para enviá-la.");
@@ -106,16 +107,16 @@ export class PrescriptionsService {
     if (!type) throw bad("INVALID_FILE", "Envie uma imagem (JPEG, PNG, WebP) ou um PDF.");
 
     const conversation = await this.prisma.client.conversation.findFirst({ where: { id: input.conversationId, businessId }, select: { id: true, leadId: true, visitorToken: true } });
-    const owns = !!conversation && (conversation.leadId === visitor.leadId || (!!visitor.visitorToken && conversation.visitorToken === visitor.visitorToken));
-    if (!conversation || !owns) throw new NotFoundException("Conversa não encontrada.");
-    const lead = await this.prisma.client.lead.findFirst({ where: { id: visitor.leadId, businessId }, select: { id: true, phoneNormalized: true } });
-    if (!lead) throw new NotFoundException("Conversa não encontrada.");
+    const owner = resolveUploadOwner(businessId, visitor, conversation);
+    if (!owner.ok || !conversation) throw new NotFoundException("Conversa não encontrada.");
+    // The visitor may still be anonymous (the photo comes before the phone number in the Rx lane).
+    const lead = owner.leadId ? await this.prisma.client.lead.findFirst({ where: { id: owner.leadId, businessId }, select: { id: true, phoneNormalized: true } }) : null;
 
     const consent = await this.prisma.client.consentRecord.create({
       data: {
         businessId,
-        leadId: lead.id,
-        phoneHash: createHash("sha256").update(lead.phoneNormalized).digest("hex"),
+        leadId: lead?.id ?? null,
+        phoneHash: createHash("sha256").update(lead ? lead.phoneNormalized : `conversation:${conversation.id}`).digest("hex"),
         consentTextVersion: RX_CONSENT_VERSION,
         purposes: ["prescription_upload"],
         ipAddress: input.ip,
@@ -134,7 +135,7 @@ export class PrescriptionsService {
           data: {
             businessId,
             conversationId: conversation.id,
-            leadId: lead.id,
+            leadId: lead?.id ?? null,
             number,
             storageKey: key,
             mimeType: type.mime,

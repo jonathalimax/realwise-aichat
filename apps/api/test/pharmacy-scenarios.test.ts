@@ -722,6 +722,34 @@ test("prescription action path: cart.add of an Rx product never creates a cart l
   noModelCalls();
 });
 
+test("rx.check right after the upload: one 'received' answer and never a stale 'not received' line", T, async () => {
+  net = hostileModel();
+  const p = await createPharmacy();
+  const c = await p.conversation();
+  await p.say(c, "quero amoxicilina 500mg");
+  await p.db.models.prescriptionUpload.create({ data: { businessId: p.businessId, conversationId: c.id, orderId: null, status: "pending", number: 1, storageKey: "k", mimeType: "image/jpeg" } });
+  const check = await p.act(c, { type: "rx.check" });
+  assert.match(check.text, /Recebi sua receita/);
+  assert.doesNotMatch(check.text, /ainda n[ãa]o recebi/i);
+  assert.deepEqual(cartOf(p, c), [{ productId: "p_amoxicilina", qty: 1 }]);
+  // asking again with nothing pending stays quiet about "not received" because the upload exists
+  const again = await p.act(c, { type: "rx.check" });
+  assert.doesNotMatch(again.text, /ainda n[ãa]o recebi/i);
+  noModelCalls();
+});
+
+test("contact form with name and an empty e-mail field does not ask for the e-mail again", T, async () => {
+  net = hostileModel();
+  const p = await createPharmacy();
+  const c = await p.conversation();
+  await p.say(c, "quero dipirona 500mg");
+  await p.act(c, { type: "checkout.start" });
+  const res = await p.act(c, { type: "checkout.contact", phone: "(41) 98877-6655", name: "Paulo Visitante", consent: true });
+  assert.doesNotMatch(res.text, /e-mail/i);
+  assert.equal(res.uis[0].type, "fulfillment_choice");
+  noModelCalls();
+});
+
 // ---------------------------------------------------------------------------------------------
 // Lane E: symptom-first
 // ---------------------------------------------------------------------------------------------
@@ -871,7 +899,7 @@ test("symptom handoff creates a pharmacist alert (non-disableable notification)"
   assert.ok(p.spies.alerts.calls.createAlert.some(([, a]: any) => a.type === "pharmacy_new_handoff" && a.severity === "warning"));
   const red = await p.conversation();
   await p.say(red, "dor no peito");
-  assert.ok(p.spies.alerts.calls.createAlert.some(([, a]: any) => a.type === "pharmacy_new_handoff" && a.severity === "critical"));
+  assert.ok(p.spies.alerts.calls.createAlert.some(([, a]: any) => a.type === "pharmacy_urgent_handoff" && a.severity === "critical"));
   const events = p.db.models.analyticsEvent.rows.map((e) => e.name);
   for (const name of ["pharmacy_symptom_started", "pharmacy_handoff_created", "pharmacy_red_flag"]) assert.ok(events.includes(name), name);
   noModelCalls();

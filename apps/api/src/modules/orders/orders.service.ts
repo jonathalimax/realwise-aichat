@@ -359,7 +359,7 @@ export class OrdersService {
       throw dom(400, "PICKUP_DISABLED", "A farmácia não oferece retirada no momento.");
     }
     const subtotalCents = lines.reduce((n, l) => n + l.product.priceCents * l.qty, 0);
-    if (settings.minOrderCents > 0 && subtotalCents < settings.minOrderCents) {
+    if (input.fulfillment === "delivery" && settings.minOrderCents > 0 && subtotalCents < settings.minOrderCents) {
       throw dom(400, "ORDER_BELOW_MINIMUM", "O pedido está abaixo do valor mínimo.", { minOrderCents: settings.minOrderCents });
     }
     const deliveryFeeCents = input.fulfillment === "delivery" ? settings.deliveryFeeCents : 0;
@@ -420,7 +420,7 @@ export class OrdersService {
       await tx.orderStatusEvent.create({ data: { orderId: order.id, businessId, fromStatus: null, toStatus: "pending_pharmacist", byName: "Cliente" } });
       if (decision.auto) await tx.orderStatusEvent.create({ data: { orderId: order.id, businessId, fromStatus: "pending_pharmacist", toStatus: "confirmed", byName: "Sistema" } });
       if (rxRows.length) {
-        const attach = await tx.prescriptionUpload.updateMany({ where: { id: { in: rxRows.map((r) => r.id) }, businessId, orderId: null }, data: { orderId: order.id } });
+        const attach = await tx.prescriptionUpload.updateMany({ where: { id: { in: rxRows.map((r) => r.id) }, businessId, orderId: null }, data: { orderId: order.id, leadId: input.leadId } });
         if (attach.count !== rxRows.length) throw dom(409, "PRESCRIPTION_TAKEN", "A receita já foi usada em outro pedido.");
       }
       return order;
