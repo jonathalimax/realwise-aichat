@@ -9,3 +9,4 @@ dist
 storage/
 *.traineddata
 .local-storage/
+.local-logs/

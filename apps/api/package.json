@@ -6,7 +6,9 @@
     "dev": "DOTENV_CONFIG_PATH=../../.env ts-node-dev -r dotenv/config --respawn --transpile-only src/main.ts",
     "build": "nest build",
     "start": "DOTENV_CONFIG_PATH=../../.env node -r dotenv/config dist/main.js",
-    "test": "node --import tsx --test test/*.test.ts"
+    "test": "node --import tsx --test test/*.test.ts",
+    "seed:pharmacy": "DOTENV_CONFIG_PATH=../../.env tsx -r dotenv/config scripts/seed-pharmacy.ts",
+    "sample:catalog": "tsx scripts/generate-sample-catalog.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^10.2.0",
