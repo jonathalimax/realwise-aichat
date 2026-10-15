@@ -161,7 +161,7 @@ export class PrescriptionsService {
     const search = q.q?.trim();
     const base = {
       businessId: m.businessId,
-      ...(search ? { OR: [{ patientName: { contains: search, mode: "insensitive" as const } }, { order: { code: { contains: search, mode: "insensitive" as const } } }, ...(Number(search.replace(/\D/g, "")) ? [{ number: Number(search.replace(/\D/g, "")) }] : [])] } : {}),
+      ...(search ? { OR: [{ patientName: { contains: search, mode: "insensitive" as const } }, { order: { code: { contains: search, mode: "insensitive" as const } } }, ...(/^(rx[-\s]?)?\d{1,9}$/i.test(search) && Number(search.replace(/\D/g, "")) ? [{ number: Number(search.replace(/\D/g, "")) }] : [])] } : {}),
     };
     const status = q.status === "pending" || q.status === "approved" || q.status === "rejected" ? q.status : undefined;
     const [rows, grouped] = await Promise.all([
@@ -219,6 +219,7 @@ export class PrescriptionsService {
     const now = new Date();
     const res = await this.prisma.client.prescriptionUpload.updateMany({ where: { id, businessId: m.businessId, status: "pending" }, data: { status: "approved", reviewedAt: now, reviewedByMemberId: m.memberId, reviewedByName: m.name } });
     if (res.count === 0) throw new ConflictException({ statusCode: 409, error: "Conflict", code: "INVALID_STATE", message: "Esta receita já foi analisada." });
+    await this.tellCustomer(m.businessId, rx.conversationId, `Sua receita RX-${rx.number} foi aprovada pelo farmacêutico.${rx.order ? ` O pedido ${rx.order.code} segue para a confirmação da farmácia.` : ""}`);
     await this.accessLog.record({
       businessId: m.businessId,
       actor: m,

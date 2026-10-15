@@ -17,10 +17,27 @@ export class KnowledgeService {
     // than something the business owner uploaded or pasted ("catalog_import" = pharmacy stock sheets,
     // managed in the catalog import screen). Owners have no reason to see,
     // edit, or remove them here.
-    return this.prisma.client.knowledgeDocument.findMany({
-      where: { businessId, source: { notIn: ["website_sync", "catalog_import"] } },
+    const docs = await this.prisma.client.knowledgeDocument.findMany({
+      where: { businessId, source: { notIn: ["website_sync", "catalog_import", "qa"] } },
       orderBy: { createdAt: "desc" },
     });
+    // How each document is searched: semantic vectors, or keyword only when no embedder was available at ingestion.
+    const modes = await this.searchModes(businessId);
+    return docs.map((d) => ({ ...d, searchMode: modes.get(d.id) ?? "pending" }));
+  }
+
+  private async searchModes(businessId: string): Promise<Map<string, "semantic" | "keyword" | "mixed" | "pending">> {
+    const out = new Map<string, "semantic" | "keyword" | "mixed" | "pending">();
+    try {
+      const rows = await this.prisma.client.$queryRawUnsafe<{ documentId: string; total: number; embedded: number }[]>(
+        `SELECT "documentId", COUNT(*)::int AS total, COUNT(embedding)::int AS embedded FROM "KnowledgeChunk" WHERE "businessId" = $1 GROUP BY "documentId"`,
+        businessId,
+      );
+      for (const r of rows) out.set(r.documentId, r.total === 0 ? "pending" : r.embedded === 0 ? "keyword" : r.embedded === r.total ? "semantic" : "mixed");
+    } catch {
+      // informational only
+    }
+    return out;
   }
 
   private storageKeyFor(businessId: string, filename: string) {

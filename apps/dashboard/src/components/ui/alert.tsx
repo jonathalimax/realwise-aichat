@@ -21,7 +21,7 @@ export interface AlertProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"
 
 export function Alert({ className, variant, title, action, children, ...props }: AlertProps) {
   return (
-    <div role="status" className={cn(alertVariants({ variant }), "items-center justify-between flex-wrap", className)} {...props}>
+    <div role={variant === "red" ? "alert" : "status"} className={cn(alertVariants({ variant }), "items-center justify-between flex-wrap", className)} {...props}>
       <div className="min-w-0 flex-1">
         {title && <div className="font-semibold">{title}</div>}
         <div>{children}</div>

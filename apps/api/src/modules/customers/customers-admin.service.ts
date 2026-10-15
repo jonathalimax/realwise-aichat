@@ -12,7 +12,8 @@ export class CustomersAdminService {
   async list(businessId: string, q: { q?: string; limit?: string; cursor?: string }) {
     const limit = parseLimit(q.limit);
     const search = q.q?.trim();
-    const digits = search?.replace(/\D/g, "") ?? "";
+    // Digits only count as a phone search when the whole query looks like a phone: "Ana 123" must not match every number containing 123.
+    const digits = search && /^[\d\s()+.-]+$/.test(search) ? search.replace(/\D/g, "") : "";
     const where = {
       businessId,
       ...(search

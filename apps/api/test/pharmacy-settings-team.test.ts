@@ -326,7 +326,7 @@ test("invite tokens: random, only the SHA-256 is stored", () => {
 
 test("permission grid sections: pharmacy rows in prototype order with notes and locks", () => {
   const rows = permissionSectionsFor("farmacia");
-  assert.deepEqual(rows.map((r) => r.key), ["inicio", "pedidos", "receitas", "atendimento", "catalogo", "importar", "classes", "clientes", "conversas", "analises", "farmacia", "equipe", "plano"]);
+  assert.deepEqual(rows.map((r) => r.key), ["inicio", "pedidos", "receitas", "atendimento", "conhecimento", "catalogo", "importar", "classes", "clientes", "conversas", "analises", "farmacia", "equipe", "plano"]);
   assert.equal(rows.find((r) => r.key === "conversas")!.readOnly, true);
   assert.equal(rows.find((r) => r.key === "receitas")!.crfOnly, true);
   assert.equal(rows.find((r) => r.key === "classes")!.crfOnly, true);

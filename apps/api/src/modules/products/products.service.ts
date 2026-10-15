@@ -46,28 +46,33 @@ export class ProductsService {
   async list(businessId: string, q: Record<string, string | undefined>) {
     const limit = parseLimit(q.limit);
     const search = q.q?.trim();
-    const base: Prisma.ProductWhereInput = {
+    // Inactive products are hidden by default (they are not sold); `active=false` lists only them, `active=all` both.
+    const activeFilter: Prisma.ProductWhereInput = q.active === "all" ? {} : q.active === "false" ? { active: false } : { active: true };
+    const baseNoActive: Prisma.ProductWhereInput = {
       businessId,
       deletedAt: null,
-      ...(q.active === "true" ? { active: true } : q.active === "false" ? { active: false } : {}),
       ...(q.equivalentGroup ? { equivalentGroup: q.equivalentGroup } : {}),
       ...(search
         ? {
             OR: [
               { name: { contains: search, mode: "insensitive" } },
               { activeIngredient: { contains: search, mode: "insensitive" } },
-              ...(search.replace(/\D/g, "") ? [{ ean: { contains: search.replace(/\D/g, "") } }] : []),
+              // Only a numeric query (EAN / code) searches the EAN; "ibuprofeno 400" must not match every EAN containing 400.
+              ...(/^[\d\s.-]+$/.test(search) && search.replace(/\D/g, "") ? [{ ean: { contains: search.replace(/\D/g, "") } }] : []),
               { sku: { contains: search, mode: "insensitive" as const } },
             ],
           }
         : {}),
     };
+    // Tab counts always describe the active catalog (the "Inativos" tab has its own count).
+    const base: Prisma.ProductWhereInput = { ...baseNoActive, active: true };
     const where: Prisma.ProductWhereInput = {
-      ...base,
+      ...baseNoActive,
+      ...activeFilter,
       ...(q.class && CLASSES.includes(q.class as SaleClass) ? { saleClass: q.class as SaleClass } : {}),
       ...(q.stock === "out" ? { stockQty: 0 } : {}),
     };
-    const [rows, grouped, outOfStock, all] = await Promise.all([
+    const [rows, grouped, outOfStock, all, inactive, unclassifiedAll] = await Promise.all([
       this.prisma.client.product.findMany({
         where,
         orderBy: [{ name: "asc" }, { id: "asc" }],
@@ -77,8 +82,11 @@ export class ProductsService {
       this.prisma.client.product.groupBy({ by: ["saleClass"], where: base, _count: { _all: true } }),
       this.prisma.client.product.count({ where: { ...base, stockQty: 0 } }),
       this.prisma.client.product.count({ where: base }),
+      this.prisma.client.product.count({ where: { ...baseNoActive, active: false } }),
+      // Whole-catalog figure for the page banner (the tab counts above follow the search box).
+      this.prisma.client.product.count({ where: { businessId, deletedAt: null, active: true, saleClass: "unclassified" } }),
     ]);
-    const counts = { all, unclassified: 0, prescription: 0, controlled: 0, otc: 0, outOfStock };
+    const counts = { all, unclassified: 0, prescription: 0, controlled: 0, otc: 0, outOfStock, inactive, unclassifiedAll };
     for (const g of grouped) counts[g.saleClass] = g._count._all;
     const { items, nextCursor } = sliceCursor(rows, limit);
     const names = await this.memberNames(items.map((p) => p.classConfirmedBy));

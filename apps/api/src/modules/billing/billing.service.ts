@@ -59,17 +59,22 @@ export class BillingService {
     }
 
     // Setup is always free: the only line item is the plan's monthly recurring price.
-    const session = await this.stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer_email: undefined,
-      client_reference_id: businessId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: { metadata: { businessId, planCode } },
-      success_url: `${process.env.DASHBOARD_URL}/billing?checkout=success`,
-      cancel_url: `${process.env.DASHBOARD_URL}/billing`,
-    });
-
-    return { url: session.url };
+    try {
+      const session = await this.stripe.checkout.sessions.create({
+        mode: "subscription",
+        customer_email: undefined,
+        client_reference_id: businessId,
+        line_items: [{ price: priceId, quantity: 1 }],
+        subscription_data: { metadata: { businessId, planCode } },
+        success_url: `${process.env.DASHBOARD_URL}/billing?checkout=success`,
+        cancel_url: `${process.env.DASHBOARD_URL}/billing`,
+      });
+      return { url: session.url };
+    } catch (error) {
+      // Stripe's own message can name keys or internal ids: log it, show a generic one.
+      this.logger.error(`checkout session failed: ${error instanceof Error ? error.message : error}`);
+      throw new BadRequestException("Não foi possível iniciar o checkout agora. Tente novamente em instantes ou fale com a gente.");
+    }
   }
 
   async createPortalSession(businessId: string) {
@@ -82,11 +87,9 @@ export class BillingService {
       });
       return { url: session.url };
     } catch (error) {
-      throw new BadRequestException(
-        error instanceof Stripe.errors.StripeError
-          ? `Não foi possível abrir o portal de cobrança: ${error.message}`
-          : "Não foi possível abrir o portal de cobrança",
-      );
+      // Stripe's own message can name keys or internal ids: log it, show a generic one.
+      this.logger.error(`billing portal failed: ${error instanceof Error ? error.message : error}`);
+      throw new BadRequestException("Não foi possível abrir o portal de cobrança agora. Tente novamente em instantes ou fale com a gente.");
     }
   }
 

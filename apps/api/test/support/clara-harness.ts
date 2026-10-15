@@ -209,6 +209,12 @@ class FakeModel {
     }
     return this.create({ data: args.create });
   }
+  async deleteMany(args: any = {}) {
+    this.guard("deleteMany", args);
+    const doomed = this.rows.filter((r) => matchesWhere(r, args?.where));
+    this.rows = this.rows.filter((r) => !doomed.includes(r));
+    return { count: doomed.length };
+  }
   async delete(args: any) {
     this.guard("delete", args);
     const index = this.rows.findIndex((r) => matchesWhere(r, args.where));
@@ -353,7 +359,9 @@ export function createFakePrisma() {
     rawQueries,
     rawFailures,
     addChunk(chunk: KbChunk) {
-      kb.push({ id: chunk.id ?? `chunk_${++idCounter}`, ...chunk });
+      const row = { id: chunk.id ?? `chunk_${++idCounter}`, ...chunk };
+      kb.push(row);
+      client.knowledgeChunk.rows.push(row);
     },
   };
 }

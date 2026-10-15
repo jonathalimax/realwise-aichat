@@ -1,5 +1,6 @@
 import { PrismaService } from "../../prisma/prisma.service";
 import { embedText } from "../../inference/embed-client";
+import { rankByKeywords, scoreChunk, tokenize } from "./kb-matching";
 
 const RESULT_LIMIT = 5;
 
@@ -139,40 +140,70 @@ export async function retrieveRelevantChunks(
     merged.push(row);
     if (merged.length >= RESULT_LIMIT) break;
   }
-  if (merged.length > 0) return merged;
+  if (merged.length > 0) {
+    // Keyword-only mode (no vectors): order the hits by token overlap so the most on-topic chunk comes first.
+    if (vectorRows.length === 0 && merged.length > 1) {
+      const q = tokenize(keywordText);
+      const scored = merged.map((m, i) => ({ m, i, s: scoreChunk(q, m.content).score }));
+      scored.sort((a, b) => b.s - a.s || a.i - b.i);
+      return scored.map((x) => x.m);
+    }
+    return merged;
+  }
 
   // Recall fallback, only when both precise paths found nothing (e.g. embeddings down AND the
   // AND-semantics keyword query missed because of a missing accent or an extra word): accent-folded
   // keywords OR'ed together, top 3 by rank. Scoped by businessId like everything else; runs without
   // the GIN index, which is fine for one tenant's chunks and only on this miss path.
   const primary = fallbackKeywords(keywordText);
-  if (primary.length === 0) return merged;
-  const keywords = [...new Set([...primary, ...fallbackKeywords(keywordOptions.extra ?? "")])].slice(0, 8);
+  let sqlFallback: RetrievedChunk[] = [];
+  if (primary.length > 0) {
+    const keywords = [...new Set([...primary, ...fallbackKeywords(keywordOptions.extra ?? "")])].slice(0, 8);
+    try {
+      const rows = await prisma.client.$queryRawUnsafe<{ id: string; content: string; rank: number }[]>(
+        `SELECT id, content, ts_rank(to_tsvector('portuguese', translate(lower(content), $4, $5)), websearch_to_tsquery('portuguese', $2)) AS rank FROM "KnowledgeChunk"
+         WHERE "businessId" = $1 AND to_tsvector('portuguese', translate(lower(content), $4, $5)) @@ websearch_to_tsquery('portuguese', $2)
+         ORDER BY rank DESC
+         LIMIT $3`,
+        businessId,
+        keywords.join(" or "),
+        FALLBACK_CANDIDATES,
+        ACCENTED,
+        UNACCENTED,
+      );
+      // OR semantics would let one generic shared word "ground" an unrelated chunk (and bypass the
+      // zero-context gap gate). Require the chunk to contain at least 2 of the question's own
+      // keywords (or the only one, for a one-keyword question), stem-tolerant.
+      const required = Math.min(2, primary.length);
+      sqlFallback = rows
+        .filter((r) => {
+          const content = foldAccents(r.content);
+          return primary.filter((w) => content.includes(w.length > 5 ? w.slice(0, w.length - 2) : w)).length >= required;
+        })
+        .slice(0, FALLBACK_RESULT_LIMIT)
+        .map((r) => ({ id: r.id, content: r.content, score: Math.max(0, Math.min(1, r.rank)) }));
+    } catch {
+      sqlFallback = [];
+    }
+  }
+  if (sqlFallback.length > 0) return sqlFallback;
+  return keywordScan(prisma, businessId, keywordText);
+}
+
+// Last resort, in process: stem-aware token overlap over this tenant's chunks ("estacionamento" finds "estacionar",
+// plurals and diminutives fold together, accents never matter). Works with no embeddings and no Postgres text search.
+const SCAN_CHUNK_LIMIT = 2000;
+async function keywordScan(prisma: PrismaService, businessId: string, queryText: string): Promise<RetrievedChunk[]> {
+  if (tokenize(queryText).length === 0) return [];
   try {
-    const rows = await prisma.client.$queryRawUnsafe<{ id: string; content: string; rank: number }[]>(
-      `SELECT id, content, ts_rank(to_tsvector('portuguese', translate(lower(content), $4, $5)), websearch_to_tsquery('portuguese', $2)) AS rank FROM "KnowledgeChunk"
-       WHERE "businessId" = $1 AND to_tsvector('portuguese', translate(lower(content), $4, $5)) @@ websearch_to_tsquery('portuguese', $2)
-       ORDER BY rank DESC
-       LIMIT $3`,
-      businessId,
-      keywords.join(" or "),
-      FALLBACK_CANDIDATES,
-      ACCENTED,
-      UNACCENTED,
-    );
-    // OR semantics would let one generic shared word "ground" an unrelated chunk (and bypass the
-    // zero-context gap gate). Require the chunk to contain at least 2 of the question's own
-    // keywords (or the only one, for a one-keyword question), stem-tolerant.
-    const required = Math.min(2, primary.length);
-    return rows
-      .filter((r) => {
-        const content = foldAccents(r.content);
-        return primary.filter((w) => content.includes(w.length > 5 ? w.slice(0, w.length - 2) : w)).length >= required;
-      })
-      .slice(0, FALLBACK_RESULT_LIMIT)
-      .map((r) => ({ id: r.id, content: r.content, score: Math.max(0, Math.min(1, r.rank)) }));
+    const rows = (await prisma.client.knowledgeChunk.findMany({
+      where: { businessId },
+      select: { id: true, content: true },
+      take: SCAN_CHUNK_LIMIT,
+    })) as { id: string; content: string }[];
+    return rankByKeywords(queryText, rows, FALLBACK_RESULT_LIMIT).map((r) => ({ id: r.id, content: r.content, score: r.score }));
   } catch {
-    return merged;
+    return [];
   }
 }
 

@@ -35,7 +35,7 @@ const SECTION_NOTES: Partial<Record<PermissionSection, string>> = {
 };
 
 /** Row order of the permission grid in the prototype (pharmacy); sales niches keep the shared order. */
-const GRID_ORDER: PermissionSection[] = ["inicio", "pedidos", "receitas", "atendimento", "catalogo", "importar", "classes", "clientes", "conversas", "analises", "farmacia", "equipe", "plano"];
+const GRID_ORDER: PermissionSection[] = ["inicio", "pedidos", "receitas", "atendimento", "conhecimento", "catalogo", "importar", "classes", "clientes", "conversas", "analises", "farmacia", "equipe", "plano"];
 
 export function permissionSectionsFor(niche: NicheKey) {
   const ordered = [...NICHE_SECTIONS[niche]].sort((a, b) => {

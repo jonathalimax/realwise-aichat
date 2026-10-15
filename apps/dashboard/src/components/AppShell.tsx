@@ -67,7 +67,7 @@ function ShellInner({ pathname, children }: { pathname: string; children: ReactN
     <div className="flex min-h-dvh flex-col md:flex-row">
       <BrandingApplier branding={me?.business.branding} restyle={isPharmacy || Boolean(me?.business.brandingIsCustom)} shadcnUi={isPharmacy} />
       <Sidebar />
-      <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 md:px-8 md:py-8">
+      <main className="outline-none min-w-0 flex-1 overflow-x-hidden px-4 py-5 md:px-8 md:py-8">
         {isPharmacy && <AlertsStrip />}
         {redirecting ? null : gated ? <TrialEndedGate /> : denied && req ? <NoAccess section={req.section} /> : modeBlocked ? <ModeBlocked /> : children}
       </main>

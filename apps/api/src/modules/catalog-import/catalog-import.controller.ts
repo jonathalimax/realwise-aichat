@@ -36,7 +36,7 @@ export class CatalogImportController {
   @RequirePermission("importar", "edit")
   @HttpCode(200)
   @Post(":id/mapping")
-  mapping(@CurrentMember() m: MemberContext, @Param("id") id: string, @Body() body: { headerRow?: number; columns?: Array<{ sourceColumn: string; field: string }> }) {
+  mapping(@CurrentMember() m: MemberContext, @Param("id") id: string, @Body() body: { headerRow?: number | null; columns?: Array<{ sourceColumn: string; field: string }> }) {
     return this.imports.confirmMapping(m, id, body ?? {});
   }
 

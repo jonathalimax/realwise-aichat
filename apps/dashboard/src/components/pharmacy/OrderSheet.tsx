@@ -54,6 +54,8 @@ export function OrderSheet({
   useEffect(() => {
     setError("");
     setCancelOpen(false);
+    setReason("out_of_stock");
+    setNote("");
   }, [orderId]);
 
   const canAssign = Boolean(order && order.fulfillment === "delivery" && can("pedidos", "edit") && !me?.role.ownDeliveriesOnly && order.tab !== "done" && order.tab !== "canceled");
@@ -269,7 +271,17 @@ export function OrderSheet({
                 type="button"
                 role="radio"
                 aria-checked={reason === r.code}
+                tabIndex={reason === r.code ? 0 : -1}
                 onClick={() => setReason(r.code as CancelReason)}
+                onKeyDown={(e) => {
+                  const dir = e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : 0;
+                  if (!dir) return;
+                  e.preventDefault();
+                  const radios = Array.from(e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? []);
+                  const next = radios[(radios.indexOf(e.currentTarget) + dir + radios.length) % radios.length];
+                  next?.focus();
+                  next?.click();
+                }}
                 className={cn(
                   "flex h-9 w-full items-center justify-start rounded-lg border px-3 text-sm font-medium",
                   reason === r.code ? "border-accent bg-accent/10 text-ink ring-1 ring-accent" : "border-transparent text-ink hover:bg-bg-2",

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Package, Pill, FlaskConical } from "lucide-react";
 import { API_BASE_URL } from "../../lib/api";
 import { assetUrl } from "../../lib/format";
@@ -19,9 +20,11 @@ export function ProductThumb({ product, size = "md", className }: { product: Pic
   const box = size === "lg" ? "h-24 w-24 rounded-2xl" : "h-11 w-11 rounded-[10px]";
   const icon = size === "lg" ? "h-11 w-11" : "h-6 w-6";
   const src = assetUrl(product.imageUrl, API_BASE_URL);
-  if (src) {
+  // Inactive products' images are not served publicly (404): fall back to the placeholder instead of a broken picture.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (src && src !== failedSrc) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={product.name} className={cn(box, "flex-none bg-bg-2 object-cover", className)} loading="lazy" />;
+    return <img src={src} alt={product.name} className={cn(box, "flex-none bg-bg-2 object-cover", className)} loading="lazy" onError={() => setFailedSrc(src)} />;
   }
   const Icon = product.placeholderIcon === "bottle" ? FlaskConical : product.placeholderIcon === "box" ? Package : Pill;
   return (

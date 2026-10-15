@@ -351,8 +351,11 @@ export interface ProductCounts {
   controlled: number;
   otc: number;
   outOfStock: number;
+  inactive: number;
+  /** Whole catalog, ignoring the search box. */
+  unclassifiedAll: number;
 }
-export const getProducts = (p: { class?: string; stock?: string; q?: string; cursor?: string; limit?: number; equivalentGroup?: string }): Promise<Page<Product> & { counts: ProductCounts }> =>
+export const getProducts = (p: { class?: string; stock?: string; active?: string; q?: string; cursor?: string; limit?: number; equivalentGroup?: string }): Promise<Page<Product> & { counts: ProductCounts }> =>
   request(`/products${qs(p)}`);
 export const getProduct = (id: string): Promise<Product> => request(`/products/${id}`);
 export type ProductPatch = Partial<
@@ -631,3 +634,57 @@ export interface LiveSnapshot {
   overview?: { marker: string };
 }
 export const getLiveSnapshot = (): Promise<LiveSnapshot> => request("/notifications/live");
+
+// ---------------------------------------------------------------- knowledge base (Base de conhecimento)
+export type SearchMode = "semantic" | "keyword" | "mixed" | "pending";
+export interface KbQa {
+  id: string;
+  question: string;
+  answer: string;
+  createdAt: string;
+  searchMode: SearchMode;
+}
+export interface KbDocument {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: "uploaded" | "processing" | "processed" | "failed";
+  processingError: string | null;
+  createdAt: string;
+  searchMode: SearchMode;
+}
+export interface KbOpenQuestion {
+  id: string;
+  question: string;
+  createdAt: string;
+}
+export interface KbTestSource {
+  kind: "qa" | "document";
+  name: string;
+  excerpt: string;
+  used: boolean;
+}
+export interface KbTestResult {
+  question: string;
+  outcome: "answer" | "team" | "pharmacist";
+  answer: string | null;
+  answerFrom?: "qa" | "document" | "excerpt";
+  message: string | null;
+  sources: KbTestSource[];
+}
+export const getKbQa = (): Promise<{ items: KbQa[]; max: number }> => request("/knowledge/qa");
+export const createKbQa = (question: string, answer: string): Promise<KbQa> => request("/knowledge/qa", json("POST", { question, answer }));
+export const updateKbQa = (id: string, question: string, answer: string): Promise<KbQa> => request(`/knowledge/qa/${id}`, json("PATCH", { question, answer }));
+export const deleteKbQa = (id: string): Promise<{ ok: true }> => request(`/knowledge/qa/${id}`, json("DELETE"));
+export const getKbDocuments = (): Promise<KbDocument[]> => request("/knowledge/documents");
+export const uploadKbDocument = (file: File): Promise<KbDocument> => {
+  const f = new FormData();
+  f.append("file", file);
+  return requestForm("/knowledge/documents/upload", f);
+};
+export const deleteKbDocument = (id: string) => request(`/knowledge/documents/${id}`, json("DELETE"));
+export const testKbAlex = (question: string): Promise<KbTestResult> => request("/knowledge/test", json("POST", { question }));
+export const getKbOpenQuestions = (): Promise<{ items: KbOpenQuestion[] }> => request("/knowledge/open-questions");
+export const answerKbOpenQuestion = (id: string, body: { answer: string; question?: string; saveToKb: boolean }): Promise<{ saved: KbQa | null }> =>
+  request(`/handoffs/${id}/answer-and-save`, json("POST", body));

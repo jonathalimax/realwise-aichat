@@ -62,8 +62,9 @@ export class PharmacyDashboardService {
     let handoffsList: unknown[] = [];
     if (can.pedidos) {
       const [today, yesterday, pending, rxPending] = await Promise.all([
-        this.prisma.client.order.count({ where: { businessId: m.businessId, createdAt: { gte: todayStart } } }),
-        this.prisma.client.order.count({ where: { businessId: m.businessId, createdAt: { gte: yesterdayStart, lt: todayStart } } }),
+        // Canceled / rejected orders are not counted anywhere (KPI, chart, funnel, Análises), so every figure agrees.
+        this.prisma.client.order.count({ where: { businessId: m.businessId, createdAt: { gte: todayStart }, status: { notIn: ["canceled", "rejected"] } } }),
+        this.prisma.client.order.count({ where: { businessId: m.businessId, createdAt: { gte: yesterdayStart, lt: todayStart }, status: { notIn: ["canceled", "rejected"] } } }),
         this.prisma.client.order.count({ where: { businessId: m.businessId, status: "pending_pharmacist" } }),
         can.receitas ? this.prisma.client.prescriptionUpload.count({ where: { businessId: m.businessId, status: "pending" } }) : Promise.resolve(0),
       ]);
@@ -215,7 +216,7 @@ export class PharmacyDashboardService {
     const [conversations, carts, orders] = await Promise.all([
       this.prisma.client.conversation.count({ where: { businessId, startedAt: { gte: from } } }),
       this.prisma.client.analyticsEvent.count({ where: { businessId, name: "pharmacy_cart_created", occurredAt: { gte: from } } }),
-      this.prisma.client.order.count({ where: { businessId, createdAt: { gte: from } } }),
+      this.prisma.client.order.count({ where: { businessId, createdAt: { gte: from }, status: { notIn: ["canceled", "rejected"] } } }),
     ]);
     return { conversations, carts, orders, conversionRate: conversations ? Math.round((orders / conversations) * 1000) / 1000 : 0 };
   }

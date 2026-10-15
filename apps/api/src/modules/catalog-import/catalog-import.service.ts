@@ -286,7 +286,7 @@ export class CatalogImportService {
 
   // ------------------------------------------------------------------ step 2: confirm mapping
 
-  async confirmMapping(actor: MemberContext, id: string, body: { headerRow?: number; columns?: Array<{ sourceColumn: string; field: string }> }) {
+  async confirmMapping(actor: MemberContext, id: string, body: { headerRow?: number | null; columns?: Array<{ sourceColumn: string; field: string }> }) {
     const imp = await this.load(actor.businessId, id);
     if (imp.status !== "mapped" && imp.status !== "reviewing") throw err(409, "INVALID_STATE", "Esta importação não está pronta para mapeamento.");
     const stored = (imp.columnMapping ?? {}) as StoredMapping;
@@ -296,7 +296,7 @@ export class CatalogImportService {
     }
     const sheet = await this.readSheet(imp);
     let headerIdx = (stored.headerRow ?? 1) - 1;
-    if (body.headerRow !== undefined) {
+    if (body.headerRow !== undefined && body.headerRow !== null) {
       if (!Number.isInteger(body.headerRow) || body.headerRow < 1 || body.headerRow > Math.min(sheet.rows.length, 50)) throw err(400, "INVALID_HEADER_ROW", "Linha de cabeçalho inválida.");
       headerIdx = body.headerRow - 1;
     }

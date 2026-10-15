@@ -40,17 +40,18 @@ export class ClassReviewService {
     private readonly accessLog: AccessLogService,
   ) {}
 
-  /** Products of a group still needing a decision (proposal = key, and not confirmed to exactly that class). */
+  /** Active products of a group still needing a decision (proposal = key, and not confirmed to exactly that class). Inactive ones are not sold, so they are not reviewed. */
   private pendingWhere(businessId: string, key: SaleClass): Prisma.ProductWhereInput {
     if (key === "unclassified") {
       return {
         businessId,
         deletedAt: null,
+        active: true,
         classConfirmedAt: null,
         OR: [{ classProposed: "unclassified" }, { classProposed: null }],
       };
     }
-    return { businessId, deletedAt: null, classProposed: key, NOT: { classConfirmedAt: { not: null }, saleClass: key } };
+    return { businessId, deletedAt: null, active: true, classProposed: key, NOT: { classConfirmedAt: { not: null }, saleClass: key } };
   }
 
   async overview(businessId: string) {
@@ -60,7 +61,9 @@ export class ClassReviewService {
     for (const key of GROUP_KEYS) {
       const meta = GROUP_META[key];
       const pending = await this.prisma.client.product.count({ where: this.pendingWhere(businessId, key) });
-      const confirmed = key === "unclassified" ? 0 : await this.prisma.client.product.count({ where: { businessId, deletedAt: null, classProposed: key, classConfirmedAt: { not: null }, saleClass: key } });
+      const confirmed = key === "unclassified" ? 0 : await this.prisma.client.product.count({ where: { businessId, deletedAt: null, active: true, classProposed: key, classConfirmedAt: { not: null }, saleClass: key } });
+      // Bulk confirm only touches products never confirmed; ones a pharmacist already decided differently need a per-row decision.
+      const bulkPending = key === "unclassified" ? 0 : await this.prisma.client.product.count({ where: { businessId, deletedAt: null, active: true, classProposed: key, classConfirmedAt: null } });
       const samples = await this.prisma.client.product.findMany({
         where: this.pendingWhere(businessId, key),
         orderBy: [{ name: "asc" }],
@@ -80,7 +83,7 @@ export class ClassReviewService {
         count: key === "unclassified" ? pending : pending + confirmed,
         confirmedCount: confirmed,
         done: key !== "unclassified" && pending + confirmed > 0 && pending === 0,
-        canConfirm: key !== "unclassified" && pending > 0,
+        canConfirm: key !== "unclassified" && bulkPending > 0,
         samples: samples.map((s) => ({ id: s.id, name: s.name, by: byText(s) })),
       });
     }
@@ -123,7 +126,7 @@ export class ClassReviewService {
     const key = this.assertKey(rawKey);
     if (key === "unclassified") throw new BadRequestException({ statusCode: 400, error: "Bad Request", code: "GROUP_NOT_CONFIRMABLE", message: "Produtos incertos precisam ser decididos um a um." });
     const res = await this.prisma.client.product.updateMany({
-      where: { businessId: actor.businessId, deletedAt: null, classProposed: key, classConfirmedAt: null },
+      where: { businessId: actor.businessId, deletedAt: null, active: true, classProposed: key, classConfirmedAt: null },
       data: { saleClass: key, classConfirmedAt: new Date(), classConfirmedBy: actor.memberId },
     });
     if (res.count > 0) {

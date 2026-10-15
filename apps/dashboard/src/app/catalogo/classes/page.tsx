@@ -175,12 +175,16 @@ function ProductReviewRow({
 }) {
   const [busy, setBusy] = useState(false);
   const [choice, setChoice] = useState<SaleClass>("otc");
+  const [error, setError] = useState("");
   const shown = (row.classProposed ?? groupKey) as SaleClass;
   async function apply(c: SaleClass) {
     setBusy(true);
+    setError("");
     try {
       await setProductClass(row.id, c);
       onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError && e.code === "CRF_REQUIRED" ? "Somente um farmacêutico com CRF cadastrado confirma classes." : errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -206,15 +210,16 @@ function ProductReviewRow({
                   <option value="controlled">Controlado</option>
                 </Select>
               </span>
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => apply(choice)}>
+              <Button size="sm" variant="outline" disabled={busy} aria-label={`Definir classe de ${row.name}`} onClick={() => apply(choice)}>
                 Definir
               </Button>
             </span>
           ) : (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => apply(groupKey)}>
+            <Button size="sm" variant="outline" disabled={busy} aria-label={`Confirmar ${row.name}`} onClick={() => apply(groupKey)}>
               Confirmar
             </Button>
           )}
+          {error && <div role="alert" className="mt-1 text-xs text-red-700">{error}</div>}
         </TableCell>
       )}
     </TableRow>

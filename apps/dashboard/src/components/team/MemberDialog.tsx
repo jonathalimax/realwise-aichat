@@ -48,12 +48,14 @@ export function MemberDialog({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [confirming, setConfirming] = useState<"disable" | "delete" | null>(null);
 
   useEffect(() => {
     setRoleId(member?.role.id ?? "");
     setCrf(member?.crf ?? "");
     setError("");
     setInfo("");
+    setConfirming(null);
   }, [member?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const options = roles.filter((r) => isOwner || r.key !== "owner" || r.id === member?.role.id);
@@ -101,6 +103,28 @@ export function MemberDialog({
             <Input id="mcrf" value={crf} onChange={(e) => setCrf(e.target.value)} placeholder="CRF-PR 00000" />
           </Field>
         )}
+        {confirming && (
+          <Alert
+            variant="amber"
+            action={
+              <span className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={busy !== null} onClick={() => setConfirming(null)} autoFocus>
+                  Voltar
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={() => run(confirming, () => (confirming === "disable" ? disableMember(member.id) : deleteMember(member.id)), undefined, true)}
+                >
+                  {confirming === "disable" ? "Sim, desativar" : "Sim, cancelar convite"}
+                </Button>
+              </span>
+            }
+          >
+            {confirming === "disable" ? `Desativar o acesso de ${member.name}? A pessoa é desconectada na hora e só volta se você reativar.` : `Cancelar o convite de ${member.name}? O link enviado deixa de funcionar.`}
+          </Alert>
+        )}
         {error && <Alert variant="red">{error}</Alert>}
         {info && <Alert variant="soft">{info}</Alert>}
         <DialogFooter className="justify-between">
@@ -110,13 +134,13 @@ export function MemberDialog({
                 <Button variant="outline" size="sm" disabled={busy !== null} onClick={() => run("resend", () => resendInvite(member.id), "Convite reenviado.")}>
                   Reenviar convite
                 </Button>
-                <Button variant="destructive" size="sm" disabled={busy !== null} onClick={() => run("delete", () => deleteMember(member.id), undefined, true)}>
+                <Button variant="destructive" size="sm" disabled={busy !== null} onClick={() => setConfirming("delete")}>
                   Cancelar convite
                 </Button>
               </>
             )}
             {member.status === "active" && !isSelf && (
-              <Button variant="destructive" size="sm" disabled={busy !== null} onClick={() => run("disable", () => disableMember(member.id), undefined, true)}>
+              <Button variant="destructive" size="sm" disabled={busy !== null} onClick={() => setConfirming("disable")}>
                 Desativar acesso
               </Button>
             )}

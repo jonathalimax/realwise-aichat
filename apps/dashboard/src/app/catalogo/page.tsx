@@ -17,7 +17,8 @@ import { EmptyState, LinkButton, LoadState, PageHeader, PageStack, SearchBox, Ta
 import { ProductThumb } from "../../components/pharmacy/ProductThumb";
 import { ProductSheet } from "../../components/pharmacy/ProductSheet";
 
-type Filter = "all" | "unclassified" | "otc" | "prescription" | "controlled" | "out";
+type Filter = "all" | "unclassified" | "otc" | "prescription" | "controlled" | "out" | "inactive";
+const FILTERS: Filter[] = ["all", "unclassified", "otc", "prescription", "controlled", "out", "inactive"];
 
 export default function CatalogoPage() {
   return (
@@ -31,7 +32,8 @@ function Catalogo() {
   const router = useRouter();
   const params = useSearchParams();
   const { can } = useSession();
-  const initialFilter: Filter = params.get("stock") === "out" ? "out" : ((params.get("class") as Filter | null) ?? "all");
+  const classParam = params.get("class") as Filter | null;
+  const initialFilter: Filter = params.get("stock") === "out" ? "out" : classParam && FILTERS.includes(classParam) ? classParam : "all";
   const [filter, setFilter] = useState<Filter>(initialFilter);
   const [q, setQ] = useState("");
   const dq = useDebounced(q, 300);
@@ -41,7 +43,7 @@ function Catalogo() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const query = useCallback(
-    (cursor?: string) => getProducts({ class: filter === "out" ? "all" : filter, stock: filter === "out" ? "out" : undefined, q: dq || undefined, cursor }),
+    (cursor?: string) => getProducts({ class: filter === "out" || filter === "inactive" ? "all" : filter, stock: filter === "out" ? "out" : undefined, active: filter === "inactive" ? "false" : undefined, q: dq || undefined, cursor }),
     [filter, dq],
   );
   const state = useLoad(() => query(), [filter, dq]);
@@ -78,16 +80,16 @@ function Catalogo() {
             {can("classes", "view") && (
               <LinkButton href="/catalogo/classes" variant="outline">
                 Revisar classes
-                {counts && counts.unclassified > 0 && <Badge variant="amber" className="h-[18px] px-1.5">{counts.unclassified}</Badge>}
+                {counts && counts.unclassifiedAll > 0 && <Badge variant="amber" className="h-[18px] px-1.5">{counts.unclassifiedAll}</Badge>}
               </LinkButton>
             )}
             {can("importar", "view") && <LinkButton href="/catalogo/importar">Importar planilha</LinkButton>}
           </>
         }
       />
-      {counts && counts.unclassified > 0 && (
+      {counts && counts.unclassifiedAll > 0 && (
         <Alert variant="amber">
-          {counts.unclassified} {counts.unclassified === 1 ? "produto está sem classe e não pode" : "produtos estão sem classe e não podem"} ser {counts.unclassified === 1 ? "vendido" : "vendidos"} no chat até o farmacêutico revisar.
+          {counts.unclassifiedAll} {counts.unclassifiedAll === 1 ? "produto está sem classe e não pode" : "produtos estão sem classe e não podem"} ser {counts.unclassifiedAll === 1 ? "vendido" : "vendidos"} no chat até o farmacêutico revisar.
         </Alert>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -102,6 +104,7 @@ function Catalogo() {
             { value: "prescription", label: "Receita", count: counts?.prescription ?? null },
             { value: "controlled", label: "Controlados", count: counts?.controlled ?? null },
             { value: "out", label: "Sem estoque", count: counts?.outOfStock ?? null },
+            { value: "inactive", label: "Inativos", count: counts?.inactive ?? null },
           ]}
         />
         <SearchBox value={q} onChange={setQ} placeholder="Buscar produto, EAN ou princípio ativo" label="Buscar produto" className="sm:w-[300px]" />
@@ -124,7 +127,7 @@ function Catalogo() {
                     <TableHead>Preço</TableHead>
                     <TableHead>Estoque</TableHead>
                     <TableHead>Equivalentes</TableHead>
-                    <TableHead>Exige farmacêutico</TableHead>
+                    <TableHead>Farmacêutico</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -143,6 +146,7 @@ function Catalogo() {
                         <span className="flex items-center gap-1">
                           <Badge variant={toneVariant(p.classBadge)}>{p.classLabel}</Badge>
                           {p.needsReview && <Badge variant="amber">Revisar</Badge>}
+                          {!p.active && <Badge variant="outline">Inativo</Badge>}
                         </span>
                       </TableCell>
                       <TableCell>{formatBRL(p.priceCents)}</TableCell>

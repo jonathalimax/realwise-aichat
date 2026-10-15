@@ -36,30 +36,41 @@ export function ProductSheet({ productId, onClose, onChanged }: { productId: str
   const canEdit = can("catalogo", "edit");
   const canClass = can("classes", "edit") && Boolean(me?.canPerformPharmacistActions);
 
-  const [form, setForm] = useState({ name: "", price: "", stock: "", max: "", group: "", required: false, saleClass: "unclassified" as SaleClass });
+  const [form, setForm] = useState({ name: "", price: "", stock: "", max: "", group: "", required: false, active: true, saleClass: "unclassified" as SaleClass });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [error]);
 
+  function syncForm(p: Product) {
+    setForm({
+      name: p.name,
+      price: centsToInput(p.priceCents),
+      stock: String(p.stockQty),
+      max: p.maxQtyPerOrder == null ? "" : String(p.maxQtyPerOrder),
+      group: p.equivalentGroup ?? "",
+      required: p.pharmacistRequired,
+      active: p.active,
+      saleClass: p.saleClass,
+    });
+  }
+
+  // The form is filled once per opened product. Later reloads (an image upload changes `updatedAt`) must not wipe what is being typed.
   useEffect(() => {
     if (!product) return;
-    setForm({
-      name: product.name,
-      price: centsToInput(product.priceCents),
-      stock: String(product.stockQty),
-      max: product.maxQtyPerOrder == null ? "" : String(product.maxQtyPerOrder),
-      group: product.equivalentGroup ?? "",
-      required: product.pharmacistRequired,
-      saleClass: product.saleClass,
-    });
+    syncForm(product);
     setError("");
     setSaved(false);
-  }, [product?.id, product?.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save() {
     if (!product) return;
     setError("");
+    setSaved(false);
     const cents = parseBRLToCents(form.price);
     if (!form.name.trim()) return setError("Informe o nome do produto.");
     if (cents === null) return setError("Informe um preço válido, por exemplo 8,90.");
@@ -75,6 +86,7 @@ export function ProductSheet({ productId, onClose, onChanged }: { productId: str
     if (max !== product.maxQtyPerOrder) patch.maxQtyPerOrder = max;
     if ((form.group.trim() || null) !== product.equivalentGroup) patch.equivalentGroup = form.group.trim() || null;
     if (form.required !== product.pharmacistRequired) patch.pharmacistRequired = form.required;
+    if (form.active !== product.active) patch.active = form.active;
 
     setBusy(true);
     try {
@@ -82,6 +94,7 @@ export function ProductSheet({ productId, onClose, onChanged }: { productId: str
       if (Object.keys(patch).length) updated = await updateProduct(product.id, patch);
       if (canClass && form.saleClass !== product.saleClass) updated = await setProductClass(product.id, form.saleClass);
       state.setData(updated);
+      syncForm(updated);
       setSaved(true);
       onChanged();
     } catch (e) {
@@ -167,6 +180,7 @@ export function ProductSheet({ productId, onClose, onChanged }: { productId: str
             <Badge variant={toneVariant(product.classBadge)}>{product.classLabel}</Badge>
             <Badge variant="outline">Estoque {product.stockQty}</Badge>
             {product.needsReview && <Badge variant="amber">Classe a revisar</Badge>}
+            {!product.active && <Badge variant="outline">Inativo</Badge>}
           </div>
           {product.warning && <Alert variant="amber">{product.warning}</Alert>}
           {product.needsReview && product.classProposed && (
@@ -174,7 +188,11 @@ export function ProductSheet({ productId, onClose, onChanged }: { productId: str
               Uma nova importação propôs a classe “{CLASS_LABELS[product.classProposed]?.label}”{product.classProposedReason ? ` (${product.classProposedReason})` : ""}, diferente da confirmada.
             </Alert>
           )}
-          {error && <Alert variant="red">{error}</Alert>}
+          {error && (
+            <div ref={errorRef}>
+              <Alert variant="red">{error}</Alert>
+            </div>
+          )}
 
           <Field label="Nome" htmlFor="pn">
             <Input id="pn" value={form.name} disabled={!canEdit} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -208,6 +226,13 @@ export function ProductSheet({ productId, onClose, onChanged }: { productId: str
           <div className="flex items-center justify-between gap-3">
             <span>Sempre exige farmacêutico</span>
             <Switch checked={form.required} disabled={!canEdit} onCheckedChange={(v) => setForm({ ...form, required: v })} aria-label="Sempre exige farmacêutico" />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span>
+              Ativo no catálogo
+              <span className="block text-xs text-muted">Produtos inativos não aparecem no chat nem em “Todos”.</span>
+            </span>
+            <Switch checked={form.active} disabled={!canEdit} onCheckedChange={(v) => setForm({ ...form, active: v })} aria-label="Ativo no catálogo" />
           </div>
           {(product.ean || product.activeIngredient) && (
             <dl className="grid grid-cols-2 gap-3 text-[13px]">

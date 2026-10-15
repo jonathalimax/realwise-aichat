@@ -124,7 +124,7 @@ export class OrdersService {
             OR: [
               { code: { contains: search, mode: "insensitive" } },
               { lead: { name: { contains: search, mode: "insensitive" } } },
-              ...(search.replace(/\D/g, "").length >= 4 ? [{ lead: { phone: { contains: search.replace(/\D/g, "") } } }] : []),
+              ...(/^[\d\s()+.-]+$/.test(search) && search.replace(/\D/g, "").length >= 4 ? [{ lead: { phone: { contains: search.replace(/\D/g, "") } } }] : []),
             ],
           }
         : {}),

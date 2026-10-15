@@ -3,6 +3,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  BookOpen,
   Boxes,
   CalendarDays,
   CreditCard,
@@ -53,6 +54,7 @@ const PHARMACY_NAV: NavGroup[] = [
       { label: "Catálogo", href: "/catalogo", icon: Boxes, section: "catalogo", commerceOnly: true },
       { label: "Clientes", href: "/clientes", icon: Users, section: "clientes" },
       { label: "Conversas", href: "/conversas", icon: MessageCircle, section: "conversas" },
+      { label: "Base de conhecimento", href: "/conhecimento", icon: BookOpen, section: "conhecimento" },
       { label: "Análises", href: "/analises", icon: BarChart3, section: "analises" },
     ],
   },
@@ -116,9 +118,12 @@ export function visibleNav(niche: Niche, me: Me | null): NavGroup[] {
       // Attendance mode: "Atendimento farmacêutico" is the hero screen, right after the assistant.
       const hero = items.find((i) => i.href === "/atendimento");
       if (!hero) return { ...g, items };
-      const rest = items.filter((i) => i !== hero);
+      // The knowledge base is the product's main brain in this mode: it sits right below the hero.
+      const brain = items.find((i) => i.href === "/conhecimento");
+      const rest = items.filter((i) => i !== hero && i !== brain);
+      const lead = brain ? [hero, brain] : [hero];
       const at = rest.findIndex((i) => i.href !== "/assistente" && i.href !== "/assistant");
-      return { ...g, items: at < 0 ? [...rest, hero] : [...rest.slice(0, at), hero, ...rest.slice(at)] };
+      return { ...g, items: at < 0 ? [...rest, ...lead] : [...rest.slice(0, at), ...lead, ...rest.slice(at)] };
     })
     .filter((g) => g.items.length > 0);
 }
@@ -152,6 +157,7 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/inicio", section: "inicio" },
   { prefix: "/pedidos", section: "pedidos" },
   { prefix: "/atendimento", section: "atendimento" },
+  { prefix: "/conhecimento", section: "conhecimento" },
   { prefix: "/clientes", section: "clientes" },
   { prefix: "/conversas", section: "conversas" },
   { prefix: "/analises", section: "analises" },

@@ -67,6 +67,7 @@ export const NICHE_SECTIONS: Record<NicheKey, readonly PermissionSection[]> = {
     "pedidos",
     "receitas",
     "atendimento",
+    "conhecimento",
     "catalogo",
     "importar",
     "classes",
@@ -103,11 +104,11 @@ type Grid = Partial<Record<PermissionSection, keyof typeof L>>;
 // Pharmacy grid (prototype Main.dc.html section 4; column order Owner Pharmacist Manager Attendant Courier).
 // "receitas": validating needs a CRF role; "atendimento": edit for staff, clinical handoffs additionally need a CRF. Courier edits only own deliveries (ownDeliveriesOnly).
 const PHARMACY_GRID: Record<StarterRoleKey, Grid> = {
-  owner:      { inicio: "V", pedidos: "E", receitas: "V", atendimento: "E", catalogo: "E", importar: "E", classes: "V", clientes: "E", conversas: "V", analises: "V", farmacia: "E", equipe: "E", plano: "E" },
-  pharmacist: { inicio: "V", pedidos: "E", receitas: "E", atendimento: "E", catalogo: "E", importar: "E", classes: "E", clientes: "V", conversas: "V", analises: "V", farmacia: "V", equipe: "N", plano: "N" },
-  manager:    { inicio: "V", pedidos: "E", receitas: "V", atendimento: "E", catalogo: "E", importar: "E", classes: "N", clientes: "E", conversas: "V", analises: "V", farmacia: "E", equipe: "E", plano: "E" },
-  attendant:  { inicio: "V", pedidos: "E", receitas: "V", atendimento: "E", catalogo: "V", importar: "N", classes: "N", clientes: "V", conversas: "V", analises: "N", farmacia: "N", equipe: "N", plano: "N" },
-  courier:    { inicio: "N", pedidos: "E", receitas: "N", atendimento: "N", catalogo: "N", importar: "N", classes: "N", clientes: "N", conversas: "N", analises: "N", farmacia: "N", equipe: "N", plano: "N" },
+  owner:      { inicio: "V", pedidos: "E", receitas: "V", atendimento: "E", conhecimento: "E", catalogo: "E", importar: "E", classes: "V", clientes: "E", conversas: "V", analises: "V", farmacia: "E", equipe: "E", plano: "E" },
+  pharmacist: { inicio: "V", pedidos: "E", receitas: "E", atendimento: "E", conhecimento: "E", catalogo: "E", importar: "E", classes: "E", clientes: "V", conversas: "V", analises: "V", farmacia: "V", equipe: "N", plano: "N" },
+  manager:    { inicio: "V", pedidos: "E", receitas: "V", atendimento: "E", conhecimento: "E", catalogo: "E", importar: "E", classes: "N", clientes: "E", conversas: "V", analises: "V", farmacia: "E", equipe: "E", plano: "E" },
+  attendant:  { inicio: "V", pedidos: "E", receitas: "V", atendimento: "E", conhecimento: "V", catalogo: "V", importar: "N", classes: "N", clientes: "V", conversas: "V", analises: "N", farmacia: "N", equipe: "N", plano: "N" },
+  courier:    { inicio: "N", pedidos: "E", receitas: "N", atendimento: "N", conhecimento: "N", catalogo: "N", importar: "N", classes: "N", clientes: "N", conversas: "N", analises: "N", farmacia: "N", equipe: "N", plano: "N" },
 };
 
 // Real estate / dealership: same shape, mapped sensibly onto leads / listings / agenda / knowledge.

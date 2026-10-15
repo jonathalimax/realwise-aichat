@@ -4,8 +4,16 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { HTMLAttributes } from "react";
 import { cn } from "../../lib/utils";
+import { FocusReturnProvider, useCloseAutoFocus, useFocusReturnProvider } from "../../lib/focus-return";
 
-export const Sheet = Dialog.Root;
+export function Sheet({ children, ...props }: Dialog.DialogProps) {
+  const ref = useFocusReturnProvider(props.open);
+  return (
+    <FocusReturnProvider value={ref}>
+      <Dialog.Root {...props}>{children}</Dialog.Root>
+    </FocusReturnProvider>
+  );
+}
 export const SheetTrigger = Dialog.Trigger;
 export const SheetClose = Dialog.Close;
 
@@ -18,11 +26,13 @@ export function SheetContent({
   className?: string;
   side?: "left" | "right";
 }) {
+  const onCloseAutoFocus = useCloseAutoFocus();
   return (
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-40 bg-zinc-950/45" />
       <Dialog.Content
         aria-describedby={undefined}
+        onCloseAutoFocus={onCloseAutoFocus}
         className={cn(
           "fixed inset-y-0 z-50 flex w-72 flex-col bg-surface shadow-[0_0_24px_rgba(0,0,0,0.18)] outline-none",
           side === "left" ? "left-0" : "right-0",

@@ -42,6 +42,8 @@ function conflict(code: string, message: string) {
   return new ConflictException({ statusCode: 409, error: "Conflict", code, message });
 }
 
+import { isNewQuestion } from "./reopen-rules";
+
 @Injectable()
 export class HandoffsService {
   constructor(
@@ -57,12 +59,16 @@ export class HandoffsService {
    */
   async reopenAnswered(businessId: string): Promise<void> {
     try {
-      await this.prisma.client.$executeRaw`UPDATE "PharmacistHandoff" h SET "status" = 'open' WHERE h."businessId" = ${businessId} AND h."status" = 'answered' AND h."answeredAt" IS NOT NULL AND EXISTS (SELECT 1 FROM "Message" m WHERE m."conversationId" = h."conversationId" AND m."role" = 'visitor' AND m."createdAt" > h."answeredAt")`;
+      const candidates = await this.prisma.client.$queryRaw<Array<{ id: string; conversationId: string; answeredAt: Date }>>`SELECT h."id", h."conversationId", h."answeredAt" FROM "PharmacistHandoff" h WHERE h."businessId" = ${businessId} AND h."status" = 'answered' AND h."answeredAt" IS NOT NULL AND EXISTS (SELECT 1 FROM "Message" m WHERE m."conversationId" = h."conversationId" AND m."role" = 'visitor' AND m."createdAt" > h."answeredAt")`;
+      for (const c of candidates) {
+        const msgs = await this.prisma.client.message.findMany({ where: { conversationId: c.conversationId, role: "visitor", createdAt: { gt: c.answeredAt } }, select: { content: true }, take: 50 });
+        // Thanks, buy intent and cart / checkout taps keep the handoff answered; only a new question re-opens it.
+        if (msgs.some((m) => isNewQuestion(m.content))) await this.prisma.client.pharmacistHandoff.updateMany({ where: { id: c.id, status: "answered" }, data: { status: "open" } });
+      }
     } catch (e) {
       logger.warn(`reopenAnswered failed: ${e instanceof Error ? e.message : e}`);
     }
   }
-
 
   private async withLeads<T extends { leadId: string | null }>(businessId: string, rows: T[]): Promise<Array<T & { lead: { name: string | null; phone?: string | null } | null }>> {
     const ids = [...new Set(rows.map((r) => r.leadId).filter((x): x is string => !!x))];
