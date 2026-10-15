@@ -34,6 +34,8 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[], opts?: { live?
     } catch (e) {
       if (id !== seq.current) return;
       setError(e instanceof Error ? e : new Error(String(e)));
+      // A failed load for NEW dependencies (another tab/filter) must not keep showing the previous set's rows.
+      if (showLoading) setData(null);
     } finally {
       if (id === seq.current) setLoading(false);
     }

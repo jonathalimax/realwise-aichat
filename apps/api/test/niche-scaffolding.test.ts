@@ -29,7 +29,7 @@ test("pharmacy persona is Alex, discloses AI and never recommends medicine", () 
   // The AI disclosure lives in the name "Alex (IA)" (widget); the welcome stays short and does not repeat it.
   assert.doesNotMatch(welcome, /inteligência artificial/);
   assert.match(welcome, /Posso montar seu pedido ou chamar o farmacêutico/);
-  assert.ok(welcome.length < 100);
+  assert.ok(welcome.length < 130);
   assert.match(p.sharedRules, /nunca indique/i);
   assert.match(p.sharedRules, /SAMU 192/);
   assert.equal(getPersona("imobiliaria").name, "Clara");

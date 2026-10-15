@@ -17,11 +17,14 @@ export function AlertsStrip() {
   const [alerts, setAlerts] = useState<BusinessAlert[]>([]);
   const [expanded, setExpanded] = useState(false);
   // Attendance mode: alerts about orders, prescriptions and stock sheets (older ones may still be active) are hidden.
-  const attendance = modeOf(useSession().me) === "attendance";
+  const { me, can } = useSession();
+  const attendance = modeOf(me) === "attendance";
+  // GET /alerts needs "inicio": roles without it (courier) never ask (no 403 in the console).
+  const allowed = !me || can("inicio");
 
   const denied = useRef(false);
   const load = useCallback(async () => {
-    if (denied.current) return;
+    if (denied.current || !allowed) return;
     try {
       const list = await getAlerts();
       const rank = { critical: 0, warning: 1, info: 2 } as Record<string, number>;
@@ -37,7 +40,7 @@ export function AlertsStrip() {
       if ((e as { status?: number })?.status === 403) denied.current = true;
       setAlerts([]);
     }
-  }, [attendance]);
+  }, [attendance, allowed]);
 
   const liveMarker = useLiveMarker(["overview"]);
   useEffect(() => {

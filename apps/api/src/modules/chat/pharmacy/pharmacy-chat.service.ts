@@ -3,6 +3,7 @@
 //   -> deterministic cart + checkout state machine persisted in Conversation.pharmacyState.
 // Everything here works with the model completely unavailable. See docs/pharmacy/CHAT_ENGINE_REPORT.md.
 
+import { retrieveChunksForChat, expandAbbreviations } from "../knowledge-retrieval";
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { createHash } from "crypto";
 import { PrismaService } from "../../../prisma/prisma.service";
@@ -27,7 +28,7 @@ import { clinicalQuestion, looksLikeQuestion, unknownStoreTopic } from "./genera
 import { isSuggestionMessage, parseSuggestionChoice, type SuggestionChoice } from "./suggestion";
 import { parseQtyEdit } from "./qty-edit";
 import { PharmacyCatalog, productLabel, scoreProduct, type Resolution } from "./catalog";
-import { CHIPS, COPY, CONSENT_VERSION, consentCard, paymentPhrase } from "./copy";
+import { CHIPS, COPY, CONSENT_VERSION, consentCard, nameComma, paymentPhrase, pharmacistRef, symptomIntroFor } from "./copy";
 import { DOSAGE_REFUSAL, asksForDosage, guardSymptomLaneText } from "./guards";
 import { OrderRuleError } from "./ports";
 import { CVV_NUMBER, SAMU_NUMBER, detectRedFlag, isInfantWithFever, redFlagReplyText, type RedFlagHit } from "./red-flags";
@@ -54,6 +55,8 @@ import {
   suggestionKeywords,
   summaryLine,
   validateAge,
+  inferFromSymptomText,
+  patientOf,
   asksRecommendation,
 } from "./symptom";
 import { brl, fold, isAffirmative, isNegative, isValidEmail, pickDigits, productTokens, titleCaseName } from "./text";
@@ -109,6 +112,12 @@ class Turn {
   prefix = "";
   /** The address of this review was confirmed earlier in the conversation (the review says so). */
   reusedAddress = false;
+  /** First name of the customer when already known (typed in this conversation or a recognized returning customer). */
+  get first(): string | null {
+    const c = this.state.contact;
+    const raw = c.returningFirstName || (c.name ? c.name.trim().split(/\s+/)[0] : "");
+    return raw ? raw : null;
+  }
   say(text: string, ui?: UiPayload | null) {
     const full = this.prefix ? `${this.prefix} ${text}` : text;
     this.prefix = "";
@@ -129,9 +138,9 @@ const RE = {
   cancel: /^(cancelar|cancela|cancelar pedido|cancelar tudo|desistir|desisti|deixa pra la|esquece|nao quero mais|esquece isso)$/,
   talkPharmacist: /\b(farmaceutic[oa]s?|atendente|humano|pessoa de verdade|alguem de verdade|falar com alguem|falar com uma pessoa|falar com a farmacia|responsavel tecnic[oa])\b/,
   viewCart: /\b(ver|mostrar|mostra|abrir|abre|qual|como esta|conferir)\b.{0,14}\bcarrinho\b|^carrinho$|^meu carrinho$/,
-  clearCart: /\b(esvaziar|limpar|zerar)\b.{0,12}\bcarrinho\b/,
+  clearCart: /\b(esvaziar|limpar|zerar)\b.{0,12}\bcarrinho\b|^(remover|remove|tirar|tira|retirar|limpar|limpa|esvaziar|esvazia)\s+(tudo|todos|todas|todos os itens|tudo isso)$/,
   checkout: /\b(finalizar|fechar|concluir|encerrar|prosseguir)\b.{0,20}\b(pedido|compra|carrinho)\b|^(finalizar|fechar pedido|continuar|prosseguir|pagar|fechar)$|\bquero finalizar\b|\bquero fechar\b/,
-  removeItem: /^(remover|tirar|retirar|excluir|remove)\s+(.+)/,
+  removeItem: /^(remover|remove|tirar|tira|retirar|retira|excluir|exclui|apagar|apaga)\s+(?:o |a |os |as |um |uma )?(.+)/,
   changeItems: /^(alterar itens|mudar itens|editar carrinho|mudar pedido)$/,
   browseCatalog: /\b(catalogo|cardapio)\b|\b(ver|mostrar|mostra|listar|lista|conhecer)\b.{0,14}\b(produtos|catalogo|remedios|medicamentos|itens)\b|\bquais\b.{0,14}\b(produtos|remedios|medicamentos|itens)\b|\bo ?que\b.{0,3}\b(voces|vcs|voce|vc|a farmacia|a loja)?\s?(tem|temos|vendem|vende)\b(?! (pra|para|contra|de bom))/,
   startOrder: /\b(fazer|montar|iniciar|comecar|novo)\b.{0,12}\bpedido\b|^(quero )?pedir$/,
@@ -369,7 +378,7 @@ export class PharmacyChatService {
       return true;
     }
     if (RE.thanks.test(f) && f.split(" ").length <= 6) {
-      t.say("Por nada! Se precisar de algo, é só chamar.");
+      t.say(`Por nada${nameComma(t.first)}! Foi um prazer ajudar. Se precisar de mais alguma coisa, estou por aqui.`);
       t.chips(CHIPS.makeOrder, CHIPS.talkPharmacist);
       return true;
     }
@@ -404,6 +413,17 @@ export class PharmacyChatService {
     const remove = f.match(RE.removeItem);
     if (remove) {
       if (await this.removeByText(t, remove[2])) return true;
+      // Named something that is not in the cart (and is not a product to add): say so instead of a dead end.
+      if (productTokens(remove[2]).some((tok) => tok.length >= 3)) {
+        if (t.state.cart.length > 0) {
+          t.prefix = COPY.notInCart;
+          await this.showCart(t);
+        } else {
+          t.say(COPY.cartEmpty);
+          t.chips(CHIPS.makeOrder);
+        }
+        return true;
+      }
     }
     if (asksForDosage(text)) {
       t.say(COPY.dosageRefusal);
@@ -460,6 +480,7 @@ export class PharmacyChatService {
 
     // A non-clinical store question the settings never cover (holidays, promotions, parking, invoices ...): the team answers.
     if (unknownStoreTopic(f) && (looksLikeQuestion(text) || f.split(" ").length >= 2) && !clinicalQuestion(text)) {
+      if (await this.kbMayAnswer(t, text)) return false;
       await this.raiseGeneralQuestion(t, text);
       return true;
     }
@@ -713,7 +734,7 @@ export class PharmacyChatService {
   private async handoffFromChip(t: Turn, text: string) {
     const f = fold(text);
     if (t.state.lane === "red_flag" && this.inRedFlagCooldown(t)) {
-      t.say("Pronto, o farmacêutico já foi avisado e responde por aqui assim que puder. Enquanto isso, se piorar ou for urgente, ligue 192 (SAMU).");
+      t.say(`Pronto${nameComma(t.first)}, já avisei ${pharmacistRef(t.settings.pharmacistName)}; assim que responder, te mostro aqui. Enquanto isso, se piorar ou for urgente, ligue 192 (SAMU).`);
       return;
     }
     if (t.state.focus && t.state.focus.kind !== "otc") {
@@ -806,7 +827,7 @@ export class PharmacyChatService {
     }
     if (Object.keys(data).length > 0) await this.db.pharmacistHandoff.update({ where: { id: handoff.id }, data });
     const humanPresent = (await this.db.message.count({ where: { conversationId: t.conversation.id, kind: "human_joined" } })) > 0;
-    t.say(humanPresent ? "Anotado. O farmacêutico vê sua mensagem e responde por aqui." : COPY.handoffAdded);
+    t.say(humanPresent ? "Anotado, obrigado! O farmacêutico já vê sua mensagem e responde por aqui." : `Anotei${nameComma(t.first)}, obrigado! Já avisei ${pharmacistRef(t.settings.pharmacistName)}, e a resposta vem por aqui.`);
     return true;
   }
 
@@ -826,6 +847,13 @@ export class PharmacyChatService {
       pendingText: isSymptomText ? text.slice(0, 300) : undefined,
       startedAt: new Date().toISOString(),
     };
+    // What the first message already says (who, age, how long) is recorded now so it is never asked again.
+    if (isSymptomText) {
+      const inferred = inferFromSymptomText(text);
+      const answers = { ...t.state.symptom.answers, ...inferred };
+      if (answers.age && !validateAge(answers, answers.age).ok) delete answers.age;
+      t.state.symptom.answers = answers;
+    }
     this.track(t, "pharmacy_symptom_started", {});
     // Ask once, remember: a visitor (or recognized lead) who already granted the health-data notice is not asked again.
     if (this.hasConsent(t, "pharmacy_triage")) {
@@ -837,7 +865,9 @@ export class PharmacyChatService {
   }
 
   private symptomConsentPrompt(t: Turn, retry: boolean) {
-    const text = retry ? COPY.symptomConsentRetry : `${COPY.symptomIntro} ${COPY.symptomConsentAsk}`;
+    const who = t.state.symptom?.answers.forWhom;
+    const patient = !who || who === "Para mim" ? "self" : patientOf(t.state.symptom!.answers) === "adult" ? "adult" : patientOf(t.state.symptom!.answers);
+    const text = retry ? COPY.symptomConsentRetry : `${symptomIntroFor(patient)} ${COPY.symptomConsentAsk}`;
     t.say(text, {
       type: "symptom_question",
       step: "symptom",
@@ -984,7 +1014,11 @@ export class PharmacyChatService {
     t.state.awaiting = null;
     t.state.lane = "symptom";
     const terms = await catalog.forbiddenTerms(t.business.id).catch(() => [] as string[]);
-    const safe = guardSymptomLaneText(contact?.phoneMasked ? COPY.handoffDoneWhatsapp : COPY.handoffDone, terms);
+    const ref = pharmacistRef(t.settings.pharmacistName);
+    const doneText = contact?.phoneMasked
+      ? `Obrigado por me contar${nameComma(t.first)}. Já passei tudo para ${ref}; ela(e) responde por aqui ou te chama no WhatsApp assim que puder.`
+      : `Obrigado por me contar${nameComma(t.first)}. Já passei tudo para ${ref}; assim que responder, aparece aqui na conversa. Se piorar ou ficar urgente, ligue 192 (SAMU).`;
+    const safe = guardSymptomLaneText(doneText.replace("ela(e)", /^a /.test(ref) ? "ela" : "ele"), terms);
     t.say(safe.text);
     t.chips(CHIPS.makeOrder, CHIPS.hoursDelivery);
   }
@@ -1087,7 +1121,7 @@ export class PharmacyChatService {
     if (t.state.symptom?.active || t.state.awaiting?.kind === "symptom_consent") {
       if (t.state.symptom) t.state.symptom.active = false;
       t.state.awaiting = null;
-      t.say("Tudo bem, parei por aqui. Se precisar do farmacêutico, é só chamar.");
+      t.say("Tudo bem, parei por aqui. Se precisar do farmacêutico, é só me chamar, estou à disposição.");
       t.chips(CHIPS.talkPharmacist, CHIPS.makeOrder);
       return true;
     }
@@ -1100,7 +1134,7 @@ export class PharmacyChatService {
       return true;
     }
     t.state.awaiting = null;
-    t.say("Tudo bem! Se precisar de algo, é só falar.");
+    t.say("Sem problema! Quando precisar, é só me chamar.");
     t.chips(CHIPS.makeOrder, CHIPS.talkPharmacist);
     return true;
   }
@@ -1747,7 +1781,7 @@ export class PharmacyChatService {
     this.afterCartChange(t);
     if (wasEmpty) this.track(t, "pharmacy_cart_created", { itemCount: qty });
     const note = via ? " O farmacêutico confirma essa troca com você antes de separar o pedido." : "";
-    t.say(`Adicionei ao carrinho: ${qty}× ${productLabel(product)} (${brl(product.priceCents * qty)}).${note}`, cartUi(await this.cartDto(t)));
+    t.say(`Ótimo, adicionei ao carrinho: ${qty}× ${productLabel(product)} (${brl(product.priceCents * qty)}).${note}`, cartUi(await this.cartDto(t)));
     t.chips(CHIPS.checkout, CHIPS.addMore, CHIPS.viewCart);
   }
 
@@ -2039,10 +2073,12 @@ export class PharmacyChatService {
     // Below the delivery minimum the Entrega option is shown disabled, with the reason, instead of failing after the tap.
     const minCents = t.settings.minOrderCents;
     let deliveryDisabled = false;
+    let missingCents = 0;
     if (t.settings.deliveryEnabled && minCents > 0) {
       const cart = await this.cartDto(t);
       if (cart.subtotalCents < minCents) {
         deliveryDisabled = true;
+        missingCents = minCents - cart.subtotalCents;
         const reason = `pedido mínimo ${brl(minCents)}`;
         const d = options.find((o) => o.value === "delivery");
         if (d) {
@@ -2057,8 +2093,11 @@ export class PharmacyChatService {
       ui.deliveryMinCents = minCents;
       if (deliveryDisabled) ui.deliveryDisabledReason = `pedido mínimo ${brl(minCents)}`;
     }
-    t.say(`${COPY.askFulfillment}${fee}`, ui);
-    t.chips(...options.filter((o) => !o.disabled).map((o) => (o.value === "delivery" ? CHIPS.delivery : CHIPS.pickup)));
+    const short = deliveryDisabled
+      ? ` Para entregar em casa faltam só ${brl(missingCents)} para o pedido mínimo${t.settings.pickupEnabled ? "; se preferir, é só retirar na loja" : ""}.`
+      : "";
+    t.say(`${COPY.askFulfillment}${fee}${short}`, ui);
+    t.chips(...options.filter((o) => !o.disabled).map((o) => (o.value === "delivery" ? CHIPS.delivery : CHIPS.pickup)), ...(deliveryDisabled ? [CHIPS.addMore] : []));
   }
 
   private async askFulfillment(t: Turn) {
@@ -2100,7 +2139,7 @@ export class PharmacyChatService {
         t.state.fulfillment = undefined;
         t.state.awaiting = { kind: "fulfillment" };
         t.say(
-          `O pedido mínimo para entrega é ${brl(t.settings.minOrderCents)} e o seu está em ${brl(cart.subtotalCents)}. Você pode adicionar mais itens${t.settings.pickupEnabled ? " ou retirar na loja" : ""}.`,
+          `Quase lá! O pedido mínimo para entrega é ${brl(t.settings.minOrderCents)} e o seu está em ${brl(cart.subtotalCents)} (faltam ${brl(t.settings.minOrderCents - cart.subtotalCents)}). Que tal incluir mais um item${t.settings.pickupEnabled ? " ou retirar na loja" : ""}?`,
         );
         t.chips(...(t.settings.pickupEnabled ? [CHIPS.pickup] : []), CHIPS.addMore);
         return;
@@ -2353,7 +2392,8 @@ export class PharmacyChatService {
     // The review card carries the items, fee, total, address and payment: the text stays short (no duplicate summary).
     const reused = t.reusedAddress && fulfillment === "delivery";
     t.reusedAddress = false;
-    const text = ["Confira seu pedido e confirme:", ...(reused ? ["Usei o endereço que você já confirmou."] : []), ...notices].join("\n");
+    // The notices live in the review card (once); the text only frames the step.
+    const text = [`Quase pronto${nameComma(t.first)}! Confira seu pedido e confirme.`, ...(reused ? ["Usei o endereço que você já confirmou."] : [])].join("\n");
     t.state.checkoutStep = "review";
     t.state.awaiting = { kind: "order_confirm" };
     t.say(text, {
@@ -2499,13 +2539,13 @@ export class PharmacyChatService {
     }
     let message: string;
     if (created.autoConfirmed) {
-      message = `Pedido ${created.code} confirmado! Acompanhe pelo botão abaixo.`;
+      message = `Pedido ${created.code} confirmado${nameComma(t.first)}, obrigado pela confiança! Acompanhe pelo botão abaixo.`;
     } else if (created.hasPrescription) {
-      message = `Pedido ${created.code} recebido. O farmacêutico vai validar a receita antes de confirmar. Acompanhe pelo botão abaixo.`;
+      message = `Pedido ${created.code} recebido${nameComma(t.first)}, obrigado! O farmacêutico vai validar a receita antes de confirmar. Acompanhe pelo botão abaixo.`;
     } else if (created.staleSheet) {
       message = `Pedido ${created.code} recebido. O estoque que tenho aqui pode estar desatualizado, então a farmácia vai confirmar a disponibilidade antes de confirmar o pedido. Acompanhe pelo botão abaixo.`;
     } else {
-      message = `Pedido ${created.code} recebido. A farmácia confirma a disponibilidade em instantes. Acompanhe pelo botão abaixo.`;
+      message = `Pedido ${created.code} recebido${nameComma(t.first)}, obrigado! A farmácia confirma a disponibilidade em instantes. Acompanhe pelo botão abaixo.`;
     }
     t.say(message, { type: "order_confirmation", code: created.code, status: created.status, statusUrl: url, totalCents: created.totalCents, message });
     t.chips(CHIPS.makeOrder);
@@ -2540,7 +2580,7 @@ export class PharmacyChatService {
       return true;
     }
     if (RE.thanks.test(f) && f.split(" ").length <= 6) {
-      t.say("Por nada! Se precisar de algo, é só chamar.");
+      t.say(`Por nada${nameComma(t.first)}! Foi um prazer ajudar. Se precisar de mais alguma coisa, estou por aqui.`);
       t.chips(ATT_CHIPS.askProduct, ATT_CHIPS.talkPharmacist);
       return true;
     }
@@ -2581,6 +2621,7 @@ export class PharmacyChatService {
       }
       if (await this.answerGeneralFromText(t, f, text)) return true;
       if (unknownStoreTopic(f) && (looksLikeQuestion(text) || f.split(" ").length >= 2) && !clinicalQuestion(text)) {
+        if (await this.kbMayAnswer(t, text)) return false;
         await this.raiseGeneralQuestion(t, text);
         return true;
       }
@@ -2743,11 +2784,26 @@ export class PharmacyChatService {
     t.chips(CHIPS.makeOrder, CHIPS.talkAttendant);
   }
 
+  /**
+   * Knowledge base first: before a deterministic "unknown topic" shortcut escalates to the team, check whether the
+   * pharmacy's own documents cover the question. When they do, the turn is left to the model path (RAG + grounding
+   * guard); if that path abstains, ChatService still raises the team question.
+   */
+  private async kbMayAnswer(t: Turn, text: string): Promise<boolean> {
+    try {
+      const r = await retrieveChunksForChat(this.prisma, t.business.id, "farmacia", text, { text: expandAbbreviations(text) });
+      return r.tenant.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
   private async answerGeneralFromText(t: Turn, f: string, originalText: string): Promise<boolean> {
     const topics = this.infoTopics(f);
     if (topics.length === 0) return false;
     // Holidays are only answered when the owner wrote them into the opening hours ("Domingo e feriados").
     if (/\bferiados?\b/.test(f) && !(t.settings.openingHours ?? []).some((h) => /feriado/i.test(h.label ?? ""))) {
+      if (await this.kbMayAnswer(t, originalText)) return false;
       await this.raiseGeneralQuestion(t, originalText);
       return true;
     }
@@ -2809,7 +2865,7 @@ export class PharmacyChatService {
   private declineQuestionContact(t: Turn) {
     t.state.questionContactDeclined = true;
     t.state.awaiting = null;
-    t.say("Tudo bem, a resposta chega aqui no chat.");
+    t.say("Tudo bem, a resposta chega aqui mesmo no chat.");
     t.chips(CHIPS.makeOrder, CHIPS.hoursDelivery);
   }
 
@@ -2864,7 +2920,7 @@ export class PharmacyChatService {
         this.logger.warn(`question contact link failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
-    t.say("Anotei seu contato. A equipe responde por aqui e te avisa no WhatsApp.");
+    t.say("Anotei seu contato, obrigado! A equipe responde por aqui e também te avisa no WhatsApp.");
     t.chips(CHIPS.makeOrder, CHIPS.hoursDelivery);
   }
 

@@ -49,47 +49,48 @@ export const CHIPS = {
 } as const;
 
 export const COPY = {
-  askProduct: "Claro! Qual produto você quer pedir? Me diga o nome (por exemplo: Dipirona 500 mg).",
+  askProduct: "Claro, com prazer! Qual produto você quer pedir? Me diga o nome (por exemplo: Dipirona 500 mg) que eu separo para você.",
   notFound:
-    "Não encontrei esse produto no catálogo. Pode me dizer o nome de outra forma (nome e concentração)? Se preferir, chamo o farmacêutico para ajudar.",
-  catalogIntro: "Estes são alguns dos nossos produtos. Toque em um para pedir, ou me diga o nome do que você procura:",
+    "Poxa, não encontrei esse produto no catálogo. Pode me dizer o nome de outra forma (nome e concentração)? Se preferir, chamo o farmacêutico para ajudar.",
+  catalogIntro: "Olha o que temos por aqui. Toque em um para pedir, ou me diga o nome do que você procura:",
   catalogMore: "Mais produtos:",
-  catalogNotFound: "Não encontrei esse produto. Veja o que temos disponível agora, ou me diga o nome de outra forma:",
+  catalogNotFound: "Não achei esse produto, mas veja o que temos disponível agora, ou me diga o nome de outra forma:",
   catalogEmpty: "No momento não tenho produtos para listar aqui. Me diga o nome do que você procura ou chame o farmacêutico.",
   ambiguous: "Encontrei mais de uma opção. Qual delas você quer?",
-  cartEmpty: "Seu carrinho está vazio. Me diga o nome do produto que você quer pedir.",
-  cartCleared: "Pronto, esvaziei o carrinho.",
-  controlledInfo: "Este medicamento é controlado e não pode ser vendido online. Venha à farmácia com a receita.",
+  cartEmpty: "Seu carrinho está vazio por enquanto. Me diga o nome do produto que você quer e eu coloco para você.",
+  notInCart: "Esse item não está no seu carrinho.",
+  cartCleared: "Pronto, esvaziei o carrinho. Quando quiser recomeçar, é só me dizer.",
+  controlledInfo: "Entendo a necessidade. Este medicamento é controlado e não pode ser vendido online; venha à farmácia com a receita que a equipe te atende.",
   unclassifiedInfo: "Este produto precisa de confirmação do farmacêutico e não vendemos online. Venha à farmácia ou fale com o farmacêutico.",
   pharmacistRequired: "Este produto precisa ser confirmado pelo farmacêutico antes do pedido. Posso avisá-lo para você.",
-  rxNeeded: "Este medicamento exige receita. Envie uma foto nítida da receita para o farmacêutico validar; o pedido só é confirmado depois disso.",
-  rxReceived: "Recebi sua receita. O farmacêutico vai validar antes de confirmar o pedido.",
-  noSale: "Não posso fechar esse pedido por aqui. Posso chamar o farmacêutico para ajudar.",
+  rxNeeded: "Este medicamento exige receita. Pode me enviar uma foto nítida dela? O farmacêutico valida e só então o pedido é confirmado.",
+  rxReceived: "Recebi sua receita, obrigado! O farmacêutico vai validar antes de confirmar o pedido.",
+  noSale: "Esse pedido eu não consigo fechar por aqui, mas o farmacêutico pode ajudar você. Quer que eu chame?",
   dosageRefusal:
-    "Não posso orientar sobre dose, horários ou como usar medicamentos. Quem orienta isso é o farmacêutico — posso chamá-lo para você.",
-  handoffDone: "Passei suas informações ao farmacêutico. Ele responde por aqui em instantes.",
-  handoffAdded: "Recebi sua mensagem e já avisei o farmacêutico. Ele responde por aqui.",
-  handoffOtherDone: "Avisei o farmacêutico. Ele responde por aqui em instantes.",
+    "Quero que você use tudo com segurança, por isso dose, horários e modo de uso quem orienta é o farmacêutico. Posso chamá-lo para você agora.",
+  handoffDone: "Obrigado por me contar. Já passei tudo ao farmacêutico; assim que ele responder, aparece aqui na conversa.",
+  handoffAdded: "Anotei, obrigado! Já avisei o farmacêutico, e a resposta vem por aqui.",
+  handoffOtherDone: "Pronto, já avisei o farmacêutico. Assim que ele responder, te mostro aqui.",
   redFlagCooldown:
-    "Antes de qualquer pedido: se a situação que você descreveu é urgente, ligue 192 (SAMU) ou vá ao pronto-socorro. Se estiver tudo bem, posso chamar o farmacêutico para seguir com você.",
+    "Me preocupo com você: se a situação que descreveu é urgente, ligue 192 (SAMU) ou vá ao pronto-socorro agora. Se estiver tudo bem, posso chamar o farmacêutico para seguir com você.",
   symptomIntro:
-    "Entendi. Não posso indicar remédios, mas vou reunir algumas informações para o farmacêutico te responder por aqui.",
-  symptomConsentAsk: "Posso registrar o que você me contar?",
-  symptomConsentRetry: "Para seguir com as perguntas preciso da sua concordância. Posso registrar o que você me contar?",
+    "Sinto muito que você esteja passando por isso, vamos cuidar disso juntos. Eu não posso indicar remédios, mas vou reunir algumas informações para o farmacêutico te responder por aqui.",
+  symptomConsentAsk: "Posso anotar o que você me contar para ajudar o farmacêutico?",
+  symptomConsentRetry: "Sem problema, é você quem decide. Para seguir com as perguntas preciso da sua concordância. Posso anotar o que você me contar?",
   symptomAskPhone:
-    "Qual seu WhatsApp (com DDD) para o farmacêutico te chamar? Se preferir, ele responde só por aqui no chat. Ao informar o número você autoriza esse contato (LGPD).",
-  symptomAskName: "Como posso te chamar? É opcional.",
-  handoffDoneWhatsapp: "Passei suas informações ao farmacêutico. Ele responde por aqui ou te chama no WhatsApp em instantes.",
-  askPhone: "Para finalizar, qual o seu WhatsApp (com DDD)?",
-  badPhone: "Não consegui entender esse número. Pode enviar com DDD, por exemplo (41) 99999-9999?",
-  askName: "Qual o seu nome?",
-  askEmail: "E o seu e-mail? Uso só para enviar o acompanhamento do pedido.",
-  badEmail: "Esse e-mail não parece válido. Pode conferir? Se preferir, toque em \"Prefiro não informar\".",
-  askContactConsent: "Posso guardar esses dados para entregar e acompanhar o pedido?",
-  askFulfillment: "Como prefere receber?",
-  askCep: "Qual o CEP do endereço de entrega?",
-  badCep: "Esse CEP não parece válido. Envie os 8 números, por exemplo 80250-000.",
-  cepNotFound: "Não encontrei esse CEP. Pode conferir os números?",
+    "Quer que o farmacêutico também te chame no WhatsApp? Me passe o número com DDD. Se preferir, ele responde só por aqui no chat. Ao informar o número você autoriza esse contato (LGPD).",
+  symptomAskName: "Como posso te chamar? Assim a conversa fica mais pessoal (é opcional).",
+  handoffDoneWhatsapp: "Obrigado por me contar. Já passei tudo ao farmacêutico; ele responde por aqui ou te chama no WhatsApp assim que puder.",
+  askPhone: "Vamos finalizar! Qual o seu WhatsApp (com DDD)?",
+  badPhone: "Acho que esse número não ficou completo. Pode enviar com DDD, por exemplo (41) 99999-9999?",
+  askName: "Qual o seu nome? Gosto de saber com quem estou falando.",
+  askEmail: "Se quiser, me passe seu e-mail para eu enviar o acompanhamento do pedido (é opcional).",
+  badEmail: "Acho que o e-mail tem algum errinho. Pode conferir? Se preferir, toque em \"Prefiro não informar\".",
+  askContactConsent: "Posso guardar esses dados só para entregar e acompanhar o seu pedido?",
+  askFulfillment: "Como fica melhor para você receber?",
+  askCep: "Qual o CEP do endereço de entrega? Assim eu já encontro a sua rua.",
+  badCep: "Esse CEP parece incompleto. Pode enviar os 8 números, por exemplo 80250-000?",
+  cepNotFound: "Não encontrei esse CEP aqui. Pode conferir os números para mim?",
   cepUnavailable:
     "Não consegui consultar o CEP agora. Me diga rua, bairro e cidade/UF, por exemplo: Rua das Flores, Água Verde, Curitiba/PR.",
   askStreetOnly: "Esse CEP é geral da cidade. Qual o nome da rua?",
@@ -98,25 +99,25 @@ export const COPY = {
   askComplement: "Tem complemento (apartamento, bloco)? É opcional.",
   askReference: "Quer deixar um ponto de referência? É opcional.",
   outsideArea:
-    "Esse endereço fica fora da área de entrega da farmácia. Você pode retirar na loja, informar outro endereço ou falar com o farmacêutico.",
-  deliveryUnavailable: "A farmácia não está fazendo entregas no momento. Posso seguir com a retirada na loja.",
+    "Que pena, esse endereço fica fora da nossa área de entrega. Você pode retirar na loja, informar outro endereço ou falar com o farmacêutico.",
+  deliveryUnavailable: "No momento a farmácia não está fazendo entregas, mas posso seguir com a retirada na loja para você.",
   pickupUnavailable: "A farmácia não está com retirada em loja no momento. Posso seguir com a entrega.",
   staleStockNotice:
     "O estoque que tenho aqui pode estar desatualizado. A farmácia confirma a disponibilidade antes de confirmar seu pedido.",
   rxReviewNotice: "Pedidos com receita passam pela validação do farmacêutico antes de serem confirmados.",
-  closedNotice: "A farmácia está fechada agora; seu pedido será atendido assim que abrir.",
+  closedNotice: "A farmácia está fechada agora, mas seu pedido já fica registrado e é atendido assim que abrirmos.",
   orderChanged: "Alguns itens do seu carrinho mudaram e não puderam ser mantidos. Confira o carrinho e me diga se quer continuar.",
-  genericError: "Não consegui concluir essa etapa agora. Posso chamar o farmacêutico para ajudar.",
-  noOrderYet: "Ainda não encontrei nenhum pedido seu por aqui. Quer fazer um pedido?",
-  unknownInfo: "Essa informação eu vou confirmar com a equipe para não te passar nada errado. Quer falar com o farmacêutico?",
+  genericError: "Desculpe, não consegui concluir essa etapa agora. Pode tentar de novo? Se preferir, chamo o farmacêutico para ajudar.",
+  noOrderYet: "Ainda não encontrei nenhum pedido seu por aqui. Quer que eu monte um agora?",
+  unknownInfo: "Quero te passar a informação certinha, então vou confirmar com a equipe. Quer falar com o farmacêutico enquanto isso?",
   // A non-clinical question Alex cannot answer from settings/KB/profile: the staff answers (general_question handoff).
-  generalQuestionAck: "Não tenho essa informação agora. Vou pedir para a equipe da farmácia confirmar e te respondo aqui mesmo.",
+  generalQuestionAck: "Boa pergunta! Ainda não tenho essa informação, mas já pedi para a equipe da farmácia confirmar, e a resposta aparece aqui mesmo.",
   generalQuestionAskPhone:
-    "Se quiser ser avisado quando a equipe responder, me diga seu WhatsApp (com DDD). Se preferir, a resposta chega só aqui no chat.",
-  attendantAsk: "Claro! Qual é a sua dúvida? Eu passo para a equipe da farmácia responder por aqui.",
+    "Quer que eu avise você no WhatsApp quando a equipe responder? É só me passar o número com DDD. Se preferir, a resposta chega só aqui no chat.",
+  attendantAsk: "Claro! Qual é a sua dúvida? Se eu não souber, passo para a equipe da farmácia responder por aqui.",
   consentDeclined:
-    "Sem a sua concordância eu não consigo guardar seus dados para registrar o pedido por aqui. Você pode concordar para seguir com a entrega ou a retirada, falar com o farmacêutico ou passar na farmácia.",
-  suggestionIntro: "Vou separar o que o farmacêutico indicou:",
+    "Tudo bem, respeito a sua decisão. Sem a concordância eu não consigo guardar seus dados para registrar o pedido por aqui, mas você pode concordar para seguir com a entrega ou a retirada, falar com o farmacêutico ou passar na farmácia.",
+  suggestionIntro: "Que bom! Vou separar o que o farmacêutico indicou para você:",
 };
 
 export function paymentPhrase(methods: string[], fulfillment: "delivery" | "pickup"): string {
@@ -124,4 +125,33 @@ export function paymentPhrase(methods: string[], fulfillment: "delivery" | "pick
   const list = methods.map((m) => label[m] ?? m);
   const when = fulfillment === "delivery" ? "na entrega" : "na retirada";
   return list.length > 0 ? `Pagamento ${when} (${list.join("/")}, conforme a farmácia)` : `Pagamento ${when}`;
+}
+
+/** "a Dra. Carla" / "o Dr. João" / "o farmacêutico": how Alex refers to the responsible pharmacist in warm lines. */
+export function pharmacistRef(name: string | null | undefined): string {
+  const n = (name ?? "").trim().replace(/\s+/g, " ");
+  const m = n.match(/^(Dra?\.?)\s+(\S+)/i);
+  if (!m) return "o farmacêutico";
+  const title = /^dra/i.test(m[1]) ? "Dra." : "Dr.";
+  return `${title === "Dra." ? "a" : "o"} ${title} ${m[2]}`;
+}
+
+/** Empty or ", Maria" so a warm line can address the customer by first name once it is known. */
+export function nameComma(first: string | null | undefined): string {
+  return first ? `, ${first}` : "";
+}
+
+/** The empathy line that opens the symptom lane, adapted to who the customer is worried about. */
+export function symptomIntroFor(patient: "self" | "adult" | "child" | "baby"): string {
+  const tail = "Eu não posso indicar remédios, mas vou reunir algumas informações para o farmacêutico te responder por aqui.";
+  switch (patient) {
+    case "child":
+      return `Sinto muito que a criança esteja assim, vamos cuidar dela com carinho. ${tail}`;
+    case "baby":
+      return `Sinto muito que o bebê esteja assim, vamos cuidar dele com todo o carinho. ${tail}`;
+    case "adult":
+      return `Sinto muito que essa pessoa esteja passando por isso, vamos cuidar disso juntos. ${tail}`;
+    default:
+      return `Sinto muito que você esteja passando por isso, vamos cuidar disso juntos. ${tail}`;
+  }
 }

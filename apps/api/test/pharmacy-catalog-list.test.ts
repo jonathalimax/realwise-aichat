@@ -35,7 +35,7 @@ test("'Fazer um pedido' shows the catalog: confirmed OTC first with prices, then
   await categorize(p);
   const c = await p.conversation();
   const turn = await p.say(c, "Fazer um pedido");
-  assert.match(turn.text, /Estes são alguns dos nossos produtos/);
+  assert.match(turn.text, /Olha o que temos por aqui/);
   const ui = listOf(turn);
   assert.ok(ui, "catalog_list returned");
   const n = names(ui);
@@ -123,7 +123,7 @@ test("product not found: says so and shows the catalog instead of a dead end", T
   const p = await createPharmacy();
   const c = await p.conversation();
   const turn = await p.say(c, "quero zzxqwv");
-  assert.match(turn.text, /Não encontrei esse produto/);
+  assert.match(turn.text, /N[ãa]o (encontrei|achei) esse produto/);
   assert.ok(listOf(turn));
   noModelCalls();
 });
@@ -144,7 +144,7 @@ test("tapping a row: OTC 'Adicionar' adds 1 to the cart; Rx starts the prescript
   const p = await createPharmacy();
   const c = await p.conversation();
   const add = await p.act(c, { type: "cart.add", productId: "p_dipirona", qty: 1 });
-  assert.match(add.text, /Adicionei ao carrinho: 1×/);
+  assert.match(add.text, /Ótimo, adicionei ao carrinho: 1×/);
   assert.deepEqual(p.stateOf(c).cart, [{ productId: "p_dipirona", qty: 1 }]);
   const rx = await p.act(c, { type: "cart.add", productId: "p_amoxicilina", qty: 1 });
   assert.match(rx.text, /receita/i);

@@ -51,7 +51,7 @@ export function hasRecommendation(text: string): boolean {
 }
 
 export const DOSAGE_REFUSAL =
-  "Não posso orientar sobre dose, horários ou como usar medicamentos. Quem orienta isso é o farmacêutico — posso chamá-lo para você.";
+  "Quero que você use tudo com segurança, por isso dose, horários e modo de uso quem orienta é o farmacêutico. Posso chamá-lo para você agora.";
 
 export interface GuardResult {
   text: string;

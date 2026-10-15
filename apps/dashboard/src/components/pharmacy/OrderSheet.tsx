@@ -272,7 +272,7 @@ export function OrderSheet({
                 onClick={() => setReason(r.code as CancelReason)}
                 className={cn(
                   "flex h-9 w-full items-center justify-start rounded-lg border px-3 text-sm font-medium",
-                  reason === r.code ? "border-border bg-surface text-ink ring-2 ring-accent/30" : "border-transparent text-ink hover:bg-bg-2",
+                  reason === r.code ? "border-accent bg-accent/10 text-ink ring-1 ring-accent" : "border-transparent text-ink hover:bg-bg-2",
                 )}
               >
                 {r.label}

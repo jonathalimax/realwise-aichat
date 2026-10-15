@@ -871,6 +871,33 @@ export function ChatScreen({
     };
   }, [historyLoaded]);
 
+  // A live card can grow in place (phone -> name + consent button, address fields appearing after the CEP lookup):
+  // keep the newest content in view when the visitor was already at the bottom, so the next button is never hidden below the fold.
+  useEffect(() => {
+    const list = bottomRef.current?.closest("main");
+    if (!list || typeof ResizeObserver === "undefined") return;
+    let lastScrollHeight = list.scrollHeight;
+    const check = () => {
+      const grew = list.scrollHeight - lastScrollHeight;
+      lastScrollHeight = list.scrollHeight;
+      if (grew <= 0) return;
+      const distanceBefore = list.scrollHeight - grew - list.scrollTop - list.clientHeight;
+      if (distanceBefore < 160) list.scrollTo({ top: list.scrollHeight });
+    };
+    const resize = new ResizeObserver(check);
+    const watch = () => Array.from(list.children).forEach((child) => resize.observe(child));
+    watch();
+    const mutation = new MutationObserver(() => {
+      watch();
+      check();
+    });
+    mutation.observe(list, { childList: true });
+    return () => {
+      resize.disconnect();
+      mutation.disconnect();
+    };
+  }, [historyLoaded]);
+
   // Two-stage "thinking" label: starts as "Clara está pensando…" and, if the response takes
   // longer than ~5s, swaps to a message acknowledging the extra wait instead of leaving the
   // visitor staring at bare dots with no sense of progress.
@@ -1468,7 +1495,7 @@ export function ChatScreen({
     // badge, visitor bubble tint, send/primary buttons) reads this same custom property instead
     // of each carrying its own separate inline style. --tenant-bubble-bg/-border are the
     // luminance-aware visitor bubble tint computed once in tenantStyle above.
-    <div className="flex h-dvh flex-col overflow-hidden bg-bg" style={tenantStyle}>
+    <div className={`flex h-dvh flex-col overflow-hidden bg-bg${isPharmacy ? " ph-root" : ""}`} style={tenantStyle}>
       {isPharmacy ? (
         <PharmacyHeader business={business} />
       ) : (
@@ -1767,8 +1794,8 @@ export function ChatScreen({
           aria-label="Mensagem"
           className="flex-1"
         />
-        <Button type="submit" variant="round" size="icon" disabled={sending || busy} className="rounded-full">
-          ➤
+        <Button type="submit" variant="round" size="icon" disabled={sending || busy} aria-label="Enviar mensagem" className="rounded-full">
+          <span aria-hidden="true">➤</span>
         </Button>
       </form>
 

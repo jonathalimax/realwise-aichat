@@ -218,7 +218,7 @@ test("OTC order end to end (delivery): cart -> contact -> address via CEP -> rev
   const c = await p.conversation();
 
   const add = await p.say(c, "quero 2 dipirona 500mg");
-  assert.match(add.text, /Adicionei ao carrinho: 2× Dipirona 500 mg/);
+  assert.match(add.text, /Ótimo, adicionei ao carrinho: 2× Dipirona 500 mg/);
   assert.equal(add.uis[0].type, "cart");
   assert.equal(add.uis[0].cart.subtotalCents, 1780);
   assert.equal(add.uis[0].cart.itemCount, 2);
@@ -230,7 +230,7 @@ test("OTC order end to end (delivery): cart -> contact -> address via CEP -> rev
   assert.deepEqual(start.uis[0].fields, ["phone", "name", "email"]);
   assert.equal(start.uis[0].consent.purpose, "order_contact");
 
-  assert.match((await p.say(c, "abc")).text, /n[ãa]o consegui entender/i);
+  assert.match((await p.say(c, "abc")).text, /n[ãa]o ficou completo/i);
   assert.match((await p.say(c, "(41) 99812-3344")).text, /nome/i);
   assert.match((await p.say(c, "joão silva")).text, /e-mail/i);
   const consent = await p.say(c, "joao@email.com");
@@ -339,7 +339,7 @@ test("ambiguous product asks which one; typos still resolve; unknown product is 
   const typo2 = await p.say(await p.conversation(), "quero ibuprofneo 600");
   assert.equal(typo2.uis[0]?.type, "cart", typo2.text);
   const none = await p.say(await p.conversation(), "quero zzxyquod 30mg");
-  assert.match(none.text, /n[ãa]o encontrei/i);
+  assert.match(none.text, /n[ãa]o (encontrei|achei)/i);
   noModelCalls();
 });
 
@@ -524,7 +524,7 @@ test("address outside the delivery area: honest message with pickup alternative;
   await p.say(c, "120");
   await p.say(c, "não");
   const out = await p.say(c, "não");
-  assert.match(out.text, /fora da [áa]rea de entrega/i);
+  assert.match(out.text, /fora da nossa [áa]rea de entrega/i);
   assert.ok(out.suggestions.includes("Retirada em loja"));
   assert.equal(p.orders().length, 0);
   assert.equal(p.stateOf(c).address, undefined);
@@ -766,7 +766,7 @@ test("contact form with name and an empty e-mail field does not ask for the e-ma
 
 async function runQuestionnaire(p: Pharmacy, c: { id: string; visitorToken: string }, answers: Record<string, string>, contact: { phone?: string; name?: string } | "decline" = "decline") {
   const log: { step: string; text: string; chips: string[] }[] = [];
-  let turn = await p.say(c, "estou com dor de cabeça");
+  let turn = await p.say(c, "dor de cabeça");
   log.push({ step: "consent", text: turn.text, chips: turn.suggestions });
   assert.equal(turn.uis[0].type, "symptom_question");
   assert.equal(turn.uis[0].consent.purpose, "pharmacy_triage");
@@ -807,9 +807,9 @@ test("symptom-first: consent first, one question per turn with chips, then a han
   assert.deepEqual(log.slice(1).map((l) => l.step), ["duration", "severity", "for_whom", "age", "pregnancy", "allergies", "other_medicines", "already_tried", "contact"]);
   assert.deepEqual(log[1].chips, ["Hoje", "1–3 dias", "Mais de 3 dias"]);
   // The visitor's first message (the symptom) was kept, not asked again.
-  assert.equal(p.db.models.pharmacistHandoff.rows[0].brief.symptoms, "estou com dor de cabeça");
+  assert.equal(p.db.models.pharmacistHandoff.rows[0].brief.symptoms, "dor de cabeça");
   // Final message.
-  assert.equal(last.text, "Passei suas informações ao farmacêutico. Ele responde por aqui em instantes.");
+  assert.equal(last.text, "Obrigado por me contar. Já passei tudo para o farmacêutico; assim que responder, aparece aqui na conversa. Se piorar ou ficar urgente, ligue 192 (SAMU).");
   // Handoff + brief.
   assert.equal(p.handoffs().length, 1);
   const h = p.handoffs()[0];
@@ -864,7 +864,7 @@ test("symptom-first: declining consent records nothing and offers the pharmacist
   net = hostileModel();
   const p = await createPharmacy();
   const c = await p.conversation();
-  await p.say(c, "estou com tosse há dias");
+  await p.say(c, "tosse seca");
   const declined = await p.say(c, "não");
   assert.match(declined.text, /n[ãa]o vou registrar nada/i);
   assert.equal(p.handoffs().length, 0);
@@ -880,7 +880,7 @@ test("symptom lane: allergy chip without content asks which; answers mentioning 
   net = hostileModel();
   const p = await createPharmacy();
   const c = await p.conversation();
-  await p.say(c, "estou com dor de cabeça");
+  await p.say(c, "dor de cabeça");
   await p.say(c, "Concordo e quero continuar");
   for (const a of ["Hoje", "Leve", "Para mim", "30"]) await p.say(c, a);
   await p.say(c, "Não"); // pregnancy
@@ -900,7 +900,7 @@ test("symptom lane: 'quero falar com o farmacêutico' mid-questionnaire hands of
   net = hostileModel();
   const p = await createPharmacy();
   const c = await p.conversation();
-  await p.say(c, "estou com dor de cabeça");
+  await p.say(c, "dor de cabeça");
   await p.say(c, "Concordo e quero continuar");
   await p.say(c, "Hoje");
   const ask = await p.say(c, "quero falar com o farmacêutico agora");
@@ -909,7 +909,7 @@ test("symptom lane: 'quero falar com o farmacêutico' mid-questionnaire hands of
   const turn = await p.say(c, "Prefiro continuar só pelo chat");
   assert.equal(p.handoffs().length, 1);
   assert.equal(p.handoffs()[0].brief.duration, "Hoje");
-  assert.match(turn.text, /Passei suas informa/);
+  assert.match(turn.text, /passei tudo/i);
   noModelCalls();
 });
 
@@ -998,7 +998,7 @@ test("model answer that is ONLY dosage advice never reaches the visitor (gap rep
   net.setLlm(llm.text("Tome o comprimido com bastante água."));
   const c2 = await p.conversation();
   const turn2 = await p.say(c2, "Vocês aceitam convênio Saúde Total?");
-  assert.match(turn2.text, /N[ãa]o posso orientar sobre dose/);
+  assert.match(turn2.text, /dose, hor[áa]rios e modo de uso/);
 });
 
 test("dosage question: fixed refusal, never the model", T, async () => {
@@ -1006,7 +1006,7 @@ test("dosage question: fixed refusal, never the model", T, async () => {
   const p = await createPharmacy();
   for (const q of ["quanto devo tomar de dipirona?", "qual a dose de paracetamol para criança?", "de quanto em quanto tempo posso tomar ibuprofeno?", "como tomar amoxicilina"]) {
     const turn = await p.say(await p.conversation(), q);
-    assert.match(turn.text, /N[ãa]o posso orientar sobre dose/, q);
+    assert.match(turn.text, /dose, hor[áa]rios e modo de uso/, q);
     assert.ok(!/\d+\s?(mg|comprimidos)/i.test(turn.text.replace("dose, hor", "")), q);
   }
   noModelCalls();
@@ -1053,7 +1053,7 @@ test("general fact that is not configured: honest, the team confirms through a g
   net = hostileModel();
   const p = await createPharmacy();
   const turn = await p.say(await p.conversation(), "qual o horário de funcionamento?");
-  assert.match(turn.text, /N[ãa]o tenho essa informa[çc][ãa]o agora\. Vou pedir para a equipe da farm[áa]cia confirmar e te respondo aqui mesmo/);
+  assert.match(turn.text, /ainda n[ãa]o tenho essa informa[çc][ãa]o.*equipe da farm[áa]cia confirmar/i);
   assert.equal(p.handoffs().filter((h) => h.reason === "general_question").length, 1);
   assert.ok(!/\d{1,2}h|\d{2}:\d{2}/.test(turn.text));
   noModelCalls();
@@ -1187,7 +1187,7 @@ test("a number that is not on file asks name, e-mail and consent; 'Prefiro não 
   assert.match((await p.say(c, "(11) 98888-7777")).text, /nome/i);
   assert.match((await p.say(c, "123")).text, /nome/i, "a number is not a name");
   assert.match((await p.say(c, "maria de souza")).text, /e-mail/i);
-  assert.match((await p.say(c, "isso não é email")).text, /n[ãa]o parece v[áa]lido/i);
+  assert.match((await p.say(c, "isso não é email")).text, /errinho/i);
   const consent = await p.say(c, "Prefiro não informar");
   assert.match(consent.text, /guardar esses dados/i);
   assert.equal(consent.uis[0].consent.required, true);
@@ -1212,7 +1212,7 @@ test("structured actions: full OTC order with buttons only", T, async () => {
   const start = await p.act(c, { type: "checkout.start" });
   assert.equal(start.pharmacy.checkoutStep, "contact");
   const bad = await p.act(c, { type: "checkout.contact", phone: "123", consent: true });
-  assert.match(bad.text, /n[ãa]o consegui entender/i);
+  assert.match(bad.text, /n[ãa]o ficou completo/i);
   const c0 = await p.conversation();
   await p.act(c0, { type: "cart.add", productId: "p_dipirona", qty: 1 });
   await p.act(c0, { type: "checkout.start" });
@@ -1317,7 +1317,7 @@ test("human join: banner once per person, authored messages, view lists who join
   assert.equal(reply.author.name, "Maria Souza");
   // With a human in the conversation, the next visitor message is acknowledged calmly (no AI chatter), brief untouched.
   const follow = await p.say(c, "estou indo aí");
-  assert.match(follow.text, /O farmac[êe]utico v[êe] sua mensagem/i);
+  assert.match(follow.text, /O farmac[êe]utico j[áa] v[êe] sua mensagem/i);
   assertBriefNeverInMessages(p, c);
   noModelCalls();
 });
@@ -1340,7 +1340,7 @@ test("history payload for a pharmacy: ui on assistant messages, pharmacy state t
   // The stream endpoint (what the widget uses) returns the same payloads.
   const c2 = await p.conversation();
   const streamed = await p.stream(c2, "quero dipirona 500mg");
-  assert.match(streamed.shown, /Adicionei ao carrinho/);
+  assert.match(streamed.shown, /adicionei ao carrinho/i);
   assert.equal(streamed.result.messages[0].ui.type, "cart");
   assert.equal(streamed.result.pharmacy.cart.itemCount, 1);
   assert.ok(streamed.result.suggestions.includes("Finalizar pedido"));
@@ -1392,7 +1392,7 @@ test("small talk is answered without the model: start-an-order phrasing, thanks"
   const p = await createPharmacy();
   const c = await p.conversation();
   const start = await p.say(c, "Quero fazer um pedido");
-  assert.match(start.text, /alguns dos nossos produtos/);
+  assert.match(start.text, /o que temos por aqui/);
   const thanks = await p.say(c, "obrigado!");
   assert.match(thanks.text, /Por nada/);
   noModelCalls();
@@ -1408,7 +1408,7 @@ test("symptom lane asks the WhatsApp before the handoff: new customer (phone + o
   const c = await p.conversation();
   const { log, last } = await runQuestionnaire(p, c, { allergies: "dipirona" }, { phone: "(41) 99111-2233", name: "maria clara souza" });
   const ask = log.find((l) => l.step === "contact")!;
-  assert.match(ask.text, /Qual seu WhatsApp \(com DDD\) para o farmac/);
+  assert.match(ask.text, /Quer que o farmac/);
   assert.deepEqual(ask.chips, ["Prefiro continuar só pelo chat"]);
   assert.equal(p.handoffs().length, 1);
   const lead = p.db.models.lead.rows[0];
@@ -1436,7 +1436,7 @@ test("symptom lane contact step: a returning customer is recognized by phone and
   assert.equal(p.handoffs().length, 1);
   assert.equal(p.handoffs()[0].leadId, lead.id);
   assert.equal(p.handoffs()[0].brief.contact.firstName, "João");
-  assert.match(last.text, /Passei suas informa/);
+  assert.match(last.text, /passei tudo/i);
   noModelCalls();
 });
 
@@ -1446,7 +1446,7 @@ test("symptom lane contact step: an invalid number is asked again, 'Pular' skips
   const c = await p.conversation();
   const { last } = await runQuestionnaire(p, c, {}, { phone: "123" });
   assert.equal(p.handoffs().length, 0, "still waiting for a valid number");
-  assert.match(last.text, /N[ãa]o consegui entender esse n[úu]mero/);
+  assert.match(last.text, /n[ãa]o ficou completo/);
   const askName = await p.say(c, "(41) 99111-2233");
   assert.equal(askName.suggestions[0], "Pular");
   assert.equal(p.handoffs().length, 0);
@@ -1461,7 +1461,7 @@ test("symptom lane contact step: an invalid number is asked again, 'Pular' skips
   assert.equal(d.handoffs()[0].leadId ?? null, null, "no phone, no lead");
   assert.equal(d.handoffs()[0].brief.contact, undefined);
   assert.equal(d.db.models.lead.rows.length, 0);
-  assert.equal(res.last.text, "Passei suas informações ao farmacêutico. Ele responde por aqui em instantes.");
+  assert.equal(res.last.text, "Obrigado por me contar. Já passei tudo para o farmacêutico; assim que responder, aparece aqui na conversa. Se piorar ou ficar urgente, ligue 192 (SAMU).");
   noModelCalls();
 });
 
@@ -1469,18 +1469,18 @@ test("symptom lane contact step through the contact card action (widget) and 'ca
   net = hostileModel();
   const p = await createPharmacy();
   const c = await p.conversation();
-  await p.say(c, "estou com dor de cabeça");
+  await p.say(c, "dor de cabeça");
   await p.say(c, "Concordo e quero continuar");
   for (const a of ["Hoje", "Leve", "Para mim", "30", "Não", "Não", "Não", "Não"]) await p.say(c, a);
   assert.equal(p.stateOf(c).awaiting?.kind, "symptom_phone");
   const sent = await p.act(c, { type: "checkout.contact", phone: "(41) 99111-2233", name: "Paulo", consent: true });
   assert.equal(p.handoffs().length, 1);
   assert.equal(p.db.models.lead.rows[0].name, "Paulo");
-  assert.match(sent.text, /Passei suas informa/);
+  assert.match(sent.text, /passei tudo/i);
 
   const q = await createPharmacy();
   const c2 = await q.conversation();
-  await q.say(c2, "estou com dor de cabeça");
+  await q.say(c2, "dor de cabeça");
   await q.say(c2, "Concordo e quero continuar");
   for (const a of ["Hoje", "Leve", "Para mim", "30", "Não", "Não", "Não", "Não"]) await q.say(c2, a);
   await q.say(c2, "cancelar");
@@ -1497,5 +1497,5 @@ test("the quantity asked before choosing between several matches is kept (quero 
   const first = await p.say(c, "quero 2 dipirona");
   assert.match(first.text, /mais de uma opção/i);
   const picked = await p.say(c, "Dipirona 500 mg · 10 comprimidos");
-  assert.match(picked.text, /Adicionei ao carrinho: 2×/);
+  assert.match(picked.text, /Ótimo, adicionei ao carrinho: 2×/);
 });

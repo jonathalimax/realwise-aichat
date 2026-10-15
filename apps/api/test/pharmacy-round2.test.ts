@@ -56,7 +56,7 @@ test("symptom consent: one tap (the chip is the consent), and not asked again in
   assert.equal(tap.uis[0].consent, null, "the questionnaire itself has no consent card");
   assert.ok(p.stateOf(c).consents.includes("pharmacy_triage"));
   await p.say(c, "cancelar");
-  const again = await p.say(c, "estou com tosse");
+  const again = await p.say(c, "tosse seca");
   assert.ok(consentUis([again]).length === 0, "no second consent card for the same purpose");
   assert.equal(again.uis[0].type, "symptom_question");
   assert.equal(p.db.models.consentRecord.rows.filter((r) => r.purposes.includes("pharmacy_triage")).length, 1);
@@ -70,7 +70,7 @@ test("consent remembered per lead: a recognized visitor in a NEW conversation is
   await p.db.models.consentRecord.create({ data: { businessId: p.businessId, leadId: lead.id, phoneHash: "x", consentTextVersion: "2026-10", purposes: ["pharmacy_triage", "contact"] } });
   const c = await p.conversation();
   p.db.models.conversation.rows.find((r) => r.id === c.id)!.leadId = lead.id;
-  const turn = await p.say(c, "estou com dor de garganta");
+  const turn = await p.say(c, "dor de garganta");
   assert.equal(turn.uis[0].type, "symptom_question");
   assert.equal(turn.uis[0].consent, null);
   assert.equal(p.stateOf(c).awaiting.kind, "symptom_answer");
@@ -194,7 +194,7 @@ test("unknown store question (holiday opening): says so, creates a general_quest
   const p = await createPharmacy({ settings: FULL_SETTINGS });
   const c = await p.conversation();
   const turn = await p.say(c, "Vocês abrem no feriado de 15 de novembro?");
-  assert.match(turn.texts[0], /^Não tenho essa informação agora\. Vou pedir para a equipe da farmácia confirmar e te respondo aqui mesmo\.$/);
+  assert.match(turn.texts[0], /ainda não tenho essa informação.*equipe da farmácia confirmar/i);
   const handoff = p.handoffs().find((h) => h.reason === "general_question")!;
   assert.ok(handoff, "general_question handoff created");
   assert.equal(handoff.summary, "Vocês abrem no feriado de 15 de novembro?");
@@ -279,7 +279,7 @@ test("'quero comprar' after a pharmacist suggestion adds THOSE items, never the 
   const c = await p.conversation();
   await suggestionFor(p, c, ["paracetamol", "loratadina"]);
   const turn = await p.say(c, "quero comprar");
-  assert.equal(turn.texts[0], "Vou separar o que o farmacêutico indicou:");
+  assert.equal(turn.texts[0], "Que bom! Vou separar o que o farmacêutico indicou para você:");
   assert.ok(!turn.uis.some((u) => u.type === "catalog_list"));
   assert.deepEqual(cartOf(p, c).map((l) => l.productId).sort(), ["p_lorat", "p_paracetamol"]);
   assert.equal(turn.uis[0].type, "cart");
@@ -464,7 +464,7 @@ test("delivery asks the CEP once and reuses the confirmed address; pickup never 
 // ---------------------------------------------------------------------------------------------
 
 async function toForWhom(p: Pharmacy, c: { id: string; visitorToken: string }) {
-  await p.say(c, "estou com dor de garganta");
+  await p.say(c, "dor de garganta");
   await p.act(c, { type: "symptom.answer", step: "symptom", value: "Concordo e quero continuar", consent: true });
   await p.say(c, "Hoje");
   await p.say(c, "Leve");
@@ -517,7 +517,7 @@ test("age question for a baby: baby ranges, an age in years is refused, brief fl
   net = hostileModel();
   const p = await createPharmacy();
   const c = await p.conversation();
-  await p.say(c, "estou com tosse");
+  await p.say(c, "tosse seca");
   await p.act(c, { type: "symptom.answer", step: "symptom", value: "Concordo e quero continuar", consent: true });
   await p.say(c, "Hoje");
   await p.say(c, "Leve");

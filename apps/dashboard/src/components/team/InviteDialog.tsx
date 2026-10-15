@@ -101,7 +101,7 @@ export function InviteDialog({ open, onOpenChange, roles, canGrantOwner, onInvit
                     onClick={() => setRoleId(r.id)}
                     className={cn(
                       "flex flex-col items-start rounded-lg border px-3 py-2 text-left",
-                      roleId === r.id ? "border-border bg-surface ring-2 ring-accent/30" : "border-transparent hover:bg-bg-2",
+                      roleId === r.id ? "border-accent bg-accent/10 ring-1 ring-accent" : "border-transparent hover:bg-bg-2",
                     )}
                   >
                     <b className="text-sm">{r.name}</b>

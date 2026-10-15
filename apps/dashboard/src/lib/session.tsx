@@ -32,7 +32,10 @@ const NOTIFICATION_POLL_MS = 20_000;
 export function SessionProvider({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [business, setBusiness] = useState<any>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [fetched, setLoaded] = useState(false);
+  // Public pages (login, invite) need no session. Once a protected page is shown, the session must have been fetched
+  // for real: otherwise the first render after login (loaded=true, me=null) would run with "everything allowed".
+  const loaded = !enabled || fetched;
   const [notifications, setNotifications] = useState<NotificationsSummary | null>(null);
 
   const refresh = useCallback(async () => {
@@ -55,7 +58,7 @@ export function SessionProvider({ enabled, children }: { enabled: boolean; child
       setMe(null);
       setBusiness(null);
       setNotifications(null);
-      setLoaded(true);
+      setLoaded(false);
       return;
     }
     setLoaded(false);

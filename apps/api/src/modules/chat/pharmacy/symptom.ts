@@ -156,6 +156,10 @@ export function nextStep(current: SymptomStep | null, answers: SymptomAnswers): 
   for (let i = idx + 1; i < SYMPTOM_STEPS.length; i++) {
     const step = SYMPTOM_STEPS[i];
     if (step === "pregnancy" && !pregnancyRelevant(answers)) continue;
+    // Never ask what the customer already said ("meu filho de 5 anos está com febre há 2 dias").
+    if (step === "for_whom" && answers.forWhom) continue;
+    if (step === "age" && answers.age) continue;
+    if (step === "duration" && answers.duration) continue;
     return step;
   }
   return "done";
@@ -321,4 +325,19 @@ export function buildSymptomBrief(
     ...(extras.contact ? { contact: extras.contact } : {}),
     conversationLink: `/conversas?open=${extras.conversationId}`,
   };
+}
+
+/** What a first symptom message already tells: who it is for, their age and for how long. Used to skip those questions. */
+export function inferFromSymptomText(text: string): Partial<Pick<SymptomAnswers, "forWhom" | "age" | "duration">> {
+  const f = fold(text);
+  const out: Partial<Pick<SymptomAnswers, "forWhom" | "age" | "duration">> = {};
+  if (/\b(bebe|neném|nenem|recem nascid[oa])\b/.test(f)) out.forWhom = "Para um bebê";
+  else if (/\b(meu filho|minha filha|meu menino|minha menina|minha crianca|meu pequeno|minha pequena|meu sobrinho|minha sobrinha|meu neto|minha neta)\b/.test(f) || /\bcrianca\b/.test(f)) out.forWhom = "Para uma criança";
+  else if (/\b(minha mae|meu pai|minha esposa|meu marido|minha mulher|minha avo|meu avo|meu namorado|minha namorada|minha irma|meu irmao|minha sogra|meu sogro|meu amigo|minha amiga)\b/.test(f)) out.forWhom = "Para outra pessoa adulta";
+  else if (/\b(estou com|to com|tô com|estou sentindo|to sentindo|estou|sinto|me sinto|tenho)\b/.test(f) && !/\b(ele|ela|dele|dela)\b/.test(f)) out.forWhom = "Para mim";
+  const age = f.match(/\b(\d{1,3})\s*(anos?|meses|mes)\b/);
+  if (age && out.forWhom && out.forWhom !== "Para mim") out.age = `${age[1]} ${/^an/.test(age[2]) ? (age[1] === "1" ? "ano" : "anos") : age[1] === "1" ? "mês" : "meses"}`;
+  const dur = f.match(/\b(?:ha|faz|ja faz|desde)\s+(\d{1,2}\s*(?:dias?|semanas?|horas?|meses|mes)|ontem|anteontem|hoje|a semana passada)\b/);
+  if (dur) out.duration = dur[1].replace(/\s+/g, " ");
+  return out;
 }

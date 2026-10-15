@@ -10,7 +10,7 @@ import { BrandingApplier } from "./shell/BrandingApplier";
 import { TrialEndedGate } from "./TrialEndedGate";
 import { SessionProvider, useSession } from "../lib/session";
 import { LiveProvider } from "../lib/live";
-import { homeFor, isCommerceRoute, isPublicRoute, modeOf, requirementFor } from "../lib/nav";
+import { homeFor, isCommerceRoute, isPublicRoute, modeOf, navFor, requirementFor } from "../lib/nav";
 
 // Pages reachable even when the trial has expired and there's no active subscription.
 const ALLOWED_WHEN_SUSPENDED = ["/billing", "/plano", "/profile"];
@@ -39,6 +39,19 @@ function ShellInner({ pathname, children }: { pathname: string; children: ReactN
     }
     if (isPharmacy && pathname === "/") router.replace(homeFor(niche, me));
   }, [loaded, business?.status, pathname, isPharmacy, niche, me, router]);
+
+  // Page title per section ("Pedidos · Farmácia Exemplo"), keeping the live "(N)" pending badge in front.
+  const businessName = me?.business.name;
+  useEffect(() => {
+    if (!loaded) return;
+    const items = navFor(niche).flatMap((g) => g.items);
+    const hit =
+      items.filter((i) => pathname === i.href || pathname.startsWith(`${i.href}/`)).sort((a, b) => b.href.length - a.href.length)[0] ?? null;
+    const label = hit?.label ?? (pathname === "/sem-acesso" ? "Sem acesso" : null);
+    if (!label) return;
+    const badge = document.title.match(/^\(\d+\)\s*/)?.[0] ?? "";
+    document.title = `${badge}${label}${businessName ? ` · ${businessName}` : ""}`;
+  }, [loaded, pathname, niche, businessName]);
 
   if (!loaded) return null;
 

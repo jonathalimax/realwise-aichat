@@ -50,9 +50,17 @@ export function buildBriefRows(brief: Brief | null | undefined): Array<{ label: 
   if (b.onlineSaleAllowed === false) add("Venda online", "Não permitida");
   else if (b.onlineSaleAllowed === true) add("Venda online", "Permitida");
   add("Equivalentes", asText(b.equivalents));
-  add("Pergunta do cliente", asText(b.question));
-  add("Pedido do cliente", asText(b.customerRequest));
-  add("Mensagem do cliente", asText(b.customerText));
+  // The same sentence is often stored under two or three keys (question = customerRequest = customerText): show it once.
+  const said = new Set<string>();
+  const addOnce = (label: string, value: string) => {
+    const key = value.trim().toLowerCase();
+    if (!key || said.has(key)) return;
+    said.add(key);
+    add(label, value);
+  };
+  addOnce("Pergunta do cliente", asText(b.question));
+  addOnce("Pedido do cliente", asText(b.customerRequest));
+  addOnce("Mensagem do cliente", asText(b.customerText));
   add("Mensagens adicionais", asText(b.followUps));
   return rows;
 }

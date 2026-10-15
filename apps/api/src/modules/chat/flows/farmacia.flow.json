@@ -15,7 +15,7 @@
   "nodes": {
     "start": {
       "id": "start",
-      "message": "Oi! Eu sou o Alex. Posso montar seu pedido ou chamar o farmacêutico.",
+      "message": "Oi! Eu sou o Alex. Que bom ter você aqui! Posso montar seu pedido ou chamar o farmacêutico.",
       "bubbles": [
         { "label": "🛒 Fazer um pedido", "goto": "pedido" },
         { "label": "💊 Falar com o farmacêutico", "goto": "farmaceutico" },

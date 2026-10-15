@@ -23,5 +23,5 @@ export function welcomeChips(business: { pharmacy?: { operationMode?: string; qu
 export function welcomeText(businessName: string, attendance: boolean): string {
   return attendance
     ? `Oi! Eu sou o Alex, da ${businessName}. Posso tirar dúvidas sobre horários, entrega e retirada, ou chamar o farmacêutico.`
-    : `Oi! Eu sou o Alex, da ${businessName}. Posso montar seu pedido ou chamar o farmacêutico.`;
+    : `Oi! Eu sou o Alex, da ${businessName}. Que bom ter você aqui! Posso montar seu pedido ou chamar o farmacêutico.`;
 }
