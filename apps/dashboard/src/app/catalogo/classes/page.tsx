@@ -19,6 +19,7 @@ import { Button } from "../../../components/ui/button";
 import { Progress } from "../../../components/ui/progress";
 import { Select } from "../../../components/ui/select";
 import { Card } from "../../../components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../../components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 import { EmptyState, LoadState, PageHeader, PageStack, SectionCard, TableSkeleton } from "../../../components/page-kit";
 
@@ -85,6 +86,8 @@ function GroupCard({ group: g, canConfirm, onChanged }: { group: ClassGroup; can
   const [open, setOpen] = useState(g.key === "controlled");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [asking, setAsking] = useState(false);
+  const pending = Math.max(0, g.count - g.confirmedCount);
   const products = useLoad(() => (open ? getClassReviewProducts(g.key) : Promise.resolve(null)), [open, g.key, g.confirmedCount]);
 
   async function confirmAll() {
@@ -92,6 +95,7 @@ function GroupCard({ group: g, canConfirm, onChanged }: { group: ClassGroup; can
     setError("");
     try {
       await confirmClassGroup(g.key);
+      setAsking(false);
       onChanged();
     } catch (e) {
       setError(e instanceof ApiError && e.code === "CRF_REQUIRED" ? "Somente um farmacêutico com CRF cadastrado confirma classes." : errorMessage(e));
@@ -112,7 +116,7 @@ function GroupCard({ group: g, canConfirm, onChanged }: { group: ClassGroup; can
       action={
         <>
           {g.canConfirm && !g.done && canConfirm && g.count > 0 && (
-            <Button size="sm" disabled={busy} onClick={confirmAll}>
+            <Button size="sm" disabled={busy} onClick={() => setAsking(true)}>
               {busy ? "Confirmando…" : "Confirmar todos"}
             </Button>
           )}
@@ -158,6 +162,27 @@ function GroupCard({ group: g, canConfirm, onChanged }: { group: ClassGroup; can
           {products.data?.nextCursor && <p className="px-5 py-3 text-xs text-muted">Mostrando os primeiros 50 produtos. Use “Confirmar todos” para o grupo inteiro.</p>}
         </>
       )}
+      <Dialog open={asking} onOpenChange={(o) => !busy && setAsking(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Confirmar {pending} {pending === 1 ? "produto" : "produtos"} como “{g.short}”?
+            </DialogTitle>
+            <DialogDescription>
+              Você, como farmacêutico responsável, confirma que revisou esta lista e que a classe proposta está correta. {g.key === "otc" ? "Os produtos ficam liberados para venda no chat." : "Receitas continuam passando pelo farmacêutico a cada pedido."}
+            </DialogDescription>
+          </DialogHeader>
+          {error && <Alert variant="red">{error}</Alert>}
+          <DialogFooter>
+            <Button variant="outline" disabled={busy} onClick={() => setAsking(false)}>
+              Cancelar
+            </Button>
+            <Button disabled={busy} onClick={confirmAll}>
+              {busy ? "Confirmando…" : `Confirmar ${pending}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SectionCard>
   );
 }

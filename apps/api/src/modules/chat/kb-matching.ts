@@ -10,7 +10,7 @@ const STOPWORDS = new Set([
   "seus", "suas", "meu", "minha", "mais", "menos", "muito", "tambem", "ainda", "entao", "porque", "que",
   "informacao", "informacoes", "duvida", "favor", "obrigado", "obrigada", "bom", "boa", "uma", "uns", "umas", "com", "sem",
   "nos", "nas", "dos", "das", "num", "numa", "por", "mas", "ola", "oi", "ai", "farmacia", "voces", "tem",
-  "pergunta", "resposta", "posso", "podemos", "possivel", "algum", "alguma", "alguns", "algumas", "tipo", "hoje", "agora", "existe", "tudo",
+  "vendem", "vende", "vendo", "vendemos", "trabalham", "trabalha", "oferecem", "possuem", "tambem", "pergunta", "resposta", "posso", "podemos", "possivel", "algum", "alguma", "alguns", "algumas", "tipo", "hoje", "agora", "existe", "tudo",
 ]);
 
 // Canonical groups: every member stems to the group's first word. Kept tiny on purpose: never group things a customer
@@ -64,7 +64,9 @@ for (const [word, canon] of SYNONYM_OF) SYNONYM_STEMS.set(stem(word), stem(canon
 /** Distinct, stemmed, synonym-normalised significant tokens of a text. */
 export function tokenize(text: string): string[] {
   const out: string[] = [];
-  for (const raw of foldText(text).replace(/[^a-z0-9\s]/g, " ").split(/\s+/)) {
+  // "wi-fi" / "wi fi" and "24h" / "24 horas" are one word each for matching purposes.
+  const normalised = foldText(text).replace(/\bwi[\s-]?fi\b/g, "wifi").replace(/\b24\s?(?:h|hs|horas)\b/g, "vinteequatrohoras");
+  for (const raw of normalised.replace(/[^a-z0-9\s]/g, " ").split(/\s+/)) {
     if (raw.length < 3 || STOPWORDS.has(raw)) continue;
     const s = stem(raw);
     if (s.length < 3) continue;
@@ -108,7 +110,9 @@ export function scoreChunk(queryTokens: string[], content: string): KeywordScore
 export function isKeywordHit(s: KeywordScore): boolean {
   if (s.matched === 0) return false;
   if (s.matched >= Math.min(2, s.total)) return true;
-  return s.longest >= 8;
+  if (s.longest >= 8) return true;
+  // One distinctive word (5+ letters) that carries at least half of the question's weight ("vacina de gripe" -> "vacinas").
+  return s.longest >= 5 && s.score >= 0.5;
 }
 
 /** Rank chunks by keyword overlap; only real hits are returned, best first. */
@@ -120,4 +124,18 @@ export function rankByKeywords<T extends { content: string }>(queryText: string,
     .sort((a, b) => b.s.score - a.s.score)
     .slice(0, limit)
     .map((x) => ({ ...x.c, score: x.s.score }));
+}
+
+// Words that only name the generic store-information topics (hours, delivery, payment, pickup, exchange).
+const GENERIC_INFO_WORDS = [
+  "entrega", "entregam", "entrega", "entregas", "horario", "horarios", "funcionamento", "abre", "abrem", "fecha", "fecham", "aberto", "abertos", "fechado", "pagamento", "pagamentos", "pagar",
+  "paga", "retirada", "retirar", "retiro", "retira", "troca", "trocas", "trocar", "devolucao", "devolver", "taxa", "taxas", "valor", "valores", "preco", "precos", "custa", "custo", "minimo", "pedido", "pedidos",
+  "forma", "formas", "aceita", "aceitam", "loja", "endereco", "bairro", "bairros", "atendem", "atende", "domingo", "sabado", "segunda", "terca", "quarta", "quinta", "sexta", "semana", "dias", "gratis",
+  "frete", "cartao", "cartoes", "pix", "dinheiro", "credito", "debito", "fazem", "fazer", "ficam", "fica", "chega", "chegar", "demora", "informacao", "todas", "todos",
+];
+const GENERIC_INFO_TOKENS = new Set(GENERIC_INFO_WORDS.flatMap((w) => tokenize(w)));
+
+/** The question's own distinctive words once the generic store-info topic words are removed ("entregam em condomínio?" -> ["condomin"]). */
+export function residualTopicTokens(text: string): string[] {
+  return tokenize(text).filter((t) => !GENERIC_INFO_TOKENS.has(t));
 }

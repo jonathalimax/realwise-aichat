@@ -26,7 +26,7 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
           <h1 className="text-2xl font-bold leading-tight tracking-tight text-ink">{title}</h1>
           {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2 max-sm:w-full">{actions}</div>}
       </div>
     </div>
   );
@@ -143,8 +143,8 @@ export function SectionCard({ title, description, action, children, className, f
   return (
     <Card className={className}>
       {title && (
-        <div data-slot="card-header" className="flex items-start justify-between gap-3 p-5 pb-3">
-          <div className="min-w-0">
+        <div data-slot="card-header" className="flex flex-wrap items-start justify-between gap-3 p-5 pb-3">
+          <div className="min-w-0 flex-[1_1_220px]">
             <h2 className="text-base font-semibold text-ink">{title}</h2>
             {description && <p className="mt-0.5 text-xs text-muted">{description}</p>}
           </div>

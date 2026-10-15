@@ -7,7 +7,8 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { LogOut, Menu, Plus } from "lucide-react";
 import { Sheet, SheetTrigger, SheetContent } from "../ui/sheet";
 import { Avatar, initialsOf } from "../ui/avatar";
-import { logout } from "../../lib/api";
+import { API_BASE_URL, logout } from "../../lib/api";
+import { assetUrl } from "../../lib/format";
 import { visibleNav, type NavItem } from "../../lib/nav";
 import { useSession } from "../../lib/session";
 import { cn } from "../../lib/utils";
@@ -20,12 +21,14 @@ function isActive(pathname: string, href: string): boolean {
 function Brand() {
   const { me, business, niche } = useSession();
   const name = me?.business.name ?? business?.name ?? "Realwise";
-  const logo = me?.business.logoUrl ?? null;
+  // An uploaded logo is a route relative to the API ("/api/public/businesses/<id>/logo"), not to the dashboard.
+  const logo = assetUrl(me?.business.logoUrl ?? null, API_BASE_URL);
+  const [logoFailed, setLogoFailed] = useState(false);
   return (
     <div className="flex items-center gap-2.5 px-2 py-1">
-      {logo ? (
+      {logo && !logoFailed ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={logo} alt="" className="h-9 w-9 flex-none rounded-[9px] object-cover" />
+        <img src={logo} alt="" className="h-9 w-9 flex-none rounded-[9px] object-cover" onError={() => setLogoFailed(true)} />
       ) : (
         <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] bg-accent text-white" aria-hidden>
           {niche === "farmacia" ? <Plus className="h-5 w-5" strokeWidth={2.4} /> : <span className="font-bold">{name.slice(0, 1).toUpperCase()}</span>}

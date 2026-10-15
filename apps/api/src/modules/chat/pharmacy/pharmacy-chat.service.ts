@@ -4,6 +4,7 @@
 // Everything here works with the model completely unavailable. See docs/pharmacy/CHAT_ENGINE_REPORT.md.
 
 import { retrieveChunksForChat, expandAbbreviations } from "../knowledge-retrieval";
+import { residualTopicTokens, scoreChunk } from "../kb-matching";
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { createHash } from "crypto";
 import { PrismaService } from "../../../prisma/prisma.service";
@@ -374,6 +375,11 @@ export class PharmacyChatService {
     if (routed) return true;
 
     if (consumed === "invalid") {
+      // A real question the knowledge base answers ("vocês aceitam vale refeição?") typed while a form or consent is open is
+      // answered, not met with "I did not understand": the open step stays pending for the next answer.
+      if (/\?/.test(text) && looksLikeQuestion(text) && !clinicalQuestion(text) && !detectsSymptomIntent(text) && !asksForDosage(text) && (await this.kbMayAnswer(t, text))) {
+        return false;
+      }
       await this.promptAwaiting(t, true);
       return true;
     }
@@ -524,7 +530,7 @@ export class PharmacyChatService {
         return true;
       }
       // "quero X" where X is not in the catalog: say so (deterministic), do not hand a purchase to the model.
-      if ((RE.purchaseVerb.test(f) || t.state.awaiting?.kind === "product_name") && !wantsRecommendation && !unknownStoreTopic(f) && this.looksLikeProductRequest(f)) {
+      if ((RE.purchaseVerb.test(f) || t.state.awaiting?.kind === "product_name") && !wantsRecommendation && !unknownStoreTopic(f) && this.looksLikeProductRequest(f) && !((/^(e se|e caso|o que acontece|como funciona|qual a politica|e quando)\b/.test(f) || /\b(politica|regra|regras)\b/.test(f) || /\?\s*$/.test(text.trim())) && (await this.kbPreferred(t, text) || await this.kbMayAnswer(t, text) && !/\?\s*$/.test(text.trim())))) {
         await this.showCatalog(t, { intro: COPY.catalogNotFound, fallback: COPY.notFound });
         return true;
       }
@@ -2530,6 +2536,7 @@ export class PharmacyChatService {
         status: s.order.status,
         statusUrl: s.order.statusUrl,
         totalCents: s.order.totalCents,
+        fulfillment: s.order.fulfillment ?? null,
         message: `Pedido ${s.order.code} registrado.`,
       });
       return;
@@ -2605,7 +2612,7 @@ export class PharmacyChatService {
       return;
     }
     const url = this.statusUrl(created.statusToken);
-    s.order = { id: created.id, code: created.code, status: created.status, statusUrl: url, totalCents: created.totalCents };
+    s.order = { id: created.id, code: created.code, status: created.status, statusUrl: url, totalCents: created.totalCents, fulfillment: fulfillmentUsed };
     s.checkoutStep = "done";
     s.awaiting = null;
     s.cart = [];
@@ -2651,7 +2658,7 @@ export class PharmacyChatService {
     } else {
       message = `Pedido ${created.code} recebido${nameComma(t.first)}, obrigado! A farmácia confirma a disponibilidade em instantes. Acompanhe pelo botão abaixo.`;
     }
-    t.say(message, { type: "order_confirmation", code: created.code, status: created.status, statusUrl: url, totalCents: created.totalCents, message });
+    t.say(message, { type: "order_confirmation", code: created.code, status: created.status, statusUrl: url, totalCents: created.totalCents, fulfillment: fulfillmentUsed, message });
     t.chips(CHIPS.makeOrder);
   }
 
@@ -2894,6 +2901,9 @@ export class PharmacyChatService {
   /** Lane F: deterministic answer from PharmacySettings; nothing configured for the topic -> the team confirms (general_question). */
   private async answerInfo(t: Turn, topics: string[], originalText: string): Promise<boolean> {
     t.state.lane = "general";
+    // A specific question the owner's own Q&A / documents answer ("entregam em condomínio?", "aceitam ticket?") goes to the
+    // knowledge base (model path), not to the generic settings block that would only list hours/fees.
+    if (await this.kbPreferred(t, originalText)) return false;
     const blocks = this.infoBlocks(t, topics, originalText);
     if (blocks.length === 0) {
       // Nothing configured for the topic: the knowledge base gets the question before the team does.
@@ -2917,6 +2927,21 @@ export class PharmacyChatService {
     try {
       const r = await retrieveChunksForChat(this.prisma, t.business.id, "farmacia", text, { text: expandAbbreviations(text) });
       return r.tenant.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private async kbPreferred(t: Turn, text: string): Promise<boolean> {
+    if (askedDeliveryPlace(text)) return false;
+    const residual = residualTopicTokens(text);
+    if (residual.length === 0) return false;
+    try {
+      const r = await retrieveChunksForChat(this.prisma, t.business.id, "farmacia", text, { text: expandAbbreviations(text) });
+      return r.tenant.some((c) => {
+        const s = scoreChunk(residual, c.content);
+        return s.matched >= 2 || (s.matched >= 1 && s.longest >= 4);
+      });
     } catch {
       return false;
     }

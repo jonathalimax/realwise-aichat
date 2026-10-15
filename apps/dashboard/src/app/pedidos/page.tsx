@@ -162,11 +162,11 @@ function OrdersTab({ version, onOpen }: { version: number; onOpen: (id: string) 
                   <TableRow>
                     <TableHead>Código</TableHead>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>Itens</TableHead>
+                    <TableHead className="max-md:hidden">Itens</TableHead>
                     <TableHead>Total</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Situação</TableHead>
-                    <TableHead>Origem</TableHead>
+                    <TableHead className="max-md:hidden">Origem</TableHead>
                     <TableHead>Quando</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -175,7 +175,7 @@ function OrdersTab({ version, onOpen }: { version: number; onOpen: (id: string) 
                     <TableRow key={o.id} onClick={() => onOpen(o.id)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onOpen(o.id)}>
                       <TableCell className="whitespace-nowrap font-semibold">{o.code}</TableCell>
                       <TableCell>{o.customer.name}</TableCell>
-                      <TableCell>{o.itemCount}</TableCell>
+                      <TableCell className="max-md:hidden">{o.itemCount}</TableCell>
                       <TableCell>{formatBRL(o.totalCents)}</TableCell>
                       <TableCell>{o.kindLabel}</TableCell>
                       <TableCell>
@@ -184,7 +184,7 @@ function OrdersTab({ version, onOpen }: { version: number; onOpen: (id: string) 
                           {o.stale && <Badge variant="amber">Estoque antigo</Badge>}
                         </span>
                       </TableCell>
-                      <TableCell className="text-muted">{o.originLabel}</TableCell>
+                      <TableCell className="text-muted max-md:hidden">{o.originLabel}</TableCell>
                       <TableCell className="text-muted">{timeAgo(o.createdAt)}</TableCell>
                     </TableRow>
                   ))}

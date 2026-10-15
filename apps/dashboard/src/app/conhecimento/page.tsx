@@ -79,7 +79,7 @@ export default function ConhecimentoPage() {
       />
       {tab === "qa" && <QaSection state={qa} canEdit={canEdit} />}
       {tab === "documents" && <DocumentsSection state={docs} canEdit={canEdit} />}
-      {tab === "open" && <OpenQuestionsSection state={open} canEdit={canEdit} onSaved={() => void qa.reload()} />}
+      {tab === "open" && <OpenQuestionsSection state={open} canSave={canEdit} canAnswer={can("atendimento", "edit")} onSaved={() => void qa.reload()} />}
     </PageStack>
   );
 }
@@ -401,7 +401,7 @@ function DocumentsSection({ state, canEdit }: { state: ReturnType<typeof useLoad
 }
 
 // ---------------------------------------------------------------- Perguntas sem resposta
-function OpenQuestionsSection({ state, canEdit, onSaved }: { state: ReturnType<typeof useLoad<{ items: KbOpenQuestion[] }>>; canEdit: boolean; onSaved: () => void }) {
+function OpenQuestionsSection({ state, canSave, canAnswer, onSaved }: { state: ReturnType<typeof useLoad<{ items: KbOpenQuestion[] }>>; canSave: boolean; canAnswer: boolean; onSaved: () => void }) {
   const [answering, setAnswering] = useState<KbOpenQuestion | null>(null);
   const items = state.data?.items ?? [];
 
@@ -418,8 +418,8 @@ function OpenQuestionsSection({ state, canEdit, onSaved }: { state: ReturnType<t
                   <div className="font-medium text-ink">{q.question}</div>
                   <p className="text-xs text-muted">Perguntada {timeAgo(q.createdAt)}</p>
                 </div>
-                <Button size="sm" onClick={() => setAnswering(q)} disabled={!canEdit} title={canEdit ? undefined : "Você pode ver, mas não editar."}>
-                  Responder e salvar na base
+                <Button size="sm" onClick={() => setAnswering(q)} disabled={!canAnswer} title={canAnswer ? undefined : "Você pode ver, mas não responder."}>
+                  {canSave ? "Responder e salvar na base" : "Responder"}
                 </Button>
               </li>
             ))}
@@ -427,6 +427,7 @@ function OpenQuestionsSection({ state, canEdit, onSaved }: { state: ReturnType<t
         )}
       </LoadState>
       <AnswerDialog
+        canSave={canSave}
         target={answering}
         onClose={() => setAnswering(null)}
         onDone={() => {
@@ -438,7 +439,7 @@ function OpenQuestionsSection({ state, canEdit, onSaved }: { state: ReturnType<t
   );
 }
 
-function AnswerDialog({ target, onClose, onDone }: { target: KbOpenQuestion | null; onClose: () => void; onDone: () => void }) {
+function AnswerDialog({ target, canSave, onClose, onDone }: { target: KbOpenQuestion | null; canSave: boolean; onClose: () => void; onDone: () => void }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
@@ -470,12 +471,14 @@ function AnswerDialog({ target, onClose, onDone }: { target: KbOpenQuestion | nu
     <Dialog open={!!target} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Responder e salvar na base</DialogTitle>
-          <DialogDescription>A resposta vai para o cliente no chat e fica na base para as próximas vezes.</DialogDescription>
+          <DialogTitle>{canSave ? "Responder e salvar na base" : "Responder ao cliente"}</DialogTitle>
+          <DialogDescription>{canSave ? "A resposta vai para o cliente no chat e fica na base para as próximas vezes." : "A resposta vai para o cliente no chat. Salvar na base de conhecimento exige acesso de edição a ela."}</DialogDescription>
         </DialogHeader>
-        <Field label="Pergunta (ajuste a redação se quiser)" htmlFor="oq-q">
-          <Input id="oq-q" value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={200} />
-        </Field>
+        {canSave && (
+          <Field label="Pergunta (ajuste a redação se quiser)" htmlFor="oq-q">
+            <Input id="oq-q" value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={200} />
+          </Field>
+        )}
         <Field label="Resposta" htmlFor="oq-a" hint="Sem dose, horário de uso, indicação de remédio ou dados de clientes.">
           <Textarea id="oq-a" rows={4} value={answer} onChange={(e) => setAnswer(e.target.value)} maxLength={1200} />
         </Field>
@@ -484,9 +487,11 @@ function AnswerDialog({ target, onClose, onDone }: { target: KbOpenQuestion | nu
           <Button variant="outline" onClick={() => void submit(false)} disabled={busy || answer.trim().length < 2}>
             Só responder
           </Button>
-          <Button onClick={() => void submit(true)} disabled={busy || answer.trim().length < 2 || question.trim().length < 5}>
-            {busy ? "Enviando..." : "Responder e salvar"}
-          </Button>
+          {canSave && (
+            <Button onClick={() => void submit(true)} disabled={busy || answer.trim().length < 2 || question.trim().length < 5}>
+              {busy ? "Enviando..." : "Responder e salvar"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

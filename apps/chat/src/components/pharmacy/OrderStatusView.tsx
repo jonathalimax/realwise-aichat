@@ -142,7 +142,7 @@ export function OrderStatusView({ token }: { token: string }) {
                     <div className="flex flex-col items-center">
                       <span
                         className="flex h-6 w-6 flex-none items-center justify-center rounded-full border-2 text-xs font-bold"
-                        style={step.done ? { background: "var(--ph-primary)", borderColor: "var(--ph-primary)", color: "var(--ph-primary-fg)" } : { background: "#fff", borderColor: "#d4d4d8", color: "#a1a1aa" }}
+                        style={step.done ? { background: "var(--ph-primary)", borderColor: "var(--ph-primary)", color: "var(--ph-primary-fg)" } : { background: "#fff", borderColor: "#a1a1aa", color: "#52525b" }}
                         aria-hidden
                       >
                         {step.done ? "✓" : i + 1}

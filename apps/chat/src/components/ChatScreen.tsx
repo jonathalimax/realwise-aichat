@@ -14,8 +14,9 @@ import {
   setListingSelection,
   pharmacyAction,
   apiErrorMessage,
+  resolveApiAsset,
 } from "../lib/api";
-import { isPushSupported, enablePush } from "../lib/push";
+import { isPushSupported, enablePush, CHAT_BASE_PATH } from "../lib/push";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
@@ -396,7 +397,7 @@ function BusinessAvatar({
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src="/clara-avatar.jpg"
+        src={`${CHAT_BASE_PATH}/clara-avatar.jpg`}
         alt={personaName}
         className="h-10 w-10 flex-none rounded-card object-cover shadow-sm"
         onError={() => setClaraFailed(true)}
@@ -419,11 +420,13 @@ function PharmacyHeader({ business }: { business: any }) {
   const rt = business.pharmacy?.pharmacistName as string | undefined;
   const crf = business.pharmacy?.pharmacistCrf as string | undefined;
   const [logoFailed, setLogoFailed] = useState(false);
+  // The upload route is relative to the API ("/api/public/businesses/<id>/logo"): it must be resolved against the API origin.
+  const logo = resolveApiAsset(business.logoUrl);
   return (
     <header className="flex flex-none items-center gap-3 px-4 py-3" style={{ background: "var(--ph-primary)", color: "var(--ph-primary-fg)" }}>
-      {business.logoUrl && !logoFailed ? (
+      {logo && !logoFailed ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={business.logoUrl} alt={business.name} className="h-10 w-10 flex-none rounded-full bg-white object-cover" onError={() => setLogoFailed(true)} />
+        <img src={logo} alt={business.name} className="h-10 w-10 flex-none rounded-full bg-white object-cover" onError={() => setLogoFailed(true)} />
       ) : (
         <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-white text-sm font-bold text-zinc-900" aria-hidden>
           A
@@ -993,7 +996,8 @@ export function ChatScreen({
   // conversation (localStorage flag), and only when the browser hasn't already decided.
   useEffect(() => {
     if (!business || !conversationId) return;
-    if (conversationStatus !== "escalated") return;
+    // Pharmacy handoffs never flip the conversation to "escalated": the engine reports `handoffOpen` instead.
+    if (conversationStatus !== "escalated" && !pharmacy?.handoffOpen) return;
     if (!isPushSupported()) return;
     if (typeof Notification === "undefined" || Notification.permission !== "default") return;
     if (pushPrompt !== "hidden") return;
@@ -1010,7 +1014,7 @@ export function ChatScreen({
       },
     ]);
     setPushPrompt("asking");
-  }, [business, conversationId, conversationStatus, pushPrompt]);
+  }, [business, conversationId, conversationStatus, pushPrompt, pharmacy?.handoffOpen]);
 
   // Returning visitor whose browser already granted permission (e.g. a previous conversation on
   // this same origin) but who has no active subscription for THIS conversation yet — subscribe
@@ -1598,7 +1602,7 @@ export function ChatScreen({
                 ctx={{
                   businessId: business.id,
                   conversationId,
-                  interactive: m.ui?.type === "catalog_list" ? i === latestCatalogIndex : m.ui?.type === "cart" ? i === latestCartIndex : m.ui?.type === "pharmacist_suggestion" ? i === latestSuggestionIndex : i === latestUiIndex,
+                  interactive: m.ui?.type === "catalog_list" ? i === latestCatalogIndex : m.ui?.type === "cart" ? i === latestCartIndex : m.ui?.type === "pharmacist_suggestion" ? i === latestSuggestionIndex : m.ui?.type === "symptom_question" ? i === latestUiIndex && !messages.slice(i + 1).some((x) => x.role !== "visitor") : m.ui?.type === "contact_capture" ? i === latestUiIndex && !messages.slice(i + 1).some((x) => x.role === "owner") : i === latestUiIndex,
                   busy,
                   onAction: handlePharmacyAction,
                   onRxUploaded: handleRxUploaded,
@@ -1676,12 +1680,12 @@ export function ChatScreen({
             </Button>
           </div>
         )}
-        {pushPrompt === "asking" && (
+        {pushPrompt === "asking" && !(isPharmacy && pharmacy && pharmacy.handoffOpen === false) && (
           <div className="mt-3 flex justify-center gap-2">
-            <Button type="button" size="sm" onClick={() => handlePushChoice(true)}>
+            <Button type="button" size="sm" className="min-h-11 min-w-20" onClick={() => handlePushChoice(true)}>
               Sim
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => handlePushChoice(false)}>
+            <Button type="button" variant="outline" size="sm" className="min-h-11 min-w-20" onClick={() => handlePushChoice(false)}>
               Não
             </Button>
           </div>

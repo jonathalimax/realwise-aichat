@@ -279,6 +279,8 @@ export interface WhatsappDraft {
 export interface HandoffDetail extends HandoffList {
   contact?: { firstName: string | null; phone: string | null; phoneMasked: string | null; hasPhone: boolean };
   brief: Record<string, unknown>;
+  /** The visitor accepted the health-data consent and the brief carries what they told us (false for "Só chamar o farmacêutico" and urgent red flags). */
+  healthConsent?: boolean;
   briefRows: { label: string; value: string }[];
   suggestion: { label: string; text: string; products: { productId: string; name: string; reason: string; inStock: boolean; priceCents: number }[] } | null;
   conversationLink: string | null;

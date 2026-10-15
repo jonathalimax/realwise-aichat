@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { closeHandoff, getHandoff, getHandoffs, handoffChatLink, markHandoffAnswered, replyHandoff, startHandoff, type HandoffDetail, type HandoffList, type HandoffStatus, type SuggestionItem } from "../../lib/pharmacy-api";
@@ -111,9 +111,15 @@ function Atendimento() {
 }
 
 function HandoffRow({ h, active, onPick }: { h: HandoffList; active: boolean; onPick: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  // Arriving from an alert or a link (?open=): the selected row must be visible in a long list.
+  useEffect(() => {
+    if (active) ref.current?.scrollIntoView({ block: "nearest" });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <li>
       <button
+        ref={ref}
         type="button"
         onClick={onPick}
         aria-current={active}
@@ -208,7 +214,7 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
           <h2 className="text-lg font-semibold text-ink">
             {h.who} · {h.reasonLabel}
           </h2>
-          <p className="mt-0.5 text-xs text-muted">{timeAgo(h.createdAt)} · consentimento LGPD registrado</p>
+          <p className="mt-0.5 text-xs text-muted">{timeAgo(h.createdAt)}{h.healthConsent ? " · consentimento LGPD registrado" : ""}</p>
         </div>
         <span className="flex flex-wrap items-center justify-end gap-1.5">
           <WhoBadge requiresPharmacist={h.requiresPharmacist} />

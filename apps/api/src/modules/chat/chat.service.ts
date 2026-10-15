@@ -201,6 +201,10 @@ function hasUngroundedEntityClaim(answerText: string, groundingText: string, all
   return false;
 }
 
+// Well-known public names a pharmacy answer may use without them being in the knowledge base (emergency number, payment
+// and legal acronyms, holidays). Pharmacy only: a product, brand or health plan the model names still has to be grounded.
+const PHARMACY_COMMON_TERMS = "SAMU Pix WhatsApp LGPD Anvisa CPF CNPJ CRF SUS UPA Procon RG CNH Natal Carnaval Páscoa Brasil";
+
 // Local duplicate of flow.service.ts's own normalize() — same small accent/punctuation-stripping
 // helper, kept per-module rather than exported across modules, matching this codebase's convention.
 function normalize(text: string): string {
@@ -1387,7 +1391,7 @@ export class ChatService {
       this.logger.warn(`grounding guard dropped unsupported figures: ${removed.join(" | ")}`);
     }
     const meaningful = strippedText.replace(/[^\p{L}]/gu, "").length >= MIN_MEANINGFUL_TEXT_LENGTH;
-    const entityHit = hasUngroundedEntityClaim(strippedText, ctx.retrievedChunkText, this.listingsGroundingAllowlist(ctx.allowlistText, ctx.browsingListings));
+    const entityHit = hasUngroundedEntityClaim(strippedText, ctx.retrievedChunkText, `${this.listingsGroundingAllowlist(ctx.allowlistText, ctx.browsingListings)}${ctx.niche === "farmacia" ? ` ${PHARMACY_COMMON_TERMS}` : ""}`);
 
     if (ctx.browsingListings?.length && (removed.length > 0 || entityHit || !strippedText.trim())) {
       // The cards are real DB rows carrying the real figures; only the prose was wrong (an invented

@@ -161,7 +161,7 @@ export interface PharmacyState {
   /** Saved default (full) offered for confirmation to a recognized customer; never shown unmasked. */
   savedAddressId?: string;
   addressDraft?: Partial<AddressSnapshot> & { replaceDefault?: boolean; needsStreet?: boolean; manual?: boolean };
-  order?: { id: string; code: string; status: string; statusUrl: string; totalCents: number } | null;
+  order?: { id: string; code: string; status: string; statusUrl: string; totalCents: number; fulfillment?: Fulfillment | null } | null;
   symptom?: {
     active: boolean;
     consent: boolean;

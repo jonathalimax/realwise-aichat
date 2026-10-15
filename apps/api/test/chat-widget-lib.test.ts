@@ -15,3 +15,12 @@ test("apiErrorMessage: a 4xx domain error keeps its own pt-BR message", () => {
   assert.equal(apiErrorMessage({ status: 422, data: { message: ["CEP inválido", "outro"] } }, "x"), "CEP inválido");
   assert.equal(apiErrorMessage({ status: 400, data: {} }, "fallback"), "fallback");
 });
+
+import { resolveApiAsset } from "../../chat/src/lib/api";
+test("resolveApiAsset: the uploaded logo route (relative to the API) becomes an absolute URL on the API origin; absolute URLs and junk are handled", () => {
+  const resolved = resolveApiAsset("/api/public/businesses/abc/logo?v=1");
+  assert.match(String(resolved), /^https?:\/\/[^/]+\/api\/public\/businesses\/abc\/logo\?v=1$/);
+  assert.equal(resolveApiAsset("https://cdn.example.com/logo.png"), "https://cdn.example.com/logo.png");
+  assert.equal(resolveApiAsset(null), null);
+  assert.equal(resolveApiAsset("javascript:alert(1)"), null);
+});

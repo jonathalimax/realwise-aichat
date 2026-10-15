@@ -27,5 +27,6 @@ export function readableOn(hex: string): "#ffffff" | "#09090b" {
     const c = v / 255;
     return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
   }) as [number, number, number];
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5 ? "#09090b" : "#ffffff";
+  // Highest-contrast choice: the black/white crossover sits at a relative luminance of ~0.18 (amber gets dark text).
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.18 ? "#09090b" : "#ffffff";
 }

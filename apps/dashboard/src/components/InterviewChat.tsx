@@ -203,8 +203,8 @@ export function InterviewChat({
             key={i}
             className={
               m.role === "owner"
-                ? "ml-auto max-w-[85%] rounded-xl rounded-br-sm bg-accent px-3 py-2 text-sm text-white"
-                : "max-w-[85%] rounded-xl rounded-bl-sm bg-surface px-3 py-2 text-sm text-ink"
+                ? "ml-auto max-w-[85%] whitespace-pre-wrap break-words rounded-xl rounded-br-sm bg-accent px-3 py-2 text-sm text-white [overflow-wrap:anywhere]"
+                : "max-w-[85%] whitespace-pre-wrap break-words rounded-xl rounded-bl-sm bg-surface px-3 py-2 text-sm text-ink [overflow-wrap:anywhere]"
             }
           >
             {m.content}

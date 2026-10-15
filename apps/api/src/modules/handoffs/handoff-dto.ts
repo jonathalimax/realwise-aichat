@@ -178,6 +178,19 @@ export function buildSuggestion(brief: Brief | null | undefined, liveInStock: Ma
   return { label: "Sugestão para o farmacêutico, não enviada ao cliente", text, products };
 }
 
+/**
+ * True only when the visitor accepted the health-data consent and the brief carries what they told us.
+ * A "Só chamar o farmacêutico" handoff (consent declined) and an urgent red-flag message have no such consent.
+ */
+export function briefHasHealthConsent(brief: Brief | null | undefined): boolean {
+  if (!brief || typeof brief !== "object") return false;
+  if (typeof brief.customerText === "string" && brief.customerText) return false;
+  return ["symptoms", "symptom", "duration", "severity", "forWhom", "age", "allergies", "pregnancy", "otherMedicines", "alreadyTried"].some((k) => {
+    const v = (brief as Record<string, unknown>)[k];
+    return typeof v === "string" ? v.trim() !== "" : Array.isArray(v) ? v.length > 0 : v != null && v !== false;
+  });
+}
+
 export function handoffDetailDto(
   h: HandoffRow,
   suggestion: ReturnType<typeof buildSuggestion>,
@@ -187,6 +200,7 @@ export function handoffDetailDto(
   return {
     ...handoffListDto(h, now),
     brief,
+    healthConsent: briefHasHealthConsent(brief),
     briefRows: buildBriefRows(brief),
     contact: contactDto(h),
     suggestion,

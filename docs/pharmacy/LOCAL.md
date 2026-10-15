@@ -48,6 +48,8 @@ cd apps/api && DEMO_MODE=attendance pnpm run seed:pharmacy     (or: pnpm run see
 
 You can also change it in the dashboard as the owner: Farmácia > Modo de operação (commerce is disabled on a plan without it).
 
+Demo knowledge base: the seed (also after `--reset`) fills Base de conhecimento with 37 store Q&As (`apps/api/scripts/pharmacy-demo-kb.ts`, saved through the same service and guards as the dashboard, keyword search only without an embedder) and 3 short documents, and creates the business profile (interview answers) consistent with the settings. A re-run refreshes the 37 demo answers; `SEED_SYNC_PROFILE=1` also rewrites the profile. QA data is removed with `pnpm --filter @realwise/api exec tsx scripts/zz-qa-cleanup.ts --apply` (prefix `zz-qa`).
+
 Options: `RESET_DEMO=1 scripts/dev-pharmacy.sh` recreates the demo pharmacy's data; `WITH_GATEWAY=1` also starts the inference gateway; `WITH_ADMIN=1` the platform admin app (:3004).
 
 | What | URL |

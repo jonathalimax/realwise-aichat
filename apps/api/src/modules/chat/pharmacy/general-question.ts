@@ -17,8 +17,14 @@ const CLINICAL =
 
 /** Anything that smells clinical goes to the pharmacist, never to a general (attendant) question. */
 export function clinicalQuestion(text: string): boolean {
-  return CLINICAL.test(fold(text));
+  const f = fold(text);
+  // "Vocês medem pressão arterial?" asks about a store SERVICE, not about health: only the words pressão/diabetes are
+  // forgiven, and only next to a service verb. Any other clinical word still escalates.
+  if (SERVICE_VERB.test(f) && /\b(pressao|diabetes)\b/.test(f) && !/\b(alta|baixa|subiu|caiu|controlar|controle|remedio|tomo|tomar|minha|meu|estou|estar|esta|sinto)\b/.test(f)) return CLINICAL.test(f.replace(/\bpressao( arterial)?\b/g, " ").replace(/\bdiabetes\b/g, " "));
+  return CLINICAL.test(f);
 }
+
+const SERVICE_VERB = /\b(mede|medem|medir|medicao|afere|aferem|aferir|aferic\w+|fazem|oferecem|servico|servicos|cobram|custa|valor|preco|gratis|gratuito)\b/;
 
 const QUESTION_START = /^(qual|quais|quando|onde|como|quanto|quantos|quem|tem|temos|voces|ha|existe|posso|pode|podem|da pra|aceitam|aceita|fazem|faz|trabalham|trabalha|funciona|funcionam|atendem|atende|e possivel|tem como|vcs)\b/;
 

@@ -30,9 +30,10 @@ function luminance(hex: string): number {
   return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
 }
 
-// Readable text colour over a brand colour (white on dark brands, near-black on light ones).
+// Readable text colour over a brand colour: whichever of white / near-black has the higher WCAG contrast
+// (the crossover is a relative luminance of about 0.18, so a mid-tone amber gets dark text, not white).
 function readableOn(hex: string): string {
-  return luminance(hex) > 0.45 ? "#09090b" : "#ffffff";
+  return luminance(hex) > 0.18 ? "#09090b" : "#ffffff";
 }
 
 export function resolvePharmacyBranding(branding?: PharmacyBranding | null) {

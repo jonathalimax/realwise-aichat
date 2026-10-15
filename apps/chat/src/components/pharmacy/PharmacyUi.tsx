@@ -189,7 +189,7 @@ function ErrorLine({ message }: { message: string | null }) {
 
 // One tap: the notice is shown as text and the button that follows IS the consent (no checkbox).
 function ConsentNotice({ consent }: { consent: ConsentCardData }) {
-  return <p className="text-xs leading-snug text-zinc-700">{consent.text}</p>;
+  return <p className="text-[13px] leading-snug text-zinc-800">{consent.text}</p>;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -1005,16 +1005,16 @@ function FulfillmentChoice({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUi
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-2" role="group" aria-label="Como você quer receber?">
         {ui.options.map((o: any) => (
-          <button key={o.value} type="button" className="ph-card flex min-h-[44px] items-center justify-between gap-3 p-3 text-left disabled:opacity-50 disabled:cursor-not-allowed" disabled={locked || o.disabled} aria-disabled={locked || o.disabled ? true : undefined} onClick={() => run({ type: "checkout.fulfillment", fulfillment: o.value }, o.label)}>
+          <button key={o.value} type="button" className={`ph-card flex min-h-[44px] items-center justify-between gap-3 p-3 text-left disabled:cursor-not-allowed ${o.disabled ? "" : "disabled:opacity-50"}`} disabled={locked || o.disabled} aria-disabled={locked || o.disabled ? true : undefined} onClick={() => run({ type: "checkout.fulfillment", fulfillment: o.value }, o.label)}>
             <span>
-              <span className="block text-sm font-semibold">{o.label}</span>
+              <span className={`block text-sm font-semibold ${o.disabled ? "text-zinc-500" : ""}`}>{o.label}</span>
               {o.disabled && o.disabledReason ? (
-                <span className="block text-xs text-red-700">Indisponível: {o.disabledReason}</span>
+                <span className="block text-xs font-medium text-red-800">Indisponível: {o.disabledReason}</span>
               ) : (
                 o.etaLabel && <span className="block text-xs text-zinc-500">{o.etaLabel}</span>
               )}
             </span>
-            <span className="text-sm font-bold">{o.disabled ? "—" : o.feeCents ? formatBRL(o.feeCents) : "Grátis"}</span>
+            <span className={`text-sm font-bold ${o.disabled ? "text-zinc-500" : ""}`}>{o.disabled ? "—" : o.feeCents ? formatBRL(o.feeCents) : "Grátis"}</span>
           </button>
         ))}
       </div>
@@ -1070,11 +1070,12 @@ function OrderReview({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContex
 function OrderConfirmation({ ui }: { ui: PharmacyUiPayload }) {
   const link = safeLink(ui.statusUrl);
   const confirmed = ui.status === "confirmed";
+  const pickup = ui.fulfillment === "pickup";
   const steps = [
     { label: "Recebido", on: true },
     { label: "Confirmado", on: confirmed },
-    { label: "Em entrega", on: false },
-    { label: "Entregue", on: false },
+    { label: pickup ? "Pronto para retirada" : "Em entrega", on: false },
+    { label: pickup ? "Retirado" : "Entregue", on: false },
   ];
   return (
     <div className="ph-card flex flex-col gap-2.5 p-3.5">

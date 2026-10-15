@@ -60,15 +60,15 @@ export function AlertsStrip() {
           key={a.id}
           role="status"
           className={cn(
-            "flex items-center gap-2 rounded-lg border py-1 pl-3 pr-1 text-[13px]",
+            "flex items-center gap-2 rounded-lg border py-1 pl-3 pr-1 text-[13px] max-md:flex-wrap",
             a.severity === "critical" ? "border-red-200 bg-red-50 text-red-900" : a.severity === "warning" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-accent/30 bg-brand-soft text-brand-2",
           )}
         >
-          <span className="min-w-0 flex-1 max-md:line-clamp-2 md:truncate" title={a.message}>
+          <span className="min-w-0 flex-1 max-md:basis-[calc(100%-3.5rem)] max-md:py-1.5 md:truncate" title={a.message}>
             {a.message}
           </span>
           {a.actionHref && (
-            <Link href={a.actionHref} className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-[13px] font-semibold underline-offset-2 hover:underline max-md:min-h-11">
+            <Link href={a.actionHref} className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-[13px] font-semibold underline-offset-2 hover:underline max-md:order-3 max-md:min-h-11 max-md:basis-full">
               {a.actionLabel ?? "Abrir"}
             </Link>
           )}

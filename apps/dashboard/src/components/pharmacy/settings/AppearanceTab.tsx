@@ -93,6 +93,21 @@ function Editor({
     }
   }
 
+  async function removeLogo() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await saveBranding({ logoUrl: null });
+      onSaved(res);
+      await refresh();
+      setMsg({ kind: "ok", text: "Logo removido." });
+    } catch (e) {
+      setMsg({ kind: "error", text: errorMessage(e, "Não consegui remover o logo.") });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const p1 = HEX.test(colors.primaryColor) ? colors.primaryColor : defaults.primaryColor;
   const p2 = HEX.test(colors.secondaryColor) ? colors.secondaryColor : defaults.secondaryColor;
   const p3 = HEX.test(colors.tertiaryColor) ? colors.tertiaryColor : defaults.tertiaryColor;
@@ -145,9 +160,16 @@ function Editor({
             {canEdit && (
               <>
                 <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="sr-only" id="logo-file" onChange={(e) => onLogo(e.target.files?.[0])} />
-                <Button variant="outline" size="sm" disabled={busy} onClick={() => fileRef.current?.click()}>
-                  {logo ? "Trocar imagem" : "Enviar imagem"}
-                </Button>
+                <span className="flex flex-wrap items-center justify-end gap-2">
+                  <Button variant="outline" size="sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+                    {logo ? "Trocar imagem" : "Enviar imagem"}
+                  </Button>
+                  {logo && (
+                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => void removeLogo()}>
+                      Remover logo
+                    </Button>
+                  )}
+                </span>
               </>
             )}
           </div>
@@ -173,7 +195,12 @@ function Editor({
       <SectionCard className="min-w-0 flex-[1_1_340px]" title="Pré-visualização do chat">
         <div className="overflow-hidden rounded-[14px] border border-border">
           <div className="flex items-center gap-2.5 p-3.5" style={{ background: p1, color: readableOn(p1) }}>
-            <span className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-full bg-white text-xs font-semibold text-zinc-900">A</span>
+            {logo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logo} alt="" className="h-8 w-8 flex-none rounded-full bg-white object-cover" />
+            ) : (
+              <span className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-full bg-white text-xs font-semibold text-zinc-900">A</span>
+            )}
             <div>
               <b>Alex</b>{" "}
               <span className="inline-flex h-[18px] items-center rounded-full px-2 text-xs font-semibold" style={{ background: p3, color: readableOn(p3) }}>

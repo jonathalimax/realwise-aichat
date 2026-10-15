@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import { ApiError } from "../../../lib/api";
+import { API_BASE_URL, ApiError } from "../../../lib/api";
+import { assetUrl } from "../../../lib/format";
 import { acceptInvite, getInvite, type InvitePreview } from "../../../lib/pharmacy-api";
 import { homeFor } from "../../../lib/nav";
 import { hexToTriplet, tint } from "../../../lib/color";
@@ -79,7 +80,7 @@ export default function AcceptInvitePage() {
         <div className="flex items-center justify-center gap-2.5">
           {invite?.business.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={invite.business.logoUrl} alt="" className="h-9 w-9 rounded-[9px] object-cover" />
+            <img src={assetUrl(invite.business.logoUrl, API_BASE_URL) ?? undefined} alt="" className="h-9 w-9 rounded-[9px] object-cover" />
           ) : (
             <span className="flex h-9 w-9 items-center justify-center rounded-[9px] bg-brand text-white" aria-hidden>
               <Plus className="h-5 w-5" strokeWidth={2.4} />

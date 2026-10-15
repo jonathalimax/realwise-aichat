@@ -84,7 +84,7 @@ function Equipe() {
                     <TableHead>Pessoa</TableHead>
                     <TableHead>Função</TableHead>
                     <TableHead>Situação</TableHead>
-                    <TableHead>Último acesso</TableHead>
+                    <TableHead className="max-md:hidden">Último acesso</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -99,7 +99,7 @@ function Equipe() {
                             <div className="min-w-0">
                               <b>{m.name}</b>
                               {m.id === me?.member.id && <span className="ml-1.5 text-xs text-muted">(você)</span>}
-                              <div className="truncate text-xs text-muted">{m.email}</div>
+                              <div className="truncate text-xs text-muted max-md:hidden">{m.email}</div>
                             </div>
                           </div>
                         </TableCell>
@@ -110,7 +110,7 @@ function Equipe() {
                         <TableCell>
                           <Badge variant={MEMBER_STATUS_BADGE[m.status]}>{m.statusLabel}</Badge>
                         </TableCell>
-                        <TableCell className="text-muted">{m.lastAccessAt ? timeAgo(m.lastAccessAt) : "nunca"}</TableCell>
+                        <TableCell className="text-muted max-md:hidden">{m.lastAccessAt ? timeAgo(m.lastAccessAt) : "nunca"}</TableCell>
                         <TableCell className="text-right">
                           {protectedFromMe ? (
                             <span className="text-xs text-muted">Só um proprietário altera</span>

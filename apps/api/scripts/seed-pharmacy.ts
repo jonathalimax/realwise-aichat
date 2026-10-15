@@ -20,6 +20,9 @@ import { dirname, resolve } from "path";
 import { prisma } from "@realwise/db";
 import { StarterRolesService } from "../src/modules/access/starter-roles.service";
 import { dedupKeyFor } from "../src/modules/products/product-utils";
+import { KnowledgeQaService } from "../src/modules/knowledge/knowledge-qa.service";
+import { chunkMarkdown } from "../../worker/src/chunking";
+import { DEMO_DOCS, DEMO_QA } from "./pharmacy-demo-kb";
 import { DEMO_AREAS, DEMO_CUSTOMERS, DEMO_HOURS, DEMO_MEMBERS, DEMO_PASSWORD, DEMO_PRODUCTS, type DemoProduct } from "./pharmacy-demo-data";
 
 const SLUG = "farmacia-exemplo";
@@ -579,6 +582,70 @@ async function main() {
       ["Marcos Silva", memberId.courier, "order.out", "PED-1008", "Marcou PED-1008 como saiu para entrega", ago({ h: 2, m: 40 }), "Pedido"],
     ] as const;
     for (const e of E) await log(e[0], e[1], e[2], e[3], e[4], e[5], e[6]);
+  }
+
+  // ---- business profile (the interview answers the chat prompt reads next to the settings): must agree with the settings.
+  // Created when missing; with SEED_SYNC_PROFILE=1 (or after a --reset) it is rewritten to the demo values.
+  {
+    const data = {
+      modo_operacao: "comércio",
+      razao_social_cnpj: "Farmácia Exemplo Ltda, CNPJ 11.222.333/0001-81",
+      afe_licenca: "AFE 1.23456.7",
+      farmaceutico_responsavel: "Dra. Carla Menezes, CRF-PR 12345",
+      horario_funcionamento: "Segunda a sexta das 8h às 22h, sábado das 8h às 20h, domingo e feriados das 9h às 18h",
+      areas_entrega: "Centro, Batel, Água Verde, Bigorrilho e Portão",
+      taxa_entrega: "R$ 6,00",
+      pedido_minimo: "R$ 25,00",
+      retirada_loja: "Temos retirada em loja, sem custo",
+      limite_quantidade_item: "No máximo 5 unidades por item",
+      produtos_exigem_farmaceutico: "Xarope: o farmacêutico confirma sempre antes de vender",
+      formas_pagamento_entrega: "Pix, cartão de débito, cartão de crédito e dinheiro",
+      politica_troca_devolucao: "Trocas em até 7 dias com a embalagem lacrada e a nota fiscal. Medicamentos não são trocados após a entrega.",
+    };
+    const stamp = new Date().toISOString();
+    const fieldStatus = Object.fromEntries(Object.keys(data).map((k) => [k, { source: "seed", updatedAt: stamp, approvedByOwner: true }]));
+    const existingProfile = await prisma.businessProfile.findUnique({ where: { businessId } });
+    if (!existingProfile) await prisma.businessProfile.create({ data: { businessId, templateVersion: "0.1.0", data, fieldStatus } });
+    else if (process.env.SEED_SYNC_PROFILE === "1") await prisma.businessProfile.update({ where: { businessId }, data: { data, fieldStatus, cachedSummary: null } });
+  }
+
+  // ---- knowledge base: Q&A through the same service the dashboard uses (guards included), plus 3 demo documents.
+  // Idempotent: a question or document that already exists is left alone. Keyword search only (no embedder needed).
+  {
+    const qaService = new KnowledgeQaService({ client: prisma } as never, { record: async () => undefined } as never);
+    const owner = await prisma.businessMember.findUnique({ where: { id: memberId.owner } });
+    const ctx = { memberId: memberId.owner, businessId, niche: "farmacia", name: owner?.name ?? "Dono", email: owner?.email ?? null, crf: null, roleId: owner?.roleId ?? "", roleKey: "owner", roleName: "Dono", requiresCrf: false, ownDeliveriesOnly: false, permissions: {} } as never;
+    let created = 0;
+    let skipped = 0;
+    for (const qa of DEMO_QA) {
+      try {
+        const before = await prisma.knowledgeDocument.findFirst({ where: { businessId, source: "qa", filename: qa.q } });
+        if (before && before.extractedMarkdown === qa.a) {
+          skipped++;
+          continue;
+        }
+        // An existing demo question gets the demo answer again (replaceExisting); anything else is created.
+        await qaService.create(ctx, { question: qa.q, answer: qa.a }, { replaceExisting: true });
+        created++;
+      } catch (e) {
+        const code = (e as { response?: { code?: string } }).response?.code;
+        console.warn(`KB Q&A refused (${code ?? "error"}): ${qa.q}`);
+      }
+    }
+    let docsCreated = 0;
+    for (const d of DEMO_DOCS) {
+      if (await prisma.knowledgeDocument.findFirst({ where: { businessId, filename: d.filename } })) continue;
+      const key = `tenants/${businessId}/documents/demo-${d.filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      await put(key, Buffer.from(d.content, "utf-8"));
+      const doc = await prisma.knowledgeDocument.create({
+        data: { businessId, filename: d.filename, mimeType: "text/plain", sizeBytes: Buffer.byteLength(d.content), storageKey: key, source: "upload", status: "processed", extractedMarkdown: d.content },
+      });
+      for (const c of chunkMarkdown(d.content)) {
+        await prisma.knowledgeChunk.create({ data: { businessId, documentId: doc.id, ordinal: c.ordinal, content: c.content, tokenCount: c.tokenCount } });
+      }
+      docsCreated++;
+    }
+    console.log(`Knowledge base: ${created} Q&A created or refreshed, ${skipped} unchanged, ${docsCreated} documents created.`);
   }
 
   // ---- operation mode (chosen) of the demo; the plan above decides what is allowed

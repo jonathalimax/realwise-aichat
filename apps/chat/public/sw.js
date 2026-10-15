@@ -14,9 +14,10 @@ self.addEventListener("push", (event) => {
     body: payload.body || "",
     tag: payload.tag,
     renotify: true,
-    icon: "/clara-avatar.jpg",
-    badge: "/clara-avatar.jpg",
-    data: { url: payload.url || "/" },
+    // The widget lives under a base path: assets and the default link are resolved against the worker's own scope.
+    icon: new URL("clara-avatar.jpg", self.registration.scope).href,
+    badge: new URL("clara-avatar.jpg", self.registration.scope).href,
+    data: { url: payload.url || self.registration.scope },
   };
 
   event.waitUntil(self.registration.showNotification(title, options));

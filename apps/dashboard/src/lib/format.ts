@@ -86,6 +86,8 @@ export function previewText(raw: string | null | undefined): string {
   // "Pedido PED-1016 confirmado! Acompanhe: http://…" -> "Pedido PED-1016 confirmado"
   const order = t.match(/Pedido\s+(PED-\d+)\s+(confirmado|recebido|cancelado|pronto)/i);
   if (order) return `Pedido ${order[1]} ${order[2].toLowerCase()}`;
+  // The chat answers carry light markdown ("**Horário de atendimento**\n- Segunda a sexta"): the list shows plain text.
+  t = t.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/^\s*[-•]\s+/gm, "");
   t = t.replace(/https?:\/\/([^\s/]+)[^\s]*/gi, (_m, host: string) => `${host}…`);
   t = t.replace(/\s*(Acompanhe|Acompanhe o status)\s*:\s*$/i, "").replace(/\s+/g, " ").trim();
   return t.length > 140 ? `${t.slice(0, 137)}…` : t;
