@@ -1,9 +1,12 @@
-import type { Viewport } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ChunkErrorReload } from "../components/ChunkErrorReload";
 
 const sans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+
+// The icon is a public file requested under the assetPrefix (/_c), so it never collides with the marketing app's /icon.svg.
+export const metadata: Metadata = { icons: { icon: "/_c/icon.svg" } };
 
 // Without this, Next.js App Router emits no viewport meta tag, leaving mobile
 // browsers to pick their own default scale — this is what caused the chat to

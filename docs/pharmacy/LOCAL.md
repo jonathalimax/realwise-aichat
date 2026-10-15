@@ -14,7 +14,7 @@ Everything here is local only: local Postgres, local Redis, no deploy, no real e
   (`scripts/dev-pharmacy.sh` does this for you when they are down.)
 - A git-ignored `.env` at the repo root with local values (it already exists on this machine). It needs at least
   `DATABASE_URL` (localhost), `SESSION_SECRET`, `INFERENCE_GATEWAY_TOKEN`, `LOCAL_STORAGE_DIR` (absolute path, `.local-storage` in the repo),
-  `REDIS_URL`, `API_PORT=3006`, `NEXT_PUBLIC_API_URL=http://localhost:3006/api`, `NEXT_PUBLIC_CHAT_URL=http://localhost:3005/client/conversation`,
+  `REDIS_URL`, `API_PORT=3006`, `NEXT_PUBLIC_API_URL=http://localhost:3006/api`, `NEXT_PUBLIC_CHAT_URL=http://localhost:3005` (a legacy `.../client/conversation` value still works: the API normalises it to the origin),
   `CORS_ALLOWED_ORIGINS`, and placeholder `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` (the API refuses to boot without them).
   Firebase is not configured, so phone login does not work locally: use e-mail + password.
 - `pnpm install` done once.
@@ -55,7 +55,8 @@ Options: `RESET_DEMO=1 scripts/dev-pharmacy.sh` recreates the demo pharmacy's da
 | What | URL |
 | --- | --- |
 | Dashboard | http://localhost:3003/farmacia/app/login |
-| Chat widget (Alex) | http://localhost:3005/client/conversation/farmacia-exemplo |
+| Chat widget (Alex) | http://localhost:3005/farmacia-exemplo/chat |
+| Same-domain simulator (production URL scheme) | http://localhost:8080 (`WITH_PROXY=1 scripts/dev-pharmacy.sh` or `pnpm dev:proxy`; details in `URLS.md`) |
 | Landing page | http://localhost:3007/farmacia |
 | API health | http://localhost:3006/api/health |
 

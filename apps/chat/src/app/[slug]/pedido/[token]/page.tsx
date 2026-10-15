@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { OrderStatusView } from "../../../components/pharmacy/OrderStatusView";
+import { OrderStatusView } from "../../../../components/pharmacy/OrderStatusView";
 
 // The token in the URL is the only credential of this page: keep it out of search indexes and
 // out of Referer headers.

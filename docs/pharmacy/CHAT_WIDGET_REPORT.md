@@ -14,7 +14,7 @@ Scope: `apps/chat/**` and `apps/marketing/**` only. Contract: `API.md` sections 
 - **Fulfillment**, **order review** (stale-stock notice, "Pagamento na entrega"), **order confirmation** (stepper badges + "Acompanhar pedido" link).
 - **Rx upload**: consent checkbox, "Tirar foto" (camera capture) / "Escolher arquivo", client-side type and size check, multipart `POST .../prescriptions` (consent `"true"`, optional patient name), confirmation with RX code, local assistant note.
 - **Human join**: `role: system` + `kind: human_joined` renders the centred "Nome · Função entrou na conversa" banner; `owner` messages with `author` show avatar initials + "Nome · Função" on a soft bubble. The generic "<business> entrou na conversa" line is suppressed for pharmacy. Polling (8 s, 15 min cap, existing mechanism) now also runs for pharmacy once a handoff was requested, the lane is `symptom`, or a human has joined.
-- **Order status page** `apps/chat` route `/pedido/[token]` (full URL `<chat origin>/client/conversation/pedido/<token>`): themed by `pharmacy.branding`; received / confirmed / out for delivery / ready for pickup / delivered / canceled / rejected with the step timeline, cancel reason, items and totals, address (as returned, masked), WhatsApp/phone buttons, polls every 20 s until terminal; `noindex` and `no-referrer`; 404 and error states.
+- **Order status page** `apps/chat` route `/[slug]/pedido/[token]` (full URL `<chat origin>/<slug>/pedido/<token>`): themed by `pharmacy.branding`; received / confirmed / out for delivery / ready for pickup / delivered / canceled / rejected with the step timeline, cancel reason, items and totals, address (as returned, masked), WhatsApp/phone buttons, polls every 20 s until terminal; `noindex` and `no-referrer`; 404 and error states.
 - **Marketing**: `/farmacia` (and `/farmacias` redirect) landing polish: "IA" badge in the hero mock, pharmacy-specific problem stats (no invented numbers), new "Segurança que não depende de promessa" section (`NicheConfig.safety`, optional, other niches unchanged). Niche picker card and footer link were already consistent; the page stays "lista de espera" like the other early-access niches.
 - Accessibility: real buttons, labelled inputs, `aria-live` regions, `role="alert"` errors, 40 px touch targets, 16 px inputs (no iOS zoom).
 
@@ -30,7 +30,7 @@ Scope: `apps/chat/**` and `apps/marketing/**` only. Contract: `API.md` sections 
 
 1. `symptom.answer` carries an extra `consent: true` when the question card included a `consent` object (API.md has no field for it; the first answer is blocked until the checkbox is ticked).
 2. `GET .../messages` is expected to return top-level `pharmacy` (as in 8.1); `done` SSE `message` may carry `id`, `kind`, `author`, `ui`; `done.pharmacy` is used if present. If `done.message.ui` is absent the card simply is not shown until history reloads.
-3. `statusUrl` is rendered as given (http(s) or same-site relative only). It should point at `<chat origin>/client/conversation/pedido/<statusToken>`.
+3. `statusUrl` is rendered as given (http(s) or same-site relative only). It should point at `<chat origin>/<slug>/pedido/<statusToken>`.
 4. The widget needs `business.pharmacy.cnpj/legalName/pharmacistName/pharmacistCrf/quickChips` and `business.branding` from `GET /businesses/public/:slug`, and `logoUrl`. Product images: API-relative `/api/public/products/...` URLs are resolved against the API origin.
 5. `api.ts` `request()` now also attaches the parsed error body as `error.data` (additive).
 

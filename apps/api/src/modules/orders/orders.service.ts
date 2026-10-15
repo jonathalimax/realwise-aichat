@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { orderTrackingLink } from "../../common/chat-links";
 import { loadOperationMode } from "../pharmacy-common/operation-mode";
 import { randomBytes } from "crypto";
 import { Prisma } from "@realwise/db";
@@ -84,9 +85,8 @@ export interface CreatedOrder {
   pendingReasons: string[];
 }
 
-export function orderStatusUrl(statusToken: string): string {
-  const base = (process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005/client/conversation").replace(/\/+$/, "");
-  return `${base}/pedido/${statusToken}`;
+export function orderStatusUrl(slug: string, statusToken: string): string {
+  return orderTrackingLink(slug, statusToken);
 }
 
 @Injectable()
@@ -249,7 +249,7 @@ export class OrdersService {
   private async afterTransition(o: { id: string; code: string; statusToken: string; businessId: string; lead: { email: string | null } }, to: OrderStatus, businessId: string, now: Date) {
     if (to !== "pending_pharmacist") void this.notifications.orderHandled(businessId, o.code).catch(() => {});
     if (isClosed(to)) await this.startRetentionClock(o.id, businessId, now);
-    void this.notifyCustomer(o, to).catch((e) => logger.warn(`customer notification failed: ${e instanceof Error ? e.message : e}`));
+    void this.notifyCustomer(o, to, businessId).catch((e) => logger.warn(`customer notification failed: ${e instanceof Error ? e.message : e}`));
   }
 
   /** Order closed: prescriptions get retentionDeleteAt = max(closedAt, reviewedAt) + retention days. */
@@ -265,10 +265,12 @@ export class OrdersService {
   }
 
   /** Status page is the primary channel; email is a stub that logs without RESEND_API_KEY. No health data. */
-  private async notifyCustomer(o: { code: string; statusToken: string; lead: { email: string | null } }, to: OrderStatus) {
+  private async notifyCustomer(o: { code: string; statusToken: string; lead: { email: string | null } }, to: OrderStatus, businessId: string) {
     if (!o.lead.email || to === "pending_pharmacist") return;
+    const biz = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { slug: true } });
+    if (!biz) return;
     const label = ORDER_STATUS_LABEL[to];
-    const html = `<p>Seu pedido <strong>${escapeHtml(o.code)}</strong> agora está: <strong>${escapeHtml(label)}</strong>.</p><p><a href="${escapeHtml(orderStatusUrl(o.statusToken))}">Acompanhar pedido</a></p>`;
+    const html = `<p>Seu pedido <strong>${escapeHtml(o.code)}</strong> agora está: <strong>${escapeHtml(label)}</strong>.</p><p><a href="${escapeHtml(orderStatusUrl(biz.slug, o.statusToken))}">Acompanhar pedido</a></p>`;
     await sendEmail(o.lead.email, `Pedido ${o.code}: ${label}`, html);
   }
 
@@ -427,6 +429,7 @@ export class OrdersService {
       return order;
     });
 
+    const bizSlug = (await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { slug: true } }))?.slug ?? "";
     void this.notifications.newOrder({ businessId, code: created.code, totalCents, fulfillment: input.fulfillment, autoConfirmed: decision.auto }).catch(() => {});
     return {
       id: created.id,
@@ -435,7 +438,7 @@ export class OrdersService {
       status,
       autoConfirmed: decision.auto,
       statusToken,
-      statusUrl: orderStatusUrl(statusToken),
+      statusUrl: orderStatusUrl(bizSlug, statusToken),
       subtotalCents,
       deliveryFeeCents,
       totalCents,

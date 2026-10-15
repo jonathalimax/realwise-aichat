@@ -1,8 +1,11 @@
 import { getPushPublicKey, subscribePush, unsubscribePush } from "./api";
 
-// Keep in sync with `basePath` in next.config.mjs: the widget (and its service worker) is served under it, never at the origin root.
-export const CHAT_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "/client/conversation";
-export const SW_URL = `${CHAT_BASE_PATH}/sw.js`;
+// The worker is served by app/[slug]/chat/sw.js/route.ts with `Service-Worker-Allowed: /<slug>/`, so the
+// registration scope is `/<slug>/` (covers /<slug>/chat and /<slug>/pedido/*).
+// Public files are requested under the assetPrefix (`/_c`, see next.config.mjs).
+export { ASSET_PREFIX } from "./asset-prefix";
+export const swUrl = (slug: string) => `/${encodeURIComponent(slug)}/chat/sw.js`;
+export const swScope = (slug: string) => `/${encodeURIComponent(slug)}/`;
 
 export function isPushSupported(): boolean {
   return (
@@ -27,6 +30,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 }
 
 export async function enablePush(
+  slug: string,
   businessId: string,
   conversationId: string,
 ): Promise<"granted" | "denied" | "unsupported" | "error"> {
@@ -36,7 +40,7 @@ export async function enablePush(
     const { publicKey } = await getPushPublicKey(businessId);
     if (!publicKey) return "error";
 
-    const registration = await navigator.serviceWorker.register(SW_URL, { scope: `${CHAT_BASE_PATH}/` });
+    const registration = await navigator.serviceWorker.register(swUrl(slug), { scope: swScope(slug) });
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return permission === "denied" ? "denied" : "error";
 
@@ -53,10 +57,10 @@ export async function enablePush(
 }
 
 /** Turns the notification off for this conversation: revokes it on the server, then drops the browser subscription. */
-export async function disablePush(businessId: string, conversationId: string): Promise<boolean> {
+export async function disablePush(slug: string, businessId: string, conversationId: string): Promise<boolean> {
   if (!isPushSupported()) return false;
   try {
-    const registration = await navigator.serviceWorker.getRegistration(`${CHAT_BASE_PATH}/`);
+    const registration = await navigator.serviceWorker.getRegistration(swScope(slug));
     const subscription = await registration?.pushManager.getSubscription();
     if (!subscription) return true;
     await unsubscribePush(businessId, conversationId, subscription.endpoint);

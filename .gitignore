@@ -11,3 +11,4 @@ storage/
 *.traineddata
 .local-storage/
 .local-logs/
+.next-concessionaria

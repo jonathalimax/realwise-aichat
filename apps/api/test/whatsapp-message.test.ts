@@ -122,7 +122,7 @@ test("general_question message: greeting + the customer's question, no symptom w
 
 test("resume link is appended last, never truncated, and the whole text stays under the cap", () => {
   const link = buildChatResumeLink({ slug: "farmacia-x", conversationId: "c1", resumeToken: "tok", baseUrl: "http://localhost:3005" });
-  assert.equal(link, "http://localhost:3005/client/conversation/farmacia-x?c=c1&t=tok");
+  assert.equal(link, "http://localhost:3005/farmacia-x/chat?c=c1&t=tok");
   const long = "muito ".repeat(60);
   const msg = buildWhatsappMessage({
     customerName: "Maria", attendantName: "Paulo", attendantRole: "Farmacêutico", pharmacyName: "Farmácia X", reason: "symptom",
@@ -134,8 +134,8 @@ test("resume link is appended last, never truncated, and the whole text stays un
   assert.ok(!noLink.includes("Para continuar"));
 });
 
-test("chat base url: adds the basePath once, tolerates trailing slashes and an env that already has it", () => {
-  assert.equal(chatBaseUrl("https://chat.x.com/"), "https://chat.x.com/client/conversation");
-  assert.equal(chatBaseUrl("https://chat.x.com/client/conversation"), "https://chat.x.com/client/conversation");
-  assert.equal(chatBaseUrl(""), "http://localhost:3005/client/conversation");
+test("chat base url: always the bare origin (legacy /client/conversation tolerated)", () => {
+  assert.equal(chatBaseUrl("https://chat.x.com/"), "https://chat.x.com");
+  assert.equal(chatBaseUrl("https://chat.x.com/client/conversation"), "https://chat.x.com");
+  assert.equal(chatBaseUrl(""), "http://localhost:3005");
 });

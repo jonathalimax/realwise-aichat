@@ -50,7 +50,7 @@ All commands: `export PATH=/opt/homebrew/opt/node@20/bin:/opt/homebrew/bin:$PATH
 | Inference gateway | `cd apps/inference-gateway && pnpm dev` (no Ollama locally: model calls degrade) | 3002 |
 | Dashboard | `cd apps/dashboard && pnpm dev` (basePath `/imobiliaria/app`) | 3003 |
 | Admin | `cd apps/admin && pnpm dev` | 3004 |
-| Chat widget | `cd apps/chat && pnpm dev` (basePath `/client/conversation`, e.g. `http://localhost:3005/client/conversation/<slug>`) | 3005 |
+| Chat widget | `cd apps/chat && pnpm dev` (no basePath; `http://localhost:3005/<slug>/chat`, see `URLS.md`) | 3005 |
 | Marketing | `cd apps/marketing && pnpm dev` | 3007 |
 
 Frontends default to `http://localhost:3006/api` (Next only reads `.env*` inside each app folder, not the root `.env`).

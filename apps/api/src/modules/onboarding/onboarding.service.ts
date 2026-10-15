@@ -8,6 +8,7 @@ import { generateFromGateway } from "../../inference/gateway-client";
 import { extractJsonObject } from "../../inference/json-extract";
 import { PharmacySettingsService } from "../pharmacy-settings/pharmacy-settings.service";
 import { classifyOperationModeAnswer } from "../pharmacy-settings/proposals";
+import { chatLink } from "../../common/chat-links";
 import { loadOperationMode } from "../pharmacy-common/operation-mode";
 
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
@@ -180,8 +181,7 @@ export class OnboardingService {
     if (gaps.length === 0) {
       const hasRealSlug = !!business.slug && !business.slug.startsWith("pending-");
       if (confidenceScore >= 70 && hasRealSlug) {
-        const chatPublicUrl = process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005";
-        const publicUrl = `${chatPublicUrl}/${business.slug}`;
+        const publicUrl = chatLink(business.slug);
         return {
           reply: [
             `Perfil pronto! Com ${confidenceScore}% de prontidão, já cobrimos tudo que eu precisava saber.`,

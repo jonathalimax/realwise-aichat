@@ -8,7 +8,7 @@
 process.env.CHAT_LLM_TIMEOUT_MS = "150";
 process.env.CHAT_LLM_DEADLINE_MS = "800";
 process.env.CHAT_LLM_RETRY_BASE_MS = "5";
-process.env.NEXT_PUBLIC_CHAT_URL = "http://localhost:3005/chat";
+process.env.NEXT_PUBLIC_CHAT_URL = "http://localhost:3005";
 
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";

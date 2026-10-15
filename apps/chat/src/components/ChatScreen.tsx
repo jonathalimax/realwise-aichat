@@ -16,7 +16,7 @@ import {
   apiErrorMessage,
   resolveApiAsset,
 } from "../lib/api";
-import { isPushSupported, enablePush, CHAT_BASE_PATH } from "../lib/push";
+import { isPushSupported, enablePush, ASSET_PREFIX } from "../lib/push";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
@@ -397,7 +397,7 @@ function BusinessAvatar({
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={`${CHAT_BASE_PATH}/clara-avatar.jpg`}
+        src={`${ASSET_PREFIX}/clara-avatar.jpg`}
         alt={personaName}
         className="h-10 w-10 flex-none rounded-card object-cover shadow-sm"
         onError={() => setClaraFailed(true)}
@@ -1023,7 +1023,7 @@ export function ChatScreen({
     if (!business || !conversationId) return;
     if (!isPushSupported()) return;
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-    enablePush(business.id, conversationId).catch(() => {});
+    enablePush(slug, business.id, conversationId).catch(() => {});
   }, [business, conversationId]);
 
   async function handlePushChoice(accepted: boolean) {
@@ -1032,7 +1032,7 @@ export function ChatScreen({
     localStorage.setItem(askedKey, "1");
 
     if (accepted) {
-      const result = await enablePush(business.id, conversationId);
+      const result = await enablePush(slug, business.id, conversationId);
       setMessages((prev) => [
         ...prev,
         {

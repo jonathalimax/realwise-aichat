@@ -3,6 +3,7 @@
 //   -> deterministic cart + checkout state machine persisted in Conversation.pharmacyState.
 // Everything here works with the model completely unavailable. See docs/pharmacy/CHAT_ENGINE_REPORT.md.
 
+import { orderTrackingLink } from "../../../common/chat-links";
 import { retrieveChunksForChat, expandAbbreviations } from "../knowledge-retrieval";
 import { residualTopicTokens, scoreChunk } from "../kb-matching";
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
@@ -2521,9 +2522,8 @@ export class PharmacyChatService {
     t.chips(CHIPS.confirmOrder, ...(reused ? [CHIPS.otherAddress] : []), CHIPS.changeItems, CHIPS.cancel);
   }
 
-  private statusUrl(token: string): string {
-    const base = (process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005").replace(/\/$/, "");
-    return `${base}/pedido/${token}`;
+  private statusUrl(t: Turn, token: string): string {
+    return orderTrackingLink(t.business.slug, token);
   }
 
   private async confirmOrder(t: Turn) {
@@ -2611,7 +2611,7 @@ export class PharmacyChatService {
       t.chips(CHIPS.confirmOrder, CHIPS.talkPharmacist);
       return;
     }
-    const url = this.statusUrl(created.statusToken);
+    const url = this.statusUrl(t, created.statusToken);
     s.order = { id: created.id, code: created.code, status: created.status, statusUrl: url, totalCents: created.totalCents, fulfillment: fulfillmentUsed };
     s.checkoutStep = "done";
     s.awaiting = null;
@@ -3382,7 +3382,7 @@ export class PharmacyChatService {
       canceled: "cancelado",
       rejected: "recusado",
     };
-    t.say(`Seu pedido ${order.code} está ${label[order.status] ?? order.status}. Acompanhe: ${this.statusUrl(order.statusToken)}`);
+    t.say(`Seu pedido ${order.code} está ${label[order.status] ?? order.status}. Acompanhe: ${this.statusUrl(t, order.statusToken)}`);
     t.chips(CHIPS.makeOrder, CHIPS.talkPharmacist);
   }
 }

@@ -4,9 +4,9 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ConfirmationResult } from "firebase/auth";
-import { maskBrPhone, brPhoneToE164, getPlanDefinition, isPlanCode } from "@realwise/shared";
+import { maskBrPhone, brPhoneToE164, getPlanDefinition, isPlanCode, dashboardRedirect } from "@realwise/shared";
 import { createRecaptchaVerifier, sendPhoneOtp } from "../../lib/firebase";
-import { verifyFirebaseToken, ApiError } from "../../lib/api";
+import { verifyFirebaseToken, ApiError, BASE_PATH_PREFIX } from "../../lib/api";
 import { memberLogin, forgotPassword } from "../../lib/pharmacy-api";
 import { homeFor } from "../../lib/nav";
 import { Input } from "../../components/ui/input";
@@ -24,10 +24,11 @@ export default function LoginPage() {
 
 // Each niche gets its own login look (persona, colours) on the same shared login. The niche comes from
 // the link (?niche=farmacia); real estate stays the default so existing links look unchanged.
-type LoginNiche = "imobiliaria" | "farmacia";
-const LOGIN_THEMES: Record<LoginNiche, { brand: string; lead: string; persona: string; tail: string; panelClass: string; accent: string; defaultMode: "email" | null }> = {
-  imobiliaria: { brand: "Realwise", lead: "Enquanto você dorme,", persona: "a Clara", tail: "responde.", panelClass: "bg-ink", accent: "#15803D", defaultMode: null },
-  farmacia: { brand: "Realwise Farmácia", lead: "Enquanto você atende no balcão,", persona: "o Alex", tail: "cuida do chat.", panelClass: "bg-[#0B4F4A]", accent: "#F59E0B", defaultMode: "email" },
+type LoginNiche = "imobiliaria" | "farmacia" | "concessionaria";
+const LOGIN_THEMES: Record<LoginNiche, { brand: string; lead: string; persona: string; tail: string; panelClass: string; accent: string; accentVar: string | null; defaultMode: "email" | null }> = {
+  imobiliaria: { brand: "Realwise", lead: "Enquanto você dorme,", persona: "a Clara", tail: "responde.", panelClass: "bg-ink", accent: "#15803D", accentVar: null, defaultMode: null },
+  concessionaria: { brand: "Realwise Concessionárias", lead: "Enquanto você fecha negócio,", persona: "o Tom", tail: "atende quem chega.", panelClass: "bg-[#14284B]", accent: "#38BDF8", accentVar: "29 78 216", defaultMode: null },
+  farmacia: { brand: "Realwise Farmácia", lead: "Enquanto você atende no balcão,", persona: "o Alex", tail: "cuida do chat.", panelClass: "bg-[#0B4F4A]", accent: "#F59E0B", accentVar: "15 118 110", defaultMode: "email" },
 };
 
 const WHATSAPP_URL = "https://wa.me/5585992265544?text=" + encodeURIComponent("Oi! Estou tentando entrar no painel da Realwise e deu erro.");
@@ -38,8 +39,20 @@ function isRateLimitError(err: unknown): boolean {
   return status === 429 || code === "auth/too-many-requests" || code === "auth/quota-exceeded";
 }
 
+// A member who signs in at another niche's prefix (a pharmacy member at /imobiliaria/app/login) is sent to their own
+// dashboard (another container, so a full navigation) instead of seeing the wrong menu.
+function useGoToDashboard() {
+  const router = useRouter();
+  return (niche: string | null | undefined, path: string) => {
+    const dest = dashboardRedirect(niche, path, BASE_PATH_PREFIX);
+    if (dest.crossPrefix) window.location.assign(dest.href);
+    else router.push(dest.href);
+  };
+}
+
 function LoginPageInner() {
   const router = useRouter();
+  const goTo = useGoToDashboard();
   const searchParams = useSearchParams();
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -51,7 +64,8 @@ function LoginPageInner() {
   // "email" = team member (e-mail + senha); "phone" = existing owner flow (Firebase SMS code), untouched.
   const firebaseConfigured = Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
   const nicheParam = searchParams.get("niche");
-  const niche: LoginNiche = (nicheParam ?? process.env.NEXT_PUBLIC_DEFAULT_NICHE) === "farmacia" ? "farmacia" : "imobiliaria";
+  const requestedNiche = nicheParam ?? process.env.NEXT_PUBLIC_DEFAULT_NICHE;
+  const niche: LoginNiche = requestedNiche === "farmacia" || requestedNiche === "concessionaria" ? requestedNiche : "imobiliaria";
   const theme = LOGIN_THEMES[niche];
   const [mode, setMode] = useState<"phone" | "email">(theme.defaultMode ?? (firebaseConfigured ? "phone" : "email"));
 
@@ -113,13 +127,8 @@ function LoginPageInner() {
       const idToken = await credential.user.getIdToken();
       const { business } = await verifyFirebaseToken(idToken);
       const hasSelectedPlan = typeof window !== "undefined" && localStorage.getItem("rw_selected_plan");
-      if (business.status === "onboarding") {
-        router.push("/onboarding");
-      } else if (hasSelectedPlan) {
-        router.push("/billing");
-      } else {
-        router.push("/");
-      }
+      const target = business.status === "onboarding" ? "/onboarding" : hasSelectedPlan ? "/billing" : "/";
+      goTo(business.niche, target);
     } catch (err) {
       if (isRateLimitError(err)) {
         setRateLimited(true);
@@ -133,7 +142,7 @@ function LoginPageInner() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-bg text-ink lg:flex-row" style={niche === "farmacia" ? ({ "--accent": "15 118 110" } as React.CSSProperties) : undefined}>
+    <div className="flex min-h-dvh flex-col bg-bg text-ink lg:flex-row" style={theme.accentVar ? ({ "--accent": theme.accentVar } as React.CSSProperties) : undefined}>
       {/* BRAND PANEL */}
       <div className={`hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-between ${theme.panelClass} px-12 py-10 text-bg`}>
         <a href="/" className="font-serif text-xl font-bold text-bg">{theme.brand}</a>
@@ -247,7 +256,7 @@ function LoginPageInner() {
 
 
 function EmailLogin() {
-  const router = useRouter();
+  const goTo = useGoToDashboard();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [businessSlug, setBusinessSlug] = useState("");
@@ -268,7 +277,7 @@ function EmailLogin() {
         return;
       }
       const me = await memberLogin(email.trim(), password, businessSlug || undefined);
-      router.push(me.business.status === "onboarding" ? "/onboarding" : homeFor(me.business.niche, me));
+      goTo(me.business.niche, me.business.status === "onboarding" ? "/onboarding" : homeFor(me.business.niche, me));
     } catch (err) {
       if (err instanceof ApiError && err.code === "BUSINESS_AMBIGUOUS") {
         setChoices(err.body?.businesses ?? []);
@@ -301,7 +310,7 @@ function EmailLogin() {
         <>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="email">E-mail</Label>
-            <Input id="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@farmacia.com.br" autoFocus />
+            <Input id="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@empresa.com.br" autoFocus />
           </div>
           {!forgot && (
             <div className="flex flex-col gap-1.5">

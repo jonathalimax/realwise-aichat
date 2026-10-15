@@ -68,7 +68,7 @@ test("reply goes through the chat human service, answers the handoff, pushes a g
   const [, payload] = calls.push[0];
   assert.equal(payload.body, "O farmacêutico respondeu ao seu atendimento.");
   assert.ok(!JSON.stringify(payload).includes("paracetamol"), "no health text in the push payload");
-  assert.match(payload.url, /\/client\/conversation\/farmacia-x\?c=c1&t=tok$/);
+  assert.match(payload.url, /\/farmacia-x\/chat\?c=c1&t=tok$/);
 });
 
 test("reply validation: text length, closed handoff, other business", async () => {
@@ -297,7 +297,7 @@ test("product suggestion permissions: clinical handoff needs CRF, general_questi
 test("resume link: whatsapp draft carries it last; chat-link endpoint returns it and needs permission", async () => {
   const { service, calls } = setup();
   const draft: any = await service.whatsappDraft(pharmacist, "h1");
-  const link = "http://localhost:3005/client/conversation/farmacia-x?c=c1&t=tok";
+  const link = "http://localhost:3005/farmacia-x/chat?c=c1&t=tok";
   assert.equal(draft.resumeLink, link);
   assert.ok(draft.message.endsWith(`Para continuar sua compra pelo chat: ${link}`));
   assert.ok(draft.message.length <= draft.maxChars);

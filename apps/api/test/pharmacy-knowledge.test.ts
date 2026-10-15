@@ -4,7 +4,7 @@
 process.env.CHAT_LLM_TIMEOUT_MS = "150";
 process.env.CHAT_LLM_DEADLINE_MS = "800";
 process.env.CHAT_LLM_RETRY_BASE_MS = "5";
-process.env.NEXT_PUBLIC_CHAT_URL = "http://localhost:3005/chat";
+process.env.NEXT_PUBLIC_CHAT_URL = "http://localhost:3005";
 // No embedder in tests: Q&A is stored without vectors and found by keyword.
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
 

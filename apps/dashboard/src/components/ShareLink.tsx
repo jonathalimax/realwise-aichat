@@ -1,11 +1,12 @@
 "use client";
 
+import { chatPublicLink } from "../lib/chat-link";
 import { useState } from "react";
 import { Button } from "./ui/button";
 
 export function ShareLink({ slug, showInstructions }: { slug: string; showInstructions?: boolean }) {
   const [copied, setCopied] = useState(false);
-  const url = `${process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005"}/${slug}`;
+  const url = chatPublicLink(slug);
 
   async function copy() {
     if (navigator.clipboard) {

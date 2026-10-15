@@ -3,7 +3,7 @@ import { PricingSection } from "./PricingSection";
 import { CAPABILITY_ICON_PATHS, type NicheConfig } from "../lib/niches";
 
 const WHATSAPP_NUMBER = "5585992265544";
-const DASHBOARD_LOGIN_URLS: Record<string, string> = { farmacias: "/farmacia/app/login" };
+const DASHBOARD_LOGIN_URLS: Record<string, string> = { farmacias: "/farmacia/app/login", concessionarias: "/concessionaria/app/login" };
 const DEFAULT_DASHBOARD_LOGIN_URL = "/imobiliaria/app/login";
 
 function waUrl(context: string) {

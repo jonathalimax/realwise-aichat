@@ -29,6 +29,7 @@ import {
   withNextStep,
 } from "./safe-replies";
 import { CalendarService } from "../calendar/calendar.service";
+import { chatLink } from "../../common/chat-links";
 import { sendEmail, escapeHtml } from "../../common/email";
 import { dashboardLink, renderEmailButton, renderWaButton } from "../../common/email-links";
 import { FlowService } from "./flow.service";
@@ -688,8 +689,7 @@ export class ChatService {
   // Ready for the email/WhatsApp notification code paths (see notifyOwner/escalate) to link a
   // visitor straight back into their existing conversation from any device.
   buildResumeLink(business: Pick<Business, "slug">, conversation: Pick<Conversation, "id" | "resumeToken">): string {
-    const chatUrl = process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005";
-    return `${chatUrl}/${business.slug}?c=${conversation.id}&t=${conversation.resumeToken}`;
+    return chatLink(business.slug, { conversationId: conversation.id, resumeToken: conversation.resumeToken });
   }
 
   // True when the reply currently being persisted is the SECOND consecutive abstention for this

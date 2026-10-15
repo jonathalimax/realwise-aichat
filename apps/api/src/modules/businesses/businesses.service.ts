@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { assertValidSlug, slugProblem } from "../../common/slug";
 import { assertPublicHttpUrl } from "../../common/url-safety";
 import { deleteFile, getFile, looksLikeSvg, putFile, sniffFileType } from "../pharmacy-common/storage";
 import { isEffectivelySuspended, isValidHexColor, resolveBranding, type NicheKey } from "@realwise/shared";
@@ -119,11 +120,13 @@ export class BusinessesService {
   }
 
   async isSlugAvailable(slug: string) {
+    if (slugProblem(slug)) return false;
     const existing = await this.prisma.client.business.findUnique({ where: { slug } });
     return !existing;
   }
 
-  async setSlug(businessId: string, slug: string) {
+  async setSlug(businessId: string, slugInput: string) {
+    const slug = assertValidSlug(slugInput);
     const existing = await this.prisma.client.business.findUnique({ where: { slug } });
     if (existing && existing.id !== businessId) {
       throw new BadRequestException("Slug already taken");

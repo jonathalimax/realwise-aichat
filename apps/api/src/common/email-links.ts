@@ -1,4 +1,4 @@
-import { buildWaMeLink, digitsOnly } from "@realwise/shared";
+import { buildWaMeLink, dashboardBasePath, digitsOnly } from "@realwise/shared";
 import { escapeHtml } from "./email";
 import { safeHttpUrl } from "./safe-http-url";
 
@@ -13,10 +13,9 @@ export function dashboardLink(path: string): string | undefined {
   return safeHttpUrl(url);
 }
 
-// The dashboard is the same app served under one prefix per niche (/imobiliaria/app, /farmacia/app).
-export function dashboardBasePath(niche: string | null | undefined): string {
-  return niche === "farmacia" ? "/farmacia/app" : "/imobiliaria/app";
-}
+// The dashboard is the same app served under one prefix per niche
+// (/imobiliaria/app, /farmacia/app, /concessionaria/app); defined once in @realwise/shared.
+export { dashboardBasePath };
 
 export function renderEmailButton(label: string, url: string | undefined): string {
   if (!url) return "";

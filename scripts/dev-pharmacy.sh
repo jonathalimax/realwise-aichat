@@ -7,6 +7,7 @@
 #   RESET_DEMO=1 scripts/dev-pharmacy.sh   recreate the demo pharmacy's data first
 #   WITH_GATEWAY=1 scripts/dev-pharmacy.sh also start the inference gateway (needs a model: see docs/pharmacy/LOCAL.md)
 #   WITH_ADMIN=1 scripts/dev-pharmacy.sh   also start the platform admin app (:3004)
+#   WITH_PROXY=1 scripts/dev-pharmacy.sh   also start the routing simulator on :8080 (scripts/dev-proxy.mjs)
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -41,7 +42,7 @@ redis-cli -h localhost ping >/dev/null 2>&1 || die "Redis is not answering on lo
 
 # ---- ports must be free (otherwise a stale server would serve old code)
 BUSY=""
-for port in 3003 3005 3006 3007; do
+for port in 3003 3005 3006 3007 $([ "${WITH_PROXY:-0}" = "1" ] && echo 8080); do
   if lsof -iTCP:"$port" -sTCP:LISTEN -n -P >/dev/null 2>&1; then BUSY="$BUSY $port"; fi
 done
 [ -z "$BUSY" ] || die "Ports already in use:$BUSY. Stop whatever runs there (lsof -iTCP:<port> -sTCP:LISTEN) and retry."
@@ -88,6 +89,7 @@ if [ "${WITH_GATEWAY:-0}" = "1" ] || grep -qE '^MANAGED_API_KEY=.{8,}' .env 2>/d
   GATEWAY_STARTED=1
 fi
 [ "${WITH_ADMIN:-0}" = "1" ] && start admin apps/admin pnpm dev
+[ "${WITH_PROXY:-0}" = "1" ] && start proxy . node scripts/dev-proxy.mjs
 
 wait_http() { # url name seconds
   local i
@@ -101,7 +103,7 @@ wait_http() { # url name seconds
 say "Waiting for the servers (the first page load of each Next app compiles it and can take a while)..."
 wait_http http://localhost:3006/api/health "API" 90 && echo "  API ok"
 wait_http http://localhost:3003/farmacia/app/login "dashboard" 120 && echo "  dashboard ok"
-wait_http http://localhost:3005/client/conversation/farmacia-exemplo "chat widget" 120 && echo "  chat ok"
+wait_http http://localhost:3005/farmacia-exemplo/chat "chat widget" 120 && echo "  chat ok"
 wait_http http://localhost:3007/farmacia "marketing" 120 && echo "  marketing ok"
 
 if [ "${GATEWAY_STARTED:-0}" = "1" ]; then
@@ -116,7 +118,8 @@ cat <<URLS
  Farmácia Exemplo is running (local only)
 ------------------------------------------------------------------------
  Dashboard      http://localhost:3003/farmacia/app/login
- Chat widget    http://localhost:3005/client/conversation/farmacia-exemplo
+ Chat widget    http://localhost:3005/farmacia-exemplo/chat
+ Same domain    http://localhost:8080  (WITH_PROXY=1 or `pnpm dev:proxy`: production URL scheme, see docs/pharmacy/URLS.md)
  Landing page   http://localhost:3007/farmacia
  API health     http://localhost:3006/api/health
  Logs           .local-logs/*.log

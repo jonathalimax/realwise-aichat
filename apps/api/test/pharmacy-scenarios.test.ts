@@ -4,7 +4,7 @@
 process.env.CHAT_LLM_TIMEOUT_MS = "150";
 process.env.CHAT_LLM_DEADLINE_MS = "800";
 process.env.CHAT_LLM_RETRY_BASE_MS = "5";
-process.env.NEXT_PUBLIC_CHAT_URL = "http://localhost:3005/client/conversation";
+process.env.NEXT_PUBLIC_CHAT_URL = "http://localhost:3005";
 
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -261,7 +261,7 @@ test("OTC order end to end (delivery): cart -> contact -> address via CEP -> rev
   assert.equal(done.uis[0].type, "order_confirmation");
   assert.equal(done.uis[0].code, "PED-1001");
   assert.equal(done.uis[0].status, "confirmed");
-  assert.match(done.uis[0].statusUrl, /^http:\/\/localhost:3005\/client\/conversation\/pedido\/[A-Za-z0-9_-]{20,}$/);
+  assert.match(done.uis[0].statusUrl, /^http:\/\/localhost:3005\/farmacia-[a-z0-9-]+\/pedido\/[A-Za-z0-9_-]{20,}$/);
   assert.match(done.text, /Pedido PED-1001 confirmado/);
 
   const order = p.orders()[0];
