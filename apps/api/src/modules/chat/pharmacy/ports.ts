@@ -162,10 +162,14 @@ export class PrismaPharmacyHandoffs implements PharmacyHandoffsPort {
 
   async create(input: CreateHandoffInput): Promise<{ id: string; reused: boolean }> {
     const client = this.prisma.client as any;
-    const existing = await client.pharmacistHandoff.findFirst({
-      where: { businessId: input.businessId, conversationId: input.conversationId, reason: input.reason, status: "open" },
-      orderBy: { createdAt: "desc" },
-    });
+    // Every general_question is its own handoff (different questions must not overwrite each other's summary).
+    const existing =
+      input.reason === "general_question"
+        ? null
+        : await client.pharmacistHandoff.findFirst({
+            where: { businessId: input.businessId, conversationId: input.conversationId, reason: input.reason, status: "open" },
+            orderBy: { createdAt: "desc" },
+          });
     if (existing && Date.now() - new Date(existing.createdAt).getTime() < HANDOFF_DEDUPE_MS) {
       // The same open request: keep one row. An urgent escalation (red flag) keeps what the questionnaire
       // already collected and adds the red flag; otherwise the latest brief wins (follow-ups are kept).
@@ -222,7 +226,11 @@ export class AlertsPharmacyNotifier implements PharmacyNotifierPort {
           // older "warning" of the same type would otherwise hide a critical one.
           type: event.urgent ? "pharmacy_urgent_handoff" : "pharmacy_new_handoff",
           severity: event.urgent ? "critical" : "warning",
-          message: event.urgent ? "Atendimento URGENTE aguardando o farmacêutico." : "Novo atendimento aguardando o farmacêutico.",
+          message: event.urgent
+            ? "Atendimento URGENTE aguardando o farmacêutico."
+            : event.reason === "general_question"
+              ? "Nova pergunta de cliente aguardando resposta"
+              : "Novo atendimento aguardando o farmacêutico.",
           actionLabel: "Abrir atendimentos",
           actionHref: "/atendimento",
         });

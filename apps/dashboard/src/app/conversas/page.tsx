@@ -31,7 +31,7 @@ function Conversas() {
   const initial = useSearchParams().get("open");
   const [filter, setFilter] = useState<"all" | "escalated">("all");
   const [selected, setSelected] = useState<string | null>(initial);
-  const state = useLoad(() => getConversations(filter), [filter]);
+  const state = useLoad(() => getConversations(filter), [filter], { live: "conversations" });
   const list = state.data ?? [];
 
   useEffect(() => {
@@ -95,7 +95,7 @@ function Conversas() {
 
 function Thread({ id }: { id: string }) {
   const { can } = useSession();
-  const state = useLoad<MirrorThread>(() => getConversationThread(id), [id]);
+  const state = useLoad<MirrorThread>(() => getConversationThread(id), [id], { live: "conversations" });
   const t = state.data?.id === id ? state.data : null;
   if (state.error && !t) return <Card><ErrorState error={state.error} onRetry={() => void state.reload()} what="esta conversa" /></Card>;
   if (!t) return <Card className="p-5"><Skeleton className="h-64" aria-busy="true" /></Card>;

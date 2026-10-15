@@ -9,6 +9,7 @@ import { AlertsStrip } from "./shell/AlertsStrip";
 import { BrandingApplier } from "./shell/BrandingApplier";
 import { TrialEndedGate } from "./TrialEndedGate";
 import { SessionProvider, useSession } from "../lib/session";
+import { LiveProvider } from "../lib/live";
 import { homeFor, isCommerceRoute, isPublicRoute, modeOf, requirementFor } from "../lib/nav";
 
 // Pages reachable even when the trial has expired and there's no active subscription.
@@ -19,7 +20,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isPublic = isPublicRoute(pathname);
   return (
     <SessionProvider enabled={!isPublic}>
-      {isPublic ? <>{children}</> : <ShellInner pathname={pathname}>{children}</ShellInner>}
+      <LiveProvider enabled={!isPublic}>{isPublic ? <>{children}</> : <ShellInner pathname={pathname}>{children}</ShellInner>}</LiveProvider>
     </SessionProvider>
   );
 }

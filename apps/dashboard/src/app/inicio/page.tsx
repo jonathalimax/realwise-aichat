@@ -30,7 +30,7 @@ function greeting(): string {
 export default function InicioPage() {
   const { me, can } = useSession();
   const [range, setRange] = useState<Range>("7d");
-  const state = useLoad(() => getDashboardSummary(range), [range]);
+  const state = useLoad(() => getDashboardSummary(range), [range], { live: "overview" });
   const s = state.data;
   // Skip honorifics ("Dra. Carla Menezes" -> "Carla").
   const firstName = me?.member.name.split(" ").find((w) => !/^(dr|dra|sr|sra|prof|profa)\.?$/i.test(w)) ?? "";

@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { closeHandoff, getHandoff, getHandoffs, markHandoffAnswered, replyHandoff, startHandoff, type HandoffDetail, type HandoffList, type HandoffStatus } from "../../lib/pharmacy-api";
+import { closeHandoff, getHandoff, getHandoffs, handoffChatLink, markHandoffAnswered, replyHandoff, startHandoff, type HandoffDetail, type HandoffList, type HandoffStatus, type SuggestionItem } from "../../lib/pharmacy-api";
 import { ApiError } from "../../lib/api";
 import { errorMessage, useLoad } from "../../lib/use-load";
 import { useSession } from "../../lib/session";
@@ -15,6 +15,7 @@ import { Textarea } from "../../components/ui/textarea";
 import { Tabs } from "../../components/ui/segmented";
 import { Card } from "../../components/ui/card";
 import { Skeleton } from "../../components/ui/skeleton";
+import { ReplyProductPicker } from "../../components/atendimento/ReplyProductPicker";
 import { WhatsappDialog } from "../../components/atendimento/WhatsappDialog";
 import { EmptyState, ErrorState, LoadState, PageHeader, PageStack, TableSkeleton } from "../../components/page-kit";
 import { cn } from "../../lib/utils";
@@ -41,13 +42,26 @@ const TABS: { value: HandoffStatus; label: string; key: "open" | "answered" }[] 
   { value: "answered", label: "Respondidos", key: "answered" },
 ];
 const POLL_MS = 20_000;
+type Kind = "all" | "clinical" | "general";
+const KINDS: { value: Kind; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "clinical", label: "Precisam do farmacêutico" },
+  { value: "general", label: "Qualquer atendente" },
+];
+
+/** Who may answer: clinical handoffs need a pharmacist (CRF); the rest can be answered by any staff with Atendimento access. */
+function WhoBadge({ requiresPharmacist }: { requiresPharmacist?: boolean }) {
+  return requiresPharmacist ? <Badge variant="amber">Farmacêutico</Badge> : <Badge variant="gray">Qualquer atendente</Badge>;
+}
 
 function Atendimento() {
   const initial = useSearchParams().get("open");
   const [status, setStatus] = useState<HandoffStatus>("open");
   const [selected, setSelected] = useState<string | null>(initial);
-  const state = useLoad(() => getHandoffs({ status }), [status]);
-  const items = state.data?.items ?? [];
+  const [kind, setKind] = useState<Kind>("all");
+  const state = useLoad(() => getHandoffs({ status }), [status], { live: "handoffs" });
+  const all = state.data?.items ?? [];
+  const items = all.filter((h) => (kind === "all" ? true : kind === "clinical" ? h.requiresPharmacist : !h.requiresPharmacist));
 
   useEffect(() => {
     const t = setInterval(() => document.visibilityState === "visible" && void state.reload(), POLL_MS);
@@ -59,20 +73,23 @@ function Atendimento() {
     if (!state.data) return;
     if (selected && (items.some((i) => i.id === selected) || selected === initial)) return;
     setSelected(items[0]?.id ?? null);
-  }, [state.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state.data, kind]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <PageStack>
       <PageHeader
         title="Atendimento farmacêutico"
-        subtitle="Conversas que o Alex encaminhou para o farmacêutico responder"
+        subtitle="Conversas que o Alex encaminhou para a equipe responder"
         actions={<Tabs label="Situação" value={status} onValueChange={setStatus} options={TABS.map((t) => ({ value: t.value, label: t.label, count: state.data?.counts?.[t.key] ?? null }))} />}
       />
-      <Alert variant="soft">Somente o farmacêutico responsável pode responder. As sugestões abaixo aparecem só para a equipe e nunca são enviadas ao cliente.</Alert>
+      <Alert variant="soft">
+        Dúvidas clínicas, receitas e controlados só podem ser respondidos por um farmacêutico com CRF. Perguntas gerais, produto em falta e pedidos de produto qualquer pessoa da equipe com acesso ao Atendimento responde. As sugestões abaixo aparecem só para a equipe e nunca são enviadas ao cliente.
+      </Alert>
+      <Tabs label="Tipo de atendimento" value={kind} onValueChange={setKind} options={KINDS} />
       <LoadState state={state} section="atendimento" what="os atendimentos" skeleton={<TableSkeleton />}>
         {items.length === 0 ? (
           <Card>
-            <EmptyState title={status === "open" ? "Nenhum atendimento aberto" : "Nenhum atendimento respondido"} description="Quando o Alex encaminhar uma conversa ao farmacêutico, ela aparece aqui." />
+            <EmptyState title={kind !== "all" && all.length > 0 ? "Nenhum atendimento deste tipo" : status === "open" ? "Nenhum atendimento aberto" : "Nenhum atendimento respondido"} description="Quando o Alex encaminhar uma conversa para a equipe, ela aparece aqui." />
           </Card>
         ) : (
           <div className="flex flex-wrap items-start gap-4">
@@ -109,6 +126,7 @@ function HandoffRow({ h, active, onPick }: { h: HandoffList; active: boolean; on
         <span className="text-[13px] text-muted">{h.summary}</span>
         <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
           {timeAgo(h.createdAt)}
+          <WhoBadge requiresPharmacist={h.requiresPharmacist} />
           {h.inProgress && <Badge variant="soft">Em atendimento · {h.inProgress.byName}</Badge>}
         </span>
       </button>
@@ -118,13 +136,19 @@ function HandoffRow({ h, active, onPick }: { h: HandoffList; active: boolean; on
 
 function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
   const { me, can, refreshNotifications } = useSession();
-  const state = useLoad<HandoffDetail>(() => getHandoff(id), [id]);
+  const state = useLoad<HandoffDetail>(() => getHandoff(id), [id], { live: "handoffs" });
   const [text, setText] = useState("");
   const [busy, setBusy] = useState<"reply" | "close" | "answered" | null>(null);
   const [error, setError] = useState("");
   const [waOpen, setWaOpen] = useState(false);
   const [chatMode, setChatMode] = useState(false);
+  const [picked, setPicked] = useState<SuggestionItem[]>([]);
+  const [note, setNote] = useState("");
+  const [linkCopied, setLinkCopied] = useState<"ok" | "fail" | null>(null);
   useEffect(() => {
+    setPicked([]);
+    setNote("");
+    setLinkCopied(null);
     setText("");
     setError("");
     setWaOpen(false);
@@ -149,15 +173,28 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
     setBusy(kind);
     setError("");
     try {
-      const updated = kind === "reply" ? await replyHandoff(id, text.trim()) : kind === "close" ? await closeHandoff(id) : await markHandoffAnswered(id);
+      const updated = kind === "reply" ? await replyHandoff(id, { text: text.trim() || undefined, productIds: picked.length ? picked.map((p) => p.productId) : undefined, note: picked.length && note.trim() ? note.trim() : undefined }) : kind === "close" ? await closeHandoff(id) : await markHandoffAnswered(id);
       state.setData(updated);
       setText("");
+      setPicked([]);
+      setNote("");
       onChanged();
       void refreshNotifications();
     } catch (e) {
       setError(e instanceof ApiError && e.code === "CRF_REQUIRED" ? "Somente um farmacêutico com CRF cadastrado pode responder." : errorMessage(e));
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function copyChatLink() {
+    setLinkCopied(null);
+    try {
+      const { url } = await handoffChatLink(id);
+      await navigator.clipboard.writeText(url);
+      setLinkCopied("ok");
+    } catch {
+      setLinkCopied("fail");
     }
   }
 
@@ -173,7 +210,10 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
           </h2>
           <p className="mt-0.5 text-xs text-muted">{timeAgo(h.createdAt)} · consentimento LGPD registrado</p>
         </div>
-        <Badge variant={toneVariant(h.tagBadge)}>{h.tag}</Badge>
+        <span className="flex flex-wrap items-center justify-end gap-1.5">
+          <WhoBadge requiresPharmacist={h.requiresPharmacist} />
+          <Badge variant={toneVariant(h.tagBadge)}>{h.tag}</Badge>
+        </span>
       </div>
       <div className="flex flex-col gap-4 p-5 pt-1">
         {h.briefRows.length > 0 ? (
@@ -193,11 +233,20 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
             {h.suggestion.text}
           </Alert>
         )}
-        {h.conversationId && can("conversas", "view") && (
-          <Link href={`/conversas?open=${h.conversationId}`} className="w-fit text-[13px] font-semibold text-accent hover:underline">
-            Ver conversa completa →
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {h.conversationId && can("conversas", "view") && (
+            <Link href={`/conversas?open=${h.conversationId}`} className="text-[13px] font-semibold text-accent hover:underline">
+              Ver conversa completa →
+            </Link>
+          )}
+          {canReply && h.status !== "closed" && h.conversationId && (
+            <Button type="button" variant="outline" size="sm" onClick={() => void copyChatLink()}>
+              Copiar link do chat
+            </Button>
+          )}
+          {linkCopied === "ok" && <span role="status" className="text-xs text-green-700">Link copiado. Ele abre a mesma conversa, com o histórico.</span>}
+          {linkCopied === "fail" && <span role="alert" className="text-xs text-red-700">Não consegui copiar o link.</span>}
+        </div>
         <hr className="border-border" />
         {error && <Alert variant="red">{error}</Alert>}
         {h.status === "open" && h.inProgress && (
@@ -233,12 +282,24 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
             )}
             {(chatMode || !hasPhone) && (
               <>
+                {!h.requiresPharmacist && (
+                  <p className="text-xs text-muted">Pergunta geral: qualquer pessoa da equipe pode responder.</p>
+                )}
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="reply" className="text-sm font-medium">
                     Responder ao cliente
                   </label>
                   <Textarea id="reply" rows={3} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Sua resposta aparece no chat com seu nome e função" />
                 </div>
+                <ReplyProductPicker selected={picked} onChange={setPicked} disabled={busy !== null} alexSuggestions={h.requiresPharmacist ? (h.suggestion?.products ?? []) : []} />
+                {picked.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="reply-note" className="text-sm font-medium">
+                      Observação sobre os produtos <span className="font-normal text-muted">(opcional)</span>
+                    </label>
+                    <Textarea id="reply-note" rows={2} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex.: tomar após as refeições" />
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-muted">
                     Será enviado como {me?.member.name} · {me?.role.name}
@@ -247,8 +308,8 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
                     <Button variant="outline" disabled={busy !== null} onClick={() => act("close")}>
                       {busy === "close" ? "Encerrando…" : "Encerrar sem responder"}
                     </Button>
-                    <Button disabled={busy !== null || text.trim().length === 0} onClick={() => act("reply")}>
-                      {busy === "reply" ? "Enviando…" : "Enviar resposta"}
+                    <Button disabled={busy !== null || (text.trim().length === 0 && picked.length === 0)} onClick={() => act("reply")}>
+                      {busy === "reply" ? "Enviando…" : picked.length > 0 ? "Enviar resposta e produtos" : "Enviar resposta"}
                     </Button>
                   </span>
                 </div>

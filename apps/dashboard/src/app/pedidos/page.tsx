@@ -49,7 +49,7 @@ function Pedidos() {
   );
 
   // pending count for the "Receitas" tab badge
-  const rxCount = useLoad(() => (canRx ? getPrescriptions({ status: "pending", limit: 1 }) : Promise.resolve(null)), [canRx]);
+  const rxCount = useLoad(() => (canRx ? getPrescriptions({ status: "pending", limit: 1 }) : Promise.resolve(null)), [canRx], { live: "prescriptions" });
   const [version, setVersion] = useState(0);
   const bump = () => {
     setVersion((v) => v + 1);
@@ -99,7 +99,7 @@ function OrdersTab({ version, onOpen }: { version: number; onOpen: (id: string) 
   const [extra, setExtra] = useState<OrderList[]>([]);
   const [tail, setTail] = useState<string | null | undefined>(undefined); // cursor after the extra pages (undefined = none loaded yet)
   const [loadingMore, setLoadingMore] = useState(false);
-  const state = useLoad(() => getOrders({ status, fulfillment: fulfillment || undefined, q: dq || undefined }), [status, fulfillment, dq, version]);
+  const state = useLoad(() => getOrders({ status, fulfillment: fulfillment || undefined, q: dq || undefined }), [status, fulfillment, dq, version], { live: "orders" });
 
   useEffect(() => {
     setExtra([]);
@@ -213,7 +213,7 @@ const RX_TABS: { value: RxStatus; label: string }[] = [
 
 function RxTab({ version, onOpen }: { version: number; onOpen: (id: string) => void }) {
   const [status, setStatus] = useState<RxStatus>("pending");
-  const state = useLoad(() => getPrescriptions({ status }), [status, version]);
+  const state = useLoad(() => getPrescriptions({ status }), [status, version], { live: "prescriptions" });
   const rows: RxList[] = state.data?.items ?? [];
   return (
     <>

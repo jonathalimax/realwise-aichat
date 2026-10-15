@@ -8,6 +8,7 @@ import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import { modeOf } from "../../lib/nav";
 import { useSession } from "../../lib/session";
+import { useLiveMarker } from "../../lib/live-context";
 
 const POLL_MS = 60_000;
 
@@ -38,11 +39,12 @@ export function AlertsStrip() {
     }
   }, [attendance]);
 
+  const liveMarker = useLiveMarker(["overview"]);
   useEffect(() => {
     void load();
     const t = setInterval(() => document.visibilityState === "visible" && void load(), POLL_MS);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, liveMarker]);
 
   if (alerts.length === 0) return null;
   // Two alerts at a time keep the page usable; the rest sit behind a toggle.

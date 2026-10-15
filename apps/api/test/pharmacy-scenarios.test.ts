@@ -35,8 +35,9 @@ test("greeting: Alex says he is an AI and gives no medical advice; chips offered
   const c = await p.conversation();
   const turn = await p.say(c, "oi");
   assert.match(turn.text, /Alex/);
-  assert.match(turn.text, /intelig[êe]ncia artificial/i);
-  assert.match(turn.text, /N[ãa]o indico rem[ée]dios/);
+  // The AI disclosure lives in the name "Alex (IA)" (widget); the welcome is short and does not repeat it.
+  assert.doesNotMatch(turn.text, /intelig[êe]ncia artificial/i);
+  assert.match(turn.text, /Posso montar seu pedido ou chamar o farmac[êe]utico/);
   assert.deepEqual(turn.suggestions, ["Fazer um pedido", "Falar com o farmacêutico", "Horários e entrega"]);
   noModelCalls();
 });
@@ -280,7 +281,7 @@ test("OTC order end to end (delivery): cart -> contact -> address via CEP -> rev
   // The lead + consent were created for a brand-new customer.
   assert.equal(p.db.models.lead.rows.length, 1);
   assert.equal(p.db.models.lead.rows[0].name, "João Silva");
-  assert.deepEqual(p.db.models.consentRecord.rows.at(-1)!.purposes, ["atendimento", "pedido"]);
+  assert.deepEqual(p.db.models.consentRecord.rows.at(-1)!.purposes, ["order_contact", "atendimento", "pedido"]);
   // Analytics: ids and enums only, never text.
   const events = p.db.models.analyticsEvent.rows.map((e) => e.name);
   for (const name of ["pharmacy_product_requested", "pharmacy_cart_created", "pharmacy_order_created"]) assert.ok(events.includes(name), name);
@@ -960,7 +961,9 @@ test("model down on a general question: friendly degraded reply with the pharmac
   const c = await p.conversation();
   const turn = await p.say(c, "Vocês aceitam o convênio Saúde Total?", { allowDegraded: true });
   assert.ok(turn.text.trim().length > 20);
-  assert.match(turn.text, /farmac[êe]utico/i);
+  // Model down: the non-clinical question goes to the team (general_question handoff), never a raw error.
+  assert.match(turn.text, /equipe da farm[áa]cia/i);
+  assert.equal(p.handoffs().filter((h) => h.reason === "general_question").length, 1);
   assert.ok(!/\bError\b|undefined|stream_failed/.test(turn.text));
 });
 
@@ -990,7 +993,7 @@ test("model answer that is ONLY dosage advice never reaches the visitor (gap rep
   const c = await p.conversation();
   const turn = await p.say(c, "Vocês aceitam convênio Saúde Total?");
   assert.ok(!/comprimido|6 horas|\bTome\b/i.test(turn.text), turn.text);
-  assert.match(turn.text, /farmac[êe]utico/i, "still a path forward");
+  assert.match(turn.text, /equipe da farm[áa]cia|farmac[êe]utico/i, "still a path forward");
   // The guard itself (model sentence with no figure the grounding guard would drop):
   net.setLlm(llm.text("Tome o comprimido com bastante água."));
   const c2 = await p.conversation();
@@ -1046,12 +1049,12 @@ test("hours, delivery, pickup, payment and minimum order answered from PharmacyS
   noModelCalls();
 });
 
-test("general fact that is not configured: honest, offers the pharmacist (never invents hours)", T, async () => {
+test("general fact that is not configured: honest, the team confirms through a general_question handoff (never invents hours)", T, async () => {
   net = hostileModel();
   const p = await createPharmacy();
   const turn = await p.say(await p.conversation(), "qual o horário de funcionamento?");
-  assert.match(turn.text, /vou confirmar com a equipe/i);
-  assert.ok(turn.suggestions.includes("Falar com o farmacêutico"));
+  assert.match(turn.text, /N[ãa]o tenho essa informa[çc][ãa]o agora\. Vou pedir para a equipe da farm[áa]cia confirmar e te respondo aqui mesmo/);
+  assert.equal(p.handoffs().filter((h) => h.reason === "general_question").length, 1);
   assert.ok(!/\d{1,2}h|\d{2}:\d{2}/.test(turn.text));
   noModelCalls();
 });

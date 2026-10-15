@@ -39,7 +39,9 @@ export const CHIPS = {
   noComplement: "Sem complemento",
   noReference: "Sem referência",
   skipEmail: "Prefiro não informar",
-  consentAgree: "Concordo",
+  consentAgree: "Concordo e quero continuar",
+  talkAttendant: "Falar com atendente",
+  otherProducts: "Ver outros produtos",
   alertPharmacist: "Avisar o farmacêutico",
   otherAddress: "Informar outro endereço",
   onlyPharmacist: "Só chamar o farmacêutico",
@@ -107,6 +109,14 @@ export const COPY = {
   genericError: "Não consegui concluir essa etapa agora. Posso chamar o farmacêutico para ajudar.",
   noOrderYet: "Ainda não encontrei nenhum pedido seu por aqui. Quer fazer um pedido?",
   unknownInfo: "Essa informação eu vou confirmar com a equipe para não te passar nada errado. Quer falar com o farmacêutico?",
+  // A non-clinical question Alex cannot answer from settings/KB/profile: the staff answers (general_question handoff).
+  generalQuestionAck: "Não tenho essa informação agora. Vou pedir para a equipe da farmácia confirmar e te respondo aqui mesmo.",
+  generalQuestionAskPhone:
+    "Se quiser ser avisado quando a equipe responder, me diga seu WhatsApp (com DDD). Se preferir, a resposta chega só aqui no chat.",
+  attendantAsk: "Claro! Qual é a sua dúvida? Eu passo para a equipe da farmácia responder por aqui.",
+  consentDeclined:
+    "Sem a sua concordância eu não consigo guardar seus dados para registrar o pedido por aqui. Você pode concordar para seguir com a entrega ou a retirada, falar com o farmacêutico ou passar na farmácia.",
+  suggestionIntro: "Vou separar o que o farmacêutico indicou:",
 };
 
 export function paymentPhrase(methods: string[], fulfillment: "delivery" | "pickup"): string {

@@ -15,7 +15,7 @@
   "nodes": {
     "start": {
       "id": "start",
-      "message": "Oi! Sou o Alex, assistente virtual com inteligência artificial. Posso ajudar a montar seu pedido ou chamar o farmacêutico. Não indico remédios.",
+      "message": "Oi! Eu sou o Alex. Posso montar seu pedido ou chamar o farmacêutico.",
       "bubbles": [
         { "label": "🛒 Fazer um pedido", "goto": "pedido" },
         { "label": "💊 Falar com o farmacêutico", "goto": "farmaceutico" },

@@ -270,6 +270,8 @@ export interface WhatsappDraft {
   /** E.164 digits, e.g. 5541991112233. Only returned to members who can start an atendimento. */
   phone: string;
   message: string;
+  /** Visitor resume link to the web chat (already the last line of `message`). */
+  resumeLink?: string | null;
   maxChars: number;
   webUrl: string;
   appUrl: string;
@@ -285,7 +287,23 @@ export interface HandoffDetail extends HandoffList {
 export const getHandoffs = (p: { status?: HandoffStatus; cursor?: string }): Promise<Page<HandoffList> & { counts: { open: number; answered: number; urgent: number } }> =>
   request(`/handoffs${qs(p)}`);
 export const getHandoff = (id: string): Promise<HandoffDetail> => request(`/handoffs/${id}`);
-export const replyHandoff = (id: string, text: string): Promise<HandoffDetail> => request(`/handoffs/${id}/reply`, json("POST", { text }));
+export interface SuggestionItem {
+  productId: string;
+  name: string;
+  presentation: string | null;
+  priceCents: number;
+  inStock: boolean;
+  maxQty: number;
+  imageUrl: string | null;
+  placeholderIcon: "pill" | "bottle" | "box";
+  requiresPrescription: boolean;
+}
+export const replyHandoff = (id: string, body: string | { text?: string; productIds?: string[]; note?: string }): Promise<HandoffDetail> =>
+  request(`/handoffs/${id}/reply`, json("POST", typeof body === "string" ? { text: body } : body));
+/** Listable products only (active, in stock, confirmed OTC / prescription). `ids` powers the "Usar sugestão" chips. */
+export const searchSuggestableProducts = (p: { q?: string; ids?: string[] }): Promise<{ items: SuggestionItem[] }> =>
+  request(`/handoffs/products/search${qs({ q: p.q, ids: p.ids?.join(",") })}`);
+export const handoffChatLink = (id: string): Promise<{ url: string }> => request(`/handoffs/${id}/chat-link`, json("POST"));
 export const closeHandoff = (id: string): Promise<HandoffDetail> => request(`/handoffs/${id}/close`, json("POST"));
 export const whatsappDraft = (id: string): Promise<WhatsappDraft> => request(`/handoffs/${id}/whatsapp/draft`, json("POST"));
 export const startHandoff = (id: string, channel: "whatsapp" | "chat"): Promise<HandoffDetail> => request(`/handoffs/${id}/start`, json("POST", { channel }));
@@ -601,3 +619,15 @@ export const acceptInvite = (b: { token: string; name: string; password: string;
 
 // credentials for owners that logged in by phone (adds e-mail login)
 export const setCredentials = (b: { email: string; password: string; currentPassword?: string }) => request("/auth/me/credentials", json("PUT", b));
+
+// ---------------------------------------------------------------- live refresh
+export interface LiveSnapshot {
+  at: string;
+  orders?: { marker: string; latest: { code: string; at: string } | null };
+  prescriptions?: { marker: string; latest: { code: string; at: string } | null };
+  handoffs?: { marker: string; latest: { id: string; at: string } | null };
+  conversations?: { marker: string };
+  clients?: { marker: string };
+  overview?: { marker: string };
+}
+export const getLiveSnapshot = (): Promise<LiveSnapshot> => request("/notifications/live");

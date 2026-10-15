@@ -65,7 +65,39 @@ export function catalogListUi(rows: ProductRow[], settings: PharmacySettingsView
   };
 }
 
-export function buildCartDto(lines: CartLine[], products: ProductRow[]): CartDto {
+export type SuggestionItemReason = "out_of_stock" | "not_online" | "needs_pharmacist" | "unavailable";
+
+/** One row of a `pharmacist_suggestion` card with LIVE price/stock/class (the class always comes from the DB row). */
+export function suggestionItem(p: ProductRow, settings: PharmacySettingsView) {
+  const gate = gateForProduct(p).kind;
+  let reason: SuggestionItemReason | null = null;
+  if (gate === "controlled" || gate === "unclassified") reason = "not_online";
+  else if (gate === "pharmacist_required") reason = "needs_pharmacist";
+  else if (gate === "inactive") reason = "unavailable";
+  else if (!((p.stockQty ?? 0) > 0)) reason = "out_of_stock";
+  return {
+    productId: p.id,
+    name: p.name,
+    presentation: p.presentation,
+    priceCents: p.priceCents,
+    inStock: (p.stockQty ?? 0) > 0,
+    maxQty: effectiveMaxQty(p, settings),
+    imageUrl: productImageUrl(p),
+    placeholderIcon: placeholderIconFor(p),
+    requiresPrescription: gate === "prescription",
+    sellable: reason === null,
+    unavailableReason: reason,
+  };
+}
+
+/** The `pharmacist_suggestion` payload with items refreshed from the DB (order kept, deleted products dropped). */
+export function suggestionUi(base: { from?: unknown; note?: unknown }, products: ProductRow[], orderedIds: string[], settings: PharmacySettingsView): UiPayload {
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const items = orderedIds.map((id) => byId.get(id)).filter((p): p is ProductRow => Boolean(p)).map((p) => suggestionItem(p, settings));
+  return { type: "pharmacist_suggestion", from: base.from ?? null, ...(typeof base.note === "string" && base.note ? { note: base.note } : {}), items };
+}
+
+export function buildCartDto(lines: CartLine[], products: ProductRow[], settings?: PharmacySettingsView): CartDto {
   const byId = new Map(products.map((p) => [p.id, p]));
   const items: CartItemDto[] = [];
   for (const line of lines) {
@@ -78,6 +110,7 @@ export function buildCartDto(lines: CartLine[], products: ProductRow[]): CartDto
       unitPriceCents: p.priceCents,
       lineTotalCents: p.priceCents * line.qty,
       imageUrl: productImageUrl(p),
+      ...(settings ? { maxQty: effectiveMaxQty(p, settings) } : {}),
     });
   }
   return {

@@ -42,7 +42,7 @@ export function OrderSheet({
   onOpenRx: (rxId: string) => void;
 }) {
   const { me, can, refreshNotifications } = useSession();
-  const state = useLoad<OrderDetail | null>(() => (orderId ? getOrder(orderId) : Promise.resolve(null)), [orderId]);
+  const state = useLoad<OrderDetail | null>(() => (orderId ? getOrder(orderId) : Promise.resolve(null)), [orderId], { live: "orders" });
   const order = orderId && state.data?.id === orderId ? state.data : null;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");

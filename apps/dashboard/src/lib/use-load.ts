@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "./api";
+import { useLiveMarker, type LiveKey } from "./live-context";
 
 export interface LoadState<T> {
   data: T | null;
@@ -14,7 +15,7 @@ export interface LoadState<T> {
 }
 
 /** Fetch-on-mount/deps with stale-response protection. `forbidden` is true for a 403 (render "Sem acesso"). */
-export function useLoad<T>(fn: () => Promise<T>, deps: unknown[]): LoadState<T> {
+export function useLoad<T>(fn: () => Promise<T>, deps: unknown[], opts?: { live?: LiveKey | LiveKey[] }): LoadState<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +48,15 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[]): LoadState<T> 
   }, deps);
 
   const reload = useCallback(() => run(false), [run]);
+
+  // Live refresh: when the change marker of the watched lists moves, refetch in the background (no skeleton, state kept).
+  const marker = useLiveMarker(opts?.live);
+  const lastMarker = useRef<string | null>(marker);
+  useEffect(() => {
+    if (marker === null) return;
+    if (lastMarker.current !== null && lastMarker.current !== marker) void run(false);
+    lastMarker.current = marker;
+  }, [marker, run]);
   const forbidden = error instanceof ApiError && error.status === 403;
   return { data, error, loading, reload, setData, forbidden };
 }

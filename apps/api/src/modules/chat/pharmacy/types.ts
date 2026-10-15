@@ -100,7 +100,11 @@ export type Awaiting =
   | { kind: "symptom_name" }
   | { kind: "product_request" }
   | { kind: "product_request_consent" }
-  | { kind: "rx_upload" };
+  | { kind: "rx_upload" }
+  /** "Falar com atendente": the next free text is a non-clinical question for the staff (general_question handoff). */
+  | { kind: "attendant_question" }
+  | { kind: "question_phone" }
+  | { kind: "question_name" };
 
 export type SymptomStep =
   | "symptom"
@@ -177,6 +181,18 @@ export interface PharmacyState {
   pendingProductRequest?: string;
   redFlagAt?: string | null;
   humanJoined: HumanJoined[];
+  /** Consent purposes the visitor already granted (this conversation and, once recognized, their lead): never asked twice. */
+  consents?: string[];
+  /** Address confirmed in this conversation: reused by later checkouts instead of asking again. */
+  knownAddress?: { address: AddressSnapshot; masked: boolean; differsFromSaved: boolean } | null;
+  /** Cart line the visitor edits by text ("mais um", "tira um", "só 1"): the focused product or the last one added. */
+  lastAddedId?: string | null;
+  /** Latest pharmacist suggestion message already turned into a cart (so "Fazer um pedido" goes back to the catalog). */
+  suggestionHandledId?: string | null;
+  /** Open general_question handoff waiting for the visitor's phone/name (non-clinical question for the staff). */
+  questionHandoffId?: string | null;
+  /** The visitor chose to receive the team's answer only in the chat (no phone asked again). */
+  questionContactDeclined?: boolean;
   /** Product under discussion: drives "Adicionar ao carrinho" and the pharmacist follow-up chips. */
   focus?: { productId: string; kind: "otc" | "controlled" | "unclassified" | "pharmacist_required" | "out_of_stock" } | null;
   /** Equivalents offered (flagged by the pharmacy) for an out-of-stock product: choosing one forces pharmacist confirmation. */
@@ -205,6 +221,8 @@ export interface CartItemDto {
   unitPriceCents: number;
   lineTotalCents: number;
   imageUrl: string | null;
+  /** Per-order limit of the product (the widget's "+" stops there). */
+  maxQty?: number;
 }
 
 export interface CartDto {
@@ -237,6 +255,8 @@ export interface PharmacyView {
   orderCode: string | null;
   statusUrl: string | null;
   humanJoined: HumanJoined[];
+  /** A handoff (pharmacist or team question) is waiting for an answer: the widget keeps polling for the reply. */
+  handoffOpen?: boolean;
 }
 
 export interface PharmacyTurnResult {
@@ -295,7 +315,7 @@ export interface CreateHandoffInput {
   businessId: string;
   conversationId: string;
   leadId?: string | null;
-  reason: "symptom" | "rx" | "controlled" | "out_of_stock" | "product_request" | "other";
+  reason: "symptom" | "rx" | "controlled" | "out_of_stock" | "product_request" | "general_question" | "other";
   urgent: boolean;
   summary: string;
   brief: Record<string, unknown>;

@@ -413,7 +413,7 @@ function BusinessAvatar({
   );
 }
 
-// Pharmacy header (S1): Alex avatar + "IA" badge, business name, and the legal identity line
+// Pharmacy header (S1): Alex avatar + "Alex (IA)" name (the AI disclosure lives in the name), business name, and the legal identity line
 // (CRF and responsible pharmacist) so the visitor always sees who is behind the counter.
 function PharmacyHeader({ business }: { business: any }) {
   const rt = business.pharmacy?.pharmacistName as string | undefined;
@@ -431,10 +431,7 @@ function PharmacyHeader({ business }: { business: any }) {
       )}
       <div className="min-w-0 flex-1 leading-snug">
         <div className="flex items-center gap-1.5">
-          <b className="text-sm">Alex</b>
-          <span className="inline-flex h-[18px] items-center rounded-full px-1.5 text-[11px] font-bold" style={{ background: "var(--ph-tertiary)", color: "var(--ph-tertiary-fg)" }} title="Assistente virtual com inteligência artificial">
-            IA
-          </span>
+          <b className="text-sm" title="Assistente virtual com inteligência artificial">Alex (IA)</b>
         </div>
         <div className="truncate text-xs opacity-95">{business.name} · online</div>
         {(crf || rt) && (
@@ -460,7 +457,7 @@ function PharmacyFooter({ business }: { business: any }) {
   const legal = business.pharmacy?.legalName as string | undefined;
   return (
     <div className="flex-none bg-bg px-4 pb-3 pt-1 text-center text-[0.7rem] leading-snug text-ink-soft">
-      <p>Você conversa com uma IA. Ela não indica remédios nem dá orientação médica.</p>
+      <p>Não indico remédios nem dou orientação médica.</p>
       {(legal || cnpj) && (
         <p className="mt-0.5">
           {legal}
@@ -850,6 +847,23 @@ export function ChatScreen({
     });
   }, [messages, showBooking, sending]);
 
+  // Opening the chat (resume link or reload): jump to the newest message once the history and its cards are laid out.
+  useEffect(() => {
+    if (!historyLoaded) return;
+    const jump = () => {
+      const list = bottomRef.current?.closest("main");
+      if (list) list.scrollTo({ top: list.scrollHeight });
+    };
+    const frame = requestAnimationFrame(jump);
+    const t1 = setTimeout(jump, 200);
+    const t2 = setTimeout(jump, 800);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [historyLoaded]);
+
   // Two-stage "thinking" label: starts as "Clara está pensando…" and, if the response takes
   // longer than ~5s, swaps to a message acknowledging the extra wait instead of leaving the
   // visitor staring at bare dots with no sense of progress.
@@ -877,7 +891,7 @@ export function ChatScreen({
   // pharmacist was asked for (symptom lane, handoff request) or has already joined.
   const pollingEnabled =
     conversationStatus === "escalated" ||
-    (isPharmacy && (handoffRequested || pharmacy?.lane === "symptom" || (pharmacy?.humanJoined?.length ?? 0) > 0));
+    (isPharmacy && (handoffRequested || pharmacy?.handoffOpen || pharmacy?.lane === "symptom" || (pharmacy?.humanJoined?.length ?? 0) > 0));
 
   // Near-live delivery of owner replies: polls history only while the conversation is escalated
   // (that's the only window where a human might actually be typing), the tab is visible, and no
@@ -895,7 +909,8 @@ export function ChatScreen({
     async function poll() {
       if (document.visibilityState !== "visible") return;
       if (isStreamingRef.current) return;
-      if (Date.now() - startedAt >= POLL_CAP_MS) {
+      // Pharmacy: no cap (it only polls while the tab is visible), so no stray "Atualizar" button is ever needed.
+      if (!isPharmacy && Date.now() - startedAt >= POLL_CAP_MS) {
         setPollCapped(true);
         return;
       }
@@ -936,7 +951,7 @@ export function ChatScreen({
       stop();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [business, conversationId, pollingEnabled, pollCapped, resumeConversationId, resumeToken]);
+  }, [business, conversationId, pollingEnabled, pollCapped, resumeConversationId, resumeToken, isPharmacy]);
 
   // Conversational opt-in: once a conversation escalates to human handoff, ask the visitor (in
   // Clara's voice, in a normal chat bubble) whether they want a notification if they leave —
@@ -1260,10 +1275,11 @@ export function ChatScreen({
     if (!business) return;
     if (isStreamingRef.current) return;
 
-    // Pharmacy (commerce): the order chip must show what the pharmacy has, not ask for a product name.
-    if (isPharmacy && !isAttendanceMode(business) && pharmacy?.operationMode !== "attendance" && /fazer um pedido/i.test(bubble.label)) {
+    // Pharmacy: every scripted chip goes through the deterministic engine as plain text ("Fazer um pedido" shows the catalog
+    // or the pharmacist's suggestion, "Horários e entrega" answers from the settings): the scripted nodes are only a welcome.
+    if (isPharmacy) {
       setBubbles([]);
-      await handlePharmacyAction({ type: "catalog.browse" }, bubble.label);
+      await handleSend(bubble.label.replace(/^[^\p{L}\p{N}]+/u, "").trim());
       return;
     }
 
@@ -1306,7 +1322,7 @@ export function ChatScreen({
     try {
       const convId = await ensureConversation();
       if (!convId) throw new Error("conversation_unavailable");
-      const res = await pharmacyAction(business.id, convId, action);
+      const res = await pharmacyAction(business.id, convId, action, resumeConversationId ? resumeToken : undefined);
       const incoming = (res.messages ?? [])
         .filter((m: any) => !(echoed && m.role === "visitor"))
         .map(fromServerMessage);
@@ -1398,6 +1414,16 @@ export function ChatScreen({
     return -1;
   }, [messages]);
 
+  // Only the newest cart card (steppers) and the newest pharmacist suggestion are live, whatever came after them.
+  const latestCartIndex = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].ui?.type === "cart") return i;
+    return -1;
+  }, [messages]);
+  const latestSuggestionIndex = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].ui?.type === "pharmacist_suggestion") return i;
+    return -1;
+  }, [messages]);
+
   // Labels of the buttons already visible in the newest card; a chip with the same label is a duplicate.
   const visibleCardLabels = useMemo(() => {
     const last = messages[messages.length - 1];
@@ -1408,6 +1434,7 @@ export function ChatScreen({
       if (typeof v === "string") labels.add(foldLabel(v));
     };
     if (ui.type === "symptom_question" && Array.isArray(ui.chips)) ui.chips.forEach(add);
+    if (ui.type === "pharmacist_suggestion") add("Adicionar tudo ao carrinho");
     if (ui.type === "controlled_info") add("Falar com o farmacêutico");
     if (ui.type === "red_flag" && ui.offerPharmacist !== false) add("Avisar o farmacêutico");
     if (ui.type === "fulfillment_choice" && Array.isArray(ui.options)) ui.options.forEach((o: any) => add(o?.label));
@@ -1512,8 +1539,8 @@ export function ChatScreen({
                 <div className="mb-1 text-xs font-semibold text-accent">{business.name}</div>
               )
             )}
-            {isFirstInGroup && m.role === "assistant" && (
-              <div className="mb-1 text-xs font-semibold text-ink-soft">{getPersonaName(business.niche)}</div>
+            {(isFirstInGroup || isPharmacy) && m.role === "assistant" && (
+              <div className="mb-1 text-xs font-semibold text-ink-soft">{isPharmacy ? "Alex (IA)" : getPersonaName(business.niche)}</div>
             )}
             {m.content.trim().length > 0 && (
               <div
@@ -1534,7 +1561,7 @@ export function ChatScreen({
                 ctx={{
                   businessId: business.id,
                   conversationId,
-                  interactive: m.ui?.type === "catalog_list" ? i === latestCatalogIndex : i === latestUiIndex,
+                  interactive: m.ui?.type === "catalog_list" ? i === latestCatalogIndex : m.ui?.type === "cart" ? i === latestCartIndex : m.ui?.type === "pharmacist_suggestion" ? i === latestSuggestionIndex : i === latestUiIndex,
                   busy,
                   onAction: handlePharmacyAction,
                   onRxUploaded: handleRxUploaded,
@@ -1605,7 +1632,7 @@ export function ChatScreen({
             onError={handleBookingError}
           />
         )}
-        {pollCapped && pollingEnabled && (
+        {pollCapped && pollingEnabled && !isPharmacy && (
           <div className="mt-3 flex justify-center">
             <Button type="button" variant="outline" size="sm" onClick={handleManualRefresh}>
               Atualizar

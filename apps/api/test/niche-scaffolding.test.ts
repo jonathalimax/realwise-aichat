@@ -26,8 +26,10 @@ test("pharmacy persona is Alex, discloses AI and never recommends medicine", () 
   assert.equal(p.name, "Alex");
   const welcome = p.welcome!("Farmácia Exemplo");
   assert.match(welcome, /Alex/);
-  assert.match(welcome, /inteligência artificial/);
-  assert.match(welcome, /Não indico remédios/);
+  // The AI disclosure lives in the name "Alex (IA)" (widget); the welcome stays short and does not repeat it.
+  assert.doesNotMatch(welcome, /inteligência artificial/);
+  assert.match(welcome, /Posso montar seu pedido ou chamar o farmacêutico/);
+  assert.ok(welcome.length < 100);
   assert.match(p.sharedRules, /nunca indique/i);
   assert.match(p.sharedRules, /SAMU 192/);
   assert.equal(getPersona("imobiliaria").name, "Clara");
@@ -87,7 +89,8 @@ test("pharmacy flow stub: valid gotos, no placeholders, no medicine or dose advi
   }
   const all = text.join(" ");
   assert.doesNotMatch(all, /\b\d+\s?(mg|ml|comprimido|gotas)\b/i);
-  assert.match(nodes.start.message, /inteligência artificial/);
+  assert.doesNotMatch(nodes.start.message, /inteligência artificial/);
+  assert.match(nodes.start.message, /Alex/);
 });
 
 test("pharmacy template: D7 questions fill declared fields and map to PharmacySettings", () => {

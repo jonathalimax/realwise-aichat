@@ -24,7 +24,7 @@ export default function ClientesPage() {
   const [extra, setExtra] = useState<CustomerList[]>([]);
   const [tail, setTail] = useState<string | null | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
-  const state = useLoad(() => getCustomers({ q: dq || undefined }), [dq]);
+  const state = useLoad(() => getCustomers({ q: dq || undefined }), [dq], { live: ["clients", "orders"] });
   useEffect(() => {
     setExtra([]);
     setTail(undefined);
@@ -104,7 +104,7 @@ export default function ClientesPage() {
 
 function CustomerSheet({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { can } = useSession();
-  const state = useLoad<CustomerDetail | null>(() => (id ? getCustomer(id) : Promise.resolve(null)), [id]);
+  const state = useLoad<CustomerDetail | null>(() => (id ? getCustomer(id) : Promise.resolve(null)), [id], { live: ["clients", "orders"] });
   const c = id && state.data?.id === id ? state.data : null;
   return (
     <SidePanel

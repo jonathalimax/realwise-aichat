@@ -89,13 +89,13 @@ test("commerce routes: guard answers PLAN_FEATURE (plan) or MODE_ATTENDANCE (own
 // Chat: attendance mode
 // ---------------------------------------------------------------------------------------------
 
-test("attendance: greeting, chips and welcome never offer a cart; Alex says he is an AI", T, async () => {
+test("attendance: greeting, chips and welcome never offer a cart; the AI disclosure lives in the name (Alex (IA))", T, async () => {
   net = hostileModel();
   const p = await attendance();
   const c = await p.conversation();
   const turn = await p.say(c, "oi");
   assert.match(turn.text, /Alex/);
-  assert.match(turn.text, /intelig[êe]ncia artificial/i);
+  assert.doesNotMatch(turn.text, /intelig[êe]ncia artificial/i);
   assert.ok(!/pedido|carrinho/i.test(turn.text), turn.text);
   assert.deepEqual(turn.suggestions, ["Falar com o farmacêutico", "Horários e entrega", "Perguntar sobre um produto"]);
   assert.equal(turn.pharmacy.operationMode, "attendance");

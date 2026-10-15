@@ -54,7 +54,7 @@ export const ATTENDANCE_WELCOME_CHIPS = [ATT_CHIPS.talkPharmacist, ATT_CHIPS.hou
 
 export const ATT_COPY = {
   welcome: (businessName: string) =>
-    `Oi! Sou o Alex, assistente virtual com inteligência artificial da ${businessName}. Posso responder dúvidas sobre horários, entrega e retirada, e encaminhar sua pergunta ao farmacêutico. Não indico remédios.`,
+    `Oi! Eu sou o Alex, da ${businessName}. Posso tirar dúvidas sobre horários, entrega e retirada, ou chamar o farmacêutico.`,
   askProduct:
     "Claro! Eu não consulto estoque nem preço por aqui: quem confirma a disponibilidade e o valor é o farmacêutico. Me diga o que você procura (nome do produto e quantidade) e eu repasso para ele.",
   confirmRequest:
@@ -77,7 +77,7 @@ const INFO_WORDS = new Set([
   "horario", "horarios", "funciona", "funcionamento", "abre", "aberto", "aberta", "fecha", "fechado", "fechada", "abertos", "hoje", "agora", "amanha", "sabado", "domingo", "feriado", "feriados",
   "entrega", "entregam", "entregas", "frete", "taxa", "delivery", "motoboy", "bairro", "bairros", "retirada", "retirar", "retiro", "pagamento", "pagar", "pix", "cartao", "dinheiro", "forma", "formas",
   "troca", "trocar", "devolucao", "devolver", "farmacia", "voces", "atendem", "atende", "atendimento", "remedio", "remedios", "produto", "produtos", "medicamento", "medicamentos", "algo", "coisa",
-  "gente", "pessoal", "ola", "oi", "bom", "boa", "dia", "tarde", "noite", "tudo", "bem", "obrigado", "obrigada", "pode", "poderia", "saber", "informacao", "informacoes", "queria", "ate", "que", "horas", "minimo", "maximo",
+  "gente", "pessoal", "todas", "todos", "tudo", "completas", "completo", "geral", "gerais", "ola", "oi", "bom", "boa", "dia", "tarde", "noite", "tudo", "bem", "obrigado", "obrigada", "pode", "poderia", "saber", "informacao", "informacoes", "queria", "ate", "que", "horas", "minimo", "maximo",
 ]);
 
 /** True when the sentence names something (a product) beyond question/filler/info words. */
@@ -101,6 +101,7 @@ export const COMMERCE_ACTIONS = new Set([
   "catalog.browse",
   "product.view",
   "cart.add",
+  "cart.add_many",
   "cart.set_qty",
   "cart.remove",
   "cart.view",

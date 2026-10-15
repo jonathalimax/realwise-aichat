@@ -17,6 +17,12 @@ export class HandoffsController {
     return this.handoffs.list(m.businessId, q, m);
   }
 
+  /** Listable products for the pharmacist reply picker (declared before ":id" so it is not read as an id). */
+  @Get("products/search")
+  searchProducts(@CurrentMember() m: MemberContext, @Query() q: { q?: string; ids?: string }) {
+    return this.handoffs.searchProducts(m.businessId, q);
+  }
+
   @Get(":id")
   get(@CurrentMember() m: MemberContext, @Param("id") id: string) {
     return this.handoffs.get(m.businessId, id, m);
@@ -24,8 +30,14 @@ export class HandoffsController {
 
   @RequirePermission("atendimento", "edit")
   @Post(":id/reply")
-  reply(@CurrentMember() m: MemberContext, @Param("id") id: string, @Body("text") text: string) {
-    return this.handoffs.reply(m, id, text);
+  reply(@CurrentMember() m: MemberContext, @Param("id") id: string, @Body() body: { text?: string; productIds?: string[]; note?: string }) {
+    return this.handoffs.reply(m, id, body);
+  }
+
+  @RequirePermission("atendimento", "edit")
+  @Post(":id/chat-link")
+  chatLink(@CurrentMember() m: MemberContext, @Param("id") id: string) {
+    return this.handoffs.chatLink(m, id);
   }
 
   @RequirePermission("atendimento", "edit")

@@ -108,3 +108,34 @@ test("masked phone shows area code and last digits only", () => {
   assert.equal(maskPhoneBr("+5541991112233"), "(41) •••••-2233");
   assert.equal(maskPhoneBr("123"), null);
 });
+
+
+// ---------------------------------------------------------------- general_question + resume link
+import { buildChatResumeLink, chatBaseUrl } from "../src/modules/handoffs/resume-link";
+
+test("general_question message: greeting + the customer's question, no symptom wording", () => {
+  const msg = buildWhatsappMessage({ customerName: "maria", attendantName: "Bruno", attendantRole: "Atendente", pharmacyName: "Farmácia X", reason: "general_question", brief: { question: "Vocês entregam no domingo?", symptoms: "dor" } });
+  assert.match(msg, /^Olá, Maria! Aqui é Bruno, Atendente da Farmácia X\. Recebi sua pergunta pelo chat:/);
+  assert.ok(msg.includes("Sua pergunta: Vocês entregam no domingo?"));
+  assert.ok(!/sintoma|sente|dor/i.test(msg));
+});
+
+test("resume link is appended last, never truncated, and the whole text stays under the cap", () => {
+  const link = buildChatResumeLink({ slug: "farmacia-x", conversationId: "c1", resumeToken: "tok", baseUrl: "http://localhost:3005" });
+  assert.equal(link, "http://localhost:3005/client/conversation/farmacia-x?c=c1&t=tok");
+  const long = "muito ".repeat(60);
+  const msg = buildWhatsappMessage({
+    customerName: "Maria", attendantName: "Paulo", attendantRole: "Farmacêutico", pharmacyName: "Farmácia X", reason: "symptom",
+    brief: { symptoms: long, duration: long, allergies: [long], otherMedicines: [long], alreadyTried: [long] }, resumeLink: link,
+  });
+  assert.ok(msg.length <= MAX_WHATSAPP_MESSAGE_CHARS, String(msg.length));
+  assert.ok(msg.endsWith(`Para continuar sua compra pelo chat: ${link}`));
+  const noLink = buildWhatsappMessage({ attendantName: "P", attendantRole: "F", pharmacyName: "X" });
+  assert.ok(!noLink.includes("Para continuar"));
+});
+
+test("chat base url: adds the basePath once, tolerates trailing slashes and an env that already has it", () => {
+  assert.equal(chatBaseUrl("https://chat.x.com/"), "https://chat.x.com/client/conversation");
+  assert.equal(chatBaseUrl("https://chat.x.com/client/conversation"), "https://chat.x.com/client/conversation");
+  assert.equal(chatBaseUrl(""), "http://localhost:3005/client/conversation");
+});

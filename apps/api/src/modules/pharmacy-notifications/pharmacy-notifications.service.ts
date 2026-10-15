@@ -28,6 +28,8 @@ export function firstNameOf(name: string | null | undefined): string | null {
 
 /** Generic on purpose: first name + non-clinical reason category, never health text. */
 export function handoffAlertMessage(urgent: boolean, firstName: string | null, reason?: string): string {
+  // Non-clinical question for the attendants: fully generic text (no name, no question text).
+  if (reason === "general_question") return "Nova pergunta de cliente aguardando resposta";
   const who = firstName ? ` de ${firstName}` : "";
   const why = reason && REASON_TEXT[reason] ? ` (${REASON_TEXT[reason]})` : "";
   return urgent ? `Atendimento farmacêutico URGENTE${who}${why} aguardando resposta` : `Novo atendimento farmacêutico${who}${why} aguardando resposta`;
@@ -136,7 +138,7 @@ export class PharmacyNotificationsService {
     const firstName = handoff.handoffId ? await this.handoffFirstName(handoff.businessId, handoff.handoffId) : null;
     const message = handoffAlertMessage(handoff.urgent, firstName, handoff.reason);
     await this.createAlert(handoff.businessId, "pharmacy_new_handoff", handoff.urgent ? "critical" : "warning", message, "Abrir atendimento", href);
-    await this.emailAll(handoff.businessId, "atendimento", handoff.urgent ? "Atendimento urgente" : "Novo atendimento farmacêutico", `<p>${escapeHtml(message)}.</p>`, "/atendimento", "Abrir atendimento");
+    await this.emailAll(handoff.businessId, "atendimento", handoff.reason === "general_question" ? "Nova pergunta de cliente" : handoff.urgent ? "Atendimento urgente" : "Novo atendimento farmacêutico", `<p>${escapeHtml(message)}.</p>`, "/atendimento", "Abrir atendimento");
   }
 
   private async handoffFirstName(businessId: string, handoffId: string): Promise<string | null> {

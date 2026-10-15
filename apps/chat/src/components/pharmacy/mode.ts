@@ -22,6 +22,6 @@ export function welcomeChips(business: { pharmacy?: { operationMode?: string; qu
 
 export function welcomeText(businessName: string, attendance: boolean): string {
   return attendance
-    ? `Oi! Sou o Alex, assistente virtual da ${businessName}. Sou uma inteligência artificial. Posso responder dúvidas sobre horários, entrega e retirada e encaminhar sua pergunta ao farmacêutico. Não indico remédios.`
-    : `Oi! Sou o Alex, assistente virtual da ${businessName}. Sou uma inteligência artificial. Posso ajudar a montar seu pedido ou encaminhar você ao farmacêutico. Não indico remédios.`;
+    ? `Oi! Eu sou o Alex, da ${businessName}. Posso tirar dúvidas sobre horários, entrega e retirada, ou chamar o farmacêutico.`
+    : `Oi! Eu sou o Alex, da ${businessName}. Posso montar seu pedido ou chamar o farmacêutico.`;
 }

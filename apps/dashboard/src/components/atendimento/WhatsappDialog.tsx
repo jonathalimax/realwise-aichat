@@ -98,6 +98,11 @@ export function WhatsappDialog({
             <span className="text-xs text-muted">
               {text.length}/{draft.maxChars} caracteres · o WhatsApp Web abre em uma nova aba e você envia a mensagem por lá.
             </span>
+            {draft.resumeLink && (
+              <span className="break-all rounded-lg bg-bg-2 p-2 text-xs text-muted">
+                Link do chat incluído no fim da mensagem (abre a mesma conversa, com o histórico): <b className="font-medium text-ink">{draft.resumeLink}</b>
+              </span>
+            )}
           </div>
         )}
         <DialogFooter>

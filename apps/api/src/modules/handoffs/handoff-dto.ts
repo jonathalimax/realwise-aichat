@@ -50,6 +50,7 @@ export function buildBriefRows(brief: Brief | null | undefined): Array<{ label: 
   if (b.onlineSaleAllowed === false) add("Venda online", "Não permitida");
   else if (b.onlineSaleAllowed === true) add("Venda online", "Permitida");
   add("Equivalentes", asText(b.equivalents));
+  add("Pergunta do cliente", asText(b.question));
   add("Pedido do cliente", asText(b.customerRequest));
   add("Mensagem do cliente", asText(b.customerText));
   add("Mensagens adicionais", asText(b.followUps));
@@ -103,11 +104,11 @@ export function readInProgress(brief: unknown): InProgressMarker | null {
 
 /**
  * Which handoffs need a pharmacist (CRF on file): anything clinical (symptoms, prescriptions, controlled medicines,
- * urgent). A plain availability check (out of stock, product request) can be handled by any member with Atendimento edit.
+ * urgent). A plain availability check or a non-clinical question (out of stock, product request, general question) can be handled by any member with Atendimento edit.
  */
 export function handoffRequiresPharmacist(reason: string, urgent: boolean): boolean {
   if (urgent) return true;
-  return reason !== "out_of_stock" && reason !== "product_request";
+  return reason !== "out_of_stock" && reason !== "product_request" && reason !== "general_question";
 }
 
 /** Contact shown to staff with Atendimento access: first name + the customer's phone, unmasked (staff need it to call back). */

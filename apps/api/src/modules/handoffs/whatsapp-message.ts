@@ -6,7 +6,8 @@
 //    what they tried; or the requested item for product requests);
 //  - never the pharmacist-only stock suggestions, red-flag labels, internal notes, order data or prices;
 //  - only the customer's first name appears in the greeting (no surname, phone or address);
-//  - the text stays under MAX_WHATSAPP_MESSAGE_CHARS and truncates on a word boundary.
+//  - the text stays under MAX_WHATSAPP_MESSAGE_CHARS and truncates on a word boundary;
+//  - the chat resume link (when given) is the last line and is never truncated (the text before it shrinks instead).
 
 export const MAX_WHATSAPP_MESSAGE_CHARS = 900;
 const MAX_VALUE_CHARS = 140;
@@ -21,6 +22,8 @@ export interface WhatsappMessageInput {
   pharmacyName: string;
   reason?: string | null;
   brief?: Brief | null;
+  /** Visitor resume link to the web chat. Appended LAST and never truncated. */
+  resumeLink?: string | null;
 }
 
 /** Collapses whitespace, removes control chars / zero-width chars, trims. */
@@ -73,6 +76,12 @@ export function customerSummaryLines(brief: Brief | null | undefined, reason?: s
   const add = (label: string, value: string) => {
     if (value) lines.push(`- ${label}: ${value}`);
   };
+
+  // General questions: the customer's own question (non-clinical), nothing else.
+  if (reason === "general_question") {
+    add("Sua pergunta", text(b.question ?? b.customerText, 200));
+    return lines;
+  }
 
   const symptom = text(b.symptoms, 160);
   if (symptom) {
@@ -130,8 +139,15 @@ export function buildWhatsappMessage(input: WhatsappMessageInput): string {
   const who = [attendant, role].filter(Boolean).join(", ");
   const intro = `Aqui é ${who}${pharmacy ? ` da ${pharmacy}` : ""}.`;
   const lines = customerSummaryLines(input.brief, input.reason);
-  const greeting = `${customer ? `Olá, ${customer}!` : "Olá!"} ${intro} Recebi seu atendimento pelo chat${lines.length ? " e já li o que você me contou:" : "."}`;
-  return fit(greeting, lines, "Posso te ajudar com isso?", MAX_WHATSAPP_MESSAGE_CHARS);
+  const isQuestion = input.reason === "general_question";
+  const greeting = `${customer ? `Olá, ${customer}!` : "Olá!"} ${intro} ${
+    isQuestion ? `Recebi sua pergunta pelo chat${lines.length ? ":" : "."}` : `Recebi seu atendimento pelo chat${lines.length ? " e já li o que você me contou:" : "."}`
+  }`;
+  const closing = isQuestion ? "Vou te ajudar com isso." : "Posso te ajudar com isso?";
+  const link = input.resumeLink?.trim();
+  if (!link) return fit(greeting, lines, closing, MAX_WHATSAPP_MESSAGE_CHARS);
+  const linkBlock = `\n\nPara continuar sua compra pelo chat: ${link}`;
+  return `${fit(greeting, lines, closing, Math.max(120, MAX_WHATSAPP_MESSAGE_CHARS - linkBlock.length))}${linkBlock}`;
 }
 
 // ---------------------------------------------------------------------------------------------

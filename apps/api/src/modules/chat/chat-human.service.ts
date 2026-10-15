@@ -79,6 +79,33 @@ export class ChatHumanService {
     return { joinMessage, message };
   }
 
+  /**
+   * A person's reply that carries a structured card (pharmacist product suggestion). Same author stamping and join
+   * banner as recordHumanReply; `uiData` is stored verbatim (the caller builds the exact payload from the DB).
+   */
+  async recordHumanCard(input: { businessId: string; conversationId: string; author: HumanAuthor; content: string; uiData: Record<string, unknown> }) {
+    const content = input.content.trim();
+    if (!content) throw new NotFoundException("Empty reply");
+    const joinMessage = await this.recordHumanJoin(input);
+    const message = await this.prisma.client.message.create({
+      data: {
+        conversationId: input.conversationId,
+        businessId: input.businessId,
+        role: "owner",
+        content,
+        authorMemberId: input.author.memberId,
+        authorRole: input.author.roleName,
+        authorName: input.author.name,
+        uiData: input.uiData as object,
+      },
+    });
+    await this.prisma.client.conversation.update({
+      where: { id: input.conversationId },
+      data: { lastMessageAt: new Date(), lastOwnerReplyAt: new Date(), lastReadByOwnerAt: new Date(), messageCount: { increment: 1 } },
+    });
+    return { joinMessage, message };
+  }
+
   /** One neutral system line in the conversation (e.g. "Nome · Função continuou o atendimento pelo WhatsApp"). Carries no health data. */
   async recordSystemNote(input: { businessId: string; conversationId: string; author: HumanAuthor; text: string }) {
     await this.assertConversation(input.businessId, input.conversationId);

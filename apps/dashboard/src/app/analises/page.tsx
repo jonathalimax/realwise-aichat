@@ -29,7 +29,7 @@ const TRIAGE_COLOR: Record<string, string> = {
 
 export default function AnalisesPage() {
   const [range, setRange] = useState<Range>("7d");
-  const state = useLoad(() => getPharmacyAnalytics(range), [range]);
+  const state = useLoad(() => getPharmacyAnalytics(range), [range], { live: "overview" });
   const a = state.data;
   const bars = (a?.chart.buckets ?? []).map((b) => ({
     label: b.label,

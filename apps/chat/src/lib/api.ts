@@ -244,8 +244,10 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
 
 export type PharmacyAction = { type: string; [key: string]: unknown };
 
-export function pharmacyAction(businessId: string, conversationId: string, action: PharmacyAction): Promise<{ messages: any[]; pharmacy?: any; suggestions?: string[] }> {
-  return request(`/chat/${businessId}/conversations/${conversationId}/pharmacy/actions`, {
+export function pharmacyAction(businessId: string, conversationId: string, action: PharmacyAction, resumeToken?: string): Promise<{ messages: any[]; pharmacy?: any; suggestions?: string[] }> {
+  // A visitor who opened the chat through a resume link (?c=&t=) on another device proves ownership with the token.
+  const qs = resumeToken ? `?t=${encodeURIComponent(resumeToken)}` : "";
+  return request(`/chat/${businessId}/conversations/${conversationId}/pharmacy/actions${qs}`, {
     method: "POST",
     body: JSON.stringify(action),
   });

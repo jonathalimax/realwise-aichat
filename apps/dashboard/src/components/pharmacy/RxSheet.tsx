@@ -25,7 +25,7 @@ import { ErrorState } from "../page-kit";
 /** Prescription viewer: protected file (blob via cookie auth, never a public URL) + approve / reject (pharmacist with CRF). */
 export function RxSheet({ rxId, onClose, onChanged }: { rxId: string | null; onClose: () => void; onChanged: () => void }) {
   const { me, can, refreshNotifications } = useSession();
-  const state = useLoad<RxDetail | null>(() => (rxId ? getPrescription(rxId) : Promise.resolve(null)), [rxId]);
+  const state = useLoad<RxDetail | null>(() => (rxId ? getPrescription(rxId) : Promise.resolve(null)), [rxId], { live: "prescriptions" });
   const rx = rxId && state.data?.id === rxId ? state.data : null;
   const [file, setFile] = useState<{ url: string; mimeType: string } | null>(null);
   const [fileError, setFileError] = useState("");

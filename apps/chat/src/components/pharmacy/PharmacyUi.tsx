@@ -25,6 +25,7 @@ export const PHARMACY_UI_KINDS = [
   "order_review",
   "order_confirmation",
   "rx_upload",
+  "pharmacist_suggestion",
   "human_joined",
 ] as const;
 
@@ -55,7 +56,9 @@ function renderKind(ui: PharmacyUiPayload, ctx: PharmacyUiContext): ReactNode {
     case "catalog_list":
       return Array.isArray(ui.items) && ui.items.length > 0 ? <CatalogList ui={ui} ctx={ctx} /> : null;
     case "cart":
-      return ui.cart ? <CartSummaryCard cart={ui.cart} /> : null;
+      return ui.cart ? <CartSummaryCard cart={ui.cart} ctx={ctx} /> : null;
+    case "pharmacist_suggestion":
+      return Array.isArray(ui.items) && ui.items.length > 0 ? <PharmacistSuggestion ui={ui} ctx={ctx} /> : null;
     case "symptom_question":
       return <SymptomQuestion ui={ui} ctx={ctx} />;
     case "red_flag":
@@ -150,16 +153,9 @@ function ErrorLine({ message }: { message: string | null }) {
   );
 }
 
-function ConsentCheck({ consent, checked, onChange, disabled }: { consent: ConsentCardData; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  const id = useId();
-  return (
-    <div className="flex items-start gap-2">
-      <input id={id} type="checkbox" className="mt-0.5 h-5 w-5 flex-none accent-[var(--ph-primary)]" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
-      <label htmlFor={id} className="text-xs leading-snug text-zinc-700">
-        {consent.text}
-      </label>
-    </div>
-  );
+// One tap: the notice is shown as text and the button that follows IS the consent (no checkbox).
+function ConsentNotice({ consent }: { consent: ConsentCardData }) {
+  return <p className="text-xs leading-snug text-zinc-700">{consent.text}</p>;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -275,23 +271,46 @@ function CatalogList({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContex
 // Cart summary (read-only snapshot in the thread; the live cart is in the cart bar)
 // ------------------------------------------------------------------------------------------
 
-function CartSummaryCard({ cart }: { cart: any }) {
+function CartSummaryCard({ cart, ctx }: { cart: any; ctx: PharmacyUiContext }) {
   const items: any[] = Array.isArray(cart.items) ? cart.items : [];
+  const { pending, error, run } = useCardAction(ctx);
+  // Only the newest cart card is live (older snapshots are read-only history).
+  const locked = !ctx.interactive || ctx.busy || pending;
   return (
     <div className="ph-card p-3.5">
       <div className="text-sm font-semibold">Seu carrinho</div>
       {items.length === 0 ? (
         <p className="mt-1 text-sm text-zinc-500">Carrinho vazio.</p>
       ) : (
-        <ul className="mt-2 flex flex-col gap-1.5">
-          {items.map((it) => (
-            <li key={it.productId} className="flex justify-between gap-3 text-sm">
-              <span>
-                {it.qty}× {it.name}
-              </span>
-              <span className="flex-none">{formatBRL(it.lineTotalCents)}</span>
-            </li>
-          ))}
+        <ul className="m-0 mt-2 flex list-none flex-col gap-2 p-0">
+          {items.map((it) => {
+            const max = Math.max(1, Number(it.maxQty) || 99);
+            return (
+              <li key={it.productId} className="flex flex-col gap-1.5 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="min-w-0 break-words">{it.name}</span>
+                  <span className="flex-none">{formatBRL(it.lineTotalCents)}</span>
+                </div>
+                {ctx.interactive && (
+                  <div className="flex items-center gap-2">
+                    <button type="button" className="ph-iconbtn" aria-label={`Menos uma unidade de ${it.name}`} disabled={locked || it.qty <= 1} onClick={() => run({ type: "cart.set_qty", productId: it.productId, qty: it.qty - 1 })}>
+                      −
+                    </button>
+                    <span className="w-7 text-center text-sm font-bold" aria-label={`Quantidade: ${it.qty}`}>
+                      {it.qty}
+                    </span>
+                    <button type="button" className="ph-iconbtn" aria-label={`Mais uma unidade de ${it.name}`} disabled={locked || it.qty >= max} onClick={() => run({ type: "cart.set_qty", productId: it.productId, qty: it.qty + 1 })}>
+                      +
+                    </button>
+                    <button type="button" className="ph-link ml-auto min-h-[44px] text-sm" disabled={locked} aria-label={`Remover ${it.name} do carrinho`} onClick={() => run({ type: "cart.remove", productId: it.productId })}>
+                      Remover
+                    </button>
+                  </div>
+                )}
+                {!ctx.interactive && <span className="text-xs text-zinc-500">{it.qty}×</span>}
+              </li>
+            );
+          })}
         </ul>
       )}
       <div className="mt-2 flex justify-between border-t border-zinc-200 pt-2 text-sm font-bold">
@@ -299,6 +318,90 @@ function CartSummaryCard({ cart }: { cart: any }) {
         <span>{formatBRL(cart.subtotalCents)}</span>
       </div>
       {cart.requiresPrescription && <p className="mt-2 text-xs text-zinc-600">Há item que exige receita. O pedido passa pelo farmacêutico.</p>}
+      <ErrorLine message={error} />
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------------------------------
+// Pharmacist suggestion: what the pharmacist indicated, bought with one tap (live price/stock from the server)
+// ------------------------------------------------------------------------------------------
+
+function PharmacistSuggestion({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContext }) {
+  const items: any[] = ui.items.filter((it: any) => it && typeof it.productId === "string" && typeof it.name === "string");
+  const from = ui.from && typeof ui.from.name === "string" ? ui.from : null;
+  const note = typeof ui.note === "string" && ui.note.trim() ? ui.note.trim() : null;
+  const [qtys, setQtys] = useState<Record<string, number>>({});
+  const [added, setAdded] = useState<Record<string, boolean>>({});
+  const { pending, error, run } = useCardAction(ctx);
+  // Only the newest suggestion card is live; older ones stay readable.
+  const locked = !ctx.interactive || ctx.busy || pending;
+  const sellable = (it: any) => (typeof it.sellable === "boolean" ? it.sellable : it.inStock !== false);
+  const qtyOf = (it: any) => Math.min(Math.max(1, qtys[it.productId] ?? 1), Math.max(1, Number(it.maxQty) || 5));
+  const buyable = items.filter(sellable);
+  async function addOne(it: any) {
+    const res = await run({ type: "cart.add", productId: it.productId, qty: qtyOf(it) }, `Adicionar ${it.name}`);
+    if (res.ok) setAdded((a) => ({ ...a, [it.productId]: true }));
+  }
+  async function addAll() {
+    const res = await run({ type: "cart.add_many", items: buyable.map((it) => ({ productId: it.productId, qty: qtyOf(it) })) }, "Adicionar tudo ao carrinho");
+    if (res.ok) setAdded(Object.fromEntries(buyable.map((it) => [it.productId, true])));
+  }
+  return (
+    <div className="ph-card p-3" role="group" aria-label="Indicação do farmacêutico">
+      {from && (
+        <div className="mb-1 text-sm font-semibold text-zinc-900">
+          Indicado por {from.name}
+          {from.roleName ? ` · ${from.roleName}` : ""}
+        </div>
+      )}
+      {note && <p className="mb-2 text-xs text-zinc-600">{note}</p>}
+      <ul className="m-0 flex list-none flex-col divide-y divide-zinc-100 p-0">
+        {items.map((it) => {
+          const can = sellable(it);
+          const max = Math.max(1, Number(it.maxQty) || 5);
+          const qty = qtyOf(it);
+          return (
+            <li key={it.productId} className="flex flex-col gap-2 py-2.5">
+              <div className="flex items-center gap-2.5">
+                <Thumb imageUrl={it.imageUrl} icon={it.placeholderIcon} alt="" />
+                <div className="min-w-0 flex-1">
+                  <span className="block break-words text-sm font-semibold leading-tight text-zinc-900">{it.name}</span>
+                  {it.presentation && <span className="block break-words text-xs text-zinc-500">{it.presentation}</span>}
+                  {it.requiresPrescription && <span className="ph-badge ph-badge-amber mt-0.5">Exige receita</span>}
+                </div>
+                <span className="flex-none text-sm font-bold text-zinc-900">{formatBRL(it.priceCents)}</span>
+              </div>
+              {can ? (
+                <div className="flex items-center gap-2">
+                  <button type="button" className="ph-iconbtn" aria-label={`Menos uma unidade de ${it.name}`} disabled={locked || qty <= 1} onClick={() => setQtys((q) => ({ ...q, [it.productId]: Math.max(1, qty - 1) }))}>
+                    −
+                  </button>
+                  <span className="w-7 text-center text-sm font-bold" aria-label={`Quantidade: ${qty}`}>
+                    {qty}
+                  </span>
+                  <button type="button" className="ph-iconbtn" aria-label={`Mais uma unidade de ${it.name}`} disabled={locked || qty >= max} onClick={() => setQtys((q) => ({ ...q, [it.productId]: Math.min(max, qty + 1) }))}>
+                    +
+                  </button>
+                  <button type="button" className="ph-btn ml-auto !min-h-[44px] !px-3" disabled={locked} aria-label={`Adicionar ${it.name} ao carrinho`} onClick={() => addOne(it)}>
+                    {added[it.productId] ? "Adicionado ✓" : "Adicionar"}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex justify-end">
+                  <button type="button" className="ph-btn ph-btn-outline !min-h-[44px] !px-3" disabled aria-disabled="true">
+                    {it.unavailableReason === "out_of_stock" || it.inStock === false ? "Sem estoque" : "Indisponível online"}
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <button type="button" className="ph-btn mt-2 w-full" disabled={locked || buyable.length === 0} onClick={addAll}>
+        {pending ? "Adicionando…" : "Adicionar tudo ao carrinho"}
+      </button>
+      <ErrorLine message={error} />
     </div>
   );
 }
@@ -310,43 +413,44 @@ function CartSummaryCard({ cart }: { cart: any }) {
 function SymptomQuestion({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContext }) {
   const chips: string[] = Array.isArray(ui.chips) ? ui.chips.filter((c: unknown) => typeof c === "string") : [];
   const consent: ConsentCardData | null = ui.consent && typeof ui.consent.text === "string" ? ui.consent : null;
-  const [accepted, setAccepted] = useState(false);
   const [text, setText] = useState("");
   const { pending, error, run } = useCardAction(ctx);
   const [answered, setAnswered] = useState<string | null>(null);
+  // Only the newest question is live: once answered, or once a newer question exists, its chips and field are gone.
   const live = ctx.interactive && !answered;
-  const blocked = !live || pending || ctx.busy || Boolean(consent && consent.required !== false && !accepted);
+  const locked = !live || pending || ctx.busy;
   const inputId = useId();
 
-  // Declining the health-data notice ("Só chamar o farmacêutico") needs no consent: it is always available.
+  // Declining the health-data notice ("Só chamar o farmacêutico") needs no consent.
   const isDecline = (c: string) => /^s[óo] chamar o farmac/i.test(c.trim());
 
   async function answer(value: string) {
     if (!value.trim()) return;
     const payload: { type: string; [key: string]: unknown } = { type: "symptom.answer", step: ui.step, value: value.trim() };
-    // The first question carries the LGPD consent card; the choice travels with the answer.
+    // First question: the notice is shown and tapping the agree button IS the consent (it travels with the answer).
     if (consent && !isDecline(value)) payload.consent = true;
     const result = await run(payload, value.trim());
     if (result.ok) setAnswered(value.trim());
   }
 
+  if (!live) return null;
   return (
     <div className="flex flex-col gap-2">
-      {consent && live && (
+      {consent && (
         <div className="ph-card p-3">
-          <ConsentCheck consent={consent} checked={accepted} onChange={setAccepted} />
+          <ConsentNotice consent={consent} />
         </div>
       )}
       {chips.length > 0 && (
         <div className="flex flex-wrap gap-2" role="group" aria-label="Respostas sugeridas">
           {chips.map((c) => (
-            <button key={c} type="button" className="ph-chip" disabled={isDecline(c) ? !live || pending || ctx.busy : blocked} onClick={() => answer(c)}>
+            <button key={c} type="button" className="ph-chip" disabled={locked} onClick={() => answer(c)}>
               {c}
             </button>
           ))}
         </div>
       )}
-      {ui.allowFreeText !== false && live && (
+      {ui.allowFreeText !== false && !consent && (
         <form
           className="flex gap-2"
           onSubmit={(e) => {
@@ -357,13 +461,12 @@ function SymptomQuestion({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiCo
           <label htmlFor={inputId} className="ph-sr-only">
             Outra resposta
           </label>
-          <input id={inputId} className="ph-input" placeholder="Outra resposta…" value={text} disabled={blocked} onChange={(e) => setText(e.target.value)} maxLength={300} />
-          <button type="submit" className="ph-btn" disabled={blocked || !text.trim()}>
+          <input id={inputId} className="ph-input" placeholder="Outra resposta…" value={text} disabled={locked} onChange={(e) => setText(e.target.value)} maxLength={300} />
+          <button type="submit" className="ph-btn" disabled={locked || !text.trim()}>
             Enviar
           </button>
         </form>
       )}
-      {consent && live && !accepted && <p className="text-xs text-zinc-500">Aceite o aviso acima para continuar, ou chame o farmacêutico direto.</p>}
       <ErrorLine message={error} />
     </div>
   );
@@ -453,18 +556,22 @@ function ContactCapture({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiCon
 
 function ContactFollowUp({ ui, ctx, fields }: { ui: PharmacyUiPayload; ctx: PharmacyUiContext; fields: string[] }) {
   const consent: ConsentCardData | null = ui.consent && typeof ui.consent.text === "string" ? ui.consent : null;
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [accepted, setAccepted] = useState(false);
   const { pending, error, done, run } = useCardAction(ctx);
+  const nameId = useId();
   const emailId = useId();
   const live = ctx.interactive && !done;
   const locked = !live || pending || ctx.busy;
-  const needsConsent = Boolean(consent && consent.required !== false);
+  const needsName = fields.includes("name");
   async function submit() {
-    if (needsConsent && !accepted) return;
-    const payload: { type: string; [key: string]: unknown } = { type: "checkout.contact", consent: true };
+    if (needsName && !name.trim()) return;
+    const payload: { type: string; [key: string]: unknown } = { type: "checkout.contact" };
+    // The button IS the consent, but only when the notice is on the card (never claim a consent that was not shown).
+    if (consent) payload.consent = true;
+    if (name.trim()) payload.name = name.trim();
     if (email.trim()) payload.email = email.trim();
-    await run(payload, email.trim() ? `E-mail: ${email.trim()}` : "Concordo");
+    await run(payload, name.trim() ? `Nome: ${name.trim()}` : email.trim() ? `E-mail: ${email.trim()}` : consent ? "Concordo" : "Continuar");
   }
   return (
     <form
@@ -474,6 +581,14 @@ function ContactFollowUp({ ui, ctx, fields }: { ui: PharmacyUiPayload; ctx: Phar
         submit();
       }}
     >
+      {needsName && (
+        <div>
+          <label htmlFor={nameId} className="ph-label">
+            Seu nome
+          </label>
+          <input id={nameId} className="ph-input" autoComplete="given-name" value={name} disabled={locked} onChange={(e) => setName(e.target.value)} maxLength={80} />
+        </div>
+      )}
       {fields.includes("email") && (
         <div>
           <label htmlFor={emailId} className="ph-label">
@@ -482,9 +597,9 @@ function ContactFollowUp({ ui, ctx, fields }: { ui: PharmacyUiPayload; ctx: Phar
           <input id={emailId} className="ph-input" type="email" autoComplete="email" value={email} disabled={locked} onChange={(e) => setEmail(e.target.value)} maxLength={120} />
         </div>
       )}
-      {consent && <ConsentCheck consent={consent} checked={accepted} onChange={setAccepted} disabled={locked} />}
-      <button type="submit" className="ph-btn" disabled={locked || (needsConsent && !accepted)}>
-        {pending ? "Enviando…" : "Continuar"}
+      {consent && <ConsentNotice consent={consent} />}
+      <button type="submit" className="ph-btn" disabled={locked || (needsName && !name.trim())}>
+        {pending ? "Enviando…" : consent ? "Concordo e quero continuar" : "Continuar"}
       </button>
       <ErrorLine message={error} />
     </form>
@@ -501,7 +616,6 @@ function ContactCaptureFull({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyU
   const [recognized, setRecognized] = useState<{ firstName: string; address: MaskedAddress | null } | null>(initial);
   const [step, setStep] = useState<"phone" | "details">(initial ? "details" : "phone");
   const [looking, setLooking] = useState(false);
-  const [accepted, setAccepted] = useState(false);
   const { pending, error, done, run } = useCardAction(ctx);
   const phoneId = useId();
   const nameId = useId();
@@ -509,6 +623,8 @@ function ContactCaptureFull({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyU
   const phoneOk = digitsOnly(phone).length === 10 || digitsOnly(phone).length === 11;
   const live = ctx.interactive && !done;
   const locked = !live || pending || ctx.busy;
+  // A customer the pharmacy already knows (recognized by phone) gave the consent before: the notice is not shown again.
+  const showConsent = consent && !recognized;
 
   async function continueWithPhone() {
     if (!phoneOk || looking) return;
@@ -529,8 +645,8 @@ function ContactCaptureFull({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyU
 
   async function submit() {
     if (!phoneOk) return;
-    if (consent && consent.required !== false && !accepted) return;
-    const payload: { type: string; [key: string]: unknown } = { type: "checkout.contact", phone, consent: true };
+    // The submit button IS the consent when the notice is on the card.
+    const payload: { type: string; [key: string]: unknown } = { type: "checkout.contact", phone, ...(showConsent ? { consent: true } : {}) };
     if (name.trim()) payload.name = name.trim();
     if (email.trim()) payload.email = email.trim();
     await run(payload, `WhatsApp: ${phone}`);
@@ -592,13 +708,13 @@ function ContactCaptureFull({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyU
               )}
             </>
           )}
-          {consent && <ConsentCheck consent={consent} checked={accepted} onChange={setAccepted} disabled={locked} />}
+          {showConsent && consent && <ConsentNotice consent={consent} />}
           <div className="flex gap-2">
             <button type="button" className="ph-btn ph-btn-outline" disabled={locked} onClick={() => { setStep("phone"); setRecognized(null); }}>
               Trocar número
             </button>
-            <button type="submit" className="ph-btn flex-1" disabled={locked || !phoneOk || Boolean(consent && consent.required !== false && !accepted)}>
-              {pending ? "Enviando…" : "Continuar"}
+            <button type="submit" className="ph-btn flex-1" disabled={locked || !phoneOk}>
+              {pending ? "Enviando…" : showConsent ? "Concordo e continuar" : "Continuar"}
             </button>
           </div>
         </>
@@ -927,7 +1043,6 @@ function RxUpload({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContext }
   const accept: string[] = Array.isArray(ui.accept) && ui.accept.length ? ui.accept : DEFAULT_RX_TYPES;
   const maxBytes: number = typeof ui.maxBytes === "number" ? ui.maxBytes : 8 * 1024 * 1024;
   const consent: ConsentCardData | null = ui.consent && typeof ui.consent.text === "string" ? ui.consent : null;
-  const [accepted, setAccepted] = useState(false);
   const [patientName, setPatientName] = useState("");
   const [status, setStatus] = useState<"idle" | "uploading" | "done">("idle");
   const [code, setCode] = useState<string | null>(null);
@@ -935,8 +1050,8 @@ function RxUpload({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContext }
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const nameId = useId();
-  const needConsent = !consent || consent.required !== false;
-  const canPick = (!needConsent || accepted) && status !== "uploading" && Boolean(ctx.conversationId);
+  // The pick buttons ARE the consent when the notice is on the card ("Concordo e tirar foto").
+  const canPick = status !== "uploading" && Boolean(ctx.conversationId);
 
   async function onPick(file: File | undefined) {
     if (!file || !ctx.conversationId) return;
@@ -980,7 +1095,7 @@ function RxUpload({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContext }
 
   return (
     <div className="ph-card flex flex-col gap-2.5 p-3.5">
-      {consent && <ConsentCheck consent={consent} checked={accepted} onChange={setAccepted} disabled={status === "uploading"} />}
+      {consent && <ConsentNotice consent={consent} />}
       <div>
         <label htmlFor={nameId} className="ph-label">
           Nome do paciente (opcional)
@@ -989,15 +1104,14 @@ function RxUpload({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiContext }
       </div>
       <div className="flex flex-wrap gap-2">
         <button type="button" className="ph-btn ph-btn-outline" disabled={!canPick} onClick={() => cameraRef.current?.click()}>
-          Tirar foto
+          {consent ? "Concordo e tirar foto" : "Tirar foto"}
         </button>
         <button type="button" className="ph-btn ph-btn-outline" disabled={!canPick} onClick={() => fileRef.current?.click()}>
-          Escolher arquivo
+          {consent ? "Concordo e escolher arquivo" : "Escolher arquivo"}
         </button>
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" tabIndex={-1} aria-label="Tirar foto da receita" onChange={(e) => onPick(e.target.files?.[0])} />
         <input ref={fileRef} type="file" accept={accept.join(",")} className="hidden" tabIndex={-1} aria-label="Escolher arquivo da receita" onChange={(e) => onPick(e.target.files?.[0])} />
       </div>
-      {needConsent && !accepted && <p className="text-xs text-zinc-500">Aceite o aviso para enviar a receita.</p>}
       <div aria-live="polite" className="text-xs text-zinc-600">
         {status === "uploading" && "Enviando receita…"}
       </div>

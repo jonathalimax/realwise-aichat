@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { randomBytes } from "node:crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AccessLogService } from "../access/access-log.service";
 import type { MemberContext } from "../access/member-context";
@@ -8,10 +9,34 @@ import { parseLimit, sliceCursor } from "../pharmacy-common/format";
 import { accessDenied } from "../access/access-errors";
 import { hasCrfOnFile } from "../access/team-rules";
 import { buildSuggestion, handoffDetailDto, handoffListDto, handoffRequiresPharmacist, type HandoffRow } from "./handoff-dto";
+import { buildChatResumeLink } from "./resume-link";
+import { placeholderIconFor } from "../products/product-utils";
 import { buildWhatsappLinks, buildWhatsappMessage, firstNameOf, MAX_WHATSAPP_MESSAGE_CHARS, whatsappDigits } from "./whatsapp-message";
 
 const logger = new Logger("HandoffsService");
 const VISITOR_LIVE_WINDOW_MS = 45_000;
+export const MAX_SUGGESTED_PRODUCTS = 6;
+const SANITY_MAX_QTY = 10;
+const MAX_NOTE_CHARS = 300;
+
+/** Products a pharmacist may recommend in a reply: active, in stock, class CONFIRMED as OTC or prescription (never controlled/unclassified). */
+const LISTABLE_PRODUCT_WHERE = {
+  active: true,
+  deletedAt: null,
+  stockQty: { gt: 0 },
+  classConfirmedAt: { not: null },
+  saleClass: { in: ["otc", "prescription"] as Array<"otc" | "prescription"> },
+};
+
+function badRequest(code: string, message: string) {
+  return new BadRequestException({ statusCode: 400, error: "Bad Request", code, message });
+}
+
+interface ReplyInput {
+  text?: unknown;
+  productIds?: unknown;
+  note?: unknown;
+}
 
 function conflict(code: string, message: string) {
   return new ConflictException({ statusCode: 409, error: "Conflict", code, message });
@@ -99,17 +124,76 @@ export class HandoffsService {
     return this.detail(businessId, id, member);
   }
 
+  /** Listable catalog products for the reply picker (search by name / ingredient / presentation, or by ids for the "Usar sugestão" chips). */
+  async searchProducts(businessId: string, q: { q?: string; ids?: string }) {
+    const ids = (q.ids ?? "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, MAX_SUGGESTED_PRODUCTS);
+    const term = (q.q ?? "").trim().slice(0, 60);
+    if (!ids.length && term.length < 2) return { items: [] };
+    const rows = await this.prisma.client.product.findMany({
+      where: {
+        businessId,
+        ...LISTABLE_PRODUCT_WHERE,
+        ...(ids.length
+          ? { id: { in: ids } }
+          : { OR: [{ name: { contains: term, mode: "insensitive" } }, { activeIngredient: { contains: term, mode: "insensitive" } }, { presentation: { contains: term, mode: "insensitive" } }] }),
+      },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      take: ids.length ? MAX_SUGGESTED_PRODUCTS : 20,
+    });
+    const settings = await this.prisma.client.pharmacySettings.findFirst({ where: { businessId }, select: { maxQtyPerItemDefault: true } });
+    return { items: rows.map((p) => this.suggestionItem(p, settings?.maxQtyPerItemDefault ?? null)) };
+  }
+
+  private suggestionItem(
+    p: { id: string; name: string; presentation: string | null; priceCents: number; stockQty: number | null; maxQtyPerOrder: number | null; imageKey: string | null; updatedAt: Date; saleClass: string },
+    defaultMax: number | null,
+  ) {
+    return {
+      productId: p.id,
+      name: p.name,
+      presentation: p.presentation,
+      priceCents: p.priceCents,
+      inStock: (p.stockQty ?? 0) > 0,
+      maxQty: p.maxQtyPerOrder ?? defaultMax ?? SANITY_MAX_QTY,
+      imageUrl: p.imageKey ? `/api/public/products/${p.id}/image?v=${Math.floor(p.updatedAt.getTime() / 1000)}` : null,
+      placeholderIcon: placeholderIconFor(p),
+      requiresPrescription: p.saleClass === "prescription",
+    };
+  }
+
   /**
    * The pharmacist answers inside the customer's conversation (through ChatHumanService, which writes the
-   * "Nome · Função entrou na conversa" banner and the author-stamped message).
+   * "Nome · Função entrou na conversa" banner and the author-stamped message). The reply carries text, product
+   * suggestions (a `pharmacist_suggestion` card) or both.
    */
-  async reply(m: MemberContext, id: string, textRaw: unknown) {
-    const text = typeof textRaw === "string" ? textRaw.trim() : "";
-    if (text.length < 1 || text.length > 2000) throw new BadRequestException({ statusCode: 400, error: "Bad Request", code: "INVALID_TEXT", message: "A resposta deve ter de 1 a 2000 caracteres." });
+  async reply(m: MemberContext, id: string, input: ReplyInput | string) {
+    const body: ReplyInput = typeof input === "string" ? { text: input } : input ?? {};
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    const note = typeof body.note === "string" ? body.note.trim() : "";
+    if (note.length > MAX_NOTE_CHARS) throw badRequest("INVALID_NOTE", `A observação deve ter até ${MAX_NOTE_CHARS} caracteres.`);
+    let productIds: string[] = [];
+    if (body.productIds !== undefined && body.productIds !== null) {
+      if (!Array.isArray(body.productIds) || body.productIds.some((x) => typeof x !== "string" || !x)) throw badRequest("INVALID_PRODUCTS", "Lista de produtos inválida.");
+      productIds = [...new Set(body.productIds as string[])];
+      if (productIds.length > MAX_SUGGESTED_PRODUCTS) throw badRequest("TOO_MANY_PRODUCTS", `Indique no máximo ${MAX_SUGGESTED_PRODUCTS} produtos.`);
+    }
+    if (!productIds.length && (text.length < 1 || text.length > 2000)) throw badRequest("INVALID_TEXT", "A resposta deve ter de 1 a 2000 caracteres.");
+    if (text.length > 2000) throw badRequest("INVALID_TEXT", "A resposta deve ter de 1 a 2000 caracteres.");
     await this.reopenAnswered(m.businessId);
     const h = await this.load(m.businessId, id);
     this.assertCanHandle(m, h);
     if (h.status === "closed") throw conflict("INVALID_STATE", "Este atendimento já foi encerrado.");
+
+    // Every product must be listable AND belong to this business; anything else rejects the whole reply.
+    let items: ReturnType<HandoffsService["suggestionItem"]>[] = [];
+    if (productIds.length) {
+      const rows = await this.prisma.client.product.findMany({ where: { businessId: m.businessId, id: { in: productIds }, ...LISTABLE_PRODUCT_WHERE } });
+      if (rows.length !== productIds.length) throw badRequest("PRODUCT_NOT_LISTABLE", "Algum produto não pode ser indicado (sem estoque, inativo, controlado ou sem classificação confirmada).");
+      const settings = await this.prisma.client.pharmacySettings.findFirst({ where: { businessId: m.businessId }, select: { maxQtyPerItemDefault: true } });
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      items = productIds.map((pid) => this.suggestionItem(byId.get(pid)!, settings?.maxQtyPerItemDefault ?? null));
+    }
+
     const conversation = await this.prisma.client.conversation.findFirst({
       where: { id: h.conversationId, businessId: m.businessId },
       select: { id: true, resumeToken: true, lastVisitorSeenAt: true, business: { select: { slug: true, name: true } } },
@@ -119,22 +203,65 @@ export class HandoffsService {
     // The chat module owns how a person appears in a conversation: join banner once per person, then the
     // owner message carrying name + role. No brief text is ever written to any Message.
     const now = new Date();
-    await this.human.recordHumanReply({ businessId: m.businessId, conversationId: conversation.id, author: { memberId: m.memberId, name: m.name, roleName: m.roleName }, text });
+    const author = { memberId: m.memberId, name: m.name, roleName: m.roleName };
+    if (text) await this.human.recordHumanReply({ businessId: m.businessId, conversationId: conversation.id, author, text });
+    let answerText = text;
+    if (items.length) {
+      const content = `${m.name} indicou ${items.length === 1 ? "este produto" : "estes produtos"} para você:${note ? ` ${note}` : ""}`;
+      answerText = answerText || content;
+      await this.human.recordHumanCard({
+        businessId: m.businessId,
+        conversationId: conversation.id,
+        author,
+        content,
+        uiData: { type: "pharmacist_suggestion", from: { name: m.name, roleName: m.roleName }, ...(note ? { note } : {}), items },
+      });
+    }
     const { inProgress: _clear, ...briefWithoutMarker } = (h.brief && typeof h.brief === "object" ? h.brief : {}) as Record<string, unknown>;
     await this.prisma.client.pharmacistHandoff.update({
       where: { id },
-      data: { status: "answered", answerText: text, answeredAt: now, answeredByMemberId: m.memberId, answeredByName: m.name, answeredByRole: m.roleName, ...(_clear ? { brief: briefWithoutMarker as object } : {}) },
+      data: { status: "answered", answerText, answeredAt: now, answeredByMemberId: m.memberId, answeredByName: m.name, answeredByRole: m.roleName, ...(_clear ? { brief: briefWithoutMarker as object } : {}) },
     });
 
     // Push only when the visitor is not looking at the chat. The body is deliberately generic: a lock screen must not show health text.
     const live = !!conversation.lastVisitorSeenAt && Date.now() - conversation.lastVisitorSeenAt.getTime() < VISITOR_LIVE_WINDOW_MS;
     if (!live) {
-      const chatUrl = (process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005").replace(/\/+$/, "");
-      const url = `${chatUrl}/${conversation.business.slug}?c=${conversation.id}${conversation.resumeToken ? `&t=${conversation.resumeToken}` : ""}`;
-      this.push.sendToConversation(conversation.id, { title: conversation.business.name, body: "O farmacêutico respondeu ao seu atendimento.", url, tag: `handoff-${id}` }).catch(() => {});
+      const url = buildChatResumeLink({ slug: conversation.business.slug, conversationId: conversation.id, resumeToken: conversation.resumeToken });
+      const clinical = handoffRequiresPharmacist(h.reason, h.urgent);
+      this.push.sendToConversation(conversation.id, { title: conversation.business.name, body: clinical ? "O farmacêutico respondeu ao seu atendimento." : "Respondemos à sua pergunta.", url, tag: `handoff-${id}` }).catch(() => {});
     }
-    await this.accessLog.record({ businessId: m.businessId, actor: m, action: "handoff.answer", summary: "Respondeu atendimento", detail: { handoffId: id } });
+    // No health text in the log: product ids and count only.
+    await this.accessLog.record({
+      businessId: m.businessId,
+      actor: m,
+      action: "handoff.answer",
+      summary: items.length ? "Respondeu atendimento com indicação de produtos" : "Respondeu atendimento",
+      detail: { handoffId: id, ...(items.length ? { productCount: items.length, productIds } : {}) },
+    });
     return this.detail(m.businessId, id, m);
+  }
+
+  /** Visitor resume link (same conversation + history, no cookie needed). Staff only; access-logged, no health data. */
+  async chatLink(m: MemberContext, id: string) {
+    const h = await this.load(m.businessId, id);
+    this.assertCanHandle(m, h);
+    const conversation = await this.prisma.client.conversation.findFirst({
+      where: { id: h.conversationId, businessId: m.businessId },
+      select: { id: true, resumeToken: true, business: { select: { slug: true } } },
+    });
+    if (!conversation) throw conflict("CONVERSATION_GONE", "A conversa deste atendimento não existe mais.");
+    const url = await this.ensureResumeLink(conversation);
+    await this.accessLog.record({ businessId: m.businessId, actor: m, action: "handoff.chat_link", summary: "Copiou o link do chat de um atendimento", detail: { handoffId: id } });
+    return { url };
+  }
+
+  private async ensureResumeLink(conversation: { id: string; resumeToken: string | null; business: { slug: string } }): Promise<string> {
+    let token = conversation.resumeToken;
+    if (!token) {
+      token = randomBytes(16).toString("base64url");
+      await this.prisma.client.conversation.update({ where: { id: conversation.id }, data: { resumeToken: token } });
+    }
+    return buildChatResumeLink({ slug: conversation.business.slug, conversationId: conversation.id, resumeToken: token });
   }
 
   async close(m: MemberContext, id: string) {
@@ -160,7 +287,9 @@ export class HandoffsService {
     if (!phone) {
       throw conflict("NO_PHONE", "Este cliente não informou o WhatsApp. Responda pelo chat.");
     }
-    const business = await this.prisma.client.business.findFirst({ where: { id: m.businessId }, select: { name: true } });
+    const business = await this.prisma.client.business.findFirst({ where: { id: m.businessId }, select: { name: true, slug: true } });
+    const conversation = await this.prisma.client.conversation.findFirst({ where: { id: h.conversationId, businessId: m.businessId }, select: { id: true, resumeToken: true } });
+    const resumeLink = conversation && business ? await this.ensureResumeLink({ ...conversation, business: { slug: business.slug } }) : null;
     const message = buildWhatsappMessage({
       customerName: h.lead?.name ?? null,
       attendantName: m.name,
@@ -168,6 +297,7 @@ export class HandoffsService {
       pharmacyName: business?.name ?? "",
       reason: h.reason,
       brief: (h.brief ?? {}) as Record<string, unknown>,
+      resumeLink,
     });
     const links = buildWhatsappLinks(phone, message)!;
     await this.accessLog.record({ businessId: m.businessId, actor: m, action: "handoff.whatsapp_link", summary: "Abriu o contato por WhatsApp de um atendimento", detail: { handoffId: id } });
@@ -175,6 +305,7 @@ export class HandoffsService {
       customerFirstName: firstNameOf(h.lead?.name) || null,
       phone: links.phoneDigits,
       message,
+      resumeLink,
       maxChars: MAX_WHATSAPP_MESSAGE_CHARS,
       webUrl: links.webUrl,
       appUrl: links.appUrl,

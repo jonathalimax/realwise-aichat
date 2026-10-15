@@ -95,6 +95,8 @@ const BROWSE_POINTER = 'Encontrei algumas opções que podem te interessar 👇 
 interface ModelTurnAnswer {
   text: string;
   abstained: boolean;
+  // The whole reply is a "I don't have this information" (no partial answer worth keeping): pharmacies turn it into a team handoff.
+  gap?: boolean;
   degraded?: boolean;
   // The reply promised team follow-up but isn't a knowledge gap (e.g. only visitor-typed figures
   // were dropped): notify the team without recording an unanswered question or counting toward
@@ -671,7 +673,7 @@ export class ChatService {
         hasLead: Boolean(conversation.leadId),
         selectedListingIds: conversation.selectedListingIds,
       },
-      messages: isPharmacy ? messagesWithListings.map((m) => serializePharmacyMessage(m)) : messagesWithListings,
+      messages: isPharmacy && this.pharmacy ? (await this.pharmacy.hydrateMessages(businessId, messagesWithListings)).map((m) => serializePharmacyMessage(m)) : messagesWithListings,
       ...(pharmacyView ? { pharmacy: pharmacyView } : {}),
       flowSnapshot: conversation.flowSnapshot ?? null,
       resumedViaToken: ownsViaResumeToken && !ownsViaVisitor,
@@ -856,6 +858,11 @@ export class ChatService {
     }
 
     const answer = await this.generateAnswer(businessId, conversationId, visitorText);
+    // Pharmacy: a non-clinical question the model could not answer (or could not be asked) goes to the team as a
+    // `general_question` handoff, with the fixed "vou pedir para a equipe confirmar" reply, instead of a dead end.
+    if (turnNiche === "farmacia" && this.pharmacy && ((answer.abstained && answer.gap) || (answer.degraded && !answer.visitorLeft)) && this.pharmacy.isTeamQuestion(visitorText)) {
+      return this.pharmacy.handleUnknownQuestion(businessId, conversationId, visitorText);
+    }
     return this.finishModelTurn(businessId, conversation, visitorText, answer, leadId);
   }
 
@@ -1317,7 +1324,7 @@ export class ChatService {
       browsingListings?: ListingItem[];
       visitorText: string;
     },
-  ): { text: string; abstained: boolean; notifyTeam?: boolean; suggestions?: string[] } {
+  ): { text: string; abstained: boolean; gap?: boolean; notifyTeam?: boolean; suggestions?: string[] } {
     if (leaksSystemPrompt(rawText)) {
       const deflection = injectionDeflection(ctx.niche, ctx.businessName);
       return { text: deflection.text, abstained: false, suggestions: deflection.suggestions };
@@ -1337,7 +1344,7 @@ export class ChatService {
     }
     if (entityHit) {
       const gap = gapReply(ctx.niche, ctx.hasContact);
-      return { text: gap.text, abstained: true, suggestions: gap.suggestions };
+      return { text: gap.text, abstained: true, gap: true, suggestions: gap.suggestions };
     }
     if (removed.length > 0) {
       // Figures the visitor typed themselves ("com renda de R$ 6.000...") are not facts we can
@@ -1350,7 +1357,7 @@ export class ChatService {
       }
       if (!meaningful) {
         const gap = gapReply(ctx.niche, ctx.hasContact);
-        return { text: gap.text, abstained: true, suggestions: gap.suggestions };
+        return { text: gap.text, abstained: true, gap: true, suggestions: gap.suggestions };
       }
       return {
         text: `${strippedText} ${partialAnswerNote(ctx.niche, ctx.hasContact)}`,
@@ -1364,7 +1371,7 @@ export class ChatService {
       return { text: gap.text, abstained: false, notifyTeam: true, suggestions: gap.suggestions };
     }
     if (looksLikeAbstention(strippedText)) {
-      return { text: withNextStep(strippedText, ctx.niche, ctx.hasContact), abstained: true, suggestions: nextStepSuggestions(ctx.niche) };
+      return { text: withNextStep(strippedText, ctx.niche, ctx.hasContact), abstained: true, gap: true, suggestions: nextStepSuggestions(ctx.niche) };
     }
     return { text: strippedText, abstained: false };
   }
@@ -1495,7 +1502,7 @@ export class ChatService {
         }
       }
       const gap = gapReply(niche, hasContact);
-      return { ...EMPTY_ANSWER, text: gap.text, abstained: true, suggestions: gap.suggestions };
+      return { ...EMPTY_ANSWER, text: gap.text, abstained: true, gap: true, suggestions: gap.suggestions };
     }
 
     const { systemPrompt, prompt, retrievedChunkIds, retrievalTopScore, retrievedChunkText, groundingAllowlistText, groundingText } =
@@ -1581,6 +1588,7 @@ export class ChatService {
       ...EMPTY_ANSWER,
       text: this.pharmacySafeText(niche, vetted.text),
       abstained: vetted.abstained,
+      gap: vetted.gap,
       notifyTeam: vetted.notifyTeam,
       model: result.model,
       inputTokens: result.inputTokens,
@@ -1930,6 +1938,11 @@ export class ChatService {
 
     // Model path: generated and vetted in full, then emitted once (see the method comment).
     const answer = await this.generateAnswer(businessId, conversationId, visitorText, signal);
+    if (streamTurnBusiness?.niche === "farmacia" && this.pharmacy && ((answer.abstained && answer.gap) || (answer.degraded && !answer.visitorLeft)) && this.pharmacy.isTeamQuestion(visitorText)) {
+      const teamTurn = await this.pharmacy.handleUnknownQuestion(businessId, conversationId, visitorText);
+      if (teamTurn.message) onDelta(teamTurn.message.content);
+      return { ...teamTurn, conversationalMode };
+    }
     onDelta(answer.text);
     const turn = await this.finishModelTurn(businessId, conversation, visitorText, answer, leadId);
     return { ...turn, conversationalMode };

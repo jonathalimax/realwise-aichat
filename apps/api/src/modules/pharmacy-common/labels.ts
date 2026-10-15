@@ -94,6 +94,7 @@ export const HANDOFF_REASON_LABEL = {
   out_of_stock: "Sem estoque",
   rx: "Receita",
   product_request: "Pedido de produto",
+  general_question: "Pergunta ao atendimento",
   other: "Outro",
 } as const;
 
@@ -101,6 +102,7 @@ export function handoffTag(reason: keyof typeof HANDOFF_REASON_LABEL, urgent: bo
   if (urgent) return { tag: "Urgente", tagBadge: "red" };
   if (reason === "controlled") return { tag: "Controlado", tagBadge: "gray" };
   if (reason === "out_of_stock") return { tag: "Sem estoque", tagBadge: "amber" };
+  if (reason === "general_question") return { tag: "Pergunta", tagBadge: "blue" };
   return { tag: HANDOFF_REASON_LABEL[reason], tagBadge: "soft" };
 }
 

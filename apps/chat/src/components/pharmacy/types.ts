@@ -15,7 +15,7 @@ export interface MaskedAddress {
 }
 
 export interface ConsentCardData {
-  purpose: "pharmacy_triage" | "prescription_upload";
+  purpose: "pharmacy_triage" | "prescription_upload" | "order_contact" | "pharmacy_contact";
   version?: string;
   text: string;
   required?: boolean;
@@ -52,6 +52,7 @@ export interface PharmacyState {
   orderCode?: string | null;
   statusUrl?: string | null;
   humanJoined?: PharmacyHumanJoined[];
+  handoffOpen?: boolean;
 }
 
 export interface MessageAuthor {

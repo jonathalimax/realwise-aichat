@@ -882,6 +882,8 @@ enum HandoffReason {
   other
   // Attendance mode: the customer asked about a product/price/availability; the pharmacist confirms.
   product_request
+  // A NON-clinical question the AI could not answer; answered by an attendant (any staff with Atendimento edit).
+  general_question
 }
 
 // Pharmacy operation mode chosen by the owner (what the plan allows is PlanFeatures.pharmacyCommerce).
