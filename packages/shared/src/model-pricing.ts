@@ -7,6 +7,8 @@ const PRICING_TABLE: Record<string, Record<string, { inputPerMillion: number; ou
   managed: {
     "qwen/qwen-2.5-7b-instruct": { inputPerMillion: 0.1, outputPerMillion: 0.2 },
     "z-ai/glm-4.7-flash": { inputPerMillion: 0.0605, outputPerMillion: 0.4 },
+    // OpenRouter live models API, 2026-10-15 (pt-BR benchmark winner, see apps/inference-gateway/src/providers/managed.ts).
+    "anthropic/claude-haiku-5.5": { inputPerMillion: 0.1, outputPerMillion: 0.5 },
   },
   self_hosted: {
     "qwen2.5:7b-instruct-q4_K_M": { inputPerMillion: 0, outputPerMillion: 0 },

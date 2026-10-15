@@ -3,11 +3,16 @@ import { isOverMonthlyBudget } from "../budget";
 
 const MANAGED_API_URL = process.env.MANAGED_API_URL ?? "https://openrouter.ai/api/v1/chat/completions";
 const MANAGED_API_KEY = process.env.MANAGED_API_KEY;
-const MANAGED_MODEL = process.env.MANAGED_MODEL ?? "qwen/qwen-2.5-7b-instruct";
+// Default for every non-chat purpose (extraction, eval, interview parsing...). Chosen from a pt-BR benchmark on the real tasks
+// (owner interview JSON, spreadsheet column mapping, class proposals, safety, grounded Q&A): claude-haiku-5.5 scored 100/100
+// at $0.10/$0.50 per million tokens, vs 80/100 for glm-4.7-flash (which also burns hidden reasoning tokens).
+const MANAGED_MODEL = process.env.MANAGED_MODEL ?? "anthropic/claude-haiku-5.5";
+// Cheap model used ONLY when a tenant is over its monthly LLM budget (the old behaviour of MANAGED_MODEL).
+const MANAGED_MODEL_ECONOMY = process.env.MANAGED_MODEL_ECONOMY ?? "qwen/qwen-2.5-7b-instruct";
 // Default chat-answering model — automatically downgraded back to MANAGED_MODEL per-tenant once
 // the tenant's month-to-date LLM spend crosses their plan-tier (or admin-override) budget cap.
 // See ../budget.ts for the resolution/caching logic.
-const MANAGED_MODEL_CHAT = process.env.MANAGED_MODEL_CHAT ?? "z-ai/glm-4.7-flash";
+const MANAGED_MODEL_CHAT = process.env.MANAGED_MODEL_CHAT ?? "anthropic/claude-haiku-5.5";
 // Tried qwen-2.5-72b-instruct here for listing_extraction's images-array problem — reverted.
 // Confirmed via direct, isolated test calls: qwen-2.5-72b-instruct + the required
 // `provider: { zdr: true, data_collection: "deny" }` routing (see generate() below — this is a
@@ -22,7 +27,8 @@ const MANAGED_MODEL_LISTING_EXTRACTION = process.env.MANAGED_MODEL_LISTING_EXTRA
 async function modelForPurpose(purpose: GenerateRequest["purpose"], businessId?: string): Promise<string> {
   if (purpose === "listing_extraction") return MANAGED_MODEL_LISTING_EXTRACTION;
   if (purpose === "chat") {
-    if (!businessId || (await isOverMonthlyBudget(businessId))) return MANAGED_MODEL;
+    if (!businessId) return MANAGED_MODEL;
+    if (await isOverMonthlyBudget(businessId)) return MANAGED_MODEL_ECONOMY;
     return MANAGED_MODEL_CHAT;
   }
   return MANAGED_MODEL;
@@ -79,7 +85,7 @@ export class ManagedProvider implements InferenceProvider {
       // covers the slower model's real latency while staying well inside the 60s per-window
       // ceiling listing-extraction.service.ts is tuned around.
       signal: AbortSignal.timeout(
-        req.purpose === "listing_extraction" ? 45000 : model === MANAGED_MODEL_CHAT ? 35000 : 20000,
+        req.purpose === "listing_extraction" ? 45000 : model === MANAGED_MODEL_CHAT || model === MANAGED_MODEL ? 35000 : 20000,
       ),
     });
 
