@@ -791,6 +791,13 @@ export function ChatScreen({
           // starts a fresh conversation instead of failing with "Conversation not found".
           setConversationId(null);
           conversationPromiseRef.current = null;
+          // Start the replacement right away: the welcome flow below needs a conversation id, and without it the
+          // visitor would see an empty chat until the first message.
+          try {
+            await ensureConversation();
+          } catch {
+            /* the first send retries */
+          }
         }
         // History fetch failing must not block the chat — the flow/start effect below still
         // runs and starts a fresh conversation experience.
