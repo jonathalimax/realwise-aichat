@@ -47,7 +47,7 @@ function parsePharmacist(raw: string): Proposed {
   }
   const name = raw
     .replace(/CRF[\s\-/]*([A-Za-z]{2})?[\s\-/]*n?[º°.]?\s*\d{3,7}/i, "")
-    .replace(/\b(farmac[eê]utic[oa]|respons[aá]vel|rt|dr\.?|dra\.?|[ée]|chama-se|o nome [ée])\b/gi, " ")
+    .replace(/\b(farmac[eê]utic[oa]|respons[aá]vel|rt|[ée]|chama-se|o nome [ée])\b|\bdra?\b\.?/gi, " ")
     .replace(/[,;()\-–:]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -201,7 +201,11 @@ export function parseProposal(fieldKey: string, raw: string): Proposed {
     }
     case "produtos_exigem_farmaceutico": {
       if (/\b(nenhum|nao|sem)\b/.test(fold(text)) && text.length < 25) return { pharmacistRequiredProductNames: [] };
-      const names = text.split(/[,;\n]| e /).map((s) => s.trim()).filter((s) => s.length >= 3 && s.length <= 100);
+      const names = text
+        .split(/[,;\n]| e /)
+        // The model sometimes returns "Xarope: o farmacêutico confirma sempre…": the product is what comes before the colon.
+        .map((s) => (/^([^:]{3,60}):.*farmac/i.test(s.trim()) ? s.trim().split(":")[0] : s).trim())
+        .filter((s) => s.length >= 3 && s.length <= 100);
       return names.length ? { pharmacistRequiredProductNames: names.slice(0, 50) } : {};
     }
     case "formas_pagamento_entrega": {

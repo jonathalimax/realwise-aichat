@@ -133,7 +133,7 @@ function LoginPageInner() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-bg text-ink lg:flex-row">
+    <div className="flex min-h-dvh flex-col bg-bg text-ink lg:flex-row" style={niche === "farmacia" ? ({ "--accent": "15 118 110" } as React.CSSProperties) : undefined}>
       {/* BRAND PANEL */}
       <div className={`hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-between ${theme.panelClass} px-12 py-10 text-bg`}>
         <a href="/" className="font-serif text-xl font-bold text-bg">{theme.brand}</a>

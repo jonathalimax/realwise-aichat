@@ -23,7 +23,7 @@ import { Input } from "../../../components/ui/input";
 import { Select } from "../../../components/ui/select";
 import { Card } from "../../../components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
-import { EmptyState, Field, LinkButton, PageHeader, PageStack, SectionCard } from "../../../components/page-kit";
+import { EmptyState, ErrorState, Field, LinkButton, PageHeader, PageStack, SectionCard } from "../../../components/page-kit";
 import { Upload, Check } from "lucide-react";
 import { cn } from "../../../lib/utils";
 
@@ -162,7 +162,7 @@ export default function ImportPage() {
         {history.loading && !history.data ? (
           <p className="px-5 py-4 text-sm text-muted">Carregando…</p>
         ) : history.error ? (
-          <p className="px-5 py-4 text-sm text-muted">Não consegui carregar o histórico agora.</p>
+          <ErrorState error={history.error} what="o histórico" onRetry={() => void history.reload()} />
         ) : (history.data?.items.length ?? 0) === 0 ? (
           <EmptyState title="Nenhuma importação ainda" description="As planilhas que você enviar aparecem aqui." />
         ) : (

@@ -30,19 +30,29 @@ async function handle(res: Response) {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new ApiError(body?.message ?? `Request failed: ${res.status}`, res.status, body);
+    // 5xx bodies carry framework English ("Internal server error"): never show that to the owner.
+    const message = res.status >= 500 ? "Algo deu errado do nosso lado. Tente de novo em instantes." : (body?.message ?? `Não foi possível concluir (${res.status}).`);
+    throw new ApiError(message, res.status, body);
   }
   if (res.status === 204) return null;
   return res.json();
 }
 
+const OFFLINE_MESSAGE = "Sem conexão com o servidor. Confira a internet e tente de novo.";
+
 export async function request(path: string, options?: RequestInit) {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    credentials: "include",
-    headers: { "content-type": "application/json", ...options?.headers },
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      credentials: "include",
+      headers: { "content-type": "application/json", ...options?.headers },
+      cache: "no-store",
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    throw new ApiError(OFFLINE_MESSAGE, 0, null);
+  }
   return handle(res);
 }
 

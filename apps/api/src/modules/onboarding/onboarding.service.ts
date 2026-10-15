@@ -166,7 +166,14 @@ export class OnboardingService {
     return { business, template, data, gaps };
   }
 
+  /** Interview turn plus a live progress count (answered/total): the readiness score is only recomputed on demand, so it sits at 0% during the interview. */
   async interviewChat(businessId: string, history: { role: "owner" | "clara"; content: string }[]) {
+    const result = await this.interviewTurn(businessId, history);
+    const { template, gaps } = await this.findGaps(businessId);
+    return { ...result, totalFields: template.fields.length, answeredFields: template.fields.length - gaps.length };
+  }
+
+  private async interviewTurn(businessId: string, history: { role: "owner" | "clara"; content: string }[]) {
     const { business, gaps } = await this.findGaps(businessId);
     const confidenceScore = business.confidenceScore ?? 0;
 
@@ -234,7 +241,10 @@ export class OnboardingService {
     const conversation = history.map((m) => `${m.role === "owner" ? "Dono" : "Clara"}: ${m.content}`).join("\n");
 
     const systemPrompt = [
-      `Você é a Clara, entrevistando o DONO ${business.name ? `da ${business.name}` : "do negócio"} para completar o perfil do negócio (não é o cliente final).`,
+      `Você é ${getPersona(business.niche).name}, o assistente de IA que está conhecendo o DONO ${business.name ? `da ${business.name}` : "do negócio"} para completar o perfil do negócio (a pessoa que fala com você é o dono, não o cliente final).`,
+      "Tom: caloroso, cuidadoso e eficiente, como um colega atencioso que respeita o tempo de quem está ocupado. Português do Brasil, frases curtas, sem jargão, sem emojis.",
+      "Cada resposta tem no máximo 2 frases curtas: um reconhecimento breve e específico do que o dono disse (varie as palavras: nunca repita o mesmo começo, evite \"Anotei\"/\"Obrigada\" em toda resposta) e a próxima pergunta, em linguagem natural (não copie o rótulo técnico do campo entre aspas).",
+      "Se o dono estiver inseguro ou não souber uma informação, tranquilize e ofereça seguir adiante (ele pode completar depois em Farmácia). Se o dono já tiver dado a informação de um campo antes, nunca pergunte de novo.",
       "Sua tarefa: perguntar, uma de cada vez, sobre os campos que ainda faltam preencher, na ordem dada.",
       "Se o conteúdo dos documentos abaixo já responder um campo, não pergunte de novo — apenas confirme e extraia o valor.",
       "Quando o dono responder uma pergunta, extraia o valor completo da resposta para o campo perguntado — preserve o conteúdo real dito pelo dono, sem resumir, abreviar ou reduzir a um código curto.",
@@ -244,8 +254,7 @@ export class OnboardingService {
       "A pergunta em `reply` deve sempre nomear explicitamente o campo (use o label do campo, ex: \"Qual o horário de funcionamento?\") — nunca use um pronome vago como \"isso\"/\"isto\" sem dizer a que campo se refere.",
       `Campos que faltam (em ordem de prioridade):\n${gapList}`,
       documentContext ? `Conteúdo já extraído dos documentos (use para não perguntar o que já está aqui):\n${documentContext}` : "",
-      `Prontidão atual: ${confidenceScore}%`,
-      "Quando for natural (ex: depois de preencher um campo importante), você pode mencionar brevemente esse percentual de prontidão para o dono acompanhar o progresso — sem exagerar nem interromper o fluxo das perguntas.",
+      `Faltam ${gaps.length} campos. Quando restarem poucos (3 ou menos), diga isso de forma animadora, sem falar em percentuais.`,
     ].join("\n\n");
 
     const prompt = conversation

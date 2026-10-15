@@ -40,6 +40,7 @@ export function InterviewChat({
   const [allDone, setAllDone] = useState(false);
   const [remainingGaps, setRemainingGaps] = useState<number | null>(null);
   const [confidenceScore, setConfidenceScore] = useState<number | null>(null);
+  const [progress, setProgress] = useState<{ answered: number; total: number } | null>(null);
   const [readyToPublish, setReadyToPublish] = useState(false);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export function InterviewChat({
       setRemainingGaps(result.remainingGaps);
       setConfidenceScore(typeof result.confidenceScore === "number" ? result.confidenceScore : null);
       setReadyToPublish(!!result.readyToPublish);
+      if (typeof result.totalFields === "number" && typeof result.answeredFields === "number") setProgress({ answered: result.answeredFields, total: result.totalFields });
       setPublicUrl(result.publicUrl ?? null);
       if (onStateChange) {
         onStateChange({
@@ -262,15 +264,28 @@ export function InterviewChat({
         </div>
       )}
       {remainingGaps !== null && (
-        <p className="text-xs text-ink-soft">
-          {allDone
-            ? confidenceScore !== null
-              ? `Todos os campos foram cobertos — prontidão em ${confidenceScore}%.`
-              : "Todos os campos foram cobertos."
-            : confidenceScore !== null
-              ? `Prontidão em ${confidenceScore}% · ${remainingGaps} campo(s) ainda faltando.`
-              : `${remainingGaps} campo(s) ainda faltando.`}
-        </p>
+        <div className="space-y-1.5" aria-live="polite">
+          {progress && progress.total > 0 && (
+            <div
+              role="progressbar"
+              aria-label="Progresso da conversa"
+              aria-valuemin={0}
+              aria-valuemax={progress.total}
+              aria-valuenow={progress.answered}
+              className="h-1.5 w-full overflow-hidden rounded-full bg-bg-2"
+            >
+              <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${Math.round((progress.answered / progress.total) * 100)}%` }} />
+            </div>
+          )}
+          <p className="text-xs text-ink-soft">
+            {allDone
+              ? "Todos os campos foram cobertos."
+              : progress
+                ? `${progress.answered} de ${progress.total} informações respondidas · faltam ${remainingGaps}.`
+                : `${remainingGaps} campo(s) ainda faltando.`}
+            {confidenceScore ? ` Prontidão do atendimento: ${confidenceScore}%.` : ""}
+          </p>
+        </div>
       )}
     </div>
   );

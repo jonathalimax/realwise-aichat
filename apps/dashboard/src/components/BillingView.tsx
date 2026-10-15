@@ -50,14 +50,16 @@ export function BillingView({ title = "Plano e cobrança" }: { title?: string })
   const [error, setError] = useState("");
   const [redirecting, setRedirecting] = useState(false);
 
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    setLoadError(null);
     Promise.all([
       getPlans().then(setPlans),
       getMe().then((business) => setSubscription(business?.subscription ?? null)),
     ])
       .catch((e) => setLoadError(e instanceof Error ? e : new Error(String(e))))
       .finally(() => setLoaded(true));
-  }, []);
+  }, [attempt]);
 
   const hasLiveSubscription = Boolean(subscription && LIVE_SUBSCRIPTION_STATUSES.includes(subscription.status));
   const currentPlanCode = hasLiveSubscription ? subscription?.plan?.code : undefined;
@@ -117,7 +119,7 @@ export function BillingView({ title = "Plano e cobrança" }: { title?: string })
       />
       {!canEdit && <Alert variant="amber">Você pode ver o plano, mas só proprietários e gerentes alteram a cobrança.</Alert>}
       {redirecting && <p className="text-sm text-muted">Abrindo o checkout do plano escolhido…</p>}
-      {loadError && <ErrorState error={loadError} what="o plano" />}
+      {loadError && <ErrorState error={loadError} what="o plano" onRetry={() => setAttempt((n) => n + 1)} />}
 
       {hasLiveSubscription && subscription && (
         <div className="flex flex-wrap gap-4">

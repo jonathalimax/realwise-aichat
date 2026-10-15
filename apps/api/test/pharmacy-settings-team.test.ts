@@ -492,3 +492,12 @@ test("team regression: access log tolerates junk limits and a date-only 'to' cov
   await service.listAccessLog(member("manager"), { limit: "25.7" });
   assert.equal(seen[1].limit, 25);
 });
+
+test("QA regression: 'Dra.' title is stripped from the pharmacist name and 'Produto: frase' keeps only the product", () => {
+  const p = parseProposal("farmaceutico_responsavel", "Dra. Helena Duarte, CRF-PR 12345");
+  assert.equal(p.pharmacistName, "Helena Duarte");
+  assert.equal(p.pharmacistCrf, "CRF-PR 12345");
+  assert.equal(parseProposal("farmaceutico_responsavel", "Dr. João Silva CRF-SP 999999").pharmacistName, "João Silva");
+  const q = parseProposal("produtos_exigem_farmaceutico", "Xarope: o farmacêutico confirma sempre antes de vender");
+  assert.deepEqual(q.pharmacistRequiredProductNames, ["Xarope"]);
+});
