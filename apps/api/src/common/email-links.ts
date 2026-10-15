@@ -2,14 +2,29 @@ import { buildWaMeLink, dashboardBasePath, digitsOnly } from "@realwise/shared";
 import { escapeHtml } from "./email";
 import { safeHttpUrl } from "./safe-http-url";
 
-// Production emails must never link to localhost — if DASHBOARD_URL isn't set in production,
-// omit the link entirely rather than falling back to a dev-only address.
-export function dashboardLink(path: string): string | undefined {
+const NICHE_PREFIXES = ["/imobiliaria/app", "/farmacia/app", "/concessionaria/app"];
+
+/**
+ * DASHBOARD_URL may be a bare origin (https://aichat.realwise.com.br) or, in older setups, include a niche prefix
+ * (https://aichat.realwise.com.br/imobiliaria/app). Normalise to the bare origin so the niche prefix is added exactly once.
+ */
+export function dashboardOrigin(): string | undefined {
   const base = process.env.DASHBOARD_URL;
   if (!base && process.env.NODE_ENV === "production") return undefined;
-  const trimmedBase = (base ?? "http://localhost:3003").replace(/\/+$/, "");
+  let origin = (base ?? "http://localhost:3003").replace(/\/+$/, "");
+  for (const p of NICHE_PREFIXES) if (origin.endsWith(p)) origin = origin.slice(0, -p.length);
+  return origin;
+}
+
+// Production emails must never link to localhost — if DASHBOARD_URL isn't set in production,
+// omit the link entirely rather than falling back to a dev-only address.
+// `path` is relative to the niche's dashboard (e.g. "/inbox"); a path that already starts with a niche prefix is kept as is.
+export function dashboardLink(path: string, niche?: string | null): string | undefined {
+  const origin = dashboardOrigin();
+  if (!origin) return undefined;
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${trimmedBase}${normalizedPath}`;
+  const hasPrefix = NICHE_PREFIXES.some((p) => normalizedPath === p || normalizedPath.startsWith(`${p}/`) || normalizedPath.startsWith(`${p}?`));
+  const url = `${origin}${hasPrefix ? "" : dashboardBasePath(niche as never)}${normalizedPath}`;
   return safeHttpUrl(url);
 }
 

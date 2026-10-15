@@ -1,3 +1,4 @@
+import { dashboardLink } from "../../common/email-links";
 import { Controller, Get, Param, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { CalendarService } from "./calendar.service";
@@ -35,12 +36,12 @@ export class CalendarController {
   // opaque, single-use `state` token — not the caller — is what proves which business this belongs to.
   @Get("oauth/callback")
   async oauthCallback(@Query("code") code: string, @Query("state") state: string, @Res() res: Response) {
-    const dashboardUrl = process.env.DASHBOARD_URL ?? "http://localhost:3003";
+    const agendaUrl = (q: string) => dashboardLink(`/agenda?calendar=${q}`) ?? `http://localhost:3003/imobiliaria/app/agenda?calendar=${q}`;
     try {
       await this.calendar.handleOAuthCallback(state, code);
-      res.redirect(`${dashboardUrl}/agenda?calendar=connected`);
+      res.redirect(agendaUrl("connected"));
     } catch {
-      res.redirect(`${dashboardUrl}/agenda?calendar=error`);
+      res.redirect(agendaUrl("error"));
     }
   }
 

@@ -1,3 +1,4 @@
+import { dashboardLink } from "../../common/email-links";
 import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import Stripe from "stripe";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -66,8 +67,8 @@ export class BillingService {
         client_reference_id: businessId,
         line_items: [{ price: priceId, quantity: 1 }],
         subscription_data: { metadata: { businessId, planCode } },
-        success_url: `${process.env.DASHBOARD_URL}/billing?checkout=success`,
-        cancel_url: `${process.env.DASHBOARD_URL}/billing`,
+        success_url: await this.billingReturnUrl(businessId, "?checkout=success"),
+        cancel_url: await this.billingReturnUrl(businessId),
       });
       return { url: session.url };
     } catch (error) {
@@ -77,13 +78,20 @@ export class BillingService {
     }
   }
 
+  /** Where Stripe sends the customer back to: the billing page of THEIR niche's dashboard (pharmacy: /plano). */
+  private async billingReturnUrl(businessId: string, query = ""): Promise<string> {
+    const business = await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { niche: true } }).catch(() => null);
+    const path = business?.niche === "farmacia" ? "/plano" : "/billing";
+    return dashboardLink(`${path}${query}`, business?.niche) ?? `http://localhost:3003${path}${query}`;
+  }
+
   async createPortalSession(businessId: string) {
     const subscription = await this.prisma.client.subscription.findUnique({ where: { businessId } });
     if (!subscription) throw new NotFoundException("Nenhuma assinatura encontrada para este negócio");
     try {
       const session = await this.stripe.billingPortal.sessions.create({
         customer: subscription.stripeCustomerId,
-        return_url: `${process.env.DASHBOARD_URL}/billing`,
+        return_url: await this.billingReturnUrl(businessId),
       });
       return { url: session.url };
     } catch (error) {
