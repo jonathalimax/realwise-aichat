@@ -1040,7 +1040,7 @@ test("hours, delivery, pickup, payment and minimum order answered from PharmacyS
   assert.match(delivery.text, /[ÁA]gua Verde/);
   assert.match((await p.say(await p.conversation(), "posso retirar na loja?")).text, /retirar o pedido na loja/i);
   const pay = await p.say(await p.conversation(), "quais formas de pagamento?");
-  assert.match(pay.text, /Pix\/cart[ãa]o\/dinheiro/);
+  assert.match(pay.text, /Aceitamos Pix, cart[ãa]o e dinheiro/);
   assert.match(pay.text, /s[óo] na entrega ou na retirada/);
   assert.match((await p.say(await p.conversation(), "como funciona a troca?")).text, /7 dias/);
   const chip = await p.say(await p.conversation(), "Horários e entrega");

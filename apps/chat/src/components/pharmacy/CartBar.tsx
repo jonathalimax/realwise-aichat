@@ -65,7 +65,7 @@ export function CartBar({
           · {formatBRL(cart.subtotalCents)}
           {cart.requiresPrescription && <span className="block text-xs text-zinc-500">Inclui item com receita.</span>}
         </div>
-        <button type="button" className="ph-link text-sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <button type="button" className="ph-link min-h-[44px] min-w-[44px] px-2 text-sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           {open ? "Fechar" : "Ver"}
         </button>
         {!checkoutStarted && (

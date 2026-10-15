@@ -169,6 +169,10 @@ export interface PharmacyState {
     answers: SymptomAnswers;
     /** First message of the visitor, held until consent is given (never processed before). */
     pendingText?: string;
+    /** Started by a medicine-use question ("posso dar X para meu filho?"), not by a symptom: the intro says so. */
+    medQuestion?: boolean;
+    /** Started by "quero falar com o farmacêutico" (no symptom told yet): the intro is an invitation, not condolences. */
+    directRequest?: boolean;
     startedAt: string;
     /** The WhatsApp question (before the handoff) was asked / the customer chose to stay in the web chat only. */
     contactAsked?: boolean;
@@ -193,6 +197,8 @@ export interface PharmacyState {
   questionHandoffId?: string | null;
   /** The visitor chose to receive the team's answer only in the chat (no phone asked again). */
   questionContactDeclined?: boolean;
+  /** The WhatsApp offer for a team question was already made in this conversation (never asked twice). */
+  questionPhoneAsked?: boolean;
   /** Product under discussion: drives "Adicionar ao carrinho" and the pharmacist follow-up chips. */
   focus?: { productId: string; kind: "otc" | "controlled" | "unclassified" | "pharmacist_required" | "out_of_stock" } | null;
   /** Equivalents offered (flagged by the pharmacy) for an out-of-stock product: choosing one forces pharmacist confirmation. */

@@ -39,12 +39,28 @@ class UiBoundary extends Component<{ children: ReactNode }, { failed: boolean }>
   }
 }
 
+// Steps of a guided flow whose next control should take the keyboard focus when the card appears right after the
+// previous step was submitted (the submitted control is disabled, so focus would otherwise fall back to the page top).
+const FOCUS_NEXT_KINDS = new Set(["fulfillment_choice", "order_review", "address_capture", "symptom_question"]);
+
 export function PharmacyUi({ ui, ctx }: { ui: PharmacyUiPayload | null | undefined; ctx: PharmacyUiContext }) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const kind = ui && typeof ui === "object" ? ui.type : undefined;
+  const interactive = ctx.interactive;
+  useEffect(() => {
+    if (!interactive || !visitorInteracted || !kind || !FOCUS_NEXT_KINDS.has(kind)) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return; // never steal focus from the composer or a field being filled
+    const target = rootRef.current?.querySelector<HTMLElement>("input:not([disabled]), button:not([disabled]), [href]");
+    target?.focus();
+  }, [interactive, kind]);
   if (!ui || typeof ui !== "object" || typeof ui.type !== "string") return null;
   if (!(PHARMACY_UI_KINDS as readonly string[]).includes(ui.type) || ui.type === "human_joined") return null;
   return (
     <UiBoundary>
-      <div className="mt-2 w-full max-w-[22rem]">{renderKind(ui, ctx)}</div>
+      <div ref={rootRef} className="mt-2 w-full max-w-[22rem]">
+        {renderKind(ui, ctx)}
+      </div>
     </UiBoundary>
   );
 }
@@ -128,6 +144,24 @@ function Thumb({ imageUrl, icon, alt }: { imageUrl?: string | null; icon?: strin
 }
 
 // Wraps a card action: pending flag + inline error, never throws.
+// Keyboard and screen-reader users: when a new live card appears AFTER the visitor started interacting (never on the
+// first paint or a refresh, so no keyboard pops up by itself), focus moves to its first field.
+let visitorInteracted = false;
+if (typeof window !== "undefined") {
+  const mark = () => {
+    visitorInteracted = true;
+  };
+  window.addEventListener("pointerdown", mark, { once: true, capture: true });
+  window.addEventListener("keydown", mark, { once: true, capture: true });
+}
+function useFocusWhen(elementId: string, when: boolean) {
+  useEffect(() => {
+    if (!when || !visitorInteracted) return;
+    const el = document.getElementById(elementId);
+    if (el && !(el as HTMLInputElement).disabled) el.focus({ preventScroll: false });
+  }, [elementId, when]);
+}
+
 function useCardAction(ctx: PharmacyUiContext) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -564,6 +598,7 @@ function ContactFollowUp({ ui, ctx, fields }: { ui: PharmacyUiPayload; ctx: Phar
   const live = ctx.interactive && !done;
   const locked = !live || pending || ctx.busy;
   const needsName = fields.includes("name");
+  useFocusWhen(needsName ? nameId : emailId, live);
   async function submit() {
     if (needsName && !name.trim()) return;
     const payload: { type: string; [key: string]: unknown } = { type: "checkout.contact" };
@@ -623,8 +658,38 @@ function ContactCaptureFull({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyU
   const phoneOk = digitsOnly(phone).length === 10 || digitsOnly(phone).length === 11;
   const live = ctx.interactive && !done;
   const locked = !live || pending || ctx.busy;
+  // A refresh in the middle of the form must not make the customer type the phone again: the draft lives in this tab's
+  // sessionStorage (per conversation) until the card is submitted.
+  const draftKey = ctx.conversationId ? `rw_ph_contact_draft_${ctx.conversationId}` : null;
+  useEffect(() => {
+    if (!draftKey || !ctx.interactive) return;
+    try {
+      const raw = sessionStorage.getItem(draftKey);
+      if (!raw) return;
+      const d = JSON.parse(raw) as { phone?: string; name?: string; email?: string; step?: "phone" | "details"; recognized?: { firstName: string; address: MaskedAddress | null } | null };
+      if (typeof d.phone === "string" && d.phone) setPhone(d.phone);
+      if (typeof d.name === "string") setName(d.name);
+      if (typeof d.email === "string") setEmail(d.email);
+      if (d.recognized && typeof d.recognized.firstName === "string") setRecognized(d.recognized);
+      if (d.step === "details") setStep("details");
+    } catch {
+      // storage unavailable: the form simply starts empty
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftKey) return;
+    try {
+      if (done) sessionStorage.removeItem(draftKey);
+      else if (ctx.interactive && phone) sessionStorage.setItem(draftKey, JSON.stringify({ phone, name, email, step, recognized }));
+    } catch {
+      // ignore
+    }
+  }, [draftKey, done, ctx.interactive, phone, name, email, step, recognized]);
   // A customer the pharmacy already knows (recognized by phone) gave the consent before: the notice is not shown again.
   const showConsent = consent && !recognized;
+  useFocusWhen(phoneId, ctx.interactive && !done && step === "phone" && !initial);
+  useFocusWhen(nameId, ctx.interactive && !done && step === "details" && !recognized);
 
   async function continueWithPhone() {
     if (!phoneOk || looking) return;
@@ -753,6 +818,7 @@ function AddressCapture({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUiCon
   const live = ctx.interactive && !done;
   const locked = !live || pending || ctx.busy;
   const lookupSeq = useRef(0);
+  useFocusWhen(ids.cep, live && mode === "form");
 
   useEffect(() => {
     const digits = cep.replace(/\D/g, "");

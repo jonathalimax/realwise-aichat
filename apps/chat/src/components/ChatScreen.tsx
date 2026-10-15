@@ -1352,7 +1352,8 @@ export function ChatScreen({
     setSuggestions([]);
     setBubbles([]);
     const echoed = Boolean(echo);
-    if (echo) setMessages((prev) => [...prev, { id: nextMessageId(), role: "visitor", content: echo }]);
+    const echoId = nextMessageId();
+    if (echo) setMessages((prev) => [...prev, { id: echoId, role: "visitor", content: echo }]);
     try {
       const convId = await ensureConversation();
       if (!convId) throw new Error("conversation_unavailable");
@@ -1371,6 +1372,8 @@ export function ChatScreen({
       if (action.type === "handoff.request") setHandoffRequested(true);
       return { ok: true };
     } catch (error) {
+      // The tap did not go through: the echoed bubble goes away so a retry does not leave two copies of it.
+      if (echoed) setMessages((prev) => prev.filter((m) => m.id !== echoId));
       const status = (error as { status?: number })?.status;
       const fallback = status === 429 ? "Muitas tentativas seguidas. Aguarde um instante." : "Não consegui concluir agora. Tente de novo em instantes.";
       return { ok: false, error: apiErrorMessage(error, fallback) };

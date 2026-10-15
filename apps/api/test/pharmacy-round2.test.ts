@@ -159,7 +159,7 @@ test("info chips answer from the settings: hours per weekday, delivery fee/areas
     }
     if (/Horários e entrega|informa/i.test(chip)) {
       assert.match(turn.text, /retirar o pedido na loja/, chip);
-      assert.match(turn.text, /Pix\/cartão/, chip);
+      assert.match(turn.text, /Aceitamos Pix/, chip);
     }
     if (/informa/i.test(chip)) assert.match(turn.text, /Trocas em até 7 dias/, chip);
   }

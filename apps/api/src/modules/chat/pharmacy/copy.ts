@@ -112,11 +112,22 @@ export const COPY = {
   unknownInfo: "Quero te passar a informação certinha, então vou confirmar com a equipe. Quer falar com o farmacêutico enquanto isso?",
   // A non-clinical question Alex cannot answer from settings/KB/profile: the staff answers (general_question handoff).
   generalQuestionAck: "Boa pergunta! Ainda não tenho essa informação, mas já pedi para a equipe da farmácia confirmar, e a resposta aparece aqui mesmo.",
+  generalQuestionAckAgain: (first: string | null | undefined) => `Anotei essa também${first ? `, ${first}` : ""}! A equipe responde aqui mesmo no chat.`,
   generalQuestionAskPhone:
     "Quer que eu avise você no WhatsApp quando a equipe responder? É só me passar o número com DDD. Se preferir, a resposta chega só aqui no chat.",
   attendantAsk: "Claro! Qual é a sua dúvida? Se eu não souber, passo para a equipe da farmácia responder por aqui.",
   consentDeclined:
     "Tudo bem, respeito a sua decisão. Sem a concordância eu não consigo guardar seus dados para registrar o pedido por aqui, mas você pode concordar para seguir com a entrega ou a retirada, falar com o farmacêutico ou passar na farmácia.",
+  whichProduct: (first: string | null | undefined) => `Claro${first ? `, ${first}` : ""}! Qual remédio ou produto você está procurando? Se preferir me contar o que está sentindo, eu chamo o farmacêutico para te ajudar.`,
+  medQuestionIntro: (first: string | null | undefined) => `Boa pergunta${first ? `, ${first}` : ""}! Essa orientação é do farmacêutico, e eu deixo tudo anotado para ele te responder por aqui, com segurança.`,
+  offTopic: (first: string | null | undefined) => `Essa eu deixo passar${first ? `, ${first}` : ""} 😄 Por aqui eu ajudo com a farmácia: pedidos, entrega, horários, ou chamo o farmacêutico para você.`,
+  unclear: (first: string | null | undefined) => `Quero te ajudar direitinho${first ? `, ${first}` : ""}, mas não entendi bem. Me conta o nome do produto ou o que você precisa? Se preferir, chamo o farmacêutico.`,
+  directPharmacistIntro: (first: string | null | undefined, ref: string) => `Claro${first ? `, ${first}` : ""}! Vou chamar ${ref}. Para já chegar sabendo do seu caso, eu deixo tudo anotado.`,
+  nicePrefix: (first: string) => `Prazer, ${first}! Como posso te ajudar hoje?`,
+  /** Short warm lead before a settings-based information answer. */
+  infoLead: (first: string | null | undefined) => (first ? `Claro, ${first}! Aqui está:` : "Claro! Aqui está:"),
+  /** "mais um" / "tira um" when there is nothing in the cart to change. */
+  nothingToEdit: (first: string | null | undefined) => `Ainda não tem nada no carrinho${first ? `, ${first}` : ""}. Me diga qual produto você quer (ou toque numa das opções) e eu coloco para você.`,
   suggestionIntro: "Que bom! Vou separar o que o farmacêutico indicou para você:",
 };
 
@@ -124,7 +135,16 @@ export function paymentPhrase(methods: string[], fulfillment: "delivery" | "pick
   const label: Record<string, string> = { pix: "Pix", cartao: "cartão", dinheiro: "dinheiro" };
   const list = methods.map((m) => label[m] ?? m);
   const when = fulfillment === "delivery" ? "na entrega" : "na retirada";
-  return list.length > 0 ? `Pagamento ${when} (${list.join("/")}, conforme a farmácia)` : `Pagamento ${when}`;
+  return list.length > 0 ? `Pagamento ${when} (${list.join("/")})` : `Pagamento ${when}`;
+}
+
+/** "Aceitamos Pix, cartão e dinheiro" for the information answers (a direct answer to "aceitam pix?"). */
+export function acceptedPaymentPhrase(methods: string[]): string {
+  const label: Record<string, string> = { pix: "Pix", cartao: "cartão", dinheiro: "dinheiro" };
+  const list = methods.map((m) => label[m] ?? m);
+  if (list.length === 0) return "O pagamento é feito na entrega ou na retirada";
+  const joined = list.length === 1 ? list[0] : `${list.slice(0, -1).join(", ")} e ${list[list.length - 1]}`;
+  return `Aceitamos ${joined}`;
 }
 
 /** "a Dra. Carla" / "o Dr. João" / "o farmacêutico": how Alex refers to the responsible pharmacist in warm lines. */

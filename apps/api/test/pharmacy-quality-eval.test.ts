@@ -40,6 +40,12 @@ interface Convo {
   empathy?: boolean;
   nameUsed?: string;
   products?: string[];
+  /** Regexes that must NOT appear in anything Alex said (cold dead ends, repeated questions). */
+  forbid?: RegExp[];
+  /** Regexes that must appear (the actual answer). */
+  expect?: RegExp[];
+  /** Settings patch for this conversation only. */
+  settings?: Record<string, unknown>;
 }
 
 const EMPATHY = /sinto muito|vamos cuidar|estou aqui/i;
@@ -62,6 +68,25 @@ const CONVOS: Convo[] = [
   { name: "KB invoice", steps: [{ say: "vocês emitem nota fiscal?" }], handoffs: 0, kb: { chunk: "Emitimos nota fiscal em todas as vendas; ela é enviada por e-mail ou entregue junto do pedido.", model: "Emitimos sim, em todas as vendas. Ela vai por e-mail ou junto do pedido." } },
   { name: "KB holiday", steps: [{ say: "vocês abrem no feriado?" }], handoffs: 0, kb: { chunk: "Nos feriados nacionais a farmácia abre das 9h às 18h.", model: "Abrimos sim! Nos feriados nacionais funcionamos das 9h às 18h." } },
   { name: "attendant request", steps: [{ say: "quero falar com um atendente" }, { say: "tem desconto para idosos?" }], handoffs: 1 },
+  { name: "KB answers right after introducing yourself", steps: [{ say: "oi, meu nome é Marina" }, { say: "tem estacionamento aí?" }], handoffs: 0, expect: [/Prazer, Marina/, /Temos sim/], kb: { chunk: "Temos estacionamento gratuito para clientes ao lado da farmácia, com 12 vagas.", model: "Temos sim! O estacionamento é gratuito para clientes, ao lado da farmácia, com 12 vagas." } },
+  { name: "KB convenio", steps: [{ say: "vocês aceitam convênio?" }], handoffs: 0, kb: { chunk: "Aceitamos os convênios Unimed e Bradesco Saúde para medicamentos com receita.", model: "Emitimos sim... aceitamos Unimed e Bradesco Saúde." } },
+  { name: "KB reached through the attendant question path", steps: [{ say: "quero falar com um atendente" }, { say: "tem estacionamento para clientes?" }], handoffs: 0, kb: { chunk: "Temos estacionamento gratuito para clientes ao lado da farmácia, com 12 vagas.", model: "Temos sim! O estacionamento é gratuito para clientes, ao lado da farmácia, com 12 vagas." } },
+  { name: "KB answers a topic the settings leave empty (exchange policy)", steps: [{ say: "qual a política de troca?" }], handoffs: 0, settings: { exchangePolicy: null }, kb: { chunk: "Política de troca: aceitamos trocas em até 7 dias com a nota fiscal e a embalagem fechada.", model: "Temos sim! Aceitamos trocas em até 7 dias com a nota fiscal e a embalagem fechada." } },
+  { name: "hours follow-up names the day: only that day, no handoff", steps: [{ say: "Horários e entrega" }, { say: "e o sábado?" }], handoffs: 0, settings: { openingHours: [{ key: "weekdays", label: "Segunda a sexta", open: true, from: "08:00", to: "22:00" }, { key: "saturday", label: "Sábado", open: true, from: "08:00", to: "20:00" }] }, expect: [/Sábado: 08:00 às 20:00/], forbid: [/não tenho essa informação/i] },
+  { name: "payment question answers directly", steps: [{ say: "aceitam pix?" }], handoffs: 0, expect: [/Aceitamos Pix e cartão/] },
+  { name: "introducing yourself: greeted by name, name used on the thanks, no escalation", steps: [{ say: "oi, meu nome é Marina" }, { say: "obrigada" }], handoffs: 0, expect: [/Prazer, Marina/, /Por nada, Marina/], forbid: [/Boa pergunta/] },
+  { name: "vague request asks which product instead of a dead end", steps: [{ say: "preciso de um remédio" }], handoffs: 0, expect: [/Qual remédio ou produto/], forbid: [/Não achei esse produto/] },
+  { name: "nothing to edit in an empty cart is said kindly", steps: [{ say: "mais um" }, { say: "tira um" }], handoffs: 0, expect: [/Ainda não tem nada no carrinho/] },
+  { name: "can I give this to my child: pharmacist, never the general team", steps: [{ say: "posso dar dipirona para meu filho de 2 anos?" }], handoffs: 0, expect: [/Essa orientação é do farmacêutico/], forbid: [/Boa pergunta! Ainda não tenho/] },
+  { name: "jokes and trivia get a kind redirect, not a handoff", steps: [{ say: "me conta uma piada" }, { say: "qual a capital da França?" }], handoffs: 0, expect: [/Essa eu deixo passar/], forbid: [/Boa pergunta/] },
+  { name: "delivery to a named district: yes for a covered one", steps: [{ say: "vocês entregam no Água Verde?" }], handoffs: 0, expect: [/Entregamos sim em Água Verde/] },
+  { name: "delivery to a named district: kindly no for an uncovered one", steps: [{ say: "vocês entregam em Santa Felicidade?" }], handoffs: 0, expect: [/Santa Felicidade ainda não está na nossa lista/, /retirar na loja/] },
+  { name: "something that is not a question and not understood: warm 'tell me more', no handoff", steps: [{ say: "hmm o mais barato" }], handoffs: 0, expect: [/não entendi bem/], forbid: [/Essa informação eu não tenho confirmada/] },
+  { name: "asking for the pharmacist is an invitation, not condolences", steps: [{ say: "quero falar com a farmacêutica" }], handoffs: 0, expect: [/Claro! Vou chamar a Dra\. Carla/], forbid: [/Sinto muito/] },
+  { name: "'tem outro parecido?' is the pharmacist's call, kindly, no general handoff", steps: [{ say: "quero dipirona" }, { say: "tem outro parecido?" }], handoffs: 0, expect: [/Essa orientação é do farmacêutico/], forbid: [/Boa pergunta! Ainda não tenho/] },
+  { name: "a discount question with 'levar' is a store question, not a missing product", steps: [{ say: "tem desconto se eu levar 3?" }], handoffs: 1, forbid: [/Não achei esse produto/] },
+  { name: "second team question never re-asks the WhatsApp number", steps: [{ say: "vocês vendem pet shop?" }, { say: "tem wi-fi para clientes?" }], handoffs: 2, expect: [/Anotei essa também/], forbid: [/não ficou completo/] },
+  { name: "a question typed while the number is awaited is not 'an incomplete number'", steps: [{ say: "vocês vendem pet shop?" }, { say: "e vocês têm brinquedoteca?" }], handoffs: 2, forbid: [/não ficou completo/i] },
 ];
 
 function phones(texts: string[]) {
@@ -70,7 +95,7 @@ function phones(texts: string[]) {
 
 async function run(convo: Convo) {
   net = convo.kb ? stubNetwork(llm.text(convo.kb.model)) : stubNetwork(llm.text("Essa informação eu não tenho."));
-  const p = await createPharmacy({ settings: SETTINGS });
+  const p = await createPharmacy({ settings: { ...SETTINGS, ...(convo.settings ?? {}) } });
   if (convo.kb) p.db.addChunk({ businessId: p.businessId, content: convo.kb.chunk, distance: 0.1 });
   const c = await p.conversation();
   const seen: string[] = [];
@@ -100,6 +125,8 @@ for (const convo of CONVOS) {
     const all = seen.join("\n");
     for (const re of convo.warm ?? []) assert.match(all, re, `${convo.name}: missing warmth marker ${re}`);
     if (convo.empathy) assert.match(all, EMPATHY, `${convo.name}: no empathy line`);
+    for (const re of convo.expect ?? []) assert.match(all, re, `${convo.name}: expected ${re} in ${all}`);
+    for (const re of convo.forbid ?? []) assert.doesNotMatch(all, re, `${convo.name}: forbidden ${re}`);
     // never robotic / legalistic openers
     assert.doesNotMatch(all, /não foi possível|erro interno|operação inválida/i, convo.name);
   });
@@ -191,4 +218,73 @@ test("quality eval: below the delivery minimum Alex says how much is missing and
   assert.match(turn.text, /faltam R\$ 16,10/);
   assert.ok(turn.suggestions.includes("Adicionar outro item"));
   assert.ok(turn.suggestions.includes("Retirada em loja"));
+});
+
+test("quality eval: a symptom conversation never asks the age again once the customer said it", T, async () => {
+  net = stubNetwork(llm.text("não deve ser chamado"));
+  const p = await createPharmacy({ settings: SETTINGS });
+  const c = await p.conversation();
+  await p.say(c, "meu filho está com febre há 2 dias");
+  await p.act(c, { type: "symptom.answer", step: "symptom", value: "Concordo e quero continuar", consent: true });
+  const turn = await p.say(c, "ele tem 5 anos");
+  assert.match(turn.text, /Anotei a idade/);
+  assert.equal((p.stateOf(c).symptom as any).answers.age, "5 anos");
+  const all: string[] = [turn.text];
+  for (const chip of ["Leve", "Não", "Não tenho", "Não uso outros", "Nada ainda"]) all.push((await p.say(c, chip)).text);
+  assert.ok(!all.some((t) => /Qual a idade/i.test(t)), `age asked again: ${all.join(" | ")}`);
+});
+
+test("quality eval: a different question typed while the consent card is open is answered, never treated as a refusal", T, async () => {
+  net = stubNetwork(llm.text("Aceitamos Unimed e Bradesco Saúde."));
+  const p = await createPharmacy({ settings: SETTINGS });
+  p.db.addChunk({ businessId: p.businessId, content: "Aceitamos os convênios Unimed e Bradesco Saúde.", distance: 0.1 });
+  const c = await p.conversation();
+  await p.say(c, "estou com dor de cabeça");
+  const turn = await p.say(c, "vocês aceitam convênio?", { allowDegraded: true });
+  assert.doesNotMatch(turn.text, /é você quem decide|Sem problema/i, turn.text);
+  assert.match(turn.text, /Unimed/);
+  // the consent is still pending and one "sim" continues the questionnaire
+  const next = await p.say(c, "sim");
+  assert.match(next.text, /Há quanto tempo|quanto tempo/i);
+});
+
+test("quality eval: the model prompt carries the owner's settings as the source of truth, the customer's first name, and never lets Alex retract earlier answers", T, async () => {
+  net = stubNetwork(llm.text("Temos sim! O estacionamento é gratuito para clientes, ao lado da farmácia, com 12 vagas."));
+  const p = await createPharmacy({ settings: { ...SETTINGS, openingHours: [{ key: "weekdays", label: "Segunda a sexta", open: true, from: "08:00", to: "22:00" }] } });
+  p.db.addChunk({ businessId: p.businessId, content: "Temos estacionamento gratuito para clientes ao lado da farmácia, com 12 vagas.", distance: 0.1 });
+  const c = await p.conversation();
+  await p.say(c, "oi, meu nome é Marina");
+  await p.say(c, "tem estacionamento para clientes?", { allowDegraded: true });
+  const body = JSON.stringify(net!.llmCalls[0] ?? {});
+  assert.match(body, /Dados oficiais da farmácia/);
+  assert.match(body, /Segunda a sexta: 08:00 às 22:00/);
+  assert.match(body, /taxa R\$ 6,00/);
+  assert.match(body, /O cliente se chama Marina/);
+  assert.match(body, /Nunca as corrija, retrate/);
+});
+
+test("quality eval: the customer's own first name in the model's answer is not an ungrounded entity claim", T, async () => {
+  net = stubNetwork(llm.text("Sim, Marina! Temos estacionamento gratuito para clientes ao lado da farmácia, com 12 vagas."));
+  const p = await createPharmacy({ settings: SETTINGS });
+  p.db.addChunk({ businessId: p.businessId, content: "Temos estacionamento gratuito para clientes ao lado da farmácia, com 12 vagas.", distance: 0.1 });
+  const c = await p.conversation();
+  await p.say(c, "meu nome é Marina");
+  const turn = await p.say(c, "tem estacionamento para clientes?", { allowDegraded: true });
+  assert.match(turn.text, /Sim, Marina! Temos estacionamento/);
+  assert.equal(p.handoffs().length, 0);
+});
+
+test("quality eval: while a handoff waits, 'já responderam?' gets reassurance with the pharmacist's name, not the same line twice", T, async () => {
+  net = stubNetwork(llm.text("x"));
+  const p = await createPharmacy({ settings: SETTINGS });
+  const c = await p.conversation();
+  await p.say(c, "estou com dor de garganta");
+  await p.act(c, { type: "symptom.answer", step: "symptom", value: "Concordo e quero continuar", consent: true });
+  for (const chip of ["Hoje", "Moderada", "30 a 59 anos", "Não", "Não tenho", "Não uso outros", "Nada ainda", "Prefiro continuar só pelo chat"]) await p.say(c, chip);
+  assert.equal(p.handoffs().length, 1);
+  const first = await p.say(c, "já responderam?");
+  assert.match(first.text, /Entendo a espera/);
+  assert.match(first.text, /Dra\. Carla/);
+  const second = await p.say(c, "tá demorando");
+  assert.match(second.text, /Entendo a espera/);
 });

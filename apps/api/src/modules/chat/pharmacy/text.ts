@@ -86,3 +86,30 @@ export function titleCaseName(text: string): string {
     .map((w) => (w.length <= 2 && /^(da|de|do|das|dos|e)$/i.test(w) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1)))
     .join(" ");
 }
+
+const NAME_STOP = new Set(["e", "mas", "quero", "queria", "preciso", "gostaria", "tenho", "estou", "to", "vim", "estava", "gostava", "posso", "pode", "poderia", "ola", "oi", "tudo", "que"]);
+
+/**
+ * "oi, meu nome é Marina", "me chamo Ana Souza, quero dipirona": the name and what is left of the message
+ * (greeting and name clause removed). null when the text does not introduce the visitor.
+ */
+export function extractSelfName(text: string): { name: string; rest: string } | null {
+  const raw = String(text ?? "").trim();
+  const m = raw.match(/(?:meu nome (?:é|e)|me chamo|pode me chamar de|aqui (?:é|e) (?:o|a)|sou (?:o|a))\s+([A-Za-zÀ-ÿ'’-]+(?:\s+[A-Za-zÀ-ÿ'’-]+){0,3})/i);
+  if (!m) return null;
+  // "sou a/o" only with a capitalised name ("sou a Marina"), never "sou a favor".
+  if (/^(?:aqui|sou)/i.test(m[0].trim()) && !/^[A-ZÀ-Ý]/.test(m[1])) return null;
+  const words: string[] = [];
+  for (const w of m[1].split(/\s+/)) {
+    if (NAME_STOP.has(fold(w))) break;
+    words.push(w);
+  }
+  if (words.length === 0 || words.length > 3) return null;
+  const name = words.join(" ");
+  if (fold(name).length < 2) return null;
+  const rest = (raw.slice(0, m.index) + " " + raw.slice((m.index ?? 0) + m[0].length - (m[1].length - name.length)))
+    .replace(/\b(?:oi|ol[aá]|bom dia|boa tarde|boa noite|tudo bem)\b[\s,!.?]*/gi, " ")
+    .replace(/^[\s,.;!?-]+|[\s,.;!?-]+$/g, "")
+    .replace(/\s+/g, " ");
+  return { name, rest };
+}

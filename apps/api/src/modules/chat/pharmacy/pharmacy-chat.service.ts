@@ -24,11 +24,11 @@ import { getPersona } from "../personas";
 import { isGreeting } from "../safe-replies";
 import { maskPhoneBr } from "../../handoffs/whatsapp-message";
 import { ATT_CHIPS, ATT_COPY, COMMERCE_ACTIONS, asksAboutProduct, attendanceChips, attendancePickupLine, buildProductRequestBrief, hasProductMention, isBareProductIntent } from "./attendance";
-import { clinicalQuestion, looksLikeQuestion, unknownStoreTopic } from "./general-question";
+import { askedDeliveryPlace, clinicalQuestion, looksLikeQuestion, offTopicChat, unknownStoreTopic } from "./general-question";
 import { isSuggestionMessage, parseSuggestionChoice, type SuggestionChoice } from "./suggestion";
 import { parseQtyEdit } from "./qty-edit";
 import { PharmacyCatalog, productLabel, scoreProduct, type Resolution } from "./catalog";
-import { CHIPS, COPY, CONSENT_VERSION, consentCard, nameComma, paymentPhrase, pharmacistRef, symptomIntroFor } from "./copy";
+import { CHIPS, COPY, CONSENT_VERSION, acceptedPaymentPhrase, consentCard, nameComma, paymentPhrase, pharmacistRef, symptomIntroFor } from "./copy";
 import { DOSAGE_REFUSAL, asksForDosage, guardSymptomLaneText } from "./guards";
 import { OrderRuleError } from "./ports";
 import { CVV_NUMBER, SAMU_NUMBER, detectRedFlag, isInfantWithFever, redFlagReplyText, type RedFlagHit } from "./red-flags";
@@ -59,7 +59,7 @@ import {
   patientOf,
   asksRecommendation,
 } from "./symptom";
-import { brl, fold, isAffirmative, isNegative, isValidEmail, pickDigits, productTokens, titleCaseName } from "./text";
+import { brl, extractSelfName, fold, isAffirmative, isNegative, isValidEmail, pickDigits, productTokens, titleCaseName } from "./text";
 import {
   PHARMACY_HANDOFFS_PORT,
   PHARMACY_NOTIFIER_PORT,
@@ -134,6 +134,29 @@ export interface PharmacyAction {
   [key: string]: unknown;
 }
 
+/** The weekday a short hours question names ("e o domingo?", "sábado abre?"), as a matcher on folded opening-hours labels. */
+function hoursDayFilter(f: string): RegExp | null {
+  if (/\bferiados?\b/.test(f)) return /feriado/;
+  if (/\b(fins? de semana|finais de semana)\b/.test(f)) return /sabado|domingo|fim de semana/;
+  if (/\bdomingos?\b/.test(f)) return /domingo/;
+  if (/\bsabados?\b/.test(f)) return /sabado/;
+  const m = f.match(/\b(segunda|terca|quarta|quinta|sexta)\b/);
+  return m ? new RegExp(`${m[1]}|segunda a sexta|dias? uteis|semana`) : null;
+}
+
+/** "um remédio", "algum medicamento", "um produto": no product name to look up. */
+function isGenericProductAsk(f: string): boolean {
+  const generic = new Set(["remedio", "remedios", "medicamento", "medicamentos", "produto", "produtos", "algo", "coisa", "alguma", "qualquer", "um", "uma", "uns", "de", "para", "pra", "mim", "meu", "minha", "uso", "pessoal", "farmacia", "da", "do", "preciso", "quero", "queria", "gostaria", "comprar", "pedir", "levar", "o", "a", "que", "mais", "barato", "mais barato"]);
+  const words = f.split(" ").filter(Boolean);
+  return words.length > 0 && words.every((w) => generic.has(w)) && words.some((w) => /^(remedios?|medicamentos?|produtos?|algo|coisa)$/.test(w));
+}
+
+/** "posso dar dipirona para meu filho?", "pode tomar com ibuprofeno?": about using a medicine, so the pharmacist's. */
+/** "tem outro parecido?", "existe um similar?": comparing products is the pharmacist's call, not Alex's. */
+const SIMILAR_PRODUCT_QUESTION = /^(?:e )?(?:tem|ha|existe|teria)\b.{0,14}\b(?:outro|outra|similar|parecid[oa]|equivalente|alternativa|generico)\b/;
+
+const MEDICINE_USE_QUESTION = /\b(posso|pode|devo|da pra) (dar|tomar|misturar)\b/;
+
 const RE = {
   cancel: /^(cancelar|cancela|cancelar pedido|cancelar tudo|desistir|desisti|deixa pra la|esquece|nao quero mais|esquece isso)$/,
   talkPharmacist: /\b(farmaceutic[oa]s?|atendente|humano|pessoa de verdade|alguem de verdade|falar com alguem|falar com uma pessoa|falar com a farmacia|responsavel tecnic[oa])\b/,
@@ -147,6 +170,7 @@ const RE = {
   thanks: /^(muito )?(obrigad[oa]|brigad[oa]|valeu|vlw|tchau|ate mais|ate logo|ok obrigad[oa]|certo obrigad[oa])\b/,
   orderStatus: /\b(status|acompanhar|acompanhamento|rastrear|onde esta|cade|como esta|andamento|ja saiu|chegou)\b.{0,25}\b(pedido|entrega|encomenda|compra)\b|\bmeu pedido\b/,
   purchaseVerb: /\b(quero|queria|preciso|precisava|gostaria|pedir|pedido de|comprar|adicionar|adiciona|coloca|colocar|poe|por no carrinho|me ve|me manda|manda|vou querer|levar|leva)\b/,
+  hoursDay: /^(e )?(o |a |no |na |nos |nas |aos |as |de |pra |para )?(domingos?|sabados?|segundas?|tercas?|quartas?|quintas?|sextas?|feriados?|fins? de semana|finais de semana|dias? de semana|dias uteis)( feira)?( tambem)?$/,
   hours: /\b(horario|horarios|funciona|funcionam|funcionamento|abre|abrem|abrir|aberto|aberta|fecha|fecham|fechado|fechada|abertos|ate que horas|que horas)\b/,
   deliveryInfo: /\b(entrega|entregam|entregas|frete|taxa|delivery|motoboy|tempo de entrega|area de entrega|entregam em|atendem em|bairros?)\b/,
   pickupInfo: /\b(retirada|retirar|buscar na loja|buscar ai|pegar na loja|retiro)\b/,
@@ -332,7 +356,7 @@ export class PharmacyChatService {
     }
     // The info chips are answered from the settings wherever the visitor is in the conversation (then the open question is repeated).
     if (INFO_CHIPS.has(f)) {
-      await this.answerInfo(t, this.infoTopics(f), text);
+      if (!(await this.answerInfo(t, this.infoTopics(f), text))) return false;
       if (t.state.awaiting && t.state.awaiting.kind !== "product_name") await this.promptAwaiting(t, false);
       return true;
     }
@@ -357,7 +381,22 @@ export class PharmacyChatService {
   }
 
   private async routeIntent(t: Turn, text: string, midStep: boolean): Promise<boolean> {
-    const f = fold(text);
+    let f = fold(text);
+
+    // "oi, meu nome é Marina": remember the name (never asked again) and greet back; the rest of the message, if any, goes on.
+    const self = !t.state.symptom?.active && !t.state.contact.name && !t.state.contact.returningFirstName ? extractSelfName(text) : null;
+    if (self) {
+      t.state.contact.name = titleCaseName(self.name);
+      const first = self.name.split(/\s+/)[0];
+      if (fold(self.rest).split(" ").filter(Boolean).length < 2) {
+        t.say(COPY.nicePrefix(titleCaseName(first)));
+        t.chips(...this.quickChips(t));
+        return true;
+      }
+      t.prefix = `Prazer, ${titleCaseName(first)}!`;
+      text = self.rest;
+      f = fold(text);
+    }
 
     // Quantity typed in the chat ("quero 2", "mais um", "tira um", "só 1", "remove"): adjusts the focused / last-added line.
     if (!t.state.symptom?.active && (await this.tryQtyEdit(t, text))) return true;
@@ -384,8 +423,7 @@ export class PharmacyChatService {
     }
     // Store information (hours, delivery, pickup, payment, "todas as informações") is answered from PharmacySettings.
     if (!hasProductMention(text) && this.infoTopics(f).length > 0 && !asksRecommendation(text) && !detectsSymptomIntent(text)) {
-      await this.answerInfo(t, this.infoTopics(f), text);
-      return true;
+      return this.answerInfo(t, this.infoTopics(f), text);
     }
     if (isGreeting(text)) {
       const persona = getPersona("farmacia");
@@ -438,6 +476,16 @@ export class PharmacyChatService {
       await this.requestPharmacist(t, text);
       return true;
     }
+    // "posso dar dipirona para meu filho?": a clinical question, answered only by the pharmacist (never by Alex, never the general team).
+    if (!t.state.symptom?.active && MEDICINE_USE_QUESTION.test(f) && !detectsSymptomIntent(text)) {
+      await this.requestPharmacist(t, text, true);
+      return true;
+    }
+
+    if (!t.state.symptom?.active && f.split(" ").length <= 8 && SIMILAR_PRODUCT_QUESTION.test(f)) {
+      await this.requestPharmacist(t, text, true);
+      return true;
+    }
 
     // Add the product currently shown on the card ("Adicionar ao carrinho", "Adicionar 3", "sim").
     if (t.state.focus?.kind === "otc" && !t.state.symptom?.active) {
@@ -449,6 +497,13 @@ export class PharmacyChatService {
           return true;
         }
       }
+    }
+
+    // "preciso de um remédio" / "quero um medicamento": nothing to look up yet, ask which one (warm, no catalog dump).
+    if (!t.state.symptom?.active && RE.purchaseVerb.test(f) && isGenericProductAsk(f)) {
+      t.say(COPY.whichProduct(t.first));
+      t.chips(CHIPS.makeOrder, CHIPS.talkPharmacist);
+      return true;
     }
 
     // Product resolution (class always from the DB row). Skipped while a symptom questionnaire runs.
@@ -469,10 +524,17 @@ export class PharmacyChatService {
         return true;
       }
       // "quero X" where X is not in the catalog: say so (deterministic), do not hand a purchase to the model.
-      if ((RE.purchaseVerb.test(f) || t.state.awaiting?.kind === "product_name") && !wantsRecommendation && this.looksLikeProductRequest(f)) {
+      if ((RE.purchaseVerb.test(f) || t.state.awaiting?.kind === "product_name") && !wantsRecommendation && !unknownStoreTopic(f) && this.looksLikeProductRequest(f)) {
         await this.showCatalog(t, { intro: COPY.catalogNotFound, fallback: COPY.notFound });
         return true;
       }
+    }
+
+    // Jokes, trivia, sports: a kind redirect, never a handoff to the team.
+    if (!t.state.symptom?.active && offTopicChat(text)) {
+      t.say(COPY.offTopic(t.first));
+      t.chips(CHIPS.makeOrder, CHIPS.talkPharmacist, CHIPS.hoursDelivery);
+      return true;
     }
 
     // A pharmacy question that is not a product: deterministic facts first.
@@ -494,7 +556,7 @@ export class PharmacyChatService {
 
     // Follow-up on an open handoff: acknowledge instead of sending it to the model.
     if (t.state.handoffId && !t.state.symptom?.active) {
-      if (await this.acknowledgeHandoffFollowUp(t)) return true;
+      if (await this.acknowledgeHandoffFollowUp(t, undefined, text)) return true;
     }
     return false;
   }
@@ -802,15 +864,15 @@ export class PharmacyChatService {
     t.chips(CHIPS.makeOrder, CHIPS.hoursDelivery);
   }
 
-  private async requestPharmacist(t: Turn, text: string) {
+  private async requestPharmacist(t: Turn, text: string, medicineQuestion = false) {
     if (t.state.focus && t.state.focus.kind !== "otc") {
       await this.handoffForFocus(t);
       return;
     }
-    await this.startSymptomLane(t, text);
+    await this.startSymptomLane(t, text, medicineQuestion);
   }
 
-  private async acknowledgeHandoffFollowUp(t: Turn, followUpText?: string): Promise<boolean> {
+  private async acknowledgeHandoffFollowUp(t: Turn, followUpText?: string, messageText?: string): Promise<boolean> {
     const handoff = await this.db.pharmacistHandoff.findFirst({ where: { id: t.state.handoffId, businessId: t.business.id } });
     if (!handoff || handoff.status === "closed") {
       t.state.handoffId = null;
@@ -827,7 +889,15 @@ export class PharmacyChatService {
     }
     if (Object.keys(data).length > 0) await this.db.pharmacistHandoff.update({ where: { id: handoff.id }, data });
     const humanPresent = (await this.db.message.count({ where: { conversationId: t.conversation.id, kind: "human_joined" } })) > 0;
-    t.say(humanPresent ? "Anotado, obrigado! O farmacêutico já vê sua mensagem e responde por aqui." : `Anotei${nameComma(t.first)}, obrigado! Já avisei ${pharmacistRef(t.settings.pharmacistName)}, e a resposta vem por aqui.`);
+    const waiting = (followUpText ?? messageText) ? /\b(ja respond\w*|respondeu|responderam|demor\w*|cade|ainda nao|quando|esperando|aguardando|sem resposta|nada ainda)\b/.test(fold(followUpText ?? messageText ?? "")) : false;
+    const ref = pharmacistRef(t.settings.pharmacistName);
+    t.say(
+      humanPresent
+        ? "Anotado, obrigado! O farmacêutico já vê sua mensagem e responde por aqui."
+        : waiting
+          ? `Entendo a espera${nameComma(t.first)}, obrigado pela paciência. Já avisei ${ref}; assim que responder, aparece aqui. Se piorar ou ficar urgente, ligue 192 (SAMU).`
+          : `Anotei${nameComma(t.first)}, obrigado! Já avisei ${ref}, e a resposta vem por aqui.`,
+    );
     return true;
   }
 
@@ -835,16 +905,18 @@ export class PharmacyChatService {
   // Symptom lane (E): one question per turn, then a handoff. NEVER a product or dose in customer text.
   // -------------------------------------------------------------------------------------------
 
-  private async startSymptomLane(t: Turn, text: string) {
+  private async startSymptomLane(t: Turn, text: string, medicineQuestion = false) {
     t.state.lane = "symptom";
     t.state.focus = null;
-    const isSymptomText = detectsSymptomIntent(text);
+    const isSymptomText = detectsSymptomIntent(text) || medicineQuestion;
     t.state.symptom = {
       active: false,
       consent: false,
       step: "symptom",
       answers: {},
       pendingText: isSymptomText ? text.slice(0, 300) : undefined,
+      ...(medicineQuestion ? { medQuestion: true } : {}),
+      ...(!isSymptomText ? { directRequest: true } : {}),
       startedAt: new Date().toISOString(),
     };
     // What the first message already says (who, age, how long) is recorded now so it is never asked again.
@@ -867,7 +939,9 @@ export class PharmacyChatService {
   private symptomConsentPrompt(t: Turn, retry: boolean) {
     const who = t.state.symptom?.answers.forWhom;
     const patient = !who || who === "Para mim" ? "self" : patientOf(t.state.symptom!.answers) === "adult" ? "adult" : patientOf(t.state.symptom!.answers);
-    const text = retry ? COPY.symptomConsentRetry : `${symptomIntroFor(patient)} ${COPY.symptomConsentAsk}`;
+    const sy = t.state.symptom!;
+    const intro = sy.medQuestion ? COPY.medQuestionIntro(t.first) : sy.directRequest ? COPY.directPharmacistIntro(t.first, pharmacistRef(t.settings.pharmacistName)) : symptomIntroFor(patient);
+    const text = retry ? COPY.symptomConsentRetry : `${intro} ${COPY.symptomConsentAsk}`;
     t.say(text, {
       type: "symptom_question",
       step: "symptom",
@@ -913,6 +987,25 @@ export class PharmacyChatService {
       t.say(detailPrompt(step), { type: "symptom_question", step, prompt: detailPrompt(step), chips: [], allowFreeText: true, consent: null });
       t.state.awaiting = { kind: "symptom_answer", step };
       return;
+    }
+    // The customer volunteered the patient's age while another question was open ("ele tem 5 anos"): record it now,
+    // keep the open question, and never ask the age again.
+    if (step !== "age" && !s.answers.age && s.answers.forWhom) {
+      const f = fold(value);
+      const m = f.match(/\b(\d{1,3}) (anos?|meses)\b/);
+      if (m && f.split(" ").length <= 6 && (m[2].startsWith("an") || (step !== "duration" && /\b(tem|idade)\b/.test(f)))) {
+        const age = `${m[1]} ${m[2].startsWith("an") ? (m[1] === "1" ? "ano" : "anos") : m[1] === "1" ? "mês" : "meses"}`;
+        if (validateAge(s.answers, age).ok) {
+          s.answers = recordAnswer(s.answers, "age", age);
+          if (isInfantWithFever(age, s.answers.symptom)) {
+            await this.handleRedFlag(t, { kind: "infant_fever", label: "Febre em bebê" }, `${s.answers.symptom ?? ""}`);
+            return;
+          }
+          t.prefix = "Anotei a idade, obrigada!";
+          await this.askSymptomStep(t);
+          return;
+        }
+      }
     }
     if (step === "age") {
       // A typed age that cannot belong to the chosen patient is asked again (the chips are the patient's own ranges).
@@ -1218,6 +1311,9 @@ export class PharmacyChatService {
           t.chips(CHIPS.onlyPharmacist, CHIPS.makeOrder);
           return "done";
         }
+        // A different question typed while the consent card is open ("vocês aceitam convênio?") is answered; it is not a
+        // "no", and the consent stays pending for the next "sim". Never "é você quem decide" for a plain question.
+        if (looksLikeQuestion(text) && !clinicalQuestion(text) && !detectsSymptomIntent(text) && !asksForDosage(text)) return "skip";
         return "invalid";
       }
 
@@ -1316,6 +1412,8 @@ export class PharmacyChatService {
           return "skip";
         }
         t.state.awaiting = null;
+        // The knowledge base answers first; only a truly unknown question reaches the team.
+        if (await this.kbMayAnswer(t, text)) return "skip";
         await this.raiseGeneralQuestion(t, text);
         return "done";
       }
@@ -1326,6 +1424,12 @@ export class PharmacyChatService {
           return "done";
         }
         const phone = canonicalPhone(text);
+        // Something that is clearly not a phone number (a new question, a product, a greeting) moves on: the phone is
+        // never re-asked over it, and the customer is never told "that number is incomplete" for a sentence.
+        if (pickDigits(text).length < 5) {
+          t.state.awaiting = null;
+          return "skip";
+        }
         if (!phone || pickDigits(text).length < 10) return "invalid";
         await this.questionContact(t, { phone: text.trim() });
         return "done";
@@ -2595,8 +2699,7 @@ export class PharmacyChatService {
       return true;
     }
     if (!hasProductMention(text) && this.infoTopics(f).length > 0 && !asksRecommendation(text) && !detectsSymptomIntent(text)) {
-      await this.answerInfo(t, this.infoTopics(f), text);
-      return true;
+      return this.answerInfo(t, this.infoTopics(f), text);
     }
     if (RE.orderStatus.test(f) && !midStep) {
       t.say(ATT_COPY.orderStatus);
@@ -2638,7 +2741,7 @@ export class PharmacyChatService {
       return true;
     }
     if (t.state.handoffId && !t.state.symptom?.active) {
-      if (await this.acknowledgeHandoffFollowUp(t)) return true;
+      if (await this.acknowledgeHandoffFollowUp(t, undefined, text)) return true;
     }
     return false;
   }
@@ -2722,7 +2825,7 @@ export class PharmacyChatService {
   private infoTopics(f: string): string[] {
     if (RE.fullInfo.test(f)) return ["hours", "delivery", "pickup", "payment", "exchange"];
     const topics: string[] = [];
-    if (RE.hours.test(f)) topics.push("hours");
+    if (RE.hours.test(f) || RE.hoursDay.test(f)) topics.push("hours");
     if (RE.deliveryInfo.test(f)) topics.push("delivery");
     if (RE.pickupInfo.test(f)) topics.push("pickup");
     if (RE.paymentInfo.test(f)) topics.push("payment");
@@ -2735,16 +2838,32 @@ export class PharmacyChatService {
     return topics;
   }
 
+  /** A direct answer to "vocês entregam em X?" from the configured districts; null when the areas cannot say (CEP prefixes, none). */
+  private deliveryPlaceLine(t: Turn, place: string): string | null {
+    const districts = t.settings.deliveryAreas.filter((a) => a.type === "district");
+    if (districts.length === 0 || districts.length !== t.settings.deliveryAreas.length) return null;
+    const hit = districts.find((a) => {
+      const v = fold(a.value);
+      return v === place || place.includes(v) || v.includes(place);
+    });
+    const label = titleCaseName(place);
+    return hit
+      ? `Entregamos sim em ${hit.value}${nameComma(t.first)}! Veja os detalhes:`
+      : `${label} ainda não está na nossa lista de bairros de entrega${nameComma(t.first)}, mas você pode retirar na loja, ou me passar o CEP no pedido que eu confirmo. Veja o que atendemos:`;
+  }
+
   /** Formatted answer blocks (markdown) from PharmacySettings only. */
-  private infoBlocks(t: Turn, topics: string[]): string[] {
+  private infoBlocks(t: Turn, topics: string[], askedText = ""): string[] {
     const s = t.settings;
     const blocks: string[] = [];
     const order = ["hours", "delivery", "min", "pickup", "payment", "exchange"].filter((x) => topics.includes(x));
     for (const topic of order) {
       if (topic === "hours") {
-        const lines = (s.openingHours ?? [])
-          .filter((h) => h.label)
-          .map((h) => (h.open ? `- ${h.label}: ${h.from ?? "?"} às ${h.to ?? "?"}` : `- ${h.label}: fechado`));
+        const all = (s.openingHours ?? []).filter((h) => h.label);
+        // "e o domingo?": only the asked day when the hours name it, all of them otherwise.
+        const day = hoursDayFilter(fold(askedText));
+        const asked = day ? all.filter((h) => day.test(fold(h.label))) : [];
+        const lines = (asked.length > 0 ? asked : all).map((h) => (h.open ? `- ${h.label}: ${h.from ?? "?"} às ${h.to ?? "?"}` : `- ${h.label}: fechado`));
         if (lines.length === 0) continue;
         const open = isOpenNow(s.openingHours, t.business.timezone ?? "America/Sao_Paulo");
         blocks.push(`**Horário de atendimento**\n${lines.join("\n")}${open === null ? "" : open ? "\nEstamos abertos agora." : "\nNo momento estamos fechados."}`);
@@ -2763,7 +2882,7 @@ export class PharmacyChatService {
         const line = t.mode.effective === "attendance" ? attendancePickupLine(s.pickupEnabled) : s.pickupEnabled ? "Você pode retirar o pedido na loja." : "A retirada em loja não está disponível no momento.";
         blocks.push(`**Retirada**\n- ${line}`);
       } else if (topic === "payment") {
-        const line = t.mode.effective === "attendance" ? `${paymentPhrase(s.paymentMethods, "delivery")}.` : `${paymentPhrase(s.paymentMethods, "delivery")}. O pagamento é feito só na entrega ou na retirada.`;
+        const line = t.mode.effective === "attendance" ? `${acceptedPaymentPhrase(s.paymentMethods)}.` : `${acceptedPaymentPhrase(s.paymentMethods)}. O pagamento é feito só na entrega ou na retirada.`;
         blocks.push(`**Pagamento**\n- ${line}`);
       } else if (topic === "exchange" && s.exchangePolicy) {
         blocks.push(`**Trocas e devoluções**\n- ${s.exchangePolicy}`);
@@ -2773,15 +2892,20 @@ export class PharmacyChatService {
   }
 
   /** Lane F: deterministic answer from PharmacySettings; nothing configured for the topic -> the team confirms (general_question). */
-  private async answerInfo(t: Turn, topics: string[], originalText: string) {
+  private async answerInfo(t: Turn, topics: string[], originalText: string): Promise<boolean> {
     t.state.lane = "general";
-    const blocks = this.infoBlocks(t, topics);
+    const blocks = this.infoBlocks(t, topics, originalText);
     if (blocks.length === 0) {
+      // Nothing configured for the topic: the knowledge base gets the question before the team does.
+      if (await this.kbMayAnswer(t, originalText)) return false;
       await this.raiseGeneralQuestion(t, originalText);
-      return;
+      return true;
     }
-    t.say(blocks.join("\n\n"));
+    const place = topics.includes("delivery") && t.settings.deliveryEnabled ? askedDeliveryPlace(originalText) : null;
+    const placeLine = place ? this.deliveryPlaceLine(t, place) : null;
+    t.say(placeLine ? `${placeLine}\n\n${blocks.join("\n\n")}` : `${COPY.infoLead(t.first)}\n\n${blocks.join("\n\n")}`);
     t.chips(CHIPS.makeOrder, CHIPS.talkAttendant);
+    return true;
   }
 
   /**
@@ -2807,8 +2931,7 @@ export class PharmacyChatService {
       await this.raiseGeneralQuestion(t, originalText);
       return true;
     }
-    await this.answerInfo(t, topics, originalText);
-    return true;
+    return this.answerInfo(t, topics, originalText);
   }
 
   // -------------------------------------------------------------------------------------------
@@ -2839,11 +2962,14 @@ export class PharmacyChatService {
       summary: question.slice(0, 160),
       brief: { question, customerRequest: question, conversationLink: this.conversationLink(t) },
     });
+    const firstQuestion = !t.state.questionHandoffId;
     t.state.questionHandoffId = handoff?.id ?? null;
-    t.say(COPY.generalQuestionAck);
+    t.say(firstQuestion ? COPY.generalQuestionAck : COPY.generalQuestionAckAgain(t.first));
     const c = t.state.contact;
     const known = Boolean(c.leadId || t.conversation.leadId || c.phone);
-    if (handoff && !known && !t.state.questionContactDeclined) {
+    // The WhatsApp offer is made once per conversation: a second question never re-asks for the number.
+    if (handoff && !known && !t.state.questionContactDeclined && !t.state.questionPhoneAsked) {
+      t.state.questionPhoneAsked = true;
       this.askQuestionPhone(t, false);
       return;
     }
@@ -2931,9 +3057,18 @@ export class PharmacyChatService {
     return this.finish(turn, 1);
   }
 
+  /** The model abstained on something that is not a question ("o mais barato"): a warm "tell me more", never a cold dead end or a useless handoff. */
+  async handleUnclearMessage(businessId: string, conversationId: string): Promise<PharmacyTurnResult> {
+    const turn = await this.loadTurn(businessId, conversationId);
+    turn.say(COPY.unclear(turn.first));
+    turn.chips(CHIPS.makeOrder, CHIPS.talkPharmacist, CHIPS.hoursDelivery);
+    return this.finish(turn, 1);
+  }
+
   /** The text may be a question for the team (used by ChatService before a model abstention is shown). */
   isTeamQuestion(text: string): boolean {
-    return looksLikeQuestion(text) && !clinicalQuestion(text) && !detectsSymptomIntent(text) && !asksForDosage(text);
+    // Clinical questions the model could not ground go to the PHARMACIST (raiseGeneralQuestion routes them), never to a dead end.
+    return looksLikeQuestion(text) || clinicalQuestion(text);
   }
 
   // -------------------------------------------------------------------------------------------
@@ -2965,7 +3100,12 @@ export class PharmacyChatService {
     if (!productId || !t.state.cart.some((l) => l.productId === productId)) {
       // The last-added line is gone: with a single line in the cart there is no doubt about which one.
       if (t.state.cart.length === 1) productId = t.state.cart[0].productId;
-      else return false;
+      else if (t.state.cart.length === 0 && !("target" in edit && edit.target) && edit.op !== "set") {
+        // "mais um" / "tira um" with nothing to change: say so warmly instead of sending it to the model.
+        t.say(COPY.nothingToEdit(t.first));
+        t.chips(CHIPS.makeOrder, CHIPS.talkPharmacist);
+        return true;
+      } else return false;
     }
     await this.applyQtyEdit(t, productId, edit);
     return true;

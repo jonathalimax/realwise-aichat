@@ -235,6 +235,10 @@ export function resolveApiAsset(url: string | null | undefined): string | null {
 
 // Best human-readable message from a failed request (domain errors carry a pt-BR `message`).
 export function apiErrorMessage(error: unknown, fallback: string): string {
+  // A server failure (5xx) or a dead connection never shows the raw English framework text ("Internal server error"):
+  // the caller's friendly fallback ("... tente de novo") is shown instead.
+  const status = (error as { status?: number })?.status;
+  if (status === undefined || status >= 500) return fallback;
   const data = (error as { data?: { message?: unknown } })?.data;
   const message = data?.message;
   if (typeof message === "string" && message.trim()) return message;
