@@ -4,6 +4,7 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || `/${defaultNiche}/app`;
 /** @type {import('next').NextConfig} */
 export default {
   reactStrictMode: true,
+  devIndicators: false,
   output: "standalone",
   // One shared dashboard, one prefix per niche: /imobiliaria/app (default) or /farmacia/app.
   // Build/run an instance per niche with NEXT_PUBLIC_DEFAULT_NICHE=farmacia (and NEXT_DIST_DIR=.next-farmacia

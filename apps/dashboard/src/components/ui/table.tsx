@@ -7,7 +7,7 @@ import { cn } from "../../lib/utils";
 export function Table({ className, bare, ...props }: HTMLAttributes<HTMLTableElement> & { bare?: boolean }) {
   return (
     <div className={cn("overflow-x-auto", !bare && "rounded-xl border border-border bg-surface")}>
-      <table className={cn("w-full border-collapse text-sm", className)} {...props} />
+      <table className={cn("w-full min-w-max border-collapse text-sm", className)} {...props} />
     </div>
   );
 }
@@ -64,5 +64,5 @@ export function SortableTableHead({
 }
 
 export function TableCell({ className, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn("px-3.5 py-3 align-middle first:pl-5 last:pr-5", className)} {...props} />;
+  return <td className={cn("whitespace-nowrap px-3.5 py-3 align-middle first:pl-5 last:pr-5", className)} {...props} />;
 }

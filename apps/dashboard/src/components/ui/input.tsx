@@ -9,5 +9,5 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   { className, ...props },
   ref,
 ) {
-  return <input ref={ref} className={cn(inputClasses, "h-9", className)} {...props} />;
+  return <input ref={ref} className={cn(inputClasses, "h-9 max-md:h-11", className)} {...props} />;
 });

@@ -14,10 +14,10 @@ export const buttonVariants = cva(
         link: "h-auto border-transparent bg-transparent p-0 text-accent hover:underline",
       },
       size: {
-        default: "h-9 px-3.5",
-        sm: "h-[30px] px-2.5 text-[13px]",
+        default: "h-9 px-3.5 max-md:min-h-11",
+        sm: "h-[30px] px-2.5 text-[13px] max-md:min-h-11",
         lg: "h-11 px-5 text-[15px]",
-        icon: "h-9 w-9 p-0",
+        icon: "h-9 w-9 p-0 max-md:h-11 max-md:w-11",
         pill: "h-12 rounded-pill px-8 text-base",
       },
     },

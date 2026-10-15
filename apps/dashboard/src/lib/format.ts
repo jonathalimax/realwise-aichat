@@ -77,3 +77,26 @@ export function assetUrl(path: string | null | undefined, apiBase: string): stri
     return path;
   }
 }
+
+/** Short, human text for a conversation list preview: no raw URLs, JSON or UI payloads. */
+export function previewText(raw: string | null | undefined): string {
+  let t = (raw ?? "").trim();
+  if (!t) return "";
+  if (/^[{[]/.test(t) || /uiData|"type"\s*:/.test(t)) return "Mensagem com opções";
+  // "Pedido PED-1016 confirmado! Acompanhe: http://…" -> "Pedido PED-1016 confirmado"
+  const order = t.match(/Pedido\s+(PED-\d+)\s+(confirmado|recebido|cancelado|pronto)/i);
+  if (order) return `Pedido ${order[1]} ${order[2].toLowerCase()}`;
+  t = t.replace(/https?:\/\/([^\s/]+)[^\s]*/gi, (_m, host: string) => `${host}…`);
+  t = t.replace(/\s*(Acompanhe|Acompanhe o status)\s*:\s*$/i, "").replace(/\s+/g, " ").trim();
+  return t.length > 140 ? `${t.slice(0, 137)}…` : t;
+}
+
+/** Splits text into plain and URL parts so long links can be shown shortened. */
+export function shortUrlLabel(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.host}${u.pathname.length > 1 ? "/…" : ""}`;
+  } catch {
+    return url.slice(0, 30) + "…";
+  }
+}

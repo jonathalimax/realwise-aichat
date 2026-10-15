@@ -1307,7 +1307,7 @@ export class PharmacyChatService {
         t.chips(CHIPS.noReference);
         return;
       case "fulfillment":
-        this.fulfillmentPrompt(t);
+        await this.fulfillmentPrompt(t);
         return;
       case "order_confirm":
         await this.showReview(t);
@@ -1855,12 +1855,32 @@ export class PharmacyChatService {
     return options;
   }
 
-  private fulfillmentPrompt(t: Turn) {
-    const options = this.fulfillmentOptions(t);
+  private async fulfillmentPrompt(t: Turn) {
+    const options: Array<{ value: Fulfillment; label: string; feeCents: number; disabled?: boolean; disabledReason?: string }> = this.fulfillmentOptions(t);
     t.state.awaiting = { kind: "fulfillment" };
-    const fee = t.settings.deliveryEnabled ? ` Entrega: taxa de ${brl(t.settings.deliveryFeeCents)}.` : "";
-    t.say(`${COPY.askFulfillment}${fee}`, { type: "fulfillment_choice", options });
-    t.chips(...options.map((o) => (o.value === "delivery" ? CHIPS.delivery : CHIPS.pickup)));
+    // Below the delivery minimum the Entrega option is shown disabled, with the reason, instead of failing after the tap.
+    const minCents = t.settings.minOrderCents;
+    let deliveryDisabled = false;
+    if (t.settings.deliveryEnabled && minCents > 0) {
+      const cart = await this.cartDto(t);
+      if (cart.subtotalCents < minCents) {
+        deliveryDisabled = true;
+        const reason = `pedido mínimo ${brl(minCents)}`;
+        const d = options.find((o) => o.value === "delivery");
+        if (d) {
+          d.disabled = true;
+          d.disabledReason = reason;
+        }
+      }
+    }
+    const fee = t.settings.deliveryEnabled && !deliveryDisabled ? ` Entrega: taxa de ${brl(t.settings.deliveryFeeCents)}.` : "";
+    const ui: { type: string; [k: string]: unknown } = { type: "fulfillment_choice", options };
+    if (t.settings.deliveryEnabled && minCents > 0) {
+      ui.deliveryMinCents = minCents;
+      if (deliveryDisabled) ui.deliveryDisabledReason = `pedido mínimo ${brl(minCents)}`;
+    }
+    t.say(`${COPY.askFulfillment}${fee}`, ui);
+    t.chips(...options.filter((o) => !o.disabled).map((o) => (o.value === "delivery" ? CHIPS.delivery : CHIPS.pickup)));
   }
 
   private async askFulfillment(t: Turn) {
@@ -1876,7 +1896,7 @@ export class PharmacyChatService {
       await this.chooseFulfillment(t, options[0].value);
       return;
     }
-    this.fulfillmentPrompt(t);
+    await this.fulfillmentPrompt(t);
   }
 
   private async chooseFulfillment(t: Turn, fulfillment: Fulfillment) {

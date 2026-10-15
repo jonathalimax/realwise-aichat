@@ -14,7 +14,7 @@ export function Segmented({ className, ...props }: HTMLAttributes<HTMLDivElement
 }
 
 const segmentedItemVariants = cva(
-  "inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-[7px] px-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
+  "inline-flex h-[30px] max-md:h-11 items-center gap-1.5 whitespace-nowrap rounded-[7px] px-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
   {
     variants: {
       selected: {

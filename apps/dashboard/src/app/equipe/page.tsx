@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { deleteRole, getAccessLog, getMembers, getRoles, type LogEntry, type Member, type Role } from "../../lib/pharmacy-api";
-import { LOG_CATEGORY_BADGE, MEMBER_STATUS_BADGE } from "../../lib/labels";
+import { accessLogDetail, LOG_CATEGORY_BADGE, MEMBER_STATUS_BADGE } from "../../lib/labels";
 import { ApiError } from "../../lib/api";
 import { errorMessage, useLoad } from "../../lib/use-load";
 import { useSession } from "../../lib/session";
@@ -289,11 +289,11 @@ function AccessLogTab({ members }: { members: Member[] }) {
                   {rows.map((l) => (
                     <TableRow key={l.id}>
                       <TableCell className="whitespace-nowrap text-muted">{formatLogWhen(l.createdAt)}</TableCell>
-                      <TableCell>{l.memberName ?? "Sistema"}</TableCell>
+                      <TableCell className="whitespace-nowrap">{l.memberName ?? "Sistema"}</TableCell>
                       <TableCell>
                         <Badge variant={LOG_CATEGORY_BADGE[l.category] ?? "outline"}>{l.category}</Badge>
                       </TableCell>
-                      <TableCell className="text-muted">{l.summary}</TableCell>
+                      <TableCell className="min-w-[240px] text-muted">{accessLogDetail(l)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

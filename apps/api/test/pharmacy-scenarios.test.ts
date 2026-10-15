@@ -394,7 +394,16 @@ test("minimum order and delivery/pickup availability", T, async () => {
   await p.say(c, "(41) 99812-3344");
   await p.say(c, "Ana Paula");
   await p.say(c, "Prefiro não informar");
-  await p.say(c, "Concordo");
+  const fulfil = await p.say(c, "Concordo");
+  // Below the minimum the Entrega option is offered disabled, with the reason (not a quick reply that fails after the tap).
+  assert.equal(fulfil.uis[0].type, "fulfillment_choice");
+  assert.equal(fulfil.uis[0].deliveryMinCents, 5000);
+  assert.equal(fulfil.uis[0].deliveryDisabledReason, "pedido mínimo R$ 50,00");
+  const dOpt = fulfil.uis[0].options.find((o: any) => o.value === "delivery");
+  assert.equal(dOpt.disabled, true);
+  assert.equal(dOpt.disabledReason, "pedido mínimo R$ 50,00");
+  assert.notEqual(fulfil.uis[0].options.find((o: any) => o.value === "pickup").disabled, true);
+  assert.ok(!fulfil.suggestions.includes("Entrega"));
   const refused = await p.say(c, "entrega");
   assert.match(refused.text, /pedido m[íi]nimo para entrega é R\$ 50,00/i);
   assert.ok(refused.suggestions.includes("Retirada em loja"));

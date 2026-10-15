@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { getConversations, getConversationThread, type MirrorConversation, type MirrorMessage, type MirrorThread } from "../../lib/pharmacy-api";
 import { useLoad } from "../../lib/use-load";
 import { useSession } from "../../lib/session";
-import { timeAgo } from "../../lib/format";
+import { previewText, shortUrlLabel, timeAgo } from "../../lib/format";
 import { Badge } from "../../components/ui/badge";
 import { Alert } from "../../components/ui/alert";
 import { Card } from "../../components/ui/card";
@@ -78,7 +78,7 @@ function Conversas() {
                         <b className="truncate">{who(c)}</b>
                         <span className="flex-none text-xs text-muted">{timeAgo(c.lastMessageAt)}</span>
                       </span>
-                      <span className="line-clamp-2 text-[13px] text-muted">{c.preview || "Sem mensagens"}</span>
+                      <span className="line-clamp-2 text-[13px] text-muted">{previewText(c.preview) || "Sem mensagens"}</span>
                       {c.status === "escalated" && <Badge variant="red" className="w-fit">Atendimento</Badge>}
                     </button>
                   </li>
@@ -150,7 +150,15 @@ function Bubble({ m, persona, visitor }: { m: MirrorMessage; persona: string; vi
             isVisitor ? "border-brand bg-brand text-white" : isPerson ? "border-accent/30 bg-brand-soft text-brand-2" : "border-border bg-surface text-ink",
           )}
         >
-          {m.content}
+          {m.content.split(/(https?:\/\/\S+)/g).map((part, i) =>
+            /^https?:\/\//.test(part) ? (
+              <a key={i} href={part} target="_blank" rel="noreferrer" title={part} className="underline">
+                {shortUrlLabel(part)}
+              </a>
+            ) : (
+              part
+            ),
+          )}
         </div>
       </div>
     </div>

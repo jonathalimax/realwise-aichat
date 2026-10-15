@@ -823,12 +823,16 @@ function FulfillmentChoice({ ui, ctx }: { ui: PharmacyUiPayload; ctx: PharmacyUi
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-2" role="group" aria-label="Como você quer receber?">
         {ui.options.map((o: any) => (
-          <button key={o.value} type="button" className="ph-card flex items-center justify-between gap-3 p-3 text-left disabled:opacity-50" disabled={locked} onClick={() => run({ type: "checkout.fulfillment", fulfillment: o.value }, o.label)}>
+          <button key={o.value} type="button" className="ph-card flex min-h-[44px] items-center justify-between gap-3 p-3 text-left disabled:opacity-50 disabled:cursor-not-allowed" disabled={locked || o.disabled} aria-disabled={locked || o.disabled ? true : undefined} onClick={() => run({ type: "checkout.fulfillment", fulfillment: o.value }, o.label)}>
             <span>
               <span className="block text-sm font-semibold">{o.label}</span>
-              {o.etaLabel && <span className="block text-xs text-zinc-500">{o.etaLabel}</span>}
+              {o.disabled && o.disabledReason ? (
+                <span className="block text-xs text-red-700">Indisponível: {o.disabledReason}</span>
+              ) : (
+                o.etaLabel && <span className="block text-xs text-zinc-500">{o.etaLabel}</span>
+              )}
             </span>
-            <span className="text-sm font-bold">{o.feeCents ? formatBRL(o.feeCents) : "Grátis"}</span>
+            <span className="text-sm font-bold">{o.disabled ? "—" : o.feeCents ? formatBRL(o.feeCents) : "Grátis"}</span>
           </button>
         ))}
       </div>

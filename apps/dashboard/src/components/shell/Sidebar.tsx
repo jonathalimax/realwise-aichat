@@ -113,7 +113,7 @@ export function Sidebar() {
       <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3 md:hidden">
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
-            <button className="rounded-lg p-1.5 text-ink-soft hover:bg-bg-2" aria-label="Abrir menu">
+            <button className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-soft hover:bg-bg-2" aria-label="Abrir menu">
               <Menu className="h-6 w-6" />
             </button>
           </SheetTrigger>

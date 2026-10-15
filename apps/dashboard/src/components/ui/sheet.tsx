@@ -29,7 +29,7 @@ export function SheetContent({
           className,
         )}
       >
-        <Dialog.Close className="absolute right-3 top-3 rounded-lg p-1.5 text-muted hover:bg-bg-2 hover:text-ink">
+        <Dialog.Close className="absolute right-3 top-3 rounded-lg p-1.5 text-muted hover:bg-bg-2 hover:text-ink max-md:flex max-md:h-11 max-md:w-11 max-md:items-center max-md:justify-center">
           <X className="h-5 w-5" />
           <span className="sr-only">Fechar</span>
         </Dialog.Close>
