@@ -2167,7 +2167,7 @@ export class PharmacyChatService {
     const s = t.state;
     if (s.order && s.checkoutStep === "done" && s.cart.length === 0) {
       // Idempotent: a double tap never creates a second order.
-      t.say(`O pedido ${s.order.code} já foi registrado. Acompanhe: ${s.order.statusUrl}`, {
+      t.say(`O pedido ${s.order.code} já foi registrado. Acompanhe pelo botão abaixo.`, {
         type: "order_confirmation",
         code: s.order.code,
         status: s.order.status,
@@ -2286,13 +2286,13 @@ export class PharmacyChatService {
     }
     let message: string;
     if (created.autoConfirmed) {
-      message = `Pedido ${created.code} confirmado! Acompanhe: ${url}`;
+      message = `Pedido ${created.code} confirmado! Acompanhe pelo botão abaixo.`;
     } else if (created.hasPrescription) {
-      message = `Pedido ${created.code} recebido. O farmacêutico vai validar a receita antes de confirmar. Acompanhe: ${url}`;
+      message = `Pedido ${created.code} recebido. O farmacêutico vai validar a receita antes de confirmar. Acompanhe pelo botão abaixo.`;
     } else if (created.staleSheet) {
-      message = `Pedido ${created.code} recebido. O estoque que tenho aqui pode estar desatualizado, então a farmácia vai confirmar a disponibilidade antes de confirmar o pedido. Acompanhe: ${url}`;
+      message = `Pedido ${created.code} recebido. O estoque que tenho aqui pode estar desatualizado, então a farmácia vai confirmar a disponibilidade antes de confirmar o pedido. Acompanhe pelo botão abaixo.`;
     } else {
-      message = `Pedido ${created.code} recebido. A farmácia confirma a disponibilidade em instantes. Acompanhe: ${url}`;
+      message = `Pedido ${created.code} recebido. A farmácia confirma a disponibilidade em instantes. Acompanhe pelo botão abaixo.`;
     }
     t.say(message, { type: "order_confirmation", code: created.code, status: created.status, statusUrl: url, totalCents: created.totalCents, message });
     t.chips(CHIPS.makeOrder);

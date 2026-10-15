@@ -790,6 +790,10 @@ export function ChatScreen({
         const status = (error as { status?: number })?.status;
         if (stored && (status === 403 || status === 404)) {
           clearStoredConversation(slug);
+          // The dead id was already pinned in state and in the promise ref: drop both so the next send
+          // starts a fresh conversation instead of failing with "Conversation not found".
+          setConversationId(null);
+          conversationPromiseRef.current = null;
         }
         // History fetch failing must not block the chat — the flow/start effect below still
         // runs and starts a fresh conversation experience.
@@ -1311,6 +1315,9 @@ export function ChatScreen({
         return [...prev, ...incoming.filter((m: Message) => !known.has(m.serverId))];
       });
       if (res.pharmacy) setPharmacy(res.pharmacy);
+      // The server's quick replies for the new state (e.g. "Retirada em loja" after the minimum-order message):
+      // dropping them left the visitor at a dead end with only read-only cards.
+      if (Array.isArray(res.suggestions)) setSuggestions(res.suggestions.filter((x: unknown): x is string => typeof x === "string"));
       if (action.type === "handoff.request") setHandoffRequested(true);
       return { ok: true };
     } catch (error) {

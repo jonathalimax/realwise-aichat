@@ -244,7 +244,7 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
 
 export type PharmacyAction = { type: string; [key: string]: unknown };
 
-export function pharmacyAction(businessId: string, conversationId: string, action: PharmacyAction): Promise<{ messages: any[]; pharmacy?: any }> {
+export function pharmacyAction(businessId: string, conversationId: string, action: PharmacyAction): Promise<{ messages: any[]; pharmacy?: any; suggestions?: string[] }> {
   return request(`/chat/${businessId}/conversations/${conversationId}/pharmacy/actions`, {
     method: "POST",
     body: JSON.stringify(action),
