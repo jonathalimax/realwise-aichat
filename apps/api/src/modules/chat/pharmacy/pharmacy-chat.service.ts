@@ -192,8 +192,15 @@ export class PharmacyChatService {
   async handleAction(businessId: string, conversationId: string, action: PharmacyAction): Promise<{ messages: any[]; pharmacy: PharmacyView; suggestions?: string[] }> {
     const turn = await this.loadTurn(businessId, conversationId);
     await this.syncPrescriptions(turn);
+    // What the visitor tapped ("1–3 dias", "Concordo e quero continuar", "Adicionar Dipirona…") is part of the conversation:
+    // store it as the visitor's message so a reload, a resume link or the staff view shows the full dialogue.
+    const echoRaw = (action as { echo?: unknown }).echo;
+    const echo = typeof echoRaw === "string" ? echoRaw.replace(/\s+/g, " ").trim().slice(0, 300) : "";
+    if (echo) {
+      await this.db.message.create({ data: { conversationId: turn.conversation.id, businessId: turn.business.id, role: "visitor", content: echo } });
+    }
     await this.onAction(turn, action);
-    const result = await this.finish(turn, 0);
+    const result = await this.finish(turn, echo ? 1 : 0);
     return { messages: result.messages, pharmacy: result.pharmacy, suggestions: result.suggestions };
   }
 

@@ -1329,7 +1329,7 @@ export function ChatScreen({
     try {
       const convId = await ensureConversation();
       if (!convId) throw new Error("conversation_unavailable");
-      const res = await pharmacyAction(business.id, convId, action, resumeConversationId ? resumeToken : undefined);
+      const res = await pharmacyAction(business.id, convId, echo ? { ...action, echo } : action, resumeConversationId ? resumeToken : undefined);
       const incoming = (res.messages ?? [])
         .filter((m: any) => !(echoed && m.role === "visitor"))
         .map(fromServerMessage);

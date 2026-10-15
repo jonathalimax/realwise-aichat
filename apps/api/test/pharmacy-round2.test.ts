@@ -534,3 +534,17 @@ test("age question for a baby: baby ranges, an age in years is refused, brief fl
   assert.deepEqual(handoff.brief.suggestedProducts, [], "no stock-based suggestion for a baby");
   noModelCalls();
 });
+
+test("what the visitor tapped on a card is stored as the visitor's message (reload shows the whole dialogue)", T, async () => {
+  net = hostileModel();
+  const p = await createPharmacy();
+  const c = await p.conversation();
+  await p.say(c, "estou com dor de cabeça");
+  await p.act(c, { type: "symptom.answer", step: "consent", value: "Concordo e quero continuar", consent: true, echo: "Concordo e quero continuar" });
+  const visitorTexts = p.allMessages(c).filter((m: any) => m.role === "visitor").map((m: any) => String(m.content));
+  assert.ok(visitorTexts.includes("estou com dor de cabeça"));
+  assert.ok(visitorTexts.includes("Concordo e quero continuar"), "the tapped consent button appears as the visitor's message");
+  const order = p.allMessages(c).map((m: any) => `${m.role}:${String(m.content).slice(0, 18)}`);
+  assert.ok(order.indexOf("visitor:Concordo e quero c") < order.lastIndexOf("assistant:Há quanto tempo vo"), "the echo comes before the answer");
+  noModelCalls();
+});
