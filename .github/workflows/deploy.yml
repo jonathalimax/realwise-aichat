@@ -16,8 +16,23 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
-        app: [api, worker, inference-gateway, chat, dashboard, admin, marketing]
+        # `image` is the ghcr repository name (realwise-<image>), `app` the apps/<app> folder holding the Dockerfile.
+        # The dashboard is built THREE times from the same code: one image per niche, each with its own
+        # NEXT_PUBLIC_DEFAULT_NICHE / NEXT_PUBLIC_BASE_PATH baked in (Next.js basePath is a build-time setting).
+        # The real-estate dashboard keeps the original image name (realwise-dashboard) so the existing compose
+        # service keeps working; it is also pushed as realwise-dashboard-imobiliaria for symmetry.
+        include:
+          - { app: api, image: api }
+          - { app: worker, image: worker }
+          - { app: inference-gateway, image: inference-gateway }
+          - { app: chat, image: chat }
+          - { app: admin, image: admin }
+          - { app: marketing, image: marketing }
+          - { app: dashboard, image: dashboard, extra_tag: dashboard-imobiliaria, niche: imobiliaria, base_path: /imobiliaria/app }
+          - { app: dashboard, image: dashboard-farmacia, niche: farmacia, base_path: /farmacia/app }
+          - { app: dashboard, image: dashboard-concessionaria, niche: concessionaria, base_path: /concessionaria/app }
     steps:
       - uses: actions/checkout@v4
 
@@ -37,19 +52,24 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Build and push ${{ matrix.app }}
+      - name: Build and push ${{ matrix.image }}
         uses: docker/build-push-action@v5
         with:
           context: .
           file: apps/${{ matrix.app }}/Dockerfile
           push: true
-          tags: ghcr.io/${{ env.IMAGE_OWNER }}/realwise-${{ matrix.app }}:latest,ghcr.io/${{ env.IMAGE_OWNER }}/realwise-${{ matrix.app }}:${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.app }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+          tags: |
+            ghcr.io/${{ env.IMAGE_OWNER }}/realwise-${{ matrix.image }}:latest
+            ghcr.io/${{ env.IMAGE_OWNER }}/realwise-${{ matrix.image }}:${{ github.sha }}
+            ${{ matrix.extra_tag && format('ghcr.io/{0}/realwise-{1}:latest', env.IMAGE_OWNER, matrix.extra_tag) || '' }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           build-args: |
             NEXT_PUBLIC_API_URL=https://aichat.realwise.com.br/api
-            NEXT_PUBLIC_CHAT_URL=https://aichat.realwise.com.br/client/conversation
-            NEXT_PUBLIC_DASHBOARD_URL=https://aichat.realwise.com.br/imobiliaria/app
+            NEXT_PUBLIC_CHAT_URL=https://aichat.realwise.com.br
+            NEXT_PUBLIC_DASHBOARD_URL=https://aichat.realwise.com.br
+            NEXT_PUBLIC_DEFAULT_NICHE=${{ matrix.niche }}
+            NEXT_PUBLIC_BASE_PATH=${{ matrix.base_path }}
             NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
             NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
             NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
@@ -136,7 +156,7 @@ jobs:
           ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Trigger guarded Coolify deploy (pulls the images just pushed above)
-        # All 7 services now live in one consolidated Docker Compose resource — the original
+        # All services (now 9, with the three dashboards) live in one consolidated Docker Compose resource — the original
         # 7 separate per-app Coolify "Application" resources were retired because each deploy
         # assigned containers a new random name, breaking inter-service DNS on every redeploy.
         env:
