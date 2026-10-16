@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Get, Param, Post, Query, Res, Us
 import type { Response } from "express";
 import { ChatService } from "./chat.service";
 import { FlowService } from "./flow.service";
+import { PharmacyChatService } from "./pharmacy/pharmacy-chat.service";
 import { VisitorSessionGuard } from "../../common/guards/visitor-session.guard";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import { CurrentVisitor } from "../../common/decorators/current-business.decorator";
@@ -12,7 +13,11 @@ type VisitorContext = Partial<VisitorSessionClaims> & { visitorToken?: string };
 @UseGuards(VisitorSessionGuard, RateLimitGuard)
 @Controller("chat")
 export class ChatController {
-  constructor(private readonly chat: ChatService, private readonly flow: FlowService) {}
+  constructor(
+    private readonly chat: ChatService,
+    private readonly flow: FlowService,
+    private readonly pharmacy: PharmacyChatService,
+  ) {}
 
   @Post(":businessId/conversations")
   startConversation(@Param("businessId") businessId: string, @CurrentVisitor() visitor: VisitorContext) {
@@ -118,6 +123,28 @@ export class ChatController {
       clearInterval(heartbeat);
       res.end();
     }
+  }
+
+  // Pharmacy structured actions (cart, checkout, symptom answers, handoff request). API.md 8.3.
+  @Post(":businessId/conversations/:conversationId/pharmacy/actions")
+  async pharmacyAction(
+    @Param("businessId") businessId: string,
+    @Param("conversationId") conversationId: string,
+    @Body() body: Record<string, unknown>,
+    @Query("t") resumeToken: string | undefined,
+    @CurrentVisitor() visitor: VisitorContext,
+  ) {
+    if (!body || typeof body.type !== "string") throw new BadRequestException("type is required");
+    const token = visitor.visitorToken ?? `${visitor.businessId}-${visitor.leadId}`;
+    const { conversation } = await this.chat.assertVisitorOwnsConversation(businessId, conversationId, token, visitor.leadId, resumeToken);
+    await this.chat.assertPharmacy(businessId);
+    return this.pharmacy.handleAction(businessId, conversation.id, body as { type: string });
+  }
+
+  // Versioned LGPD wording per purpose (pharmacy_triage | prescription_upload | order_contact).
+  @Get(":businessId/consent-text")
+  consentText(@Query("purpose") purpose: string) {
+    return this.pharmacy.consentText(purpose);
   }
 
   @Post(":businessId/conversations/:conversationId/flow/start")

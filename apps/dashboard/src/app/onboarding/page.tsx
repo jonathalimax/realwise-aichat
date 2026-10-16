@@ -1,5 +1,6 @@
 "use client";
 
+import { chatPublicLink } from "../../lib/chat-link";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Upload, MessageCircle } from "lucide-react";
@@ -148,7 +149,7 @@ export default function OnboardingPage() {
   const pendingFieldsCount = (profile.template?.fields ?? []).filter(
     (f: any) => !fieldStatus[f.key]?.approvedByOwner,
   ).length;
-  const publicUrl = `${process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005"}/${business.slug}`;
+  const publicUrl = chatPublicLink(business.slug);
   const score = business.confidenceScore ?? 0;
 
   return (

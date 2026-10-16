@@ -18,3 +18,20 @@ export async function embedText(text: string): Promise<number[]> {
   const data = (await res.json()) as { embedding: number[] };
   return data.embedding;
 }
+
+let embedderDownUntil = 0;
+const EMBEDDER_COOLDOWN_MS = 60_000;
+
+/**
+ * Embedding or null when the embedder is not available (not configured locally, down, slow). Ingestion never fails
+ * because of it: chunks are stored without a vector and retrieval falls back to keyword matching.
+ */
+export async function tryEmbedText(text: string): Promise<number[] | null> {
+  if (Date.now() < embedderDownUntil) return null;
+  try {
+    return await embedText(text);
+  } catch {
+    embedderDownUntil = Date.now() + EMBEDDER_COOLDOWN_MS;
+    return null;
+  }
+}

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import type { Niche } from "@realwise/db";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { dirname, join } from "path";
@@ -6,7 +7,9 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { SharedKnowledgeIngestionQueue } from "../../queues/shared-knowledge-ingestion.queue";
 
 const STORAGE_DIR = process.env.LOCAL_STORAGE_DIR ?? "./storage";
-const ALLOWED_NICHES = ["imobiliaria", "concessionaria"] as const;
+// Exhaustive: every Niche may have shared knowledge (pharmacy content is curated later).
+const NICHE_FLAGS: Record<Niche, true> = { imobiliaria: true, concessionaria: true, farmacia: true };
+const ALLOWED_NICHES = Object.keys(NICHE_FLAGS) as Niche[];
 
 // Admin-only CRUD for the shared/global knowledge tier (Stage 2b) — general domain content
 // (rental/vehicle law, financing basics, documentation) scoped by niche, not by tenant. Mirrors
@@ -21,8 +24,8 @@ export class SharedKnowledgeService {
   ) {}
 
   private assertNiche(niche: string) {
-    if (!ALLOWED_NICHES.includes(niche as (typeof ALLOWED_NICHES)[number])) {
-      throw new BadRequestException("niche must be 'imobiliaria' or 'concessionaria'");
+    if (!ALLOWED_NICHES.includes(niche as Niche)) {
+      throw new BadRequestException(`niche must be one of: ${ALLOWED_NICHES.join(", ")}`);
     }
   }
 

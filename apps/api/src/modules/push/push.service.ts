@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger } from "@nestjs/common";
 import * as webpush from "web-push";
 import { PrismaService } from "../../prisma/prisma.service";
 
@@ -9,7 +9,17 @@ const ALLOWED_PUSH_HOSTS = [
   "web.push.apple.com",
 ];
 
-function isAllowedPushEndpoint(endpoint: string): boolean {
+/** Key material of a browser PushSubscription: p256dh is an uncompressed P-256 point (65 bytes, 0x04 prefix), auth is 16 random bytes. */
+export function hasValidPushKeys(keys: { p256dh?: unknown; auth?: unknown } | undefined | null): boolean {
+  if (!keys || typeof keys.p256dh !== "string" || typeof keys.auth !== "string") return false;
+  const b64url = /^[A-Za-z0-9_-]+={0,2}$/;
+  if (!b64url.test(keys.p256dh) || !b64url.test(keys.auth)) return false;
+  const p256dh = Buffer.from(keys.p256dh, "base64url");
+  const auth = Buffer.from(keys.auth, "base64url");
+  return p256dh.length === 65 && p256dh[0] === 4 && auth.length === 16;
+}
+
+export function isAllowedPushEndpoint(endpoint: string): boolean {
   let url: URL;
   try {
     url = new URL(endpoint);
@@ -77,10 +87,10 @@ export class PushService {
     userAgent?: string,
   ) {
     if (!sub?.endpoint || sub.endpoint.length >= MAX_ENDPOINT_LENGTH || !isAllowedPushEndpoint(sub.endpoint)) {
-      throw new Error("Invalid push subscription endpoint");
+      throw new BadRequestException("Invalid push subscription endpoint");
     }
-    if (!sub.keys?.p256dh || !sub.keys?.auth) {
-      throw new Error("Invalid push subscription keys");
+    if (!hasValidPushKeys(sub.keys)) {
+      throw new BadRequestException("Invalid push subscription keys");
     }
 
     const existing = await this.prisma.client.pushSubscription.findUnique({
@@ -140,6 +150,8 @@ export class PushService {
               keys: { p256dh: sub.p256dh, auth: sub.auth },
             },
             body,
+            // A dead push service must not hold the reply flow: give up after 10 s (counts as a failure).
+            { TTL: 24 * 3600, timeout: 10_000 },
           );
           await this.prisma.client.pushSubscription.update({
             where: { id: sub.id },

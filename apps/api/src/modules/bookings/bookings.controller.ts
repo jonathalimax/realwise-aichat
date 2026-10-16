@@ -1,10 +1,13 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { BookingsService } from "./bookings.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
+import { PermissionsGuard } from "../access/permissions.guard";
+import { RequirePermission } from "../access/permission.decorator";
 import { CurrentBusiness } from "../../common/decorators/current-business.decorator";
 import type { BusinessSessionClaims } from "@realwise/auth";
 
-@UseGuards(BusinessSessionGuard)
+@UseGuards(BusinessSessionGuard, PermissionsGuard)
+@RequirePermission("agenda", "view")
 @Controller("bookings")
 export class BookingsController {
   constructor(private readonly bookings: BookingsService) {}
@@ -14,6 +17,7 @@ export class BookingsController {
     return this.bookings.listSlots(session.businessId);
   }
 
+  @RequirePermission("agenda", "edit")
   @Post("slots")
   createSlotRule(@CurrentBusiness() session: BusinessSessionClaims, @Body() body: any) {
     return this.bookings.createSlotRule(session.businessId, body);
@@ -24,6 +28,7 @@ export class BookingsController {
     return this.bookings.listAppointments(session.businessId);
   }
 
+  @RequirePermission("agenda", "edit")
   @Patch("appointments/:id/status")
   updateStatus(
     @CurrentBusiness() session: BusinessSessionClaims,

@@ -1,9 +1,9 @@
-import { PLAN_CATALOG, PRICING_COPY, formatPlanPriceBrl, planHighlights, type PlanDefinition } from "@realwise/shared";
+import { PLAN_CATALOG, PRICING_COPY, formatPlanPriceBrl, pharmacyPlanHighlights, planHighlights, type PlanDefinition } from "@realwise/shared";
 import { Reveal } from "./Reveal";
 
 // Pricing section shared by the home page and the niche landing pages. Every number and bullet
 // comes from the shared plan catalog (packages/shared/src/plans.ts) — don't hardcode prices here.
-export function PricingSection({ cta }: { cta: (plan: PlanDefinition) => { href: string; label: string } }) {
+export function PricingSection({ cta, pharmacy = false }: { cta: (plan: PlanDefinition) => { href: string; label: string }; pharmacy?: boolean }) {
   return (
     <section id="precos" className="py-20">
       <Reveal className="mx-auto max-w-5xl px-5 text-center">
@@ -11,7 +11,7 @@ export function PricingSection({ cta }: { cta: (plan: PlanDefinition) => { href:
         <p className="mx-auto mt-2 max-w-md text-ink-soft">{PRICING_COPY.setupFree}</p>
         <div className="mt-10 grid gap-5 text-left md:grid-cols-3">
           {PLAN_CATALOG.map((plan) => (
-            <PlanCard key={plan.code} plan={plan} cta={cta(plan)} />
+            <PlanCard key={plan.code} plan={plan} cta={cta(plan)} pharmacy={pharmacy} />
           ))}
         </div>
         <p className="mx-auto mt-6 max-w-2xl text-sm text-ink-soft">
@@ -22,7 +22,7 @@ export function PricingSection({ cta }: { cta: (plan: PlanDefinition) => { href:
   );
 }
 
-function PlanCard({ plan, cta }: { plan: PlanDefinition; cta: { href: string; label: string } }) {
+function PlanCard({ plan, cta, pharmacy }: { plan: PlanDefinition; cta: { href: string; label: string }; pharmacy: boolean }) {
   const featured = plan.recommended;
   const external = cta.href.startsWith("http");
   return (
@@ -46,7 +46,7 @@ function PlanCard({ plan, cta }: { plan: PlanDefinition; cta: { href: string; la
         <span className={`font-sans text-sm ${featured ? "opacity-60" : "text-muted"}`}>/mês</span>
       </div>
       <ul className={`mt-5 flex flex-1 flex-col gap-2 text-sm ${featured ? "opacity-90" : "text-ink-soft"}`}>
-        {planHighlights(plan).map((item) => (
+        {[...planHighlights(plan), ...(pharmacy ? pharmacyPlanHighlights(plan) : [])].map((item) => (
           <li key={item}>— {item}</li>
         ))}
       </ul>

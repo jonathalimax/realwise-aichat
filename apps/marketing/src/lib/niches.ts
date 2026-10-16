@@ -23,6 +23,11 @@ export interface NicheConfig {
   capabilities: { title: string; desc: string }[];
   faqExtra: [string, string];
   earlyAccess?: boolean;
+  // Optional niche overrides. Niches that omit them keep the generic problem stats and have no
+  // safety section, so existing landing pages render exactly as before.
+  heroBadge?: string;
+  problemStats?: { value: string; text: string }[];
+  safety?: { title: string; intro: string; points: { title: string; desc: string }[] };
 }
 
 const CAPABILITY_ICON_PATHS = [
@@ -144,5 +149,57 @@ export const NICHES: Record<string, NicheConfig> = {
     ],
     faqExtra: ["A IA dá indicação de procedimento?", "Não. Ela explica o que está na sua base e organiza a pré-avaliação — qualquer indicação clínica continua sendo sua, da sua equipe."],
     earlyAccess: true,
+  },
+  farmacias: {
+    slug: "farmacias",
+    label: "para farmácias",
+    heroPre: "Enquanto o balcão está cheio, ",
+    heroEm: "o pedido já está sendo feito",
+    heroSub: "O Alex, assistente virtual com IA, monta o pedido de venda livre, recebe a foto da receita e encaminha o cliente ao farmacêutico — sem indicar remédio e sem vender o que é controlado.",
+    heroBusinessName: "Farmácia Exemplo",
+    heroBusinessInitials: "FE",
+    heroMessages: [
+      { from: "bot", text: "Oi! Sou o Alex, assistente virtual com IA. Posso montar seu pedido ou chamar o farmacêutico. Não indico remédios." },
+      { from: "user", text: "Quero uma dipirona 500 mg" },
+      { from: "bot", text: "Temos Dipirona 500 mg · 10 comp. por R$ 8,90, em estoque. Adiciono ao carrinho?" },
+    ],
+    heroChips: ["Fazer um pedido", "Falar com o farmacêutico"],
+    problemIntro: "Todo dia, um cliente desiste de esperar o balcão ou o telefone.",
+    solutionCard1Title: "Pedido pronto no chat, com pagamento na entrega",
+    solutionCard1Desc: "Entrega ou retirada em loja, endereço por CEP e confirmação automática quando o item de venda livre está em estoque.",
+    solutionCard1Messages: [
+      { from: "user", text: "Vocês entregam no Água Verde?" },
+      { from: "bot", text: "Entregamos sim, taxa de R$ 6,00. Quer fazer um pedido?" },
+    ],
+    solutionCard2Title: "Sintomas vão para o farmacêutico, não para a IA",
+    solutionCard2Desc: "O Alex nunca indica remédio. Ele reúne as informações e passa um resumo ao farmacêutico responsável, que responde pelo painel.",
+    solutionCard2Messages: [
+      { from: "user", text: "Estou com dor de cabeça há 3 dias" },
+      { from: "bot", text: "Vou reunir algumas informações para o farmacêutico. Você tem alguma alergia a medicamentos?" },
+    ],
+    capabilities: [
+      { title: "Catálogo a partir da sua planilha", desc: "Importa qualquer Excel ou CSV; a IA mapeia as colunas e você confirma." },
+      { title: "Regras de segurança no código", desc: "Controlados nunca são vendidos online e produtos sem classe ficam bloqueados até a revisão do farmacêutico." },
+      { title: "Receita com validação do farmacêutico", desc: "A foto da receita fica privada e só o farmacêutico aprova." },
+      { title: "Equipe com acessos por função", desc: "Proprietário, farmacêutico RT, gerente, atendente e entregador, com registro de acessos." },
+    ],
+    faqExtra: ["O Alex indica medicamentos?", "Não. Ele nunca indica remédio nem informa dose. Sintomas e dúvidas clínicas são encaminhados ao farmacêutico responsável."],
+    earlyAccess: true,
+    heroBadge: "IA",
+    problemStats: [
+      { value: "22h47", text: "é quando muita gente lembra de pedir o remédio, com a loja já fechada e ninguém para responder preço e entrega." },
+      { value: "0", text: "remédios indicados pela IA. Sintomas e dúvidas clínicas vão sempre para o farmacêutico responsável." },
+      { value: "100%", text: "dos controlados ficam fora do carrinho. É regra no código, não depende do que o modelo decide." },
+    ],
+    safety: {
+      title: "Segurança que não depende de promessa",
+      intro: "Em farmácia, o erro tem custo alto. Por isso as regras que protegem o cliente e a sua loja são código, e não instrução para a IA.",
+      points: [
+        { title: "Só venda livre entra no carrinho", desc: "Produto sem classe confirmada pelo farmacêutico fica bloqueado. Controlado nunca é vendido no chat." },
+        { title: "Sintoma vai para quem pode responder", desc: "O Alex reúne as informações e envia um resumo ao farmacêutico. Sinais de alerta mostram o 192 (SAMU) na hora." },
+        { title: "Receita privada e com validade", desc: "A foto fica em área privada, só quem tem permissão abre, e é apagada depois do prazo que você define." },
+        { title: "Avisa que é uma IA, sempre", desc: "O chat se apresenta como assistente virtual e mostra o CRF e o farmacêutico responsável da sua farmácia." },
+      ],
+    },
   },
 };

@@ -16,7 +16,15 @@ function secret(): Uint8Array {
 
 export interface BusinessSessionClaims {
   businessId: string;
+  /** Firebase-verified phone (owner phone login) or the member's email / phone for password logins. */
   phoneNumber: string;
+  // Team & access. Absent on sessions issued before the team feature: the API then resolves the
+  // business's primary Owner member. `permissions` is informational (UI hints at login time); the
+  // server always re-resolves role + permissions from the DB on every request (instant revocation).
+  memberId?: string;
+  roleId?: string;
+  roleKey?: string | null;
+  permissions?: Record<string, string>;
 }
 
 export interface VisitorSessionClaims {

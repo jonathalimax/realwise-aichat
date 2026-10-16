@@ -32,6 +32,11 @@ export default {
         tertiary: "rgb(var(--tertiary) / <alpha-value>)",
         "tertiary-soft": "rgb(var(--tertiary-soft) / <alpha-value>)",
         "tertiary-ink": "rgb(var(--tertiary-ink) / <alpha-value>)",
+        // Per-business brand colours (hex, set at runtime by BrandingApplier). Generic: any niche can use them.
+        brand: "var(--brand-primary)",
+        "brand-2": "var(--brand-secondary)",
+        "brand-3": "var(--brand-tertiary)",
+        "brand-soft": "var(--brand-soft)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],

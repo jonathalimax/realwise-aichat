@@ -13,6 +13,7 @@ const DEV_DEFAULT_ORIGINS = [
   "http://localhost:3004",
   "http://localhost:3005",
   "http://localhost:3007",
+  "http://localhost:8080", // scripts/dev-proxy.mjs (same-domain routing simulator)
 ];
 
 function buildAllowedOrigins(): string[] {

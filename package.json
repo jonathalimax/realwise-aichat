@@ -6,7 +6,8 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "dev:proxy": "node scripts/dev-proxy.mjs"
   },
   "devDependencies": {
     "turbo": "^2.3.0"

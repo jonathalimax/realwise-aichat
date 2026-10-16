@@ -3,7 +3,8 @@ import { PricingSection } from "./PricingSection";
 import { CAPABILITY_ICON_PATHS, type NicheConfig } from "../lib/niches";
 
 const WHATSAPP_NUMBER = "5585992265544";
-const DASHBOARD_LOGIN_URL = "/imobiliaria/app/login";
+const DASHBOARD_LOGIN_URLS: Record<string, string> = { farmacias: "/farmacia/app/login", concessionarias: "/concessionaria/app/login" };
+const DEFAULT_DASHBOARD_LOGIN_URL = "/imobiliaria/app/login";
 
 function waUrl(context: string) {
   const msg = encodeURIComponent(`Oi! Vi o site da Realwise (${context}) e quero saber mais.`);
@@ -48,7 +49,14 @@ function ChatBubble({ msg }: { msg: { from: "bot" | "user"; text: string } }) {
   );
 }
 
+const DEFAULT_PROBLEM_STATS = [
+  { value: "22h47", text: "é quando chega boa parte das perguntas de preço — bem depois de qualquer um estar lá pra responder." },
+  { value: "2h", text: "é o tempo médio pra um interessado esfriar. Quem responde em 5 minutos fecha mais — quem demora, perde pro concorrente." },
+  { value: "R$ 3.500", text: "custa uma recepcionista por mês, com encargos — e ela não trabalha domingo às 22h." },
+];
+
 export function LandingPage({ niche }: { niche: NicheConfig }) {
+  const DASHBOARD_LOGIN_URL = DASHBOARD_LOGIN_URLS[niche.slug] ?? DEFAULT_DASHBOARD_LOGIN_URL;
   const WHATSAPP_URL = waUrl(niche.label);
   const ctaLabel = niche.earlyAccess ? "Entrar na lista de espera" : "Entrar no painel";
   const navCtaHref = niche.earlyAccess ? WHATSAPP_URL : DASHBOARD_LOGIN_URL;
@@ -101,7 +109,10 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
             <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft font-serif font-bold text-accent-ink">{niche.heroBusinessInitials}</div>
               <div className="text-left">
-                <div className="text-sm font-semibold">{niche.heroBusinessName}</div>
+                <div className="flex items-center gap-1.5 text-sm font-semibold">
+                  {niche.heroBusinessName}
+                  {niche.heroBadge && <span className="rounded-full bg-lime px-1.5 text-[0.62rem] font-bold text-lime-ink">{niche.heroBadge}</span>}
+                </div>
                 <div className="flex items-center gap-1 text-[0.7rem] text-positive">
                   <span className="h-1.5 w-1.5 rounded-full bg-positive" /> Online agora
                 </div>
@@ -126,18 +137,12 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
         <Reveal className="mx-auto max-w-5xl px-5">
           <h2 className="text-center font-serif text-2xl md:text-3xl">{niche.problemIntro}</h2>
           <div className="mt-10 grid gap-8 sm:grid-cols-3">
-            <div>
-              <div className="font-mono text-4xl text-lime">22h47</div>
-              <p className="mt-2 text-sm text-bg/70">é quando chega boa parte das perguntas de preço — bem depois de qualquer um estar lá pra responder.</p>
-            </div>
-            <div>
-              <div className="font-mono text-4xl text-lime">2h</div>
-              <p className="mt-2 text-sm text-bg/70">é o tempo médio pra um interessado esfriar. Quem responde em 5 minutos fecha mais — quem demora, perde pro concorrente.</p>
-            </div>
-            <div>
-              <div className="font-mono text-4xl text-lime">R$ 3.500</div>
-              <p className="mt-2 text-sm text-bg/70">custa uma recepcionista por mês, com encargos — e ela não trabalha domingo às 22h.</p>
-            </div>
+            {(niche.problemStats ?? DEFAULT_PROBLEM_STATS).map((stat) => (
+              <div key={stat.value}>
+                <div className="font-mono text-4xl text-lime">{stat.value}</div>
+                <p className="mt-2 text-sm text-bg/70">{stat.text}</p>
+              </div>
+            ))}
           </div>
         </Reveal>
       </section>
@@ -167,6 +172,27 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
           </div>
         </Reveal>
       </section>
+
+      {/* SAFETY (niche-specific, e.g. pharmacy) */}
+      {niche.safety && (
+        <section id="seguranca" className="py-20">
+          <Reveal className="mx-auto max-w-5xl px-5 text-center">
+            <h2 className="font-serif text-3xl text-ink md:text-4xl">{niche.safety.title}</h2>
+            <p className="mx-auto mt-3 max-w-xl text-ink-soft">{niche.safety.intro}</p>
+            <div className="mt-10 grid gap-5 text-left sm:grid-cols-2">
+              {niche.safety.points.map((point) => (
+                <div key={point.title} className="rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+                  <h3 className="font-serif text-lg text-ink">
+                    <span className="mr-2 text-positive" aria-hidden>✓</span>
+                    {point.title}
+                  </h3>
+                  <p className="mt-2 text-sm text-ink-soft">{point.desc}</p>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </section>
+      )}
 
       {/* CHANNELS */}
       <section className="py-14">
@@ -201,6 +227,7 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
 
       {/* PRICING */}
       <PricingSection
+        pharmacy={niche.slug === "farmacias"}
         cta={(plan) =>
           niche.earlyAccess
             ? { href: WHATSAPP_URL, label: "Entrar na lista de espera" }
@@ -324,6 +351,7 @@ export function LandingPage({ niche }: { niche: NicheConfig }) {
             <a href="/" className="hover:text-ink">Início</a>
             <a href="/imobiliaria" className="hover:text-ink">Imobiliárias</a>
             <a href="/concessionaria" className="hover:text-ink">Concessionárias</a>
+            <a href="/farmacia" className="hover:text-ink">Farmácias</a>
             <a href="#faq" className="hover:text-ink">FAQ</a>
           </nav>
         </div>

@@ -139,7 +139,7 @@ export default function TenantDetailPage() {
                     <div className="break-words text-ink">
                       {tenant.slug ? (
                         <a
-                          href={`${process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005"}/${tenant.slug}`}
+                          href={`${(process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005").replace(/\/client\/conversation\/?$/, "").replace(/\/+$/, "")}/${tenant.slug}/chat`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="underline hover:text-ink-soft"

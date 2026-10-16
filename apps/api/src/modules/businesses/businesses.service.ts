@@ -1,11 +1,19 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { assertValidSlug, slugProblem } from "../../common/slug";
 import { assertPublicHttpUrl } from "../../common/url-safety";
-import { isEffectivelySuspended } from "@realwise/shared";
+import { deleteFile, getFile, looksLikeSvg, putFile, sniffFileType } from "../pharmacy-common/storage";
+import { isEffectivelySuspended, isValidHexColor, resolveBranding, type NicheKey } from "@realwise/shared";
+import { StarterRolesService } from "../access/starter-roles.service";
+import { getPersona } from "../chat/personas";
+import { loadOperationMode } from "../pharmacy-common/operation-mode";
 
 @Injectable()
 export class BusinessesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly starterRoles: StarterRolesService,
+  ) {}
 
   async getBySlug(slug: string) {
     const business = await this.prisma.client.business.findUnique({
@@ -16,6 +24,9 @@ export class BusinessesService {
         niche: true,
         logoUrl: true,
         brandColor: true,
+        primaryColor: true,
+        secondaryColor: true,
+        tertiaryColor: true,
         status: true,
         trialEndsAt: true,
         subscription: { select: { status: true } },
@@ -27,8 +38,37 @@ export class BusinessesService {
     // Fire-and-forget: every real page load of the public chat link counts as a link open,
     // feeding the "Aberturas do link 7d" dashboard stat. Never block the chat on this.
     this.prisma.client.analyticsEvent.create({ data: { businessId: business.id, name: "link_opened" } }).catch(() => {});
-    const { trialEndsAt, subscription, ...publicBusiness } = business;
-    return publicBusiness;
+    const { trialEndsAt, subscription, primaryColor, secondaryColor, tertiaryColor, ...publicBusiness } = business;
+    const persona = getPersona(business.niche);
+    // `branding` is always fully resolved (niche default when unset): the chat widget can apply it as-is.
+    // `persona` = who the visitor talks to (pharmacy: Alex, isAi true -> "IA" badge in the header).
+    return {
+      ...publicBusiness,
+      branding: resolveBranding(business.niche as NicheKey, { primaryColor, secondaryColor, tertiaryColor, brandColor: business.brandColor }),
+      persona: { name: persona.name, isAi: true },
+      pharmacy: business.niche === "farmacia" ? await this.publicPharmacyBlock(business.id) : null,
+    };
+  }
+
+  /** Public, non-sensitive pharmacy facts for the chat footer/about and checkout copy (null-safe defaults when unset). */
+  private async publicPharmacyBlock(businessId: string) {
+    const st = await this.prisma.client.pharmacySettings.findUnique({ where: { businessId } });
+    const mode = await loadOperationMode(this.prisma.client, businessId);
+    return {
+      // Effective mode only (never the plan details): the widget hides cart/product UI in "attendance".
+      operationMode: mode.effective,
+      legalName: st?.legalName ?? null,
+      cnpj: st?.cnpj ?? null,
+      pharmacistName: st?.pharmacistName ?? null,
+      pharmacistCrf: st?.pharmacistCrf ?? null,
+      deliveryEnabled: st?.deliveryEnabled ?? true,
+      pickupEnabled: st?.pickupEnabled ?? true,
+      deliveryFeeCents: st?.deliveryFeeCents ?? 0,
+      minOrderCents: st?.minOrderCents ?? 0,
+      paymentMethods: st?.paymentMethods ?? ["pix", "cartao", "dinheiro"],
+      openingHours: st?.openingHours ?? [],
+      quickChips: st?.quickChips ?? [],
+    };
   }
 
   async getOwnBusiness(businessId: string) {
@@ -50,7 +90,7 @@ export class BusinessesService {
       name?: string;
       ownerName?: string;
       email?: string;
-      niche?: "imobiliaria" | "concessionaria";
+      niche?: NicheKey;
       timezone?: string;
       address?: string;
       websiteUrl?: string;
@@ -72,15 +112,21 @@ export class BusinessesService {
         throw new BadRequestException(error instanceof Error ? error.message : "URL do site inválida");
       }
     }
-    return this.prisma.client.business.update({ where: { id: businessId }, data });
+    const updated = await this.prisma.client.business.update({ where: { id: businessId }, data });
+    // Niche is picked during onboarding after the business (and its starter roles) already exist:
+    // re-sync so e.g. a pharmacy gets the pharmacist / courier roles and the pharmacy grids.
+    if (data.niche) await this.starterRoles.syncForNiche(businessId, data.niche);
+    return updated;
   }
 
   async isSlugAvailable(slug: string) {
+    if (slugProblem(slug)) return false;
     const existing = await this.prisma.client.business.findUnique({ where: { slug } });
     return !existing;
   }
 
-  async setSlug(businessId: string, slug: string) {
+  async setSlug(businessId: string, slugInput: string) {
+    const slug = assertValidSlug(slugInput);
     const existing = await this.prisma.client.business.findUnique({ where: { slug } });
     if (existing && existing.id !== businessId) {
       throw new BadRequestException("Slug already taken");
@@ -144,7 +190,74 @@ export class BusinessesService {
     return this.prisma.client.whatsappRoutingNumber.delete({ where: { id: numberId } });
   }
 
-  async updateBranding(businessId: string, data: { logoUrl?: string; brandColor?: string }) {
-    return this.prisma.client.business.update({ where: { id: businessId }, data });
+  /** Branding with the niche default resolved; `*Stored` fields are the raw (nullable) values. */
+  async getBranding(businessId: string) {
+    const b = await this.prisma.client.business.findUniqueOrThrow({
+      where: { id: businessId },
+      select: { niche: true, logoUrl: true, brandColor: true, primaryColor: true, secondaryColor: true, tertiaryColor: true },
+    });
+    const niche = b.niche as NicheKey;
+    return {
+      logoUrl: b.logoUrl,
+      ...resolveBranding(niche, b),
+      stored: { primaryColor: b.primaryColor, secondaryColor: b.secondaryColor, tertiaryColor: b.tertiaryColor },
+      isCustom: [b.primaryColor, b.secondaryColor, b.tertiaryColor].some(isValidHexColor),
+    };
+  }
+
+  /**
+   * Whitelisted (this used to pass the raw body to Prisma). Colours must be #RRGGBB or null (= reset to
+   * the niche default). `brandColor` is the legacy single colour and is kept in sync with the primary.
+   */
+  async updateBranding(
+    businessId: string,
+    body: { logoUrl?: string | null; brandColor?: string | null; primaryColor?: string | null; secondaryColor?: string | null; tertiaryColor?: string | null },
+  ) {
+    const data: Record<string, string | null> = {};
+    for (const key of ["primaryColor", "secondaryColor", "tertiaryColor", "brandColor"] as const) {
+      const v = body[key];
+      if (v === undefined) continue;
+      if (v !== null && !isValidHexColor(v)) throw new BadRequestException(`Cor inválida em ${key} (use #RRGGBB).`);
+      data[key] = v;
+    }
+    if (body.logoUrl !== undefined) {
+      if (body.logoUrl && (body.logoUrl.length > 2048 || !/^(https?:\/\/|\/)/i.test(body.logoUrl))) {
+        throw new BadRequestException("URL do logo inválida");
+      }
+      data.logoUrl = body.logoUrl || null;
+    }
+    if (data.primaryColor !== undefined && data.brandColor === undefined) data.brandColor = data.primaryColor;
+    await this.prisma.client.business.update({ where: { id: businessId }, data });
+    return this.getBranding(businessId);
+  }
+
+  // -------------------------------------------------------------------- logo file (one file per business)
+
+  private logoKey(businessId: string, ext: string) {
+    return `branding/${businessId}/logo.${ext}`;
+  }
+
+  /** Stores the uploaded logo (type decided by the bytes, never by the client) and points Business.logoUrl at the public route. */
+  async setLogoFile(businessId: string, buffer: Buffer) {
+    const sniffed = sniffFileType(buffer);
+    const type = sniffed && sniffed.mime.startsWith("image/") ? sniffed : looksLikeSvg(buffer) ? { mime: "image/svg+xml", ext: "svg" } : null;
+    if (!type) throw new BadRequestException({ statusCode: 400, error: "Bad Request", code: "INVALID_IMAGE", message: "Use PNG, JPEG, WebP ou SVG." });
+    for (const ext of ["png", "jpg", "webp", "svg"]) if (ext !== type.ext) await deleteFile(this.logoKey(businessId, ext));
+    await putFile(this.logoKey(businessId, type.ext), buffer);
+    const logoUrl = `/api/public/businesses/${businessId}/logo?v=${Date.now()}`;
+    await this.prisma.client.business.update({ where: { id: businessId }, data: { logoUrl } });
+    return { logoUrl };
+  }
+
+  async readLogoFile(businessId: string): Promise<{ data: Buffer; mime: string }> {
+    const mimes: Record<string, string> = { png: "image/png", jpg: "image/jpeg", webp: "image/webp", svg: "image/svg+xml" };
+    for (const [ext, mime] of Object.entries(mimes)) {
+      try {
+        return { data: await getFile(this.logoKey(businessId, ext)), mime };
+      } catch {
+        // try the next extension
+      }
+    }
+    throw new NotFoundException();
   }
 }

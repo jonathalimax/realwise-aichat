@@ -13,8 +13,11 @@ async function request(path: string, options?: RequestInit) {
   if (!res.ok) {
     // Attach the real HTTP status so callers (e.g. ChatScreen's localStorage self-heal) can
     // distinguish "stale/foreign conversation id" (403/404) from a transient network failure.
-    const error = new Error(`Request failed: ${res.status}`) as Error & { status?: number };
+    const error = new Error(`Request failed: ${res.status}`) as Error & { status?: number; data?: any };
     error.status = res.status;
+    // Additive: the parsed error body (Nest shape, plus the domain `code`/`message` the pharmacy
+    // forms show inline). Never required by existing callers.
+    error.data = await res.json().catch(() => null);
     throw error;
   }
   return res.json();
@@ -210,4 +213,116 @@ export function unsubscribePush(businessId: string, conversationId: string, endp
     method: "POST",
     body: JSON.stringify({ endpoint }),
   });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pharmacy (niche "farmacia"). Contract: docs/pharmacy/API.md sections 8, 8.4, 8.5 and 9.
+// ---------------------------------------------------------------------------------------------
+
+// Product image URLs come back as API-relative paths ("/api/public/products/<id>/image?v=…").
+export function resolveApiAsset(url: string | null | undefined): string | null {
+  if (!url || typeof url !== "string") return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith("/")) {
+    try {
+      return new URL(API_URL).origin + url;
+    } catch {
+      return url;
+    }
+  }
+  return null;
+}
+
+// Best human-readable message from a failed request (domain errors carry a pt-BR `message`).
+export function apiErrorMessage(error: unknown, fallback: string): string {
+  // A server failure (5xx) or a dead connection never shows the raw English framework text ("Internal server error"):
+  // the caller's friendly fallback ("... tente de novo") is shown instead.
+  const status = (error as { status?: number })?.status;
+  if (status === undefined || status >= 500) return fallback;
+  const data = (error as { data?: { message?: unknown } })?.data;
+  const message = data?.message;
+  if (typeof message === "string" && message.trim()) return message;
+  if (Array.isArray(message) && typeof message[0] === "string") return message[0];
+  return fallback;
+}
+
+export type PharmacyAction = { type: string; [key: string]: unknown };
+
+export function pharmacyAction(businessId: string, conversationId: string, action: PharmacyAction, resumeToken?: string): Promise<{ messages: any[]; pharmacy?: any; suggestions?: string[] }> {
+  // A visitor who opened the chat through a resume link (?c=&t=) on another device proves ownership with the token.
+  const qs = resumeToken ? `?t=${encodeURIComponent(resumeToken)}` : "";
+  return request(`/chat/${businessId}/conversations/${conversationId}/pharmacy/actions${qs}`, {
+    method: "POST",
+    body: JSON.stringify(action),
+  });
+}
+
+export function lookupCustomerPhone(
+  businessId: string,
+  phone: string,
+): Promise<{ recognized: boolean; firstName?: string; address?: { id: string; label: string } | null }> {
+  return request(`/customers/${businessId}/lookup`, { method: "POST", body: JSON.stringify({ phone }) });
+}
+
+export function lookupCep(
+  businessId: string,
+  cep: string,
+): Promise<{ status: "ok" | "not_found" | "unavailable"; cep?: string; street?: string; district?: string; city?: string; state?: string }> {
+  return request(`/customers/${businessId}/cep/${encodeURIComponent(cep)}`);
+}
+
+export function getConsentText(businessId: string, purpose: "pharmacy_triage" | "prescription_upload"): Promise<{ purpose: string; version: string; text: string }> {
+  return request(`/chat/${businessId}/consent-text?purpose=${purpose}`);
+}
+
+// Private upload: multipart, so it bypasses the JSON `request` helper (which pins content-type).
+export async function uploadPrescription(
+  businessId: string,
+  conversationId: string,
+  file: File,
+  patientName?: string,
+): Promise<{ prescription: { id: string; code: string; status: string } }> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("consent", "true");
+  if (patientName?.trim()) form.append("patientName", patientName.trim());
+  const res = await fetch(`${API_URL}/chat/${businessId}/conversations/${conversationId}/prescriptions`, {
+    method: "POST",
+    credentials: "include",
+    body: form,
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!res.ok) {
+    const error = new Error(`Request failed: ${res.status}`) as Error & { status?: number; data?: any };
+    error.status = res.status;
+    error.data = await res.json().catch(() => null);
+    throw error;
+  }
+  return res.json();
+}
+
+export interface PublicOrderDto {
+  code: string;
+  status: "pending_pharmacist" | "confirmed" | "out_for_delivery" | "ready_for_pickup" | "delivered" | "canceled" | "rejected";
+  statusLabel: string;
+  fulfillment: "delivery" | "pickup";
+  steps: { key: string; label: string; at: string | null; done: boolean }[];
+  canceled: { reason: string; at: string | null } | null;
+  items: { name: string; qty: number; unitPriceCents: number }[];
+  subtotalCents: number;
+  deliveryFeeCents: number;
+  totalCents: number;
+  paymentLabel: string;
+  addressLabel: string | null;
+  pharmacy: {
+    name: string;
+    phone: string | null;
+    logoUrl: string | null;
+    branding: { primaryColor?: string; secondaryColor?: string; tertiaryColor?: string };
+  };
+  updatedAt: string;
+}
+
+export function getPublicOrder(token: string): Promise<PublicOrderDto> {
+  return request(`/public/orders/${encodeURIComponent(token)}`);
 }

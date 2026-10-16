@@ -1,5 +1,6 @@
 "use client";
 
+import { chatPublicLink } from "../../lib/chat-link";
 import { useState } from "react";
 import { MessageCircle } from "lucide-react";
 import {
@@ -97,7 +98,7 @@ export function ChatOnboarding({
   }
 
   const score = confidenceScore ?? business.confidenceScore ?? 0;
-  const publicUrl = `${process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005"}/${business.slug}`;
+  const publicUrl = chatPublicLink(business.slug);
 
   if (phase === "preChat") {
     return (

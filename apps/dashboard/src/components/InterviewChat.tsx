@@ -22,7 +22,10 @@ export function InterviewChat({
   prefill,
   prefillNonce,
   onStateChange,
+  assistantName = "Clara",
 }: {
+  // Persona name used in the helper copy (the pharmacy niche's assistant is "Alex").
+  assistantName?: string;
   onFieldFilled?: () => void;
   // When `prefillNonce` changes, `prefill` is sent as an owner message — used to target a specific
   // field from outside the chat. The nonce lets the same prefill text be re-sent (e.g. clicking
@@ -37,6 +40,7 @@ export function InterviewChat({
   const [allDone, setAllDone] = useState(false);
   const [remainingGaps, setRemainingGaps] = useState<number | null>(null);
   const [confidenceScore, setConfidenceScore] = useState<number | null>(null);
+  const [progress, setProgress] = useState<{ answered: number; total: number } | null>(null);
   const [readyToPublish, setReadyToPublish] = useState(false);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
@@ -44,6 +48,7 @@ export function InterviewChat({
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [savingUrl, setSavingUrl] = useState(false);
+  const [slow, setSlow] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const started = useRef(false);
@@ -58,6 +63,7 @@ export function InterviewChat({
       setRemainingGaps(result.remainingGaps);
       setConfidenceScore(typeof result.confidenceScore === "number" ? result.confidenceScore : null);
       setReadyToPublish(!!result.readyToPublish);
+      if (typeof result.totalFields === "number" && typeof result.answeredFields === "number") setProgress({ answered: result.answeredFields, total: result.totalFields });
       setPublicUrl(result.publicUrl ?? null);
       if (onStateChange) {
         onStateChange({
@@ -73,6 +79,15 @@ export function InterviewChat({
       setSending(false);
     }
   }
+
+  useEffect(() => {
+    if (!sending) {
+      setSlow(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlow(true), 6000);
+    return () => clearTimeout(timer);
+  }, [sending]);
 
   useEffect(() => {
     if (started.current) return;
@@ -129,7 +144,7 @@ export function InterviewChat({
     }
 
     setMessages((prev) => [...prev, { role: "owner", content: `📎 ${file.name}` }]);
-    setUploadStatus("Clara está lendo…");
+    setUploadStatus(`${assistantName} está lendo…`);
 
     try {
       const uploaded = await uploadDocumentFile(file);
@@ -149,7 +164,7 @@ export function InterviewChat({
 
       if (!processed) {
         setUploadStatus(null);
-        setUploadError(`Não consegui confirmar que "${file.name}" terminou de ser processado a tempo. Pode continuar a conversa — a Clara vai usar o conteúdo assim que estiver pronto.`);
+        setUploadError(`Não consegui confirmar que "${file.name}" terminou de ser processado a tempo. Pode continuar a conversa — ${assistantName} vai usar o conteúdo assim que estiver pronto.`);
         return;
       }
 
@@ -188,18 +203,21 @@ export function InterviewChat({
             key={i}
             className={
               m.role === "owner"
-                ? "ml-auto max-w-[85%] rounded-xl rounded-br-sm bg-accent px-3 py-2 text-sm text-white"
-                : "max-w-[85%] rounded-xl rounded-bl-sm bg-surface px-3 py-2 text-sm text-ink"
+                ? "ml-auto max-w-[85%] whitespace-pre-wrap break-words rounded-xl rounded-br-sm bg-accent px-3 py-2 text-sm text-white [overflow-wrap:anywhere]"
+                : "max-w-[85%] whitespace-pre-wrap break-words rounded-xl rounded-bl-sm bg-surface px-3 py-2 text-sm text-ink [overflow-wrap:anywhere]"
             }
           >
             {m.content}
           </div>
         ))}
         {sending && (
-          <div className="flex max-w-[60%] items-center gap-1 rounded-xl rounded-bl-sm bg-surface px-3 py-2">
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.3s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.15s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft" />
+          <div role="status" aria-live="polite" className="flex max-w-[85%] items-center gap-2 rounded-xl rounded-bl-sm bg-surface px-3 py-2">
+            <span className="flex items-center gap-1" aria-hidden="true">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft" />
+            </span>
+            <span className="text-xs italic text-ink-soft">{assistantName} está pensando…{slow ? " isso pode levar alguns segundos" : ""}</span>
           </div>
         )}
         {uploadStatus && <p className="text-xs italic text-ink-soft">{uploadStatus}</p>}
@@ -213,7 +231,7 @@ export function InterviewChat({
 
       {showUrlInput && !allDone && (
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg-2 p-3">
-          <p className="text-xs text-ink-soft">Esse é o site do seu negócio? Posso salvar pra Clara usar também.</p>
+          <p className="text-xs text-ink-soft">Esse é o site do seu negócio? Posso salvar para {assistantName} usar também.</p>
           <div className="flex gap-2">
             <Input value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="https://seusite.com.br" />
             <Button variant="outline" size="sm" onClick={handleSaveUrl} disabled={savingUrl || !urlInput.trim()}>
@@ -246,15 +264,28 @@ export function InterviewChat({
         </div>
       )}
       {remainingGaps !== null && (
-        <p className="text-xs text-ink-soft">
-          {allDone
-            ? confidenceScore !== null
-              ? `Todos os campos foram cobertos — prontidão em ${confidenceScore}%.`
-              : "Todos os campos foram cobertos."
-            : confidenceScore !== null
-              ? `Prontidão em ${confidenceScore}% · ${remainingGaps} campo(s) ainda faltando.`
-              : `${remainingGaps} campo(s) ainda faltando.`}
-        </p>
+        <div className="space-y-1.5" aria-live="polite">
+          {progress && progress.total > 0 && (
+            <div
+              role="progressbar"
+              aria-label="Progresso da conversa"
+              aria-valuemin={0}
+              aria-valuemax={progress.total}
+              aria-valuenow={progress.answered}
+              className="h-1.5 w-full overflow-hidden rounded-full bg-bg-2"
+            >
+              <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${Math.round((progress.answered / progress.total) * 100)}%` }} />
+            </div>
+          )}
+          <p className="text-xs text-ink-soft">
+            {allDone
+              ? "Todos os campos foram cobertos."
+              : progress
+                ? `${progress.answered} de ${progress.total} informações respondidas · faltam ${remainingGaps}.`
+                : `${remainingGaps} campo(s) ainda faltando.`}
+            {confidenceScore ? ` Prontidão do atendimento: ${confidenceScore}%.` : ""}
+          </p>
+        </div>
       )}
     </div>
   );

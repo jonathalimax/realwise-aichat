@@ -26,8 +26,11 @@ export interface FixedFlow {
   triggerIntents: string[];
 }
 
+/** Keep in sync with the Prisma `Niche` enum (a type-level check lives in apps/api). */
+export type NicheKey = "imobiliaria" | "concessionaria" | "farmacia";
+
 export interface NicheTemplate {
-  niche: string;
+  niche: NicheKey;
   version: string;
   fields: NicheFieldDef[];
   interviewQuestions: InterviewQuestion[];

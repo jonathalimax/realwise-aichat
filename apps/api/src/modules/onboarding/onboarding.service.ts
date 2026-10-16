@@ -1,9 +1,33 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { nicheTemplates } from "@realwise/profile-schema";
+import type { Niche } from "@realwise/db";
+import { getPersona } from "../chat/personas";
+import { nicheBehavior } from "../chat/niche-behavior";
 import { PrismaService } from "../../prisma/prisma.service";
 import { generateFromGateway } from "../../inference/gateway-client";
+import { extractJsonObject } from "../../inference/json-extract";
+import { PharmacySettingsService } from "../pharmacy-settings/pharmacy-settings.service";
+import { classifyOperationModeAnswer } from "../pharmacy-settings/proposals";
+import { chatLink } from "../../common/chat-links";
+import { loadOperationMode } from "../pharmacy-common/operation-mode";
 
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
+
+// Pharmacy interview field that picks the operation mode: an unclear answer is never saved, the owner is asked to confirm.
+const OPERATION_MODE_FIELD = "modo_operacao";
+const OPERATION_MODE_CLARIFY =
+  'Não ficou claro o "Modo de operação". Você quer usar estoque e vender pelo sistema (responda "comércio") ou só o atendimento com IA, que escala tudo sobre produtos ao farmacêutico (responda "atendimento")?';
+/** The question lists ONLY the modes this pharmacy's plan allows; with a single mode available it is stated, not asked. */
+function operationModeQuestion(commerceAllowed: boolean): string {
+  return commerceAllowed
+    ? 'Qual "Modo de operação" você quer usar? 1) Comércio: estoque, catálogo, pedidos e receitas pelo sistema, com o Alex vendendo no chat. 2) Atendimento: só a IA com encaminhamento ao farmacêutico, como um WhatsApp com IA, sem estoque nem pedidos. Responda "comércio" ou "atendimento".'
+    : 'No "Modo de operação" do seu plano atual está disponível o modo Atendimento: a IA atende e encaminha tudo sobre produtos ao farmacêutico, como um WhatsApp com IA, sem estoque nem pedidos. Para vender com estoque é preciso o plano Profissional ou superior.';
+}
+
+const OPERATION_MODE_ACK = {
+  commerce: "Entendi: modo comércio (estoque, catálogo e pedidos pelo sistema; depende do plano Profissional ou superior).",
+  attendance: "Entendi: modo atendimento (só a IA com encaminhamento ao farmacêutico, sem estoque nem pedidos).",
+} as const;
 
 const ABSTENTION_MARKERS = [
   "não tenho essa informação",
@@ -52,9 +76,16 @@ function validateFieldValue(type: string | undefined, value: unknown): { ok: tru
   }
 }
 
+// Reasoning model: hidden thinking eats max_tokens (a small cap returns EMPTY text) and answers take 15 s+.
+export const INTERVIEW_MAX_TOKENS = 3000;
+export const INTERVIEW_TIMEOUT_MS = 90_000;
+
 @Injectable()
 export class OnboardingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pharmacySettings: PharmacySettingsService,
+  ) {}
 
   async getProfile(businessId: string) {
     const profile = await this.prisma.client.businessProfile.findUnique({ where: { businessId } });
@@ -93,6 +124,10 @@ export class OnboardingService {
         fieldStatus: fieldStatus as any,
       },
     });
+    // Pharmacy: an interview answer becomes a PROPOSED setting the owner must confirm (never applied silently).
+    if (business.niche === "farmacia" && typeof value === "string") {
+      await this.pharmacySettings.proposeFromField(businessId, fieldKey, value).catch(() => {});
+    }
     return { ok: true, profile };
   }
 
@@ -132,15 +167,21 @@ export class OnboardingService {
     return { business, template, data, gaps };
   }
 
+  /** Interview turn plus a live progress count (answered/total): the readiness score is only recomputed on demand, so it sits at 0% during the interview. */
   async interviewChat(businessId: string, history: { role: "owner" | "clara"; content: string }[]) {
+    const result = await this.interviewTurn(businessId, history);
+    const { template, gaps } = await this.findGaps(businessId);
+    return { ...result, totalFields: template.fields.length, answeredFields: template.fields.length - gaps.length };
+  }
+
+  private async interviewTurn(businessId: string, history: { role: "owner" | "clara"; content: string }[]) {
     const { business, gaps } = await this.findGaps(businessId);
     const confidenceScore = business.confidenceScore ?? 0;
 
     if (gaps.length === 0) {
       const hasRealSlug = !!business.slug && !business.slug.startsWith("pending-");
       if (confidenceScore >= 70 && hasRealSlug) {
-        const chatPublicUrl = process.env.NEXT_PUBLIC_CHAT_URL ?? "http://localhost:3005";
-        const publicUrl = `${chatPublicUrl}/${business.slug}`;
+        const publicUrl = chatLink(business.slug);
         return {
           reply: [
             `Perfil pronto! Com ${confidenceScore}% de prontidão, já cobrimos tudo que eu precisava saber.`,
@@ -166,6 +207,29 @@ export class OnboardingService {
       };
     }
 
+    // Pharmacy: the operation mode is asked by script (never by the model) and only offers what the plan allows.
+    if (business.niche === "farmacia" && gaps[0]?.key === OPERATION_MODE_FIELD) {
+      const info = await loadOperationMode(this.prisma.client, businessId);
+      const lastIdx = history.length - 1;
+      const answered = lastIdx >= 1 && history[lastIdx].role === "owner" && history[lastIdx - 1].content.includes('"Modo de operação"');
+      const finish = async (mode: "commerce" | "attendance", ack: string) => {
+        const saved = await this.patchProfileField(businessId, OPERATION_MODE_FIELD, mode === "commerce" ? "comércio" : "atendimento", "interview");
+        const { gaps: next } = await this.findGaps(businessId);
+        const tail = next.length ? ` Pode me contar sobre "${next[0].label}"?` : " Isso foi tudo que eu precisava saber.";
+        return { reply: `${saved.ok ? ack : ""}${tail}`.trim(), allDone: next.length === 0, remainingGaps: next.length, confidenceScore };
+      };
+      if (!info.commerceAllowedByPlan) {
+        // Only one mode exists for this plan: state it, save it and move on (nothing to ask).
+        return finish("attendance", operationModeQuestion(false));
+      }
+      if (answered) {
+        const mode = classifyOperationModeAnswer(history[lastIdx].content);
+        if (mode === null) return { reply: OPERATION_MODE_CLARIFY, allDone: false, remainingGaps: gaps.length, confidenceScore };
+        return finish(mode, OPERATION_MODE_ACK[mode]);
+      }
+      return { reply: operationModeQuestion(true), allDone: false, remainingGaps: gaps.length, confidenceScore };
+    }
+
     const documents = await this.prisma.client.knowledgeDocument.findMany({
       where: { businessId, status: "processed" },
       select: { extractedMarkdown: true },
@@ -177,7 +241,10 @@ export class OnboardingService {
     const conversation = history.map((m) => `${m.role === "owner" ? "Dono" : "Clara"}: ${m.content}`).join("\n");
 
     const systemPrompt = [
-      `Você é a Clara, entrevistando o DONO ${business.name ? `da ${business.name}` : "do negócio"} para completar o perfil do negócio (não é o cliente final).`,
+      `Você é ${getPersona(business.niche).name}, o assistente de IA que está conhecendo o DONO ${business.name ? `da ${business.name}` : "do negócio"} para completar o perfil do negócio (a pessoa que fala com você é o dono, não o cliente final).`,
+      "Tom: caloroso, cuidadoso e eficiente, como um colega atencioso que respeita o tempo de quem está ocupado. Português do Brasil, frases curtas, sem jargão, sem emojis.",
+      "Cada resposta tem no máximo 2 frases curtas: um reconhecimento breve e específico do que o dono disse (varie as palavras: nunca repita o mesmo começo, evite \"Anotei\"/\"Obrigada\" em toda resposta) e a próxima pergunta, em linguagem natural (não copie o rótulo técnico do campo entre aspas).",
+      "Se o dono estiver inseguro ou não souber uma informação, tranquilize e ofereça seguir adiante (ele pode completar depois em Farmácia). Se o dono já tiver dado a informação de um campo antes, nunca pergunte de novo.",
       "Sua tarefa: perguntar, uma de cada vez, sobre os campos que ainda faltam preencher, na ordem dada.",
       "Se o conteúdo dos documentos abaixo já responder um campo, não pergunte de novo — apenas confirme e extraia o valor.",
       "Quando o dono responder uma pergunta, extraia o valor completo da resposta para o campo perguntado — preserve o conteúdo real dito pelo dono, sem resumir, abreviar ou reduzir a um código curto.",
@@ -187,8 +254,7 @@ export class OnboardingService {
       "A pergunta em `reply` deve sempre nomear explicitamente o campo (use o label do campo, ex: \"Qual o horário de funcionamento?\") — nunca use um pronome vago como \"isso\"/\"isto\" sem dizer a que campo se refere.",
       `Campos que faltam (em ordem de prioridade):\n${gapList}`,
       documentContext ? `Conteúdo já extraído dos documentos (use para não perguntar o que já está aqui):\n${documentContext}` : "",
-      `Prontidão atual: ${confidenceScore}%`,
-      "Quando for natural (ex: depois de preencher um campo importante), você pode mencionar brevemente esse percentual de prontidão para o dono acompanhar o progresso — sem exagerar nem interromper o fluxo das perguntas.",
+      `Faltam ${gaps.length} campos. Quando restarem poucos (3 ou menos), diga isso de forma animadora, sem falar em percentuais.`,
     ].join("\n\n");
 
     const prompt = conversation
@@ -199,16 +265,48 @@ export class OnboardingService {
     let reply = `Pode me contar sobre "${gaps[0].label}"?`;
     let fieldKey: string | null = null;
     let value: string | null = null;
+    let modelAnswered = false;
     try {
-      const result = await generateFromGateway({ purpose: "chat", businessId, systemPrompt, prompt, maxTokens: 300, timeoutMs: 60000 });
-      const parsed = JSON.parse(result.text.trim());
+      const result = await generateFromGateway({ purpose: "chat", businessId, systemPrompt, prompt, maxTokens: INTERVIEW_MAX_TOKENS, timeoutMs: INTERVIEW_TIMEOUT_MS });
+      // The chat model reasons before answering (~15 s) and may wrap the JSON in fences/prose.
+      const parsed: any = extractJsonObject(result.text) ?? {};
       if (typeof parsed.reply === "string") reply = parsed.reply;
       if (typeof parsed.fieldKey === "string") fieldKey = parsed.fieldKey;
       if (typeof parsed.value === "string") value = parsed.value;
+      modelAnswered = typeof parsed.reply === "string";
     } catch {
-      // keep the generic fallback reply; don't block the conversation on a parsing/inference hiccup
+      // don't block the conversation on a parsing/inference hiccup: fall back to the scripted interview below
     }
 
+    // No model (local dev, outage): run the interview by script. The last question named a field by its label,
+    // so the owner's next message is that field's answer; then ask for the next missing field.
+    if (!modelAnswered) {
+      const lastOwnerIdx = history.map((m) => m.role).lastIndexOf("owner");
+      const lastOwner = lastOwnerIdx >= 0 ? history[lastOwnerIdx] : undefined;
+      const lastAsked = lastOwnerIdx > 0 ? history.slice(0, lastOwnerIdx).reverse().find((m) => m.role !== "owner") : undefined;
+      const askedGap = lastAsked ? gaps.find((g) => lastAsked.content.includes(`"${g.label}"`)) : undefined;
+      const modeAnswer = askedGap?.key === OPERATION_MODE_FIELD && lastOwner ? classifyOperationModeAnswer(lastOwner.content) : undefined;
+      if (lastOwner && askedGap && modeAnswer === null) {
+        return { reply: OPERATION_MODE_CLARIFY, allDone: false, remainingGaps: gaps.length, confidenceScore };
+      }
+      if (lastOwner && askedGap) {
+        const saved = await this.patchProfileField(businessId, askedGap.key, lastOwner.content.trim(), "interview");
+        if (!saved.ok) {
+          reply = `Não consegui usar essa resposta para "${askedGap.label}". Pode escrever de outro jeito?`;
+        } else {
+          const { gaps: next } = await this.findGaps(businessId);
+          const ack = modeAnswer ? `${OPERATION_MODE_ACK[modeAnswer]} ` : "";
+          reply = next.length ? `${ack}Anotado! Pode me contar sobre "${next[0].label}"?` : `${ack}Anotado! Isso foi tudo que eu precisava saber.`;
+          return { reply, allDone: next.length === 0, remainingGaps: next.length, confidenceScore: (await this.prisma.client.business.findUnique({ where: { id: businessId }, select: { confidenceScore: true } }))?.confidenceScore ?? confidenceScore };
+        }
+      }
+    }
+
+    if (fieldKey === OPERATION_MODE_FIELD && value && classifyOperationModeAnswer(value) === null) {
+      // The model extracted something unclear for the operation mode: ask instead of saving a guess.
+      reply = OPERATION_MODE_CLARIFY;
+      fieldKey = null;
+    }
     if (fieldKey && value) {
       const result = await this.patchProfileField(businessId, fieldKey, value, "interview");
       // Invalid extraction (e.g. LLM drift) — skip the write rather than corrupt the field, keep the conversation going.
@@ -219,11 +317,11 @@ export class OnboardingService {
     return { reply, allDone: remaining.length === 0, remainingGaps: remaining.length, confidenceScore };
   }
 
-  private async runEvalQuestions(businessId: string, businessName: string, niche: string, profileSummary: string, evalQuestions: string[]): Promise<number> {
+  private async runEvalQuestions(businessId: string, businessName: string, niche: Niche, profileSummary: string, evalQuestions: string[]): Promise<number> {
     if (evalQuestions.length === 0) return 0;
 
     const systemPrompt = [
-      `Você é a Clara, a atendente de IA da ${businessName}, um negócio de ${niche === "imobiliaria" ? "locação imobiliária" : "concessionária de veículos"}.`,
+      `Você é ${niche === "imobiliaria" ? "a Clara" : getPersona(niche).name}, a atendente de IA da ${businessName}, um negócio de ${nicheBehavior(niche).businessDescriptor}.`,
       "Responda apenas com base nas informações abaixo. Se não souber, diga que vai confirmar com um atendente humano — nunca invente preço, prazo ou disponibilidade.",
       `Informações do negócio: ${profileSummary}`,
     ].join("\n");

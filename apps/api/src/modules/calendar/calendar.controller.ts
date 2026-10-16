@@ -1,7 +1,10 @@
+import { dashboardLink } from "../../common/email-links";
 import { Controller, Get, Param, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { CalendarService } from "./calendar.service";
 import { BusinessSessionGuard } from "../../common/guards/business-session.guard";
+import { PermissionsGuard } from "../access/permissions.guard";
+import { RequirePermission } from "../access/permission.decorator";
 import { CurrentBusiness } from "../../common/decorators/current-business.decorator";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import type { BusinessSessionClaims } from "@realwise/auth";
@@ -10,7 +13,8 @@ import type { BusinessSessionClaims } from "@realwise/auth";
 export class CalendarController {
   constructor(private readonly calendar: CalendarService) {}
 
-  @UseGuards(BusinessSessionGuard)
+  @UseGuards(BusinessSessionGuard, PermissionsGuard)
+  @RequirePermission("agenda", "edit")
   @Get(":businessId/auth-url")
   async authUrl(@Param("businessId") businessId: string, @CurrentBusiness() session: BusinessSessionClaims) {
     const result = this.calendar.getAuthUrl(session.businessId ?? businessId);
@@ -20,7 +24,8 @@ export class CalendarController {
     return result;
   }
 
-  @UseGuards(BusinessSessionGuard)
+  @UseGuards(BusinessSessionGuard, PermissionsGuard)
+  @RequirePermission("agenda", "view")
   @Get(":businessId/status")
   async status(@CurrentBusiness() session: BusinessSessionClaims) {
     const integration = await this.calendar.getIntegration(session.businessId);
@@ -31,12 +36,12 @@ export class CalendarController {
   // opaque, single-use `state` token — not the caller — is what proves which business this belongs to.
   @Get("oauth/callback")
   async oauthCallback(@Query("code") code: string, @Query("state") state: string, @Res() res: Response) {
-    const dashboardUrl = process.env.DASHBOARD_URL ?? "http://localhost:3003";
+    const agendaUrl = (q: string) => dashboardLink(`/agenda?calendar=${q}`) ?? `http://localhost:3003/imobiliaria/app/agenda?calendar=${q}`;
     try {
       await this.calendar.handleOAuthCallback(state, code);
-      res.redirect(`${dashboardUrl}/agenda?calendar=connected`);
+      res.redirect(agendaUrl("connected"));
     } catch {
-      res.redirect(`${dashboardUrl}/agenda?calendar=error`);
+      res.redirect(agendaUrl("error"));
     }
   }
 

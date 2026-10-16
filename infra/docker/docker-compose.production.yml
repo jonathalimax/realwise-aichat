@@ -25,6 +25,7 @@ services:
       - traefik.http.routers.realwise-api.entrypoints=https
       - traefik.http.routers.realwise-api.tls=true
       - traefik.http.routers.realwise-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.realwise-api.priority=300
       - traefik.http.services.realwise-api.loadbalancer.server.port=3006
       # A Traefik-level loadbalancer.healthcheck was tried here and reverted -- it caused the
       # api backend to flap between 503/timeout even though /api/health verifiably returned 200
@@ -89,12 +90,29 @@ services:
       start_period: 20s
     labels:
       - traefik.enable=true
-      - traefik.http.routers.realwise-chat.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/client/conversation`)
+      # Priorities are EXPLICIT so routers can never shadow each other (Traefik otherwise ranks by rule length):
+      # api/admin/dashboards 300 > chat 200 > marketing 1. That is why /api/chat/... reaches the API even though
+      # `/api/chat` also matches the chat regex below.
+      # Chat pages: /<client-slug>/chat, /<client-slug>/pedido/<token> and the legacy /client/conversation/<slug>
+      # (kept as a redirect by the chat app). NOTE: in docker compose "$" must be written "$$".
+      - traefik.http.routers.realwise-chat.rule=Host(`aichat.realwise.com.br`) && (PathRegexp(`^/[^/]+/(chat|pedido)(/.*)?$$`) || PathPrefix(`/client/conversation`))
       - traefik.http.routers.realwise-chat.entrypoints=https
       - traefik.http.routers.realwise-chat.tls=true
       - traefik.http.routers.realwise-chat.tls.certresolver=letsencrypt
+      - traefik.http.routers.realwise-chat.priority=200
+      # Chat static assets live under /_c (assetPrefix); the prefix is stripped before reaching the chat container.
+      # ONLY /_c is stripped, the page router above forwards the path untouched.
+      - traefik.http.middlewares.realwise-chat-strip-c.stripprefix.prefixes=/_c
+      - traefik.http.routers.realwise-chat-assets.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/_c`)
+      - traefik.http.routers.realwise-chat-assets.entrypoints=https
+      - traefik.http.routers.realwise-chat-assets.tls=true
+      - traefik.http.routers.realwise-chat-assets.tls.certresolver=letsencrypt
+      - traefik.http.routers.realwise-chat-assets.middlewares=realwise-chat-strip-c
+      - traefik.http.routers.realwise-chat-assets.priority=200
       - traefik.http.services.realwise-chat.loadbalancer.server.port=3000
 
+  # Dashboard = same code built three times (one image per niche, basePath baked in at build time, see deploy.yml).
+  # Real estate keeps the original service/image name; farmacia and concessionaria are new services below.
   dashboard:
     image: ghcr.io/jonathalimax/realwise-dashboard:latest
     pull_policy: always
@@ -111,7 +129,46 @@ services:
       - traefik.http.routers.realwise-dashboard.entrypoints=https
       - traefik.http.routers.realwise-dashboard.tls=true
       - traefik.http.routers.realwise-dashboard.tls.certresolver=letsencrypt
+      - traefik.http.routers.realwise-dashboard.priority=300
       - traefik.http.services.realwise-dashboard.loadbalancer.server.port=3000
+
+  dashboard-farmacia:
+    image: ghcr.io/jonathalimax/realwise-dashboard-farmacia:latest
+    pull_policy: always
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.realwise-dashboard-farmacia.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/farmacia/app`)
+      - traefik.http.routers.realwise-dashboard-farmacia.entrypoints=https
+      - traefik.http.routers.realwise-dashboard-farmacia.tls=true
+      - traefik.http.routers.realwise-dashboard-farmacia.tls.certresolver=letsencrypt
+      - traefik.http.routers.realwise-dashboard-farmacia.priority=300
+      - traefik.http.services.realwise-dashboard-farmacia.loadbalancer.server.port=3000
+
+  dashboard-concessionaria:
+    image: ghcr.io/jonathalimax/realwise-dashboard-concessionaria:latest
+    pull_policy: always
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.realwise-dashboard-concessionaria.rule=Host(`aichat.realwise.com.br`) && PathPrefix(`/concessionaria/app`)
+      - traefik.http.routers.realwise-dashboard-concessionaria.entrypoints=https
+      - traefik.http.routers.realwise-dashboard-concessionaria.tls=true
+      - traefik.http.routers.realwise-dashboard-concessionaria.tls.certresolver=letsencrypt
+      - traefik.http.routers.realwise-dashboard-concessionaria.priority=300
+      - traefik.http.services.realwise-dashboard-concessionaria.loadbalancer.server.port=3000
 
   admin:
     image: ghcr.io/jonathalimax/realwise-admin:latest
@@ -129,6 +186,7 @@ services:
       - traefik.http.routers.realwise-admin.entrypoints=https
       - traefik.http.routers.realwise-admin.tls=true
       - traefik.http.routers.realwise-admin.tls.certresolver=letsencrypt
+      - traefik.http.routers.realwise-admin.priority=300
       - traefik.http.services.realwise-admin.loadbalancer.server.port=3000
 
   marketing:
