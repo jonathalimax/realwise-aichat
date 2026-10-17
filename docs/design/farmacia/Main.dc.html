@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pharmacy admin structure</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F7F6;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#10211F}
+</style>
+</helmet>
+<div style="max-width: 1680px; margin: 0 auto; padding: 56px 48px 72px; box-sizing: border-box; display: flex; flex-direction: column; gap: 40px">
+
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; justify-content: space-between">
+<div style="display: flex; flex-direction: column; gap: 10px; max-width: 760px">
+<div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: {{accent}}">Step 1 of 2 · Structure, revision 2</div>
+<h1 style="margin: 0; font-size: 44px; line-height: 1.1; font-weight: 800">Pharmacy admin: how it is organised</h1>
+<p style="margin: 0; font-size: 17px; line-height: 1.55; color: #3F5552">Nothing is designed yet. This is the map of every screen from the handoff doc, plus the new Team &amp; access area. Revised with your answers. Say "go" and I draw the screens.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; max-width: 520px">
+<div style="padding: 8px 14px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D5E0DD; font-size: 13px; font-weight: 600">Web only, desktop first, works on tablet</div>
+<div style="padding: 8px 14px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D5E0DD; font-size: 13px; font-weight: 600">pt-BR copy</div>
+<div style="padding: 8px 14px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D5E0DD; font-size: 13px; font-weight: 600">Own look: teal, no real-estate or vehicle terms</div>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+
+<div style="flex: 999 1 820px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<div style="font-size: 20px; font-weight: 800">1 · Screens by sidebar section</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px">
+<sc-for list="{{modules}}" as="m" hint-placeholder-count="6">
+<div style="background: #FFFFFF; border: 1px solid #D5E0DD; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px">
+<div style="font-size: 16px; font-weight: 800; line-height: 1.25">{{m.name}}</div>
+<div style="font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; background: {{m.tagBg}}; color: {{m.tagFg}}; white-space: nowrap">{{m.tag}}</div>
+</div>
+<div style="font-size: 13px; line-height: 1.45; color: #3F5552">{{m.purpose}}</div>
+<div style="display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #E4ECEA; padding-top: 12px">
+<sc-for list="{{m.screens}}" as="s" hint-placeholder-count="3">
+<div style="display: flex; gap: 8px; font-size: 13px; line-height: 1.4"><span style="color: {{accent}}; font-weight: 800">·</span><span>{{s.t}}</span></div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 32px">
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div style="font-size: 20px; font-weight: 800">2 · Before the app</div>
+<div style="background: #FFFFFF; border: 1px solid #D5E0DD; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{entry}}" as="e" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 14px; font-weight: 700">{{e.t}}</div><div style="font-size: 13px; line-height: 1.4; color: #3F5552">{{e.d}}</div></div>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div style="font-size: 20px; font-weight: 800">3 · Customer chat, same product</div>
+<div style="background: {{accent}}; color: #FFFFFF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 12px">
+<div style="width: 44px; height: 44px; border-radius: 999px; background: #F4F7F6; color: #10211F; font-weight: 800; font-size: 18px; display: flex; align-items: center; justify-content: center">A</div>
+<div><div style="font-size: 16px; font-weight: 800">Alex</div><div style="font-size: 12px; opacity: 0.9">Atendente virtual · IA</div></div>
+</div>
+<div style="font-size: 13px; line-height: 1.5">Same layout and flows as the real-estate chat, with a man persona. Alex always says he is an AI assistant: in the welcome message and in the header badge "IA".</div>
+<div style="font-size: 13px; line-height: 1.5">When a person takes over (the pharmacist answers a handoff), the chat shows "Maria S. · Farmacêutica responsável entrou na conversa", with name and role, and messages switch to that person's avatar. Same for any employee who joins.</div>
+<div style="display: flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 600"><span>Branding:</span><span style="width: 24px; height: 24px; border-radius: 6px; background: {{accent}}; border: 2px solid #FFFFFF"></span><span style="width: 24px; height: 24px; border-radius: 6px; background: {{secondary}}; border: 2px solid #FFFFFF"></span><span style="width: 24px; height: 24px; border-radius: 6px; background: {{tertiary}}; border: 2px solid #FFFFFF"></span></div>
+<div style="font-size: 13px; line-height: 1.5">Each pharmacy sets primary, secondary and tertiary colours in Farmácia › Aparência, as in real estate. Default is teal. It themes the chat, the customer status page and the admin; teal is the fallback when no colours are set.</div>
+<div style="font-size: 13px; line-height: 1.5">Chat screens: S1–S9 from the doc, plus S10 "person joined".</div>
+</div>
+
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="font-size: 20px; font-weight: 800">4 · Team &amp; access: roles and what each can do</div>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: #3F5552; max-width: 900px">Every business registers its own staff. Five starter roles ship ready; the owner can duplicate one or build a custom role by ticking permissions per section. The sidebar only shows what the role can open. Order and handoff notifications stay on for everyone who can see them.</p>
+<div style="overflow-x: auto; background: #FFFFFF; border: 1px solid #D5E0DD; border-radius: 14px">
+<div style="min-width: 860px; display: grid; grid-template-columns: minmax(220px, 1.6fr) repeat(5, minmax(110px, 1fr)); font-size: 13px">
+<div style="padding: 14px 16px; font-weight: 700; color: #3F5552; background: #EAF1EF; border-radius: 14px 0 0 0">Section</div>
+<sc-for list="{{roles}}" as="r" hint-placeholder-count="5">
+<div style="padding: 14px 16px; font-weight: 800; background: #EAF1EF; display: flex; flex-direction: column; gap: 2px"><span>{{r.name}}</span><span style="font-size: 11px; font-weight: 500; color: #3F5552">{{r.note}}</span></div>
+</sc-for>
+<sc-for list="{{matrix}}" as="row" hint-placeholder-count="6">
+<div style="padding: 12px 16px; border-top: 1px solid #E4ECEA; font-weight: 600">{{row.name}}</div>
+<sc-for list="{{row.cells}}" as="c" hint-placeholder-count="5">
+<div style="padding: 10px 16px; border-top: 1px solid #E4ECEA; display: flex; align-items: center"><span style="font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: {{c.bg}}; color: {{c.fg}}">{{c.l}}</span></div>
+</sc-for>
+</sc-for>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px">
+<sc-for list="{{rules}}" as="g" hint-placeholder-count="4">
+<div style="background: #FFFFFF; border: 1px solid #D5E0DD; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 6px"><div style="font-size: 14px; font-weight: 800">{{g.t}}</div><div style="font-size: 13px; line-height: 1.5; color: #3F5552">{{g.d}}</div></div>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px">
+<div style="flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+<div style="font-size: 20px; font-weight: 800">5 · Home: dashboards and insights</div>
+<div style="background: #FFFFFF; border: 1px solid #D5E0DD; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{home}}" as="h" hint-placeholder-count="5">
+<div style="display: flex; gap: 10px; font-size: 13px; line-height: 1.45"><span style="color: {{accent}}; font-weight: 800">·</span><span><b>{{h.t}}</b> {{h.d}}</span></div>
+</sc-for>
+</div>
+</div>
+<div style="flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+<div style="font-size: 20px; font-weight: 800">6 · What I need from you</div>
+<div style="background: #FFFFFF; border: 1px solid #D5E0DD; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{asks}}" as="a" hint-placeholder-count="4">
+<div style="display: flex; gap: 10px; font-size: 13px; line-height: 1.45"><span style="color: #B45309; font-weight: 800">?</span><span>{{a}}</span></div>
+</sc-for>
+</div>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#0F766E","section":"Branding"},"secondary":{"editor":"color","default":"#0B4F4A","section":"Branding"},"tertiary":{"editor":"color","default":"#F59E0B","section":"Branding"},"$preview":{"width":1760,"height":1700}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const tone = (k) => ({
+      all: { tagBg: '#E1F1EE', tagFg: '#0B4F4A' },
+      rt: { tagBg: '#FDEBD3', tagFg: '#8A4B08' },
+      own: { tagBg: '#E7E4F7', tagFg: '#43388F' }
+    }[k]);
+    const mk = (name, tag, k, purpose, screens) => ({ name, tag, ...tone(k), purpose, screens: screens.map((t) => ({ t })) });
+    const modules = [
+      mk('Assistente', 'Everyone', 'all', 'AI interview that fills the pharmacy profile; the same chat used at signup.', ['Interview chat', 'Answers to confirm (marked "confirmar")']),
+      mk('Início', 'Everyone', 'all', 'Dashboard and insights. First screen after login, adapted to the role.', ['Dashboard (see section 5)', 'Alerts strip: old stock sheet, waiting orders']),
+      mk('Pedidos', 'Orders team', 'all', 'Every order from chat, delivery and pickup, including prescriptions to validate.', ['Orders list with status tabs', 'Order detail panel, with status actions and cancel reason', 'Address-differs flag and sheet age shown inside', 'Tab Receitas: prescription queue, viewer, approve or reject with reason (pharmacist), retention status']),
+      mk('Atendimento farmacêutico', 'Pharmacist', 'rt', 'Handoffs from the chat: symptoms, controlled and out-of-stock questions.', ['Inbox: open, answered, urgent first', 'Handoff detail with brief, pharmacist-only suggestion and reply box', 'Full conversation view']),
+      mk('Catálogo', 'Catalog team', 'all', 'Products, class, price, stock, equivalents.', ['Products table with class filters', 'Product detail: class, max quantity, "needs pharmacist", equivalents', 'Revisar classes: bulk confirm, controlled first (pharmacist)']),
+      mk('Importar planilha', 'Catalog team', 'all', 'Any Excel or CSV; the AI maps the columns.', ['Step 1 file', 'Step 2 columns, preview', 'Step 3 classes', 'Step 4 confirm and "stock updated as of"', 'Import history']),
+      mk('Clientes', 'Orders team', 'all', 'One customer list per pharmacy, recognised by phone.', ['Customer list', 'Customer detail: orders, addresses, consent', 'Masked address; sensitive health data hidden']),
+      mk('Conversas', 'Everyone', 'all', 'Read-only mirror of chat conversations.', ['Conversation list with filters', 'Conversation thread, order and handoff links']),
+      mk('Análises', 'Managers', 'all', 'Trends behind the home KPIs.', ['Sales and orders', 'Chat funnel: asked, cart, ordered', 'Triage and handoffs', 'Top products and unmet demand']),
+      mk('Farmácia', 'Owner / manager', 'own', 'Settings the code enforces and the branding of the chat.', ['Identidade e legal: CNPJ, AFE, RT, CRF', 'Entrega, Retirada, Horários', 'Limites and Estoque (sheet max age)', 'Aparência: primary, secondary and tertiary colours, logo, quick chips', 'Banner: order notifications always on']),
+      mk('Equipe e acessos', 'Owner / manager', 'own', 'Register employees and control what each can do. New for every business.', ['Members list: status, role, last access', 'Invite employee (email, role)', 'Roles list and role editor with permission grid', 'Access log (v1): who did what, when, filter by person']),
+      mk('Plano e cobrança', 'Owner / manager', 'own', 'Plan, usage, invoices.', ['Current plan and quota', 'Invoices'])
+    ];
+    const entry = [
+      { t: 'Login', d: 'Email and password, reset flow.' },
+      { t: 'Accept invite', d: 'Employee opens the email link, sets a password, lands on their role home.' },
+      { t: 'Pharmacy onboarding', d: 'Owner only, first access: AI interview, then confirm the settings.' },
+      { t: 'No access', d: 'Friendly screen when a role cannot open a section.' }
+    ];
+    const roles = [
+      { name: 'Owner', note: 'Proprietário' },
+      { name: 'Pharmacist', note: 'Farmacêutico RT' },
+      { name: 'Manager', note: 'Gerente' },
+      { name: 'Attendant', note: 'Atendente' },
+      { name: 'Courier', note: 'Entregador' }
+    ];
+    const lv = { E: { l: 'Edit', bg: '#0F766E', fg: '#FFFFFF' }, V: { l: 'View', bg: '#E1F1EE', fg: '#0B4F4A' }, N: { l: 'None', bg: '#F0F2F2', fg: '#6B7B79' }, D: { l: 'Own deliveries', bg: '#FDEBD3', fg: '#8A4B08' } };
+    const row = (name, s) => ({ name, cells: s.split('').map((k) => lv[k]) });
+    const matrix = [
+      row('Início', 'VVVVN'), row('Pedidos (incl. receitas)', 'EEEED'), row('Atendimento farmacêutico', 'VEVNN'), row('Catálogo', 'EEEVN'), row('Importar planilha', 'EEENN'), row('Revisar classes', 'VENNN'), row('Clientes', 'EVEVN'),
+      row('Conversas', 'VVVVN'), row('Análises', 'VVVNN'), row('Farmácia (configurações)', 'EVENN'), row('Equipe e acessos', 'ENENN'), row('Plano e cobrança', 'ENENN')
+    ];
+    const rules = [
+      { t: 'Pharmacist-only actions', d: 'Confirming product classes, validating prescriptions and answering handoffs need a role flagged "Pharmacist" with a CRF number. Not even the owner can do these without it.' },
+      { t: 'Owner is protected', d: 'There is always at least one Owner. The last Owner cannot be removed or downgraded, and a Manager cannot edit Owners or grant the Owner role (my assumption).' },
+      { t: 'Custom roles', d: 'Duplicate a starter role, rename it, tick View or Edit per section. Starter roles stay as reference.' },
+      { t: 'Safe by default', d: 'A new invite starts with the least access (Attendant). Revoking is instant and ends open sessions. Every sensitive action is written to the access log, visible to Owner and Manager.' }
+    ];
+    const home = [
+      { t: 'Today KPIs:', d: 'orders today, waiting for action, open pharmacist handoffs, stock sheet age.' },
+      { t: 'Needs action:', d: 'live list of orders to confirm or prescriptions to validate, with time waiting.' },
+      { t: 'Sales chart:', d: 'orders and revenue, last 7 or 30 days, delivery vs pickup split.' },
+      { t: 'Chat funnel:', d: 'conversations, carts, orders, with conversion rate.' },
+      { t: 'Insights:', d: 'AI-written cards such as top products asked but out of stock, peak hours, slow-to-confirm orders.' },
+      { t: 'By role:', d: 'the pharmacist home leads with handoffs and prescriptions to validate; the attendant home leads with orders.' }
+    ];
+    const asks = [
+      'All structure questions are settled. Say "go" and I draw the screens.'
+    ];
+    return { accent: this.props.accent ?? '#0F766E', secondary: this.props.secondary ?? '#0B4F4A', tertiary: this.props.tertiary ?? '#F59E0B', modules, entry, roles, matrix, rules, home, asks };
+  }
+}
+</script>
+</body>
+</html>

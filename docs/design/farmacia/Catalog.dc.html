@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Catálogo</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Catálogo" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Catálogo</h1><p class="muted">Produtos que o Alex pode consultar e vender</p></div>
+<div class="row"><a class="btn btn-outline" href="ClassReview.dc.html">Revisar classes <span class="badge b-amber" style="height: 18px; padding: 0 6px">148</span></a><a class="btn" href="Import.dc.html">Importar planilha</a></div>
+</div>
+<div class="alert alert-amber">148 produtos estão sem classe e não podem ser vendidos no chat até o farmacêutico revisar. Estoque atualizado há 5 horas.</div>
+<div class="row wrap" style="justify-content: space-between; gap: 12px">
+<div class="tabs" role="tablist" aria-label="Filtro">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="5"><button class="{{f.cls}}" role="tab" onClick="{{ f.pick }}">{{f.label}}</button></sc-for>
+</div>
+<div style="width: 280px; max-width: 100%"><input class="input" placeholder="Buscar produto, EAN ou princípio ativo" aria-label="Buscar produto"></div>
+</div>
+<div class="card scroll-x">
+<table class="tbl">
+<thead><tr><th>Produto</th><th>Classe</th><th>Preço</th><th>Estoque</th><th>Equivalentes</th><th>Exige farmacêutico</th></tr></thead>
+<tbody>
+<sc-for list="{{rows}}" as="p" hint-placeholder-count="6">
+<tr class="hover" onClick="{{ p.open }}"><td><div class="row" style="gap: 12px"><span class="thumb" style="background: {{p.tbg}}; color: {{p.tfg}}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{p.icon}}"/></svg></span><div><b>{{p.name}}</b><div class="xs muted">{{p.sub}}</div></div></div></td><td><span class="badge {{p.badge}}">{{p.label}}</span></td><td>{{p.price}}</td><td>{{p.stock}}</td><td class="muted">{{p.eq}}</td><td class="muted">{{p.req}}</td></tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</main>
+
+<sc-if value="{{open}}" hint-placeholder-val="{{ false }}">
+<div class="sheet-wrap"><aside class="sheet" aria-label="Produto">
+<div class="row" style="justify-content: space-between; align-items: flex-start"><div class="row" style="gap: 14px"><span class="thumb thumb-lg" style="background: {{sel.tbg}}; color: {{sel.tfg}}"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{sel.icon}}"/></svg></span><div><h2 class="h2" style="font-size: 20px">{{sel.name}}</h2><p class="xs muted">{{sel.sub}}</p></div></div><button class="btn btn-ghost btn-icon" aria-label="Fechar" onClick="{{ close }}">✕</button></div>
+<div class="row"><span class="badge {{sel.badge}}">{{sel.label}}</span><span class="badge b-outline">Estoque {{sel.stock}}</span></div>
+<sc-if value="{{sel.warn}}" hint-placeholder-val="{{ false }}"><div class="alert alert-amber">{{sel.warn}}</div></sc-if>
+<div class="field"><label class="label" for="pn">Nome</label><input id="pn" class="input" value="{{sel.name}}"></div>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px"><div class="field"><label class="label" for="pp">Preço</label><input id="pp" class="input" value="{{sel.price}}"></div><div class="field"><label class="label" for="pm">Máx. por pedido</label><input id="pm" class="input" value="{{sel.max}}"></div></div>
+<div class="field"><label class="label" for="pc">Classe de venda</label><select id="pc" class="input"><option>{{sel.label}}</option><option>Venda livre (OTC)</option><option>Receita</option><option>Controlado</option></select><span class="xs muted" style="margin-top: 4px">Somente o farmacêutico confirma a classe.</span></div>
+<div class="field"><label class="label" for="pe">Grupo de equivalentes</label><input id="pe" class="input" value="{{sel.eq}}"></div>
+<div class="row" style="justify-content: space-between"><span>Sempre exige farmacêutico</span><span class="{{sel.swCls}}" role="switch" aria-checked="{{sel.reqOn}}"></span></div>
+<div class="row" style="margin-top: auto"><button class="btn" onClick="{{ close }}">Salvar</button><button class="btn btn-outline" onClick="{{ close }}">Cancelar</button></div>
+</aside></div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { f: 'all', sel: null };
+  renderVals() {
+    const S = this.state;
+    const cls = { otc: ['Venda livre ✓', 'b-green'], rx: ['Receita ✓', 'b-amber'], ctl: ['Controlado ✓', 'b-gray'], none: ['Sem classe', 'b-red'] };
+    const pill = 'M10.5 20.5l10-10a4.95 4.95 0 0 0-7-7l-10 10a4.95 4.95 0 0 0 7 7zM8.5 8.5l7 7';
+    const bottle = 'M9 2h6v3H9zM8 5h8l1 4v11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V9zM7 13h10';
+    const box = 'M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8';
+    const look = [{ icon: pill, tbg: '#E6F4F1', tfg: '#0B4F4A' }, { icon: box, tbg: '#E0ECFB', tfg: '#1e40af' }, { icon: pill, tbg: '#FEF3C7', tfg: '#92400e' }, { icon: box, tbg: '#E4E4E7', tfg: '#3f3f46' }, { icon: bottle, tbg: '#FEE2E2', tfg: '#991b1b' }, { icon: bottle, tbg: '#DCFCE7', tfg: '#166534' }];
+    const all = [
+      { id: 1, name: 'Dipirona 500 mg', sub: '10 comprimidos · EMS', c: 'otc', price: 'R$ 8,90', stock: 42, eq: 'grupo A', req: 'Não', max: 5, warn: '' },
+      { id: 2, name: 'Novalgina 500 mg', sub: '10 comprimidos · Sanofi', c: 'otc', price: 'R$ 12,90', stock: 18, eq: 'grupo A', req: 'Não', max: 5, warn: '' },
+      { id: 3, name: 'Amoxicilina 500 mg', sub: '21 cápsulas · Medley', c: 'rx', price: 'R$ 48,30', stock: 12, eq: '—', req: 'Sim', max: 1, warn: 'Exige receita. O pedido sempre passa pelo farmacêutico.' },
+      { id: 4, name: 'Clonazepam 2 mg', sub: '30 comprimidos · Teuto', c: 'ctl', price: 'R$ 24,90', stock: 10, eq: '—', req: 'Sim', max: 0, warn: 'Controlado. O chat só informa disponibilidade e preço, nunca vende.' },
+      { id: 5, name: 'Xarope X', sub: '120 ml · Marca Y', c: 'none', price: 'R$ 15,00', stock: 7, eq: '—', req: 'Sim', max: 0, warn: 'Sem classe. Não pode ser vendido no chat até ser revisado.' },
+      { id: 6, name: 'Soro fisiológico', sub: '500 ml · Fresenius', c: 'otc', price: 'R$ 6,20', stock: 0, eq: '—', req: 'Não', max: 10, warn: '' }
+    ].map((p, i) => ({ ...p, ...look[i], label: cls[p.c][0], badge: cls[p.c][1], reqOn: p.req === 'Sim', swCls: p.req === 'Sim' ? 'sw on' : 'sw' }));
+    const keep = { all: () => true, none: (p) => p.c === 'none', rx: (p) => p.c === 'rx', ctl: (p) => p.c === 'ctl', out: (p) => p.stock === 0 };
+    const fl = [['all', 'Todos'], ['none', 'Sem classe'], ['rx', 'Receita'], ['ctl', 'Controlados'], ['out', 'Sem estoque']];
+    const filters = fl.map(([k, label]) => ({ label, cls: S.f === k ? 'tab on' : 'tab', pick: () => this.setState({ f: k }) }));
+    const rows = all.filter(keep[S.f]).map((p) => ({ ...p, open: () => this.setState({ sel: p.id }) }));
+    const sel = all.find((p) => p.id === S.sel) || {};
+    return { filters, rows, sel, open: !!S.sel, close: () => this.setState({ sel: null }) };
+  }
+}
+</script>
+</body>
+</html>

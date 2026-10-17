@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Clientes</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Clientes" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div class="row wrap" style="justify-content: space-between; gap: 16px"><div><h1 class="h1">Clientes</h1><p class="muted">Reconhecidos pelo telefone. Cada farmácia tem a própria lista.</p></div><div style="width: 280px; max-width: 100%"><input class="input" placeholder="Buscar por nome ou telefone" aria-label="Buscar cliente"></div></div>
+<div class="card scroll-x"><table class="tbl">
+<thead><tr><th>Cliente</th><th>Telefone</th><th>Pedidos</th><th>Último pedido</th><th>Endereço padrão</th></tr></thead>
+<tbody>
+<sc-for list="{{rows}}" as="c" hint-placeholder-count="6"><tr class="hover" onClick="{{ c.open }}"><td><div class="row"><span class="avatar">{{c.ini}}</span><b>{{c.name}}</b></div></td><td>{{c.phone}}</td><td>{{c.orders}}</td><td class="muted">{{c.last}}</td><td class="muted">{{c.addr}}</td></tr></sc-for>
+</tbody></table></div>
+</main>
+<sc-if value="{{open}}" hint-placeholder-val="{{ false }}">
+<div class="sheet-wrap"><aside class="sheet" aria-label="Cliente">
+<div class="row" style="justify-content: space-between"><div class="row"><span class="avatar" style="width: 44px; height: 44px">{{sel.ini}}</span><div><h2 class="h2" style="font-size: 20px">{{sel.name}}</h2><p class="xs muted">{{sel.phone}} · {{sel.email}}</p></div></div><button class="btn btn-ghost btn-icon" aria-label="Fechar" onClick="{{ close }}">✕</button></div>
+<div class="row"><span class="badge b-green">Consentimento LGPD registrado</span><span class="badge b-outline">{{sel.orders}} pedidos</span></div>
+<div class="col" style="gap: 6px"><b>Endereços</b>
+<div style="border: 1px solid #e4e4e7; border-radius: 10px; padding: 12px"><div class="row" style="justify-content: space-between"><span>{{sel.addr}}</span><span class="badge b-soft">Padrão</span></div><div class="xs muted">Número ocultado para proteger o cliente</div></div>
+<div class="xs muted">Endereços antigos ficam no histórico e nunca são apagados.</div></div>
+<div class="col" style="gap: 6px"><b>Pedidos recentes</b>
+<sc-for list="{{sel.history}}" as="h" hint-placeholder-count="3"><div class="row" style="justify-content: space-between"><a href="Orders.dc.html" style="font-weight: 600">{{h.code}}</a><span class="muted">{{h.when}}</span><span>{{h.total}}</span></div></sc-for></div>
+<div class="alert alert-soft">Sintomas, alergias e receitas não aparecem aqui. Ficam só no atendimento farmacêutico.</div>
+<a class="btn btn-outline" href="Conversations.dc.html" style="margin-top: auto">Abrir conversas</a>
+</aside></div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { sel: null };
+  renderVals() {
+    const S = this.state;
+    const hist = [{ code: 'PED-4821', when: 'há 2 min', total: 'R$ 14,90' }, { code: 'PED-4702', when: '12 set', total: 'R$ 33,20' }, { code: 'PED-4511', when: '2 set', total: 'R$ 9,90' }];
+    const all = [
+      { id: 1, name: 'João Silva', ini: 'JS', phone: '(41) 99812-3344', email: 'joao@email.com', orders: 7, last: 'há 2 min', addr: 'Rua das Flores, nº •••, Água Verde' },
+      { id: 2, name: 'Ana Paula Ramos', ini: 'AP', phone: '(41) 99777-1020', email: 'ana@email.com', orders: 3, last: 'há 9 min', addr: 'Av. Sete de Setembro, nº •••, Batel' },
+      { id: 3, name: 'Beatriz Lima', ini: 'BL', phone: '(41) 99655-4412', email: 'bia@email.com', orders: 12, last: 'há 24 min', addr: 'Rua Pasteur, nº •••, Água Verde' },
+      { id: 4, name: 'Carlos Mendes', ini: 'CM', phone: '(41) 99540-8821', email: 'carlos@email.com', orders: 2, last: 'há 14 min', addr: 'Retirada em loja' },
+      { id: 5, name: 'Fernanda Rocha', ini: 'FR', phone: '(41) 99422-9087', email: 'fer@email.com', orders: 5, last: 'há 1 h', addr: 'Rua Bom Jesus, nº •••, Cabral' }
+    ].map((c) => ({ ...c, history: hist }));
+    const rows = all.map((c) => ({ ...c, open: () => this.setState({ sel: c.id }) }));
+    return { rows, sel: all.find((c) => c.id === S.sel) || {}, open: !!S.sel, close: () => this.setState({ sel: null }) };
+  }
+}
+</script>
+</body>
+</html>

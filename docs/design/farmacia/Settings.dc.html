@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Farmácia</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Farmácia" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px; max-width: 980px">
+<div class="row wrap" style="justify-content: space-between; gap: 16px"><div><h1 class="h1">Farmácia</h1><p class="muted">Regras que o sistema aplica no chat e nos pedidos</p></div><button class="btn">Salvar alterações</button></div>
+<div class="alert alert-soft">As notificações de novos pedidos e atendimentos estão sempre ativas e não podem ser desligadas.</div>
+<div class="alert alert-amber">3 campos foram preenchidos pela entrevista com o Assistente e aguardam sua confirmação (marcados "confirmar").</div>
+<div class="tabs" role="tablist" aria-label="Seções" style="width: fit-content; max-width: 100%">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="7"><button class="{{t.cls}}" role="tab" onClick="{{ t.pick }}">{{t.label}}</button></sc-for>
+</div>
+
+<sc-if value="{{t_id}}" hint-placeholder-val="{{ true }}"><div class="card"><div class="card-h"><div><h2 class="h2">Identidade e legal</h2><p class="xs muted">Aparece no rodapé do chat para o cliente</p></div></div><div class="card-b" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px">
+<div class="field"><label class="label" for="a1">Razão social</label><input id="a1" class="input" value="Farmácia Exemplo Ltda."></div>
+<div class="field"><label class="label" for="a2">CNPJ</label><input id="a2" class="input" value="12.345.678/0001-90"></div>
+<div class="field"><label class="label" for="a3">Autorização de funcionamento (AFE)</label><input id="a3" class="input" value="1.23456.7"></div>
+<div class="field"><label class="label" for="a4">Farmacêutico responsável</label><input id="a4" class="input" value="Maria Souza"></div>
+<div class="field"><label class="label" for="a5">CRF <span class="badge b-amber" style="height: 18px">confirmar</span></label><input id="a5" class="input" value="CRF-PR 1234"></div>
+</div></div></sc-if>
+
+<sc-if value="{{t_del}}" hint-placeholder-val="{{ false }}"><div class="card"><div class="card-h"><div><h2 class="h2">Entrega</h2><p class="xs muted">Pedidos fora da área vão para o farmacêutico</p></div><span class="{{swDel}}" role="switch" aria-checked="true"></span></div><div class="card-b" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px">
+<div class="field"><label class="label" for="b1">Taxa de entrega</label><input id="b1" class="input" value="R$ 6,00"></div>
+<div class="field"><label class="label" for="b2">Pedido mínimo <span class="badge b-amber" style="height: 18px">confirmar</span></label><input id="b2" class="input" value="R$ 15,00"></div>
+<div class="field" style="grid-column: 1 / -1"><label class="label" for="b3">Bairros e faixas de CEP atendidos</label><textarea id="b3" class="input" rows="3">Água Verde, Batel, Centro, Cabral, Bigorrilho · CEP 80000-000 a 80999-999</textarea></div>
+</div></div></sc-if>
+
+<sc-if value="{{t_pick}}" hint-placeholder-val="{{ false }}"><div class="card"><div class="card-h"><div><h2 class="h2">Retirada em loja</h2><p class="xs muted">O cliente retira e paga na farmácia</p></div><span class="{{swDel}}" role="switch" aria-checked="true"></span></div><div class="card-b col"><div class="field"><label class="label" for="c1">Aviso ao cliente</label><textarea id="c1" class="input" rows="2">Leve um documento com foto. O pedido fica reservado por 24 horas.</textarea></div></div></div></sc-if>
+
+<sc-if value="{{t_lim}}" hint-placeholder-val="{{ false }}"><div class="card"><div class="card-h"><div><h2 class="h2">Limites</h2><p class="xs muted">O sistema aplica essas regras antes de confirmar</p></div></div><div class="card-b col">
+<div class="field" style="max-width: 320px"><label class="label" for="d1">Quantidade máxima por item</label><input id="d1" class="input" value="5"></div>
+<div class="row" style="justify-content: space-between"><div><b>Confirmar pedidos livres automaticamente</b><div class="xs muted">Quando o produto é de venda livre e há estoque</div></div><span class="{{swDel}}" role="switch" aria-checked="true"></span></div>
+<hr class="sep"><b>Sempre exigem farmacêutico, mesmo sendo de venda livre</b><div class="row wrap"><span class="badge b-outline">Descongestionante nasal ✕</span><span class="badge b-outline">Xarope para tosse ✕</span><button class="btn btn-outline btn-sm">Adicionar produto</button></div>
+</div></div></sc-if>
+
+<sc-if value="{{t_stock}}" hint-placeholder-val="{{ false }}"><div class="card"><div class="card-h"><div><h2 class="h2">Estoque</h2><p class="xs muted">Protege contra planilhas antigas</p></div></div><div class="card-b col"><div class="field" style="max-width: 320px"><label class="label" for="e1">Idade máxima da planilha para confirmar sozinho</label><select id="e1" class="input"><option>24 horas</option><option>12 horas</option><option>48 horas</option></select></div><p class="sm muted">Planilha atual: atualizada há 5 horas. Acima do limite, todo pedido vai para o farmacêutico.</p></div></div></sc-if>
+
+<sc-if value="{{t_hours}}" hint-placeholder-val="{{ false }}"><div class="card"><div class="card-h"><div><h2 class="h2">Horários</h2></div></div><div class="card-b col" style="gap: 8px">
+<sc-for list="{{hours}}" as="h" hint-placeholder-count="7"><div class="row" style="justify-content: space-between; max-width: 460px"><span style="width: 120px">{{h.d}}</span><span class="muted">{{h.t}}</span><span class="{{h.sw}}" role="switch" aria-checked="{{h.on}}"></span></div></sc-for>
+</div></div></sc-if>
+
+<sc-if value="{{t_look}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div class="card" style="flex: 1 1 340px"><div class="card-h"><div><h2 class="h2">Aparência</h2><p class="xs muted">Cores do chat, da página de acompanhamento e deste painel. Sem cores definidas, usa o verde-azulado padrão.</p></div></div><div class="card-b col" style="gap: 14px">
+<sc-for list="{{colors}}" as="c" hint-placeholder-count="3"><div class="row" style="justify-content: space-between"><div><b>{{c.name}}</b><div class="xs muted">{{c.use}}</div></div><div class="row"><span class="sm muted">{{c.value}}</span><input type="color" aria-label="{{c.name}}" value="{{c.value}}" onChange="{{ c.set }}" style="width: 40px; height: 36px; border: 1px solid #e4e4e7; border-radius: 8px; padding: 2px; background: #fff"></div></div></sc-for>
+<div class="row" style="justify-content: space-between"><b>Logo</b><button class="btn btn-outline btn-sm">Enviar imagem</button></div>
+<button class="btn btn-ghost btn-sm" style="width: fit-content" onClick="{{ reset }}">Restaurar padrão</button>
+</div></div>
+<div class="card" style="flex: 1 1 340px"><div class="card-h"><div><h2 class="h2">Pré-visualização do chat</h2></div></div><div class="card-b">
+<div style="border-radius: 14px; overflow: hidden; border: 1px solid #e4e4e7">
+<div style="background: {{p1}}; color: #fff; padding: 14px; display: flex; align-items: center; gap: 10px"><span class="avatar" style="background: #fff; color: #09090b">A</span><div><b>Alex</b> <span class="badge" style="background: {{p3}}; color: #09090b; height: 18px">IA</span><div class="xs" style="opacity: 0.9">Farmácia Exemplo</div></div></div>
+<div class="col" style="padding: 14px; background: #fafafa; gap: 10px"><div style="background: #fff; border: 1px solid #e4e4e7; border-radius: 12px; padding: 10px 12px; max-width: 85%">Oi! Sou o Alex, assistente virtual com inteligência artificial. Posso montar seu pedido ou chamar o farmacêutico.</div><div style="align-self: flex-end; background: {{p2}}; color: #fff; border-radius: 12px; padding: 10px 12px">Quero dipirona</div><button class="btn" style="background: {{p1}}; border-color: {{p1}}; width: fit-content">Fazer um pedido</button></div>
+</div></div></div>
+</div>
+</sc-if>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { tab: 'id', c1: '#0F766E', c2: '#0B4F4A', c3: '#F59E0B' };
+  renderVals() {
+    const S = this.state;
+    const tl = [['id', 'Identidade e legal'], ['del', 'Entrega'], ['pick', 'Retirada'], ['lim', 'Limites'], ['stock', 'Estoque'], ['hours', 'Horários'], ['look', 'Aparência']];
+    const tabs = tl.map(([k, label]) => ({ label, cls: S.tab === k ? 'tab on' : 'tab', pick: () => this.setState({ tab: k }) }));
+    const days = ['Segunda a sexta', 'Sábado', 'Domingo e feriados'];
+    const hours = [{ d: days[0], t: '08:00 às 20:00', on: true }, { d: days[1], t: '08:00 às 18:00', on: true }, { d: days[2], t: 'Fechado', on: false }].map((h) => ({ ...h, sw: h.on ? 'sw on' : 'sw' }));
+    const mk = (name, use, key) => ({ name, use, value: S[key], set: (e) => this.setState({ [key]: e.target.value }) });
+    return {
+      tabs, hours, swDel: 'sw on',
+      t_id: S.tab === 'id', t_del: S.tab === 'del', t_pick: S.tab === 'pick', t_lim: S.tab === 'lim', t_stock: S.tab === 'stock', t_hours: S.tab === 'hours', t_look: S.tab === 'look',
+      colors: [mk('Primária', 'Botões, cabeçalho do chat, menu ativo', 'c1'), mk('Secundária', 'Mensagens do cliente, destaques escuros', 'c2'), mk('Terciária', 'Selos e realces', 'c3')],
+      p1: S.c1, p2: S.c2, p3: S.c3, reset: () => this.setState({ c1: '#0F766E', c2: '#0B4F4A', c3: '#F59E0B' })
+    };
+  }
+}
+</script>
+</body>
+</html>

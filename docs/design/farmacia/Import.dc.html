@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Importar planilha</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Catálogo" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px; max-width: 980px">
+<div class="col" style="gap: 4px"><a class="sm muted" href="Catalog.dc.html">← Catálogo</a><h1 class="h1">Importar planilha</h1><p class="muted">Envie o arquivo do seu sistema, do jeito que ele é. A IA entende as colunas.</p></div>
+
+<ol style="display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="4"><li class="row" style="gap: 8px; padding-right: 12px"><span class="avatar" style="background: {{s.bg}}; color: {{s.fg}}">{{s.n}}</span><span style="font-weight: 500; color: {{s.tc}}">{{s.label}}</span></li></sc-for>
+</ol>
+
+<sc-if value="{{s1}}" hint-placeholder-val="{{ true }}">
+<div class="card"><div class="card-b col" style="align-items: center; padding: 48px 24px; gap: 12px; border: 2px dashed #d4d4d8; border-radius: 12px; margin: 20px">
+<div class="avatar" style="width: 48px; height: 48px">↑</div>
+<b>Arraste a planilha aqui ou escolha um arquivo</b><span class="sm muted">Excel (.xlsx) ou CSV, até 20 MB. Não precisa seguir um modelo.</span>
+<button class="btn" onClick="{{ next }}">Usar estoque_farmacia_out.xlsx</button>
+</div></div>
+</sc-if>
+
+<sc-if value="{{s2}}" hint-placeholder-val="{{ false }}">
+<div class="card"><div class="card-h"><div><h2 class="h2">Colunas sugeridas pela IA</h2><p class="xs muted">estoque_farmacia_out.xlsx · 612 linhas · a IA viu só 20 linhas de exemplo</p></div></div>
+<div class="card-b scroll-x"><table class="tbl"><thead><tr><th>Coluna da planilha</th><th>Exemplo</th><th>Campo</th><th>Confiança</th></tr></thead><tbody>
+<sc-for list="{{cols}}" as="c" hint-placeholder-count="5"><tr><td><b>{{c.from}}</b></td><td class="muted">{{c.ex}}</td><td style="min-width: 180px"><select class="input" aria-label="Campo"><option>{{c.to}}</option><option>Nome</option><option>Preço</option><option>Estoque</option><option>Classe</option><option>Ignorar</option></select></td><td><span class="badge {{c.badge}}">{{c.conf}}</span></td></tr></sc-for>
+</tbody></table></div></div>
+<div class="row" style="justify-content: space-between"><button class="btn btn-outline" onClick="{{ back }}">Voltar</button><button class="btn" onClick="{{ next }}">Continuar</button></div>
+</sc-if>
+
+<sc-if value="{{s3}}" hint-placeholder-val="{{ false }}">
+<div class="card"><div class="card-h"><div><h2 class="h2">Classes propostas</h2><p class="xs muted">A confirmação é feita depois, em Revisar classes, pelo farmacêutico.</p></div></div>
+<div class="card-b" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px">
+<sc-for list="{{classes}}" as="k" hint-placeholder-count="4"><div class="col" style="gap: 4px; padding: 14px; border: 1px solid #e4e4e7; border-radius: 10px"><span class="badge {{k.badge}}" style="width: fit-content">{{k.label}}</span><span style="font-size: 24px; font-weight: 700">{{k.n}}</span><span class="xs muted">{{k.d}}</span></div></sc-for>
+</div></div>
+<div class="alert alert-amber">Os 148 produtos incertos ficam "sem classe" e não podem ser vendidos no chat.</div>
+<div class="row" style="justify-content: space-between"><button class="btn btn-outline" onClick="{{ back }}">Voltar</button><button class="btn" onClick="{{ next }}">Continuar</button></div>
+</sc-if>
+
+<sc-if value="{{s4}}" hint-placeholder-val="{{ false }}">
+<div class="card"><div class="card-h"><div><h2 class="h2">Confirmar importação</h2><p class="xs muted">Nada é aplicado antes de você confirmar.</p></div></div>
+<div class="card-b col" style="gap: 16px">
+<div class="row wrap" style="gap: 24px"><span><b>Novos</b> 421</span><span><b>Atualizados</b> 177</span><span><b>Ignorados</b> 14</span><span><b>Sem classe</b> 148</span></div>
+<div class="field" style="max-width: 320px"><label class="label" for="asof">Estoque atualizado em</label><input id="asof" class="input" value="13/10/2026 09:30"></div>
+<label class="row" style="gap: 10px; cursor: pointer"><button class="{{chkCls}}" role="checkbox" aria-checked="{{checked}}" aria-label="Confirmo" onClick="{{ toggle }}" style="cursor: pointer">{{mark}}</button><span>Confirmo que o estoque desta planilha está correto na data acima</span></label>
+<p class="xs muted">Planilhas com mais de 24 horas desligam a confirmação automática de pedidos.</p>
+</div></div>
+<div class="row" style="justify-content: space-between"><button class="btn btn-outline" onClick="{{ back }}">Voltar</button><button class="{{applyCls}}" onClick="{{ apply }}">Aplicar importação</button></div>
+</sc-if>
+
+<sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+<div class="card"><div class="card-b col" style="align-items: center; padding: 48px 24px; gap: 12px"><div class="avatar" style="width: 48px; height: 48px; background: #dcfce7; color: #166534">✓</div><h2 class="h2" style="font-size: 20px">Importação aplicada</h2><p class="muted">598 produtos criados ou atualizados. Estoque atualizado agora.</p><div class="row"><a class="btn" href="ClassReview.dc.html">Revisar classes</a><a class="btn btn-outline" href="Catalog.dc.html">Ver catálogo</a></div></div></div>
+</sc-if>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { step: 1, checked: false, done: false };
+  renderVals() {
+    const S = this.state;
+    const labels = ['Arquivo', 'Colunas', 'Classes', 'Confirmar'];
+    const steps = labels.map((label, i) => { const n = i + 1; const cur = n === S.step && !S.done; const past = n < S.step || S.done; return { n: past ? '✓' : String(n), label, bg: cur ? '#0F766E' : past ? '#E6F4F1' : '#f4f4f5', fg: cur ? '#ffffff' : past ? '#0B4F4A' : '#71717a', tc: cur ? '#09090b' : '#71717a' }; });
+    const cols = [
+      { from: 'Produto', ex: 'DIPIRONA 500MG C/10', to: 'Nome', conf: 'Alta', badge: 'b-green' },
+      { from: 'Vlr Venda', ex: '8,90', to: 'Preço', conf: 'Alta', badge: 'b-green' },
+      { from: 'Qtd', ex: '42', to: 'Estoque', conf: 'Média', badge: 'b-amber' },
+      { from: 'Tarja', ex: 'Livre', to: 'Classe', conf: 'Alta', badge: 'b-green' },
+      { from: 'Cód. Barras', ex: '7891234567890', to: 'EAN', conf: 'Alta', badge: 'b-green' }
+    ];
+    const classes = [
+      { label: 'Controlado', n: 12, d: 'Revisão um a um', badge: 'b-gray' },
+      { label: 'Receita', n: 96, d: 'Exigem foto da receita', badge: 'b-amber' },
+      { label: 'Venda livre', n: 310, d: 'Vendidos direto no chat', badge: 'b-green' },
+      { label: 'Incertos', n: 148, d: 'Sem classe, sem venda', badge: 'b-red' }
+    ];
+    const go = (d) => () => this.setState({ step: S.step + d });
+    return {
+      steps, cols, classes, s1: S.step === 1 && !S.done, s2: S.step === 2 && !S.done, s3: S.step === 3 && !S.done, s4: S.step === 4 && !S.done, done: S.done,
+      next: go(1), back: go(-1), checked: S.checked, chkCls: S.checked ? 'chk on' : 'chk', mark: S.checked ? '✓' : '', toggle: () => this.setState({ checked: !S.checked }),
+      applyCls: S.checked ? 'btn' : 'btn btn-outline', apply: () => { if (S.checked) this.setState({ done: true }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

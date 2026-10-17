@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Equipe e acessos</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Equipe e acessos" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Equipe e acessos</h1><p class="muted">Cadastre funcionários e controle o que cada um pode ver e fazer</p></div>
+<button class="btn" onClick="{{ openInvite }}">Convidar funcionário</button>
+</div>
+<div class="tabs" role="tablist" aria-label="Seção" style="width: fit-content">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3"><button class="{{t.cls}}" role="tab" onClick="{{ t.pick }}">{{t.label}}</button></sc-for>
+</div>
+
+<sc-if value="{{showMembers}}" hint-placeholder-val="{{ true }}">
+<div class="card scroll-x"><table class="tbl">
+<thead><tr><th>Pessoa</th><th>Função</th><th>Situação</th><th>Último acesso</th><th></th></tr></thead>
+<tbody>
+<sc-for list="{{members}}" as="m" hint-placeholder-count="5">
+<tr><td><div class="row"><span class="avatar">{{m.ini}}</span><div><b>{{m.name}}</b><div class="xs muted">{{m.email}}</div></div></div></td><td><span class="badge {{m.badge}}">{{m.role}}</span><div class="xs muted" style="margin-top: 2px">{{m.crf}}</div></td><td><span class="badge {{m.stBadge}}">{{m.status}}</span></td><td class="muted">{{m.last}}</td><td style="text-align: right"><sc-if value="{{m.locked}}" hint-placeholder-val="{{ false }}"><span class="xs muted">Só um proprietário altera</span></sc-if><sc-if value="{{m.editable}}" hint-placeholder-val="{{ true }}"><a class="btn btn-outline btn-sm" href="RoleEditor.dc.html">Alterar acesso</a></sc-if></td></tr>
+</sc-for>
+</tbody></table></div>
+</sc-if>
+
+<sc-if value="{{showRoles}}" hint-placeholder-val="{{ false }}">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px">
+<sc-for list="{{roles}}" as="r" hint-placeholder-count="5">
+<div class="card"><div class="card-h"><div><h2 class="h2">{{r.name}}</h2><p class="xs muted">{{r.en}}</p></div><span class="badge {{r.badge}}">{{r.kind}}</span></div>
+<div class="card-b col" style="gap: 12px"><p class="sm muted">{{r.desc}}</p><div class="row" style="justify-content: space-between"><span class="sm">{{r.count}} pessoas</span><div class="row"><a class="btn btn-outline btn-sm" href="RoleEditor.dc.html">Ver permissões</a><button class="btn btn-ghost btn-sm">Duplicar</button></div></div></div></div>
+</sc-for>
+<div class="card" style="border-style: dashed; box-shadow: none"><div class="card-b col" style="align-items: center; justify-content: center; height: 100%; gap: 10px; text-align: center"><b>Criar função personalizada</b><span class="sm muted">Escolha o que pode ver e editar em cada seção.</span><a class="btn btn-sm" href="RoleEditor.dc.html">Nova função</a></div></div>
+</div>
+</sc-if>
+
+<sc-if value="{{showLog}}" hint-placeholder-val="{{ false }}">
+<div class="row wrap" style="gap: 12px"><div style="width: 260px; max-width: 100%"><select class="input" aria-label="Pessoa"><option>Todas as pessoas</option><option>Maria Souza</option><option>Paulo Nunes</option><option>Renata Alves</option></select></div><div style="width: 220px; max-width: 100%"><select class="input" aria-label="Tipo"><option>Todas as ações</option><option>Acessos e equipe</option><option>Pedidos</option><option>Catálogo</option><option>Configurações</option></select></div></div>
+<div class="card scroll-x"><table class="tbl"><thead><tr><th>Quando</th><th>Pessoa</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody>
+<sc-for list="{{log}}" as="l" hint-placeholder-count="6"><tr><td class="muted" style="white-space: nowrap">{{l.when}}</td><td>{{l.who}}</td><td><span class="badge {{l.badge}}">{{l.what}}</span></td><td class="muted">{{l.detail}}</td></tr></sc-for>
+</tbody></table></div>
+</sc-if>
+</main>
+
+<sc-if value="{{invite}}" hint-placeholder-val="{{ false }}">
+<div class="dialog-wrap"><div class="dialog" role="dialog" aria-label="Convidar funcionário">
+<div><h2 class="h2" style="font-size: 18px">Convidar funcionário</h2><p class="sm muted">A pessoa recebe um e-mail para criar a senha e entra com o acesso da função escolhida.</p></div>
+<div class="field"><label class="label" for="iname">Nome</label><input id="iname" class="input" placeholder="Nome completo"></div>
+<div class="field"><label class="label" for="iemail">E-mail</label><input id="iemail" class="input" placeholder="nome@farmacia.com.br"></div>
+<div class="field"><label class="label" for="irole">Função</label>
+<div class="col" style="gap: 6px" role="radiogroup" aria-label="Função">
+<sc-for list="{{roleOpts}}" as="o" hint-placeholder-count="5"><button class="{{o.cls}}" onClick="{{ o.pick }}" role="radio" aria-checked="{{o.on}}" style="justify-content: flex-start; height: auto; padding: 8px 12px; text-align: left; flex-direction: column; align-items: flex-start; gap: 0"><b>{{o.name}}</b><span class="xs muted" style="font-weight: 400">{{o.desc}}</span></button></sc-for>
+</div></div>
+<sc-if value="{{needsCrf}}" hint-placeholder-val="{{ false }}"><div class="field"><label class="label" for="icrf">CRF do farmacêutico</label><input id="icrf" class="input" placeholder="CRF-PR 00000"></div></sc-if>
+<div class="row" style="justify-content: flex-end"><button class="btn btn-outline" onClick="{{ closeInvite }}">Cancelar</button><button class="btn" onClick="{{ sendInvite }}">Enviar convite</button></div>
+</div></div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { tab: 'members', invite: false, role: 3, added: false };
+  renderVals() {
+    const S = this.state;
+    const roleDefs = [
+      { name: 'Proprietário', en: 'Owner', kind: 'Padrão', badge: 'b-gray', desc: 'Acesso total. Sempre existe ao menos um.', count: 1 },
+      { name: 'Farmacêutico RT', en: 'Pharmacist', kind: 'Padrão', badge: 'b-gray', desc: 'Valida receitas, confirma classes e responde atendimentos. Exige CRF.', count: 1 },
+      { name: 'Gerente', en: 'Manager', kind: 'Padrão', badge: 'b-gray', desc: 'Gerencia operação, catálogo, equipe e plano. Não altera proprietários.', count: 1 },
+      { name: 'Atendente', en: 'Attendant', kind: 'Padrão', badge: 'b-gray', desc: 'Acompanha e atende pedidos, consulta catálogo e clientes.', count: 1 },
+      { name: 'Entregador', en: 'Courier', kind: 'Padrão', badge: 'b-gray', desc: 'Vê somente as próprias entregas.', count: 1 }
+    ];
+    const members = [
+      { name: 'Maria Souza', email: 'maria@farmaciaexemplo.com.br', ini: 'MS', role: 'Proprietário', badge: 'b-default', crf: '', status: 'Ativo', stBadge: 'b-green', last: 'agora', locked: true },
+      { name: 'Paulo Nunes', email: 'paulo@farmaciaexemplo.com.br', ini: 'PN', role: 'Farmacêutico RT', badge: 'b-soft', crf: 'CRF-PR 1234', status: 'Ativo', stBadge: 'b-green', last: 'há 12 min' },
+      { name: 'Renata Alves', email: 'renata@farmaciaexemplo.com.br', ini: 'RA', role: 'Gerente', badge: 'b-soft', crf: '', status: 'Ativo', stBadge: 'b-green', last: 'há 2 h' },
+      { name: 'Bruno Dias', email: 'bruno@farmaciaexemplo.com.br', ini: 'BD', role: 'Atendente', badge: 'b-outline', crf: '', status: 'Ativo', stBadge: 'b-green', last: 'ontem' },
+      { name: 'Tiago Lima', email: 'tiago@farmaciaexemplo.com.br', ini: 'TL', role: 'Entregador', badge: 'b-outline', crf: '', status: 'Convite pendente', stBadge: 'b-amber', last: 'nunca' }
+    ].map((m) => ({ ...m, editable: !m.locked }));
+    if (S.added) members.push({ name: 'Novo funcionário', email: 'enviado agora', ini: 'NF', role: roleDefs[S.role].name, badge: 'b-outline', crf: '', status: 'Convite pendente', stBadge: 'b-amber', last: 'nunca', editable: true });
+    const tl = [['members', 'Membros'], ['roles', 'Funções'], ['log', 'Registro de acessos']];
+    const tabs = tl.map(([k, label]) => ({ label, cls: S.tab === k ? 'tab on' : 'tab', pick: () => this.setState({ tab: k }) }));
+    const opts = roleDefs.map((r, i) => ({ name: r.name, desc: r.desc, on: S.role === i, cls: S.role === i ? 'btn btn-outline' : 'btn btn-ghost', pick: () => this.setState({ role: i }) }));
+    const log = [
+      { when: 'Hoje 09:42', who: 'Paulo Nunes', what: 'Receita', badge: 'b-green', detail: 'Aprovou RX-309 do pedido PED-4809' },
+      { when: 'Hoje 09:31', who: 'Maria Souza', what: 'Equipe', badge: 'b-blue', detail: 'Convidou Tiago Lima como Entregador' },
+      { when: 'Hoje 08:50', who: 'Renata Alves', what: 'Catálogo', badge: 'b-gray', detail: 'Importou estoque_farmacia_out.xlsx' },
+      { when: 'Ontem 17:20', who: 'Renata Alves', what: 'Configurações', badge: 'b-amber', detail: 'Alterou taxa de entrega para R$ 6,00' },
+      { when: 'Ontem 11:05', who: 'Maria Souza', what: 'Equipe', badge: 'b-blue', detail: 'Alterou Bruno Dias de Entregador para Atendente' }
+    ];
+    return {
+      tabs, members, roles: roleDefs, log, roleOpts: opts, needsCrf: S.role === 1,
+      showMembers: S.tab === 'members', showRoles: S.tab === 'roles', showLog: S.tab === 'log',
+      invite: S.invite, openInvite: () => this.setState({ invite: true }), closeInvite: () => this.setState({ invite: false }),
+      sendInvite: () => this.setState({ invite: false, added: true, tab: 'members' })
+    };
+  }
+}
+</script>
+</body>
+</html>

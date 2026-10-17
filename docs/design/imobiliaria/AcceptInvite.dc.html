@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Aceitar convite</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; background: #fafafa">
+<div style="flex: 1 1 480px; background: var(--dark); color: #fff; padding: 56px; display: flex; flex-direction: column; justify-content: space-between; gap: 32px">
+<div class="row" style="gap: 12px"><div style="width: 40px; height: 40px; border-radius: 10px; background: #fff; color: var(--primary); display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></div><b style="font-size: 18px">Imobiliária Exemplo</b></div>
+<div class="col" style="gap: 12px; max-width: 460px"><h2 style="margin: 0; font-size: 36px; line-height: 1.15; letter-spacing: -0.02em">Você foi convidado para a equipe.</h2><p style="margin: 0; opacity: 0.85; font-size: 16px">Crie sua senha para entrar. Você verá somente o que a sua função permite.</p></div>
+<span class="sm" style="opacity: 0.7">O convite vale por 7 dias.</span>
+</div>
+<div style="flex: 1 1 480px; display: flex; align-items: center; justify-content: center; padding: 32px">
+<div class="card" style="width: min(420px, 100%)"><div class="card-b col" style="gap: 16px; padding: 28px">
+<div><h1 class="h1" style="font-size: 22px">Criar acesso</h1><p class="muted">Marina Souza convidou você como <b style="color: #09090b">Corretor</b>.</p></div>
+<div class="alert alert-soft">Como corretor, você vê os seus leads, as suas visitas e as suas conversas.</div>
+<div class="field"><label class="label" for="nm">Nome</label><input id="nm" class="input" value="Carlos Prado"></div>
+<div class="field"><label class="label" for="em">E-mail</label><input id="em" class="input" value="carlos@imobiliariaexemplo.com.br" readonly style="background: #f4f4f5"></div>
+<div class="field"><label class="label" for="cr">CRECI (opcional)</label><input id="cr" class="input" placeholder="CRECI-PR 00000-F"></div>
+<div class="field"><label class="label" for="pw">Senha</label><input id="pw" type="password" class="input" value="{{pw}}" onInput="{{ setPw }}"><span class="xs {{pwTone}}" style="margin-top: 4px">{{pwHint}}</span></div>
+<label class="row" style="gap: 8px; align-items: flex-start; cursor: pointer" onClick="{{ toggleTerms }}"><span class="{{chkCls}}" aria-hidden="true">{{chkMark}}</span><span class="sm">Li e aceito os termos de uso e o aviso de privacidade</span></label>
+<a class="{{btnCls}}" href="{{btnHref}}">Entrar no painel</a>
+<p class="xs muted" style="text-align: center">Já tem conta? <a href="Login.dc.html" style="color: var(--primary); font-weight: 600">Entrar</a></p>
+</div></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  state = { pw: 'senhasegura1', terms: false };
+  renderVals() {
+    const S = this.state;
+    const ok = S.pw.length >= 8;
+    const can = ok && S.terms;
+    return {
+      pw: S.pw, setPw: (e) => this.setState({ pw: e.target.value }),
+      pwHint: ok ? 'Senha forte o bastante' : 'Use ao menos 8 caracteres', pwTone: ok ? 'muted' : 'muted',
+      chkCls: S.terms ? 'chk on' : 'chk', chkMark: S.terms ? '✓' : '',
+      toggleTerms: () => this.setState({ terms: !S.terms }),
+      btnCls: can ? 'btn btn-lg' : 'btn btn-lg btn-outline', btnHref: can ? 'Home.dc.html' : '#'
+    };
+  }
+}
+</script>
+</body>
+</html>

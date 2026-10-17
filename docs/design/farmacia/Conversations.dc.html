@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Conversas</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Conversas" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div class="row wrap" style="justify-content: space-between; gap: 16px"><div><h1 class="h1">Conversas</h1><p class="muted">Somente leitura. Para responder, use Atendimento farmacêutico.</p></div>
+<div class="tabs"><sc-for list="{{filters}}" as="f" hint-placeholder-count="3"><button class="{{f.cls}}" onClick="{{ f.pick }}">{{f.label}}</button></sc-for></div></div>
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div class="card" style="flex: 1 1 320px; max-width: 420px; min-width: 0"><div class="card-b col" style="gap: 0; padding: 8px">
+<sc-for list="{{list}}" as="c" hint-placeholder-count="4"><button onClick="{{ c.pick }}" style="text-align: left; font: inherit; border: 0; border-radius: 8px; padding: 12px; cursor: pointer; background: {{c.bg}}; display: flex; flex-direction: column; gap: 4px"><span class="row" style="justify-content: space-between"><b>{{c.who}}</b><span class="xs muted">{{c.when}}</span></span><span class="sm muted">{{c.last}}</span><span class="row"><span class="badge {{c.badge}}">{{c.tag}}</span></span></button></sc-for>
+</div></div>
+<div class="card" style="flex: 2 1 460px; min-width: 0"><div class="card-h"><div><h2 class="h2">{{sel.who}}</h2><p class="xs muted">{{sel.tag}} · Alex, assistente virtual com IA</p></div><a class="btn btn-outline btn-sm" href="{{sel.href}}">{{sel.cta}}</a></div>
+<div class="card-b col" style="gap: 10px; background: #fafafa; border-radius: 0 0 12px 12px; margin-top: 16px">
+<sc-for list="{{sel.msgs}}" as="m" hint-placeholder-count="5">
+<sc-if value="{{m.sys}}" hint-placeholder-val="{{ false }}"><div style="text-align: center"><span class="badge b-soft">{{m.t}}</span></div></sc-if>
+<sc-if value="{{m.chat}}" hint-placeholder-val="{{ true }}"><div style="display: flex; justify-content: {{m.just}}"><div style="max-width: 78%"><div class="xs muted" style="margin-bottom: 2px; text-align: {{m.align}}">{{m.by}}</div><div style="padding: 10px 14px; border-radius: 12px; background: {{m.bg}}; color: {{m.fg}}; border: 1px solid {{m.bd}}">{{m.t}}</div></div></div></sc-if>
+</sc-for>
+</div></div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { sel: 1, f: 0 };
+  renderVals() {
+    const S = this.state;
+    const alex = (t) => ({ chat: true, by: 'Alex · IA', t, just: 'flex-start', align: 'left', bg: '#fff', fg: '#09090b', bd: '#e4e4e7' });
+    const cust = (t, by) => ({ chat: true, by, t, just: 'flex-end', align: 'right', bg: '#0F766E', fg: '#fff', bd: '#0F766E' });
+    const pharm = (t) => ({ chat: true, by: 'Maria Souza · Farmacêutica responsável', t, just: 'flex-start', align: 'left', bg: '#E6F4F1', fg: '#0B4F4A', bd: '#b7ded7' });
+    const sys = (t) => ({ sys: true, t });
+    const all = [
+      { id: 1, who: 'Maria, 34', when: 'há 4 min', last: 'Passei suas informações ao farmacêutico.', tag: 'Atendimento', k: 1, badge: 'b-red', cta: 'Abrir atendimento', href: 'Handoffs.dc.html', msgs: [alex('Oi! Sou o Alex, assistente virtual com inteligência artificial. Não indico remédios, mas posso chamar o farmacêutico.'), cust('Estou com dor de cabeça há 3 dias', 'Maria'), alex('Entendi. Vou reunir algumas informações para o farmacêutico. Você tem alguma alergia a medicamentos?'), cust('Dipirona', 'Maria'), alex('Passei suas informações ao farmacêutico. Ele responde por aqui em instantes.'), sys('Paulo Nunes · Farmacêutico RT entrou na conversa')] },
+      { id: 2, who: 'João Silva', when: 'há 2 min', last: 'Pedido PED-4821 recebido.', tag: 'Pedido', k: 2, badge: 'b-blue', cta: 'Abrir pedido', href: 'Orders.dc.html', msgs: [alex('Oi, João! Quer repetir o endereço da Rua das Flores?'), cust('Pode ser, quero uma dipirona 500', 'João'), alex('Encontrei Dipirona 500 mg · 10 comp. por R$ 8,90, em estoque. Adiciono ao carrinho?'), cust('Sim', 'João'), alex('Pedido PED-4821 recebido. Total R$ 14,90, pagamento na entrega.')] },
+      { id: 3, who: 'Roberto, 61', when: 'há 18 min', last: 'Este medicamento é controlado.', tag: 'Controlado', k: 1, badge: 'b-gray', cta: 'Abrir atendimento', href: 'Handoffs.dc.html', msgs: [cust('Vocês têm clonazepam 2 mg?', 'Roberto'), alex('Temos em estoque por R$ 24,90. Este medicamento é controlado e não pode ser vendido online. Venha à farmácia com a receita.')] }
+    ];
+    const filters = ['Todas', 'Pedidos', 'Atendimentos'].map((label, i) => ({ label, cls: S.f === i ? 'tab on' : 'tab', pick: () => this.setState({ f: i }) }));
+    const list = all.filter((c) => S.f === 0 || (S.f === 1 && c.k === 2) || (S.f === 2 && c.k === 1)).map((c) => ({ ...c, bg: c.id === S.sel ? '#E6F4F1' : 'transparent', pick: () => this.setState({ sel: c.id }) }));
+    return { filters, list, sel: all.find((c) => c.id === S.sel) || all[0] };
+  }
+}
+</script>
+</body>
+</html>

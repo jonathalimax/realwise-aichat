@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Equipe e acessos</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Equipe e acessos" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Equipe e acessos</h1><p class="muted">Cadastre a equipe e controle o que cada pessoa pode ver e fazer</p></div>
+<div class="row wrap" style="gap: 12px"><span class="xs muted">Ver como</span>
+<div class="tabs" role="tablist" aria-label="Ver como"><button class="{{asOwnerCls}}" role="tab" onClick="{{ asOwner }}">Proprietário</button><button class="{{asMgrCls}}" role="tab" onClick="{{ asMgr }}">Gerente</button></div>
+<button class="btn" onClick="{{ openInvite }}">Convidar pessoa</button></div>
+</div>
+<sc-if value="{{isMgr}}" hint-placeholder-val="{{ false }}"><div class="alert alert-soft">Como gerente, você convida e altera a equipe, mas não altera proprietários nem cria outro proprietário.</div></sc-if>
+<div class="tabs" role="tablist" aria-label="Seção" style="width: fit-content">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3"><button class="{{t.cls}}" role="tab" onClick="{{ t.pick }}">{{t.label}}</button></sc-for>
+</div>
+
+<sc-if value="{{showMembers}}" hint-placeholder-val="{{ true }}">
+<div class="card scroll-x"><table class="tbl">
+<thead><tr><th>Pessoa</th><th>Função</th><th>Leads ativos</th><th>Situação</th><th>Último acesso</th><th></th></tr></thead>
+<tbody>
+<sc-for list="{{members}}" as="m" hint-placeholder-count="5">
+<tr><td><div class="row"><span class="avatar">{{m.ini}}</span><div><b>{{m.name}}</b><div class="xs muted">{{m.email}}</div></div></div></td><td><span class="badge {{m.badge}}">{{m.role}}</span><div class="xs muted" style="margin-top: 2px">{{m.creci}}</div></td><td class="muted">{{m.leads}}</td><td><span class="badge {{m.stBadge}}">{{m.status}}</span></td><td class="muted">{{m.last}}</td><td style="text-align: right"><sc-if value="{{m.locked}}" hint-placeholder-val="{{ false }}"><span class="xs muted">Só um proprietário altera</span></sc-if><sc-if value="{{m.editable}}" hint-placeholder-val="{{ true }}"><a class="btn btn-outline btn-sm" href="RoleEditor.dc.html">Alterar acesso</a></sc-if></td></tr>
+</sc-for>
+</tbody></table></div>
+</sc-if>
+
+<sc-if value="{{showRoles}}" hint-placeholder-val="{{ false }}">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px">
+<sc-for list="{{roles}}" as="r" hint-placeholder-count="4">
+<div class="card"><div class="card-h"><div><h2 class="h2">{{r.name}}</h2><p class="xs muted">{{r.scope}}</p></div><span class="badge b-gray">Padrão</span></div>
+<div class="card-b col" style="gap: 12px"><p class="sm muted">{{r.desc}}</p><div class="row" style="justify-content: space-between"><span class="sm">{{r.count}} pessoa(s)</span><div class="row"><a class="btn btn-outline btn-sm" href="RoleEditor.dc.html">Ver permissões</a><button class="btn btn-ghost btn-sm">Duplicar</button></div></div></div></div>
+</sc-for>
+<div class="card" style="border-style: dashed; box-shadow: none"><div class="card-b col" style="align-items: center; justify-content: center; height: 100%; gap: 10px; text-align: center"><b>Criar função personalizada</b><span class="sm muted">Escolha o que pode ver e editar em cada seção.</span><a class="btn btn-sm" href="RoleEditor.dc.html">Nova função</a></div></div>
+</div>
+</sc-if>
+
+<sc-if value="{{showLog}}" hint-placeholder-val="{{ false }}">
+<div class="row wrap" style="gap: 12px"><div style="width: 260px; max-width: 100%"><select class="input" aria-label="Pessoa"><option>Todas as pessoas</option><option>Marina Souza</option><option>Renato Alves</option><option>Carlos Prado</option><option>Ana Lopes</option></select></div><div style="width: 220px; max-width: 100%"><select class="input" aria-label="Tipo"><option>Todas as ações</option><option>Acessos e equipe</option><option>Leads</option><option>Imóveis</option><option>Configurações</option></select></div></div>
+<div class="card scroll-x"><table class="tbl"><thead><tr><th>Quando</th><th>Pessoa</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody>
+<sc-for list="{{log}}" as="l" hint-placeholder-count="6"><tr><td class="muted" style="white-space: nowrap">{{l.when}}</td><td>{{l.who}}</td><td><span class="badge {{l.badge}}">{{l.what}}</span></td><td class="muted">{{l.detail}}</td></tr></sc-for>
+</tbody></table></div>
+</sc-if>
+</main>
+
+<sc-if value="{{invite}}" hint-placeholder-val="{{ false }}">
+<div class="dialog-wrap"><div class="dialog" role="dialog" aria-label="Convidar pessoa">
+<div><h2 class="h2" style="font-size: 18px">Convidar pessoa</h2><p class="sm muted">A pessoa recebe um e-mail para criar a senha e entra com o acesso da função escolhida.</p></div>
+<div class="field"><label class="label" for="iname">Nome</label><input id="iname" class="input" placeholder="Nome completo"></div>
+<div class="field"><label class="label" for="iemail">E-mail</label><input id="iemail" class="input" placeholder="nome@imobiliaria.com.br"></div>
+<div class="field"><span class="label">Função</span>
+<div class="col" style="gap: 6px" role="radiogroup" aria-label="Função">
+<sc-for list="{{roleOpts}}" as="o" hint-placeholder-count="4"><button class="{{o.cls}}" onClick="{{ o.pick }}" role="radio" aria-checked="{{o.on}}" style="justify-content: flex-start; height: auto; padding: 8px 12px; text-align: left; flex-direction: column; align-items: flex-start; gap: 0"><b>{{o.name}}</b><span class="xs muted" style="font-weight: 400">{{o.desc}}</span></button></sc-for>
+</div></div>
+<sc-if value="{{needsCreci}}" hint-placeholder-val="{{ false }}"><div class="field"><label class="label" for="icr">CRECI do corretor (opcional)</label><input id="icr" class="input" placeholder="CRECI-PR 00000-F"></div></sc-if>
+<div class="row" style="justify-content: flex-end"><button class="btn btn-outline" onClick="{{ closeInvite }}">Cancelar</button><button class="btn" onClick="{{ sendInvite }}">Enviar convite</button></div>
+</div></div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { tab: 'members', invite: false, role: 2, added: false, mgr: false };
+  renderVals() {
+    const S = this.state;
+    const roleDefs = [
+      { name: 'Proprietário', scope: 'Acesso total', desc: 'Controla tudo, inclusive plano e outros proprietários. Sempre existe ao menos um.', count: 1 },
+      { name: 'Gerente', scope: 'Todos os leads e visitas', desc: 'Gerencia leads, imóveis, equipe e configurações. Não altera proprietários.', count: 1 },
+      { name: 'Corretor', scope: 'Só os próprios leads', desc: 'Vê e atende os leads, visitas e conversas atribuídos a ele. Consulta imóveis.', count: 2 },
+      { name: 'Atendente', scope: 'Todos os leads, sem editar imóveis', desc: 'Organiza visitas e acompanha leads. Não vê análises, equipe nem plano.', count: 1 }
+    ];
+    const members0 = [
+      { name: 'Marina Souza', email: 'marina@imobiliariaexemplo.com.br', ini: 'MS', role: 'Proprietário', badge: 'b-default', creci: 'CRECI-PR 54321-F', status: 'Ativo', stBadge: 'b-green', last: 'agora', leads: '-', isOwner: true },
+      { name: 'Renato Alves', email: 'renato@imobiliariaexemplo.com.br', ini: 'RA', role: 'Gerente', badge: 'b-soft', creci: '', status: 'Ativo', stBadge: 'b-green', last: 'há 2 h', leads: '-' },
+      { name: 'Carlos Prado', email: 'carlos@imobiliariaexemplo.com.br', ini: 'CP', role: 'Corretor', badge: 'b-outline', creci: 'CRECI-PR 60112-F', status: 'Ativo', stBadge: 'b-green', last: 'há 12 min', leads: '3' },
+      { name: 'Ana Lopes', email: 'ana@imobiliariaexemplo.com.br', ini: 'AL', role: 'Corretor', badge: 'b-outline', creci: 'CRECI-PR 61874-F', status: 'Ativo', stBadge: 'b-green', last: 'ontem', leads: '3' },
+      { name: 'Bia Dias', email: 'bia@imobiliariaexemplo.com.br', ini: 'BD', role: 'Atendente', badge: 'b-outline', creci: '', status: 'Convite pendente', stBadge: 'b-amber', last: 'nunca', leads: '-' }
+    ];
+    const members = members0.map((m) => ({ ...m, locked: m.isOwner && S.mgr, editable: !(m.isOwner && S.mgr) && !(m.isOwner && !S.mgr && false) }));
+    members[0].editable = !S.mgr; members[0].locked = S.mgr;
+    if (S.added) members.push({ name: 'Novo membro', email: 'convite enviado agora', ini: 'NM', role: roleDefs[S.role].name, badge: 'b-outline', creci: '', status: 'Convite pendente', stBadge: 'b-amber', last: 'nunca', leads: '-', editable: true, locked: false });
+    const tl = [['members', 'Pessoas'], ['roles', 'Funções'], ['log', 'Registro de acessos']];
+    const tabs = tl.map(([k, label]) => ({ label, cls: S.tab === k ? 'tab on' : 'tab', pick: () => this.setState({ tab: k }) }));
+    const avail = roleDefs.map((r, i) => ({ r, i })).filter((x) => !(S.mgr && x.i === 0));
+    const role = S.mgr && S.role === 0 ? 2 : S.role;
+    const opts = avail.map(({ r, i }) => ({ name: r.name, desc: r.desc, on: role === i, cls: role === i ? 'btn btn-outline' : 'btn btn-ghost', pick: () => this.setState({ role: i }) }));
+    const log = [
+      { when: 'Hoje 09:42', who: 'Carlos Prado', what: 'Leads', badge: 'b-green', detail: 'Mudou Camila Andrade para Visita agendada' },
+      { when: 'Hoje 09:31', who: 'Marina Souza', what: 'Equipe', badge: 'b-blue', detail: 'Convidou Bia Dias como Atendente' },
+      { when: 'Hoje 08:50', who: 'Renato Alves', what: 'Imóveis', badge: 'b-gray', detail: 'Importou tabela_locacao_outubro.pdf' },
+      { when: 'Ontem 17:20', who: 'Renato Alves', what: 'Configurações', badge: 'b-amber', detail: 'Alterou a taxa de financiamento para 1,01% ao mês' },
+      { when: 'Ontem 11:05', who: 'Marina Souza', what: 'Equipe', badge: 'b-blue', detail: 'Alterou Ana Lopes de Atendente para Corretor' }
+    ];
+    return {
+      tabs, members, roles: roleDefs, log, roleOpts: opts, needsCreci: role === 2,
+      isMgr: S.mgr, asOwnerCls: S.mgr ? 'tab' : 'tab on', asMgrCls: S.mgr ? 'tab on' : 'tab', asOwner: () => this.setState({ mgr: false }), asMgr: () => this.setState({ mgr: true }),
+      showMembers: S.tab === 'members', showRoles: S.tab === 'roles', showLog: S.tab === 'log',
+      invite: S.invite, openInvite: () => this.setState({ invite: true }), closeInvite: () => this.setState({ invite: false }),
+      sendInvite: () => this.setState({ invite: false, added: true, tab: 'members', role })
+    };
+  }
+}
+</script>
+</body>
+</html>

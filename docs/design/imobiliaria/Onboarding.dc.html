@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Assistente</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Assistente" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div><h1 class="h1">Assistente</h1><p class="muted">Conte como a imobiliária trabalha. Eu preencho as regras que a Clara usa no atendimento e você confirma.</p></div>
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div class="card" style="flex: 2 1 480px; min-width: 0">
+<div class="card-b col" style="gap: 14px; min-height: 520px">
+<sc-for list="{{msgs}}" as="m" hint-placeholder-count="4">
+<div style="display: flex; justify-content: {{m.just}}"><div style="max-width: 80%; padding: 10px 14px; border-radius: 12px; background: {{m.bg}}; color: {{m.fg}}; border: 1px solid {{m.bd}}">{{m.t}}</div></div>
+</sc-for>
+<sc-if value="{{finished}}" hint-placeholder-val="{{ false }}"><div class="alert alert-soft" style="justify-content: space-between; align-items: center; flex-wrap: wrap"><span>Pronto! Preenchi as regras de locação. Falta você confirmar.</span><a class="btn btn-sm" href="Settings.dc.html">Revisar em Imobiliária</a></div></sc-if>
+<div style="margin-top: auto" class="col">
+<sc-if value="{{hasReplies}}" hint-placeholder-val="{{ true }}"><div class="row wrap"><sc-for list="{{replies}}" as="r" hint-placeholder-count="2"><button class="btn btn-outline btn-sm" onClick="{{ r.pick }}">{{r.label}}</button></sc-for></div></sc-if>
+<div class="row"><input class="input" placeholder="Escreva sua resposta" aria-label="Mensagem"><button class="btn">Enviar</button></div>
+</div>
+</div></div>
+<div class="card" style="flex: 1 1 300px; min-width: 0"><div class="card-h"><div><h2 class="h2">Regras da imobiliária</h2><p class="xs muted">{{done}} de {{total}} campos</p></div></div>
+<div class="card-b col" style="gap: 10px"><div class="bar"><i style="width: {{pct}}%"></i></div>
+<sc-for list="{{fields}}" as="f" hint-placeholder-count="10"><div class="row" style="justify-content: space-between"><span class="sm">{{f.label}} <span class="xs muted">{{f.weight}}</span></span><span class="badge {{f.badge}}">{{f.state}}</span></div></sc-for>
+</div></div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  state = { step: 3 };
+  renderVals() {
+    const S = this.state;
+    const qa = [
+      { q: 'Oi, Marina! Eu sou o Assistente. Vamos começar: quais tipos de imóveis vocês têm disponíveis para locação hoje?', a: ['Apartamentos, casas e salas comerciais'], f: 'Tipos de imóvel', w: 'obrigatório' },
+      { q: 'Quais documentos vocês pedem de quem quer alugar?', a: ['RG, CPF, comprovante de renda e de residência'], f: 'Documentos exigidos', w: 'obrigatório' },
+      { q: 'Vocês aceitam fiador, ou só seguro fiança?', a: ['Fiador, seguro fiança ou caução'], f: 'Fiador e seguro fiança', w: 'obrigatório' },
+      { q: 'Qual a taxa de administração cobrada?', a: ['10% do aluguel mensal'], f: 'Taxa de administração', w: 'obrigatório' },
+      { q: 'Vocês aceitam imóveis com pets?', a: ['Sim, conforme o condomínio'], f: 'Política de pets', w: 'recomendado' },
+      { q: 'Qual o prazo mínimo de contrato que vocês praticam?', a: ['30 meses para residencial'], f: 'Prazo mínimo de contrato', w: 'recomendado' },
+      { q: 'Em quais horários vocês conseguem fazer visitas?', a: ['Seg a sex 9h às 18h, sábado 9h às 13h'], f: 'Horário de visitas', w: 'obrigatório' },
+      { q: 'Quanto tempo leva a análise de crédito normalmente?', a: ['Até 2 dias úteis'], f: 'Análise de crédito', w: 'recomendado' },
+      { q: 'Como funciona o reajuste anual do aluguel?', a: ['Pelo IGP-M, a cada 12 meses'], f: 'Reajuste anual', w: 'opcional' },
+      { q: 'Como é feita a vistoria de saída do imóvel?', a: ['Agendada com o corretor, com laudo comparativo'], f: 'Vistoria de saída', w: 'opcional' }
+    ];
+    const msgs = [];
+    qa.forEach((x, i) => {
+      if (i <= S.step) msgs.push({ t: x.q, just: 'flex-start', bg: '#fff', fg: '#09090b', bd: '#e4e4e7' });
+      if (i < S.step) msgs.push({ t: x.a[0], just: 'flex-end', bg: '#15803D', fg: '#fff', bd: '#15803D' });
+    });
+    const finished = S.step >= qa.length;
+    const cur = qa[S.step];
+    const fields = qa.map((x, i) => ({ label: x.f, weight: x.w, state: i < S.step ? 'confirmar' : 'pendente', badge: i < S.step ? 'b-amber' : 'b-gray' }));
+    return {
+      msgs, finished, hasReplies: !finished,
+      replies: cur ? cur.a.map((label) => ({ label, pick: () => this.setState({ step: S.step + 1 }) })) : [],
+      fields, done: Math.min(S.step, qa.length), total: qa.length, pct: Math.round((Math.min(S.step, qa.length) / qa.length) * 100)
+    };
+  }
+}
+</script>
+</body>
+</html>

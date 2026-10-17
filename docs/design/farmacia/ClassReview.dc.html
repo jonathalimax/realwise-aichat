@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Revisar classes</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Catálogo" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px; max-width: 980px">
+<div class="col" style="gap: 4px"><a class="sm muted" href="Catalog.dc.html">← Catálogo</a><h1 class="h1">Revisar classes</h1><p class="muted">A IA propôs uma classe para cada produto. Nada é vendido no chat antes da sua confirmação.</p></div>
+<div class="alert alert-soft"><span>Revisão feita por <b>Maria Souza · Farmacêutica responsável (CRF-PR 1234)</b>. Produtos incertos ficam sem classe e não podem ser vendidos.</span></div>
+<div class="row sm muted wrap"><span>Confirmados nesta revisão:</span><b style="color: #09090b">{{doneCount}} de {{total}}</b><div class="bar grow" style="max-width: 280px"><i style="width: {{pct}}%"></i></div></div>
+
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+<div class="card">
+<div class="card-h"><div><div class="row"><h2 class="h2">{{g.title}}</h2><span class="badge {{g.badge}}">{{g.n}} produtos</span></div><p class="xs muted" style="margin-top: 4px">{{g.hint}}</p></div>
+<div class="row"><sc-if value="{{g.canConfirm}}" hint-placeholder-val="{{ true }}"><button class="btn btn-sm" onClick="{{ g.confirm }}">Confirmar todos</button></sc-if><sc-if value="{{g.done}}" hint-placeholder-val="{{ false }}"><span class="badge b-green">Confirmado</span></sc-if><button class="btn btn-outline btn-sm" onClick="{{ g.toggle }}">{{g.toggleLabel}}</button></div></div>
+<sc-if value="{{g.open}}" hint-placeholder-val="{{ false }}">
+<div class="card-b scroll-x" style="padding-top: 8px"><table class="tbl"><thead><tr><th>Produto</th><th>Proposta por</th><th>Classe proposta</th></tr></thead><tbody>
+<sc-for list="{{g.rows}}" as="r" hint-placeholder-count="3"><tr><td><b>{{r.name}}</b></td><td class="muted">{{r.by}}</td><td><span class="badge {{g.badge}}">{{g.short}}</span></td></tr></sc-for>
+</tbody></table></div>
+</sc-if>
+</div>
+</sc-for>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { done: {}, open: { ctl: true } };
+  renderVals() {
+    const S = this.state;
+    const defs = [
+      { k: 'ctl', title: 'Controlados propostos', n: 12, badge: 'b-gray', short: 'Controlado', hint: 'Revise um a um. Esses produtos nunca podem ser comprados online.', rows: [['Clonazepam 2 mg', 'lista Portaria 344'], ['Alprazolam 1 mg', 'lista Portaria 344'], ['Zolpidem 10 mg', 'lista Portaria 344']] },
+      { k: 'rx', title: 'Receita propostos', n: 96, badge: 'b-amber', short: 'Receita', hint: 'Exigem foto da receita e validação do farmacêutico.', rows: [['Amoxicilina 500 mg', 'coluna "Tarja"'], ['Losartana 50 mg', 'referência ANVISA'], ['Azitromicina 500 mg', 'referência ANVISA']] },
+      { k: 'otc', title: 'Venda livre propostos', n: 310, badge: 'b-green', short: 'Venda livre', hint: 'Podem ser pedidos direto no chat quando houver estoque.', rows: [['Dipirona 500 mg', 'coluna "Tarja"'], ['Soro fisiológico 500 ml', 'referência ANVISA'], ['Protetor solar FPS 50', 'IA']] },
+      { k: 'unk', title: 'Incertos', n: 148, badge: 'b-red', short: 'Sem classe', hint: 'Ficam sem classe e não podem ser vendidos no chat até você decidir.', rows: [['Xarope X 120 ml', 'IA, baixa confiança'], ['Suplemento Z', 'IA, baixa confiança']] }
+    ];
+    const groups = defs.map((g) => ({ ...g, done: !!S.done[g.k], canConfirm: g.k !== 'unk' && !S.done[g.k], open: !!S.open[g.k], toggleLabel: S.open[g.k] ? 'Ocultar' : 'Ver produtos', rows: g.rows.map(([name, by]) => ({ name, by })), confirm: () => this.setState({ done: { ...S.done, [g.k]: true } }), toggle: () => this.setState({ open: { ...S.open, [g.k]: !S.open[g.k] } }) }));
+    const doneCount = defs.reduce((a, g) => a + (S.done[g.k] ? g.n : 0), 0);
+    const total = 12 + 96 + 310;
+    return { groups, doneCount, total, pct: Math.round((doneCount / total) * 100) };
+  }
+}
+</script>
+</body>
+</html>

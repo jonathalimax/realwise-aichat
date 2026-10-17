@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Pedidos</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Pedidos" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Pedidos</h1><p class="muted">Todos os pedidos feitos pelo chat, com entrega ou retirada</p></div>
+<div class="tabs" role="tablist" aria-label="Seção">
+<button class="{{tabOrdersCls}}" role="tab" onClick="{{ goOrders }}">Pedidos</button>
+<button class="{{tabRxCls}}" role="tab" onClick="{{ goRx }}">Receitas <span class="badge b-amber" style="height: 18px; padding: 0 6px">{{rxPending}}</span></button>
+</div>
+</div>
+
+<sc-if value="{{showOrders}}" hint-placeholder-val="{{ true }}">
+<div class="row wrap" style="justify-content: space-between; gap: 12px">
+<div class="tabs" role="tablist" aria-label="Situação">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="5"><button class="{{f.cls}}" role="tab" onClick="{{ f.pick }}">{{f.label}} <span class="xs muted">{{f.n}}</span></button></sc-for>
+</div>
+<div style="width: 260px; max-width: 100%"><input class="input" placeholder="Buscar por código ou cliente" aria-label="Buscar pedido"></div>
+</div>
+<div class="card scroll-x">
+<table class="tbl">
+<thead><tr><th>Código</th><th>Cliente</th><th>Itens</th><th>Total</th><th>Tipo</th><th>Situação</th><th>Origem</th><th>Quando</th></tr></thead>
+<tbody>
+<sc-for list="{{orders}}" as="o" hint-placeholder-count="5">
+<tr class="hover" onClick="{{ o.open }}"><td style="font-weight: 600">{{o.code}}</td><td>{{o.client}}</td><td>{{o.count}}</td><td>{{o.total}}</td><td>{{o.kind}}</td><td><span class="badge {{o.badge}}">{{o.statusLabel}}</span></td><td class="muted">{{o.origin}}</td><td class="muted">{{o.when}}</td></tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</sc-if>
+
+<sc-if value="{{showRx}}" hint-placeholder-val="{{ false }}">
+<div class="alert alert-soft">Somente farmacêuticos com CRF cadastrado podem validar receitas. As fotos ficam guardadas por 30 dias após o pedido e são apagadas depois.</div>
+<div class="card scroll-x">
+<table class="tbl">
+<thead><tr><th>Receita</th><th>Cliente</th><th>Medicamento</th><th>Pedido</th><th>Enviada</th><th>Situação</th></tr></thead>
+<tbody>
+<sc-for list="{{rxList}}" as="r" hint-placeholder-count="3">
+<tr class="hover" onClick="{{ r.open }}"><td style="font-weight: 600">{{r.id}}</td><td>{{r.patient}}</td><td>{{r.med}}</td><td>{{r.order}}</td><td class="muted">{{r.when}}</td><td><span class="badge {{r.badge}}">{{r.label}}</span></td></tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</sc-if>
+
+</main>
+
+<sc-if value="{{sheetOpen}}" hint-placeholder-val="{{ false }}">
+<div class="sheet-wrap">
+<aside class="sheet" aria-label="Detalhe do pedido">
+<div class="row" style="justify-content: space-between"><div><h2 class="h2" style="font-size: 20px">{{sel.code}}</h2><p class="xs muted">{{sel.when}} · {{sel.origin}}</p></div><button class="btn btn-ghost btn-icon" aria-label="Fechar" onClick="{{ close }}">✕</button></div>
+<div class="row"><span class="badge {{sel.badge}}">{{sel.statusLabel}}</span><span class="badge b-outline">{{sel.kind}}</span><span class="badge b-outline">Pagamento na {{sel.payWord}}</span></div>
+<sc-if value="{{sel.stale}}" hint-placeholder-val="{{ false }}"><div class="alert alert-amber">A planilha de estoque tem 27 horas. Confirme a disponibilidade antes de aceitar.</div></sc-if>
+<sc-if value="{{sel.rxPending}}" hint-placeholder-val="{{ false }}"><div class="alert alert-amber">Este pedido tem receita para validar. <a href="#" onClick="{{ goRx }}" style="text-decoration: underline; font-weight: 600">Abrir receita</a></div></sc-if>
+<div class="col" style="gap: 6px"><b>Cliente</b><span>{{sel.client}} · {{sel.phone}}</span><a class="sm" href="Conversations.dc.html" style="color: var(--primary); font-weight: 600">Abrir conversa →</a></div>
+<sc-if value="{{sel.delivery}}" hint-placeholder-val="{{ true }}"><div class="col" style="gap: 6px"><b>Endereço</b><span>{{sel.address}}</span><sc-if value="{{sel.differs}}" hint-placeholder-val="{{ false }}"><span class="badge b-amber" style="width: fit-content">Difere do endereço salvo</span></sc-if></div></sc-if>
+<hr class="sep">
+<div class="col" style="gap: 8px"><b>Itens</b>
+<sc-for list="{{sel.items}}" as="i" hint-placeholder-count="2"><div class="row" style="justify-content: space-between"><span>{{i.q}}× {{i.n}} <span class="badge {{i.cb}}" style="height: 18px; font-size: 11px">{{i.c}}</span></span><span>{{i.p}}</span></div></sc-for>
+<div class="row muted" style="justify-content: space-between"><span>Entrega</span><span>{{sel.fee}}</span></div>
+<div class="row" style="justify-content: space-between; font-weight: 700; font-size: 16px"><span>Total</span><span>{{sel.total}}</span></div>
+</div>
+<div class="row sm muted" style="gap: 6px">Estoque do catálogo atualizado há {{sel.sheetAge}}</div>
+<div class="row wrap" style="margin-top: auto; padding-top: 8px">
+<sc-if value="{{sel.canConfirm}}" hint-placeholder-val="{{ true }}"><button class="btn" onClick="{{ confirmOrder }}">Confirmar pedido</button></sc-if>
+<sc-if value="{{sel.canSend}}" hint-placeholder-val="{{ false }}"><button class="btn" onClick="{{ sendOrder }}">{{sel.sendLabel}}</button></sc-if>
+<sc-if value="{{sel.canFinish}}" hint-placeholder-val="{{ false }}"><button class="btn" onClick="{{ finishOrder }}">Marcar como concluído</button></sc-if>
+<sc-if value="{{sel.canCancel}}" hint-placeholder-val="{{ true }}"><button class="btn btn-danger" onClick="{{ askCancel }}">Cancelar pedido</button></sc-if>
+</div>
+</aside>
+</div>
+</sc-if>
+
+<sc-if value="{{cancelOpen}}" hint-placeholder-val="{{ false }}">
+<div class="dialog-wrap"><div class="dialog" role="dialog" aria-label="Cancelar pedido">
+<div><h2 class="h2" style="font-size: 18px">Cancelar {{sel.code}}?</h2><p class="muted sm">O cliente é avisado por e-mail e pela página de acompanhamento.</p></div>
+<div class="col" style="gap: 8px"><span class="label" style="margin: 0">Motivo</span>
+<sc-for list="{{reasons}}" as="r" hint-placeholder-count="3"><button class="{{r.cls}}" onClick="{{ r.pick }}" style="justify-content: flex-start; width: 100%">{{r.label}}</button></sc-for>
+</div>
+<div class="row" style="justify-content: flex-end"><button class="btn btn-outline" onClick="{{ keepOrder }}">Voltar</button><button class="btn btn-danger" onClick="{{ doCancel }}">Cancelar pedido</button></div>
+</div></div>
+</sc-if>
+
+<sc-if value="{{rxSheetOpen}}" hint-placeholder-val="{{ false }}">
+<div class="sheet-wrap">
+<aside class="sheet" aria-label="Validar receita">
+<div class="row" style="justify-content: space-between"><div><h2 class="h2" style="font-size: 20px">{{rxSel.id}}</h2><p class="xs muted">{{rxSel.patient}} · {{rxSel.order}}</p></div><button class="btn btn-ghost btn-icon" aria-label="Fechar" onClick="{{ closeRx }}">✕</button></div>
+<div style="height: 280px; border-radius: 10px; border: 1px dashed #a1a1aa; background: #f4f4f5; display: flex; align-items: center; justify-content: center; color: #71717a; text-align: center; padding: 16px">Foto da receita enviada pelo cliente<br>(abre em tela cheia, acesso restrito)</div>
+<div class="col" style="gap: 4px"><b>{{rxSel.med}}</b><span class="sm muted">Enviada {{rxSel.when}} · consentimento LGPD registrado</span></div>
+<sc-if value="{{rxSel.pending}}" hint-placeholder-val="{{ true }}">
+<div class="field"><label class="label" for="rxreason">Motivo da recusa (somente se recusar)</label><select id="rxreason" class="input"><option>Receita ilegível</option><option>Receita vencida</option><option>Medicamento não confere</option><option>Falta carimbo ou CRM</option></select></div>
+<div class="row" style="margin-top: auto"><button class="btn" onClick="{{ approveRx }}">Aprovar receita</button><button class="btn btn-danger" onClick="{{ rejectRx }}">Recusar</button></div>
+</sc-if>
+<sc-if value="{{rxSel.done}}" hint-placeholder-val="{{ false }}"><div class="alert alert-soft">Receita {{rxSel.label}} por Maria Souza (CRF-PR 1234). O entregador recolhe a receita original na entrega.</div></sc-if>
+</aside>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { tab: 'orders', filter: 'new', sel: null, cancelOpen: false, reason: 0, status: {}, rxSel: null, rx: {} };
+  renderVals() {
+    const S = this.state;
+    const base = [
+      { id: 'PED-4821', client: 'João Silva', phone: '(41) 99812-3344', kind: 'Entrega', st: 'new', origin: '⚡ automático', when: 'há 2 min', address: 'Rua das Flores, 120B, ap 31 · Água Verde, Curitiba/PR · ref: portão azul', differs: true, stale: false, rxP: false, fee: 'R$ 6,00', total: 'R$ 14,90', age: '5 h', items: [{ q: 1, n: 'Dipirona 500 mg · 10 comp.', c: 'OTC', cb: 'b-green', p: 'R$ 8,90' }] },
+      { id: 'PED-4820', client: 'Ana Paula Ramos', phone: '(41) 99777-1020', kind: 'Receita', st: 'new', origin: 'Chat', when: 'há 9 min', address: 'Av. Sete de Setembro, 2200, ap 82 · Batel, Curitiba/PR', differs: false, stale: false, rxP: true, fee: 'R$ 14,00', total: 'R$ 62,30', age: '5 h', items: [{ q: 1, n: 'Amoxicilina 500 mg · 21 caps.', c: 'Receita', cb: 'b-amber', p: 'R$ 48,30' }] },
+      { id: 'PED-4819', client: 'Beatriz Lima', phone: '(41) 99655-4412', kind: 'Entrega', st: 'confirmed', origin: '⚡ automático', when: 'há 24 min', address: 'Rua Pasteur, 55 · Água Verde, Curitiba/PR', differs: false, stale: false, rxP: false, fee: 'R$ 6,00', total: 'R$ 38,40', age: '5 h', items: [{ q: 2, n: 'Soro fisiológico 500 ml', c: 'OTC', cb: 'b-green', p: 'R$ 12,40' }, { q: 1, n: 'Vitamina C 1 g · 10 comp.', c: 'OTC', cb: 'b-green', p: 'R$ 7,60' }] },
+      { id: 'PED-4818', client: 'Carlos Mendes', phone: '(41) 99540-8821', kind: 'Retirada', st: 'new', origin: 'Chat', when: 'há 14 min', address: '', differs: false, stale: true, rxP: false, fee: 'R$ 0,00', total: 'R$ 31,00', age: '27 h', items: [{ q: 1, n: 'Ibuprofeno 400 mg · 20 comp.', c: 'OTC', cb: 'b-green', p: 'R$ 31,00' }] },
+      { id: 'PED-4817', client: 'Fernanda Rocha', phone: '(41) 99422-9087', kind: 'Entrega', st: 'out', origin: '⚡ automático', when: 'há 1 h', address: 'Rua Bom Jesus, 310 · Cabral, Curitiba/PR', differs: false, stale: false, rxP: false, fee: 'R$ 6,00', total: 'R$ 27,50', age: '4 h', items: [{ q: 1, n: 'Protetor solar FPS 50', c: 'OTC', cb: 'b-green', p: 'R$ 21,50' }] },
+      { id: 'PED-4816', client: 'Paulo Henrique', phone: '(41) 99310-2255', kind: 'Entrega', st: 'done', origin: '⚡ automático', when: 'ontem', address: 'Rua XV de Novembro, 900 · Centro, Curitiba/PR', differs: false, stale: false, rxP: false, fee: 'R$ 6,00', total: 'R$ 19,90', age: '3 h', items: [{ q: 1, n: 'Dipirona 500 mg · 10 comp.', c: 'OTC', cb: 'b-green', p: 'R$ 8,90' }, { q: 1, n: 'Água oxigenada 10 vol.', c: 'OTC', cb: 'b-green', p: 'R$ 5,00' }] },
+      { id: 'PED-4815', client: 'Luiza Torres', phone: '(41) 99288-6140', kind: 'Retirada', st: 'canceled', origin: 'Chat', when: 'ontem', address: '', differs: false, stale: false, rxP: false, fee: 'R$ 0,00', total: 'R$ 12,00', age: '3 h', items: [{ q: 1, n: 'Antisséptico bucal 250 ml', c: 'OTC', cb: 'b-green', p: 'R$ 12,00' }] }
+    ];
+    const rxBase = [
+      { id: 'RX-310', patient: 'Ana Paula Ramos', med: 'Amoxicilina 500 mg · 21 caps.', order: 'PED-4820', when: 'há 9 min', st: 'pending' },
+      { id: 'RX-309', patient: 'Marcos Vieira', med: 'Losartana 50 mg · 30 comp.', order: 'PED-4809', when: 'ontem', st: 'approved' }
+    ];
+    const stOf = (o) => S.status[o.id] || o.st;
+    const info = { new: ['Novo', 'b-blue'], confirmed: ['Confirmado', 'b-soft'], out: ['Em entrega', 'b-amber'], done: ['Concluído', 'b-green'], canceled: ['Cancelado', 'b-gray'] };
+    const orders0 = base.map((o) => { const st = stOf(o); const lab = (st === 'out' && o.kind === 'Retirada') ? 'Pronto p/ retirada' : info[st][0]; return { ...o, st, statusLabel: lab, badge: info[st][1], count: o.items.length }; });
+    const fl = [['new', 'Novos'], ['confirmed', 'Confirmados'], ['out', 'Em entrega'], ['done', 'Concluídos'], ['canceled', 'Cancelados']];
+    const filters = fl.map(([k, label]) => ({ label, n: orders0.filter((o) => o.st === k).length, cls: S.filter === k ? 'tab on' : 'tab', pick: () => this.setState({ filter: k }) }));
+    const orders = orders0.filter((o) => o.st === S.filter).map((o) => ({ ...o, open: () => this.setState({ sel: o.id }) }));
+    const rxInfo = { pending: ['Aguardando', 'b-amber'], approved: ['Aprovada', 'b-green'], rejected: ['Recusada', 'b-red'] };
+    const rxList = rxBase.map((r) => { const st = S.rx[r.id] || r.st; return { ...r, st, label: rxInfo[st][0], badge: rxInfo[st][1], open: () => this.setState({ rxSel: r.id }) }; });
+    const cur = orders0.find((o) => o.id === S.sel);
+    const sel = cur ? { ...cur, payWord: cur.kind === 'Retirada' ? 'retirada' : 'entrega', delivery: cur.kind !== 'Retirada', rxPending: cur.rxP && (S.rx['RX-310'] || 'pending') === 'pending', canConfirm: cur.st === 'new' && !(cur.rxP && (S.rx['RX-310'] || 'pending') === 'pending'), canSend: cur.st === 'confirmed', sendLabel: cur.kind === 'Retirada' ? 'Pronto para retirada' : 'Saiu para entrega', canFinish: cur.st === 'out', canCancel: cur.st === 'new' || cur.st === 'confirmed', sheetAge: cur.age } : { items: [] };
+    const set = (st) => this.setState({ status: { ...S.status, [S.sel]: st }, sel: null, filter: st });
+    const rl = ['Sem estoque', 'Endereço fora da área de entrega', 'Cliente pediu o cancelamento', 'Outro motivo'];
+    const reasons = rl.map((label, i) => ({ label, cls: S.reason === i ? 'btn btn-outline' : 'btn btn-ghost', pick: () => this.setState({ reason: i }) }));
+    const rxCur = rxList.find((r) => r.id === S.rxSel);
+    const rxSel = rxCur ? { ...rxCur, pending: rxCur.st === 'pending', done: rxCur.st !== 'pending', label: rxCur.label.toLowerCase() } : {};
+    const setRx = (st) => this.setState({ rx: { ...S.rx, [S.rxSel]: st }, rxSel: null });
+    return {
+      tabOrdersCls: S.tab === 'orders' ? 'tab on' : 'tab', tabRxCls: S.tab === 'rx' ? 'tab on' : 'tab',
+      goOrders: () => this.setState({ tab: 'orders', sel: null }), goRx: () => this.setState({ tab: 'rx', sel: null }),
+      rxPending: rxList.filter((r) => r.st === 'pending').length,
+      showOrders: S.tab === 'orders', showRx: S.tab === 'rx',
+      filters, orders, rxList, sel, sheetOpen: !!cur, close: () => this.setState({ sel: null }),
+      confirmOrder: () => set('confirmed'), sendOrder: () => set('out'), finishOrder: () => set('done'),
+      askCancel: () => this.setState({ cancelOpen: true }), keepOrder: () => this.setState({ cancelOpen: false }),
+      doCancel: () => { this.setState({ cancelOpen: false }); set('canceled'); },
+      cancelOpen: S.cancelOpen && !!cur, reasons,
+      rxSheetOpen: !!rxCur, rxSel, closeRx: () => this.setState({ rxSel: null }),
+      approveRx: () => setRx('approved'), rejectRx: () => setRx('rejected')
+    };
+  }
+}
+</script>
+</body>
+</html>

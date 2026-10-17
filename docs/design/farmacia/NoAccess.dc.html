@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Sem acesso</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Plano e cobrança" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; align-items: center; justify-content: center">
+<div class="card" style="width: min(480px, 100%)"><div class="card-b col" style="align-items: center; text-align: center; padding: 40px 32px; gap: 14px">
+<div class="avatar" style="width: 52px; height: 52px; background: #fef3c7; color: #92400e"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+<h1 class="h1" style="font-size: 20px">Você não tem acesso a Plano e cobrança</h1>
+<p class="muted">Sua função atual é <b style="color: #09090b">Atendente</b>. Essa seção é do Proprietário e do Gerente.</p>
+<div class="row" style="margin-top: 8px"><a class="btn" href="Home.dc.html">Voltar ao início</a><button class="btn btn-outline">Pedir acesso ao proprietário</button></div>
+<p class="xs muted">O pedido é enviado para Maria Souza e fica registrado no log de acessos.</p>
+</div></div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

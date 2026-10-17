@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Início</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Início" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 24px">
+
+<div class="row wrap" style="justify-content: space-between; gap: 16px">
+<div><h1 class="h1">Bom dia, Marina</h1><p class="muted">Resumo de hoje na Imobiliária Exemplo</p></div>
+<div class="tabs" role="tablist" aria-label="Período">
+<sc-for list="{{ranges}}" as="r" hint-placeholder-count="3"><button class="{{r.cls}}" role="tab" onClick="{{ r.pick }}">{{r.label}}</button></sc-for>
+</div>
+</div>
+
+<div class="alert alert-soft" style="align-items: center; justify-content: space-between; flex-wrap: wrap">
+<span>3 visitas aguardam confirmação. A Clara avisa o interessado assim que você confirmar.</span>
+<a class="btn btn-outline btn-sm" href="Visits.dc.html">Ver visitas</a>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px">
+<sc-for list="{{kpis}}" as="k" hint-placeholder-count="4">
+<a href="{{k.href}}" class="card stat" style="display: block"><div class="xs muted" style="font-weight: 500">{{k.label}}</div><div class="n" style="margin: 6px 0 4px">{{k.value}}</div><div class="xs muted">{{k.note}}</div></a>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch">
+<div class="card" style="flex: 2 1 520px; min-width: 0">
+<div class="card-h"><div><h2 class="h2">Leads que pedem ação</h2><p class="xs muted">Ordenados por tempo de espera</p></div><a class="btn btn-outline btn-sm" href="Leads.dc.html">Ver todos</a></div>
+<div class="card-b scroll-x" style="padding-top: 8px">
+<table class="tbl">
+<thead><tr><th>Interessado</th><th>Imóvel</th><th>Temperatura</th><th>Etapa</th><th>Espera</th></tr></thead>
+<tbody>
+<sc-for list="{{actions}}" as="o" hint-placeholder-count="4">
+<tr class="hover"><td><a href="Leads.dc.html" style="font-weight: 600">{{o.name}}</a><div class="xs muted">{{o.why}}</div></td><td>{{o.prop}}</td><td><span class="badge {{o.tBadge}}">{{o.temp}}</span></td><td><span class="badge {{o.badge}}">{{o.stage}}</span></td><td class="muted">{{o.wait}}</td></tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</div>
+<div class="card" style="flex: 1 1 320px; min-width: 0">
+<div class="card-h"><div><h2 class="h2">Visitas de hoje</h2><p class="xs muted">Agendadas pela Clara</p></div><a class="btn btn-outline btn-sm" href="Visits.dc.html">Abrir</a></div>
+<div class="card-b col" style="gap: 14px">
+<sc-for list="{{visits}}" as="h" hint-placeholder-count="3">
+<a href="Visits.dc.html" class="row" style="gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #e4e4e7; align-items: flex-start">
+<b style="width: 48px; flex: none">{{h.time}}</b>
+<div class="col grow" style="gap: 2px"><div class="row" style="justify-content: space-between"><b>{{h.who}}</b><span class="badge {{h.badge}}">{{h.tag}}</span></div><span class="sm muted">{{h.what}}</span></div>
+</a>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch">
+<div class="card" style="flex: 2 1 520px; min-width: 0">
+<div class="card-h"><div><h2 class="h2">Conversas e leads</h2><p class="xs muted">{{rangeText}}</p></div>
+<div class="row xs muted"><span class="row" style="gap: 4px"><i style="width: 10px; height: 10px; border-radius: 3px; background: var(--primary); display: inline-block"></i>Conversas</span><span class="row" style="gap: 4px"><i style="width: 10px; height: 10px; border-radius: 3px; background: var(--tertiary); display: inline-block"></i>Leads</span></div></div>
+<div class="card-b" style="display: flex; gap: 12px; align-items: flex-end; height: 240px; padding-top: 24px">
+<sc-for list="{{bars}}" as="b" hint-placeholder-count="7">
+<div class="col grow" style="gap: 6px; align-items: center; justify-content: flex-end; height: 100%"><div style="width: 100%; max-width: 44px; display: flex; flex-direction: column-reverse; gap: 2px"><div style="height: {{b.h1}}px; background: var(--primary); border-radius: 4px 4px 0 0"></div><div style="height: {{b.h2}}px; background: var(--tertiary); border-radius: 4px 4px 0 0"></div></div><span class="xs muted">{{b.d}}</span></div>
+</sc-for>
+</div>
+</div>
+<div class="card" style="flex: 1 1 320px; min-width: 0">
+<div class="card-h"><div><h2 class="h2">Funil do chat</h2><p class="xs muted">Da conversa ao negócio fechado</p></div></div>
+<div class="card-b col" style="gap: 18px">
+<sc-for list="{{funnel}}" as="f" hint-placeholder-count="4">
+<div class="col" style="gap: 6px"><div class="row sm" style="justify-content: space-between"><span>{{f.label}}</span><b>{{f.n}}</b></div><div class="bar"><i style="width: {{f.w}}%"></i></div></div>
+</sc-for>
+<p class="sm muted">Conversas que viraram lead: <b style="color: #09090b">29,4%</b></p>
+</div>
+</div>
+</div>
+
+<div class="card">
+<div class="card-h"><div><h2 class="h2">Insights</h2><p class="xs muted">Sugestões geradas a partir das conversas e dos leads</p></div><span class="badge b-soft">IA</span></div>
+<div class="card-b" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px">
+<sc-for list="{{insights}}" as="i" hint-placeholder-count="3">
+<div class="col" style="gap: 6px; padding: 16px; border: 1px solid #e4e4e7; border-radius: 10px">
+<b>{{i.t}}</b><span class="sm muted">{{i.d}}</span><a href="{{i.href}}" class="sm" style="color: var(--primary); font-weight: 600">{{i.cta}} →</a>
+</div>
+</sc-for>
+</div>
+</div>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { range: 1 };
+  renderVals() {
+    const r = this.state.range;
+    const labels = ['Hoje', '7 dias', '30 dias'];
+    const ranges = labels.map((label, i) => ({ label, cls: i === r ? 'tab on' : 'tab', pick: () => this.setState({ range: i }) }));
+    const sets = [
+      { days: ['8h', '10h', '12h', '14h', '16h', '18h', '20h'], a: [20, 34, 56, 44, 70, 104, 80], b: [4, 8, 12, 10, 16, 22, 14], text: 'Hoje, por faixa de horário' },
+      { days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], a: [76, 90, 82, 104, 126, 110, 58], b: [18, 24, 20, 30, 36, 30, 14], text: 'Últimos 7 dias' },
+      { days: ['S1', 'S2', 'S3', 'S4', 'S5'], a: [118, 134, 126, 156, 148], b: [32, 40, 36, 46, 42], text: 'Últimas 5 semanas' }
+    ][r];
+    const bars = sets.days.map((d, i) => ({ d, h1: sets.a[i], h2: sets.b[i] }));
+    const kpis = [
+      { label: 'Leads novos hoje', value: '5', note: '2 quentes', href: 'Leads.dc.html' },
+      { label: 'Visitas hoje', value: '3', note: '1 aguardando confirmação', href: 'Visits.dc.html' },
+      { label: 'Leads em negociação', value: '8', note: '2 com proposta enviada', href: 'Leads.dc.html' },
+      { label: 'Conversas da Clara', value: '37', note: '4 passaram para a equipe', href: 'Conversations.dc.html' }
+    ];
+    const actions = [
+      { name: 'Camila Andrade', why: 'Pediu para falar com corretor', prop: 'Apto 2 qts, Água Verde', temp: 'Quente', tBadge: 'b-red', stage: 'Novo', badge: 'b-blue', wait: 'há 6 min' },
+      { name: 'Rodrigo Teixeira', why: 'Simulou financiamento', prop: 'Casa 3 qts, Santa Felicidade', temp: 'Quente', tBadge: 'b-red', stage: 'Novo', badge: 'b-blue', wait: 'há 22 min' },
+      { name: 'Patrícia Gomes', why: 'Agendou visita para sábado', prop: 'Studio, Batel', temp: 'Morno', tBadge: 'b-amber', stage: 'Visita agendada', badge: 'b-soft', wait: 'há 1 h' },
+      { name: 'Luiz Fernando', why: 'Sem retorno há 3 dias', prop: 'Sala comercial, Centro', temp: 'Frio', tBadge: 'b-gray', stage: 'Contatado', badge: 'b-outline', wait: 'há 3 dias' }
+    ];
+    const visits = [
+      { time: '10:00', who: 'Camila Andrade', what: 'Apto 2 qts, Água Verde', tag: 'Confirmada', badge: 'b-green' },
+      { time: '14:30', who: 'Marcos Vieira', what: 'Cobertura, Bigorrilho', tag: 'Aguardando', badge: 'b-amber' },
+      { time: '16:00', who: 'Helena Costa', what: 'Terreno, Campo Comprido', tag: 'Aguardando', badge: 'b-amber' }
+    ];
+    const funnel = [{ label: 'Conversas', n: '214', w: 100 }, { label: 'Leads', n: '63', w: 29 }, { label: 'Visitas', n: '27', w: 13 }, { label: 'Fechados', n: '6', w: 3 }];
+    const insights = [
+      { t: 'Studio no Batel é o mais procurado', d: '19 conversas citaram este imóvel nos últimos 30 dias, mais do que qualquer outro.', cta: 'Abrir imóvel', href: 'Properties.dc.html' },
+      { t: '5 perguntas sem resposta', d: 'A Clara não soube responder sobre IPTU e condomínio. Uma resposta salva resolve as próximas.', cta: 'Responder agora', href: 'Knowledge.dc.html' },
+      { t: '2 imóveis extraídos para revisar', d: 'Imóveis extraídos de documentos precisam da sua revisão antes de a Clara oferecer.', cta: 'Revisar imóveis', href: 'Properties.dc.html' }
+    ];
+    return { ranges, bars, rangeText: sets.text, kpis, actions, visits, funnel, insights };
+  }
+}
+</script>
+</body>
+</html>

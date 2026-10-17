@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Sidebar</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<nav aria-label="Principal" style="width: 100%; min-height: 100vh; background: #FFFFFF; border-right: 1px solid #e4e4e7; display: flex; flex-direction: column; padding: 16px 12px; gap: 16px; font-family: 'Geist', system-ui, sans-serif; font-size: 14px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px">
+<div style="width: 36px; height: 36px; border-radius: 9px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+</div>
+<div style="display: flex; flex-direction: column; line-height: 1.25"><span style="font-weight: 700">Imobiliária Exemplo</span><span class="xs muted">CRECI-PR 12345-J</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{top}}" as="i" hint-placeholder-count="1">
+<a href="{{i.href}}" style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 8px; border-radius: 8px; font-weight: 600; border: 1px solid #b6e0c6; background: {{i.bg}}; color: #073128">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{i.d}}"/></svg>
+<span style="flex: 1">{{i.t}}</span>
+</a>
+</sc-for>
+</div>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div class="xs muted" style="padding: 4px 8px; font-weight: 500">{{g.name}}</div>
+<sc-for list="{{g.items}}" as="i" hint-placeholder-count="4">
+<a href="{{i.href}}" style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 8px; border-radius: 8px; font-weight: 500; background: {{i.bg}}; color: {{i.fg}}">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{i.d}}"/></svg>
+<span style="flex: 1">{{i.t}}</span>
+<sc-if value="{{i.count}}" hint-placeholder-val="{{ false }}"><span class="badge b-default" style="height: 20px; padding: 0 7px">{{i.count}}</span></sc-if>
+</a>
+</sc-for>
+</div>
+</sc-for>
+<div style="margin-top: auto; border-top: 1px solid #e4e4e7; padding-top: 12px; display: flex; align-items: center; gap: 10px">
+<span class="avatar">{{ini}}</span>
+<div style="display: flex; flex-direction: column; line-height: 1.25; flex: 1; min-width: 0"><span style="font-weight: 600">{{userName}}</span><span class="xs muted">{{userRole}}</span></div>
+<a href="Login.dc.html" aria-label="Sair" style="color: #71717a"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></a>
+</div>
+</nav>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"active":{"editor":"text","default":"Início"},"role":{"editor":"enum","default":"Proprietário","options":["Proprietário","Gerente","Corretor","Atendente"]},"$preview":{"width":260,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const a = this.props.active ?? 'Início';
+    const role = this.props.role ?? 'Proprietário';
+    const mk = (t, href, d, count) => ({ t, href, d, count: count || '', bg: t === a ? '#DCF3E6' : 'transparent', fg: t === a ? '#073128' : '#3f3f46' });
+    const hide = {
+      'Proprietário': [],
+      'Gerente': [],
+      'Corretor': ['Base de conhecimento', 'Simulações', 'Análises', 'Imobiliária', 'Equipe e acessos', 'Plano e cobrança'],
+      'Atendente': ['Análises', 'Imobiliária', 'Equipe e acessos', 'Plano e cobrança', 'Base de conhecimento', 'Simulações']
+    }[role] || [];
+    const top = [mk('Assistente', 'Onboarding.dc.html', 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z')];
+    top[0].bg = a === 'Assistente' ? '#C7E8D4' : '#DCF3E6';
+    const raw = [
+      { name: 'Atendimento', items: [
+        mk('Início', 'Home.dc.html', 'M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'),
+        mk('Leads', 'Leads.dc.html', 'M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 20v-2a4 4 0 0 0-3-3.9', '5'),
+        mk('Visitas', 'Visits.dc.html', 'M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14H3zM3 10h18M8 2v4M16 2v4', '3'),
+        mk('Conversas', 'Conversations.dc.html', 'M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z')
+      ] },
+      { name: 'Conteúdo', items: [
+        mk('Imóveis', 'Properties.dc.html', 'M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 7h3M8 11h3M8 15h3'),
+        mk('Base de conhecimento', 'Knowledge.dc.html', 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19a2 2 0 0 0 2 2h13'),
+        mk('Simulações', 'Simulations.dc.html', 'M5 3h14v18H5zM8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M16 15h0')
+      ] },
+      { name: 'Gestão', items: [
+        mk('Análises', 'Analytics.dc.html', 'M4 20V10M10 20V4M16 20v-7M22 20H2'),
+        mk('Imobiliária', 'Settings.dc.html', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'),
+        mk('Equipe e acessos', 'Team.dc.html', 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z'),
+        mk('Plano e cobrança', 'Billing.dc.html', 'M3 6h18v12H3zM3 10h18')
+      ] }
+    ];
+    const groups = raw.map((g) => ({ name: g.name, items: g.items.filter((i) => !hide.includes(i.t)) })).filter((g) => g.items.length);
+    if (role === 'Corretor' || role === 'Atendente') {
+      groups.forEach((g) => g.items.forEach((i) => { if (i.t === 'Leads') i.count = role === 'Corretor' ? '3' : '5'; }));
+    }
+    const who = { 'Proprietário': ['MS', 'Marina Souza'], 'Gerente': ['RA', 'Renato Alves'], 'Corretor': ['CP', 'Carlos Prado'], 'Atendente': ['BD', 'Bia Dias'] }[role];
+    return { top, groups, ini: who[0], userName: who[1], userRole: role };
+  }
+}
+</script>
+</body>
+</html>

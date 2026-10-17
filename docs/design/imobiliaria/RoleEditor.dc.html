@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Editor de função</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; position: relative; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Equipe e acessos" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px; max-width: 980px">
+<div class="col" style="gap: 4px"><a class="sm muted" href="Team.dc.html">← Equipe e acessos</a><h1 class="h1">Nova função</h1><p class="muted">Escolha o que essa função pode ver e fazer. O menu lateral mostra só o que a pessoa pode abrir.</p></div>
+
+<div class="card"><div class="card-b" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: end">
+<div class="field"><label class="label" for="rn">Nome da função</label><input id="rn" class="input" value="Corretor sênior"></div>
+<div class="field"><label class="label" for="rb">Começar a partir de</label><select id="rb" class="input"><option>Corretor</option><option>Atendente</option><option>Gerente</option><option>Em branco</option></select></div>
+<div class="row" style="justify-content: space-between; border: 1px solid #e4e4e7; border-radius: 8px; padding: 6px 12px; min-height: 36px"><span>Vê todos os leads da equipe</span><button class="{{allCls}}" role="switch" aria-checked="{{all}}" aria-label="Vê todos os leads" onClick="{{ toggleAll }}"></button></div>
+</div></div>
+
+<div class="alert alert-soft">{{scopeText}}</div>
+
+<div class="card scroll-x"><table class="tbl" style="min-width: 640px">
+<thead><tr><th>Seção</th><th>Nenhum</th><th>Ver</th><th>Editar</th><th>Observação</th></tr></thead>
+<tbody>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="10">
+<tr><td><b>{{r.name}}</b></td>
+<td><button class="{{r.c0}}" role="radio" aria-checked="{{r.on0}}" aria-label="{{r.name}} nenhum" onClick="{{ r.set0 }}" style="padding: 0; width: 22px; height: 22px; border-radius: 50%">{{r.m0}}</button></td>
+<td><button class="{{r.c1}}" role="radio" aria-checked="{{r.on1}}" aria-label="{{r.name}} ver" onClick="{{ r.set1 }}" style="padding: 0; width: 22px; height: 22px; border-radius: 50%">{{r.m1}}</button></td>
+<td><button class="{{r.c2}}" role="radio" aria-checked="{{r.on2}}" aria-label="{{r.name}} editar" onClick="{{ r.set2 }}" style="padding: 0; width: 22px; height: 22px; border-radius: 50%">{{r.m2}}</button></td>
+<td class="xs muted">{{r.note}}</td></tr>
+</sc-for>
+</tbody></table></div>
+
+<div class="alert alert-soft">Alertas de lead quente e de visita nova continuam ativos para quem tem acesso a essas seções. Não é possível desligá-los.</div>
+<div class="row" style="justify-content: flex-end"><a class="btn btn-outline" href="Team.dc.html">Cancelar</a><a class="btn" href="Team.dc.html">Salvar função</a></div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { all: false, p: { inicio: 1, leads: 2, imoveis: 1, visitas: 2, conversas: 1, kb: 0, sim: 0, analises: 0, imob: 0, equipe: 0, plano: 0 } };
+  renderVals() {
+    const S = this.state;
+    const defs = [
+      ['inicio', 'Início', 'Mostra só o que a pessoa pode ver'], ['leads', 'Leads', 'Escopo definido acima'], ['imoveis', 'Imóveis', 'Importar exige Editar'],
+      ['visitas', 'Visitas', 'Escopo definido acima'], ['conversas', 'Conversas', 'Somente leitura'], ['kb', 'Base de conhecimento', ''],
+      ['sim', 'Simulações', ''], ['analises', 'Análises', ''], ['imob', 'Imobiliária (configurações)', 'Dados legais só para proprietário'],
+      ['equipe', 'Equipe e acessos', 'Gerente não altera proprietários'], ['plano', 'Plano e cobrança', '']
+    ];
+    const readOnly = { conversas: 1 };
+    const rows = defs.map(([k, name, note]) => {
+      const v = S.p[k];
+      const set = (n) => () => { if (n === 2 && readOnly[k]) return; this.setState({ p: { ...S.p, [k]: n } }); };
+      const cell = (n) => ({ [`c${n}`]: v === n ? 'btn' : 'btn btn-outline', [`on${n}`]: v === n, [`m${n}`]: v === n ? '●' : '', [`set${n}`]: set(n) });
+      return { name, note, ...cell(0), ...cell(1), ...cell(2) };
+    });
+    return {
+      rows, all: S.all, allCls: S.all ? 'sw on' : 'sw', toggleAll: () => this.setState({ all: !S.all }),
+      scopeText: S.all ? 'Esta função vê leads, visitas e conversas de toda a equipe.' : 'Esta função vê só os leads, visitas e conversas atribuídos a ela. Leads sem responsável ficam com o gerente.'
+    };
+  }
+}
+</script>
+</body>
+</html>

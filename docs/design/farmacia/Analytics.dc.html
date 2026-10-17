@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Análises</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'Geist',system-ui,sans-serif}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; background: #fafafa">
+<div style="flex: 1 1 260px; max-width: 260px"><dc-import name="Sidebar" active="Análises" hint-size="260px,100vh"></dc-import></div>
+<main style="flex: 999 1 640px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div class="row wrap" style="justify-content: space-between; gap: 16px"><div><h1 class="h1">Análises</h1><p class="muted">Como o chat e a operação estão performando</p></div>
+<div class="tabs"><sc-for list="{{ranges}}" as="r" hint-placeholder-count="3"><button class="{{r.cls}}" onClick="{{ r.pick }}">{{r.label}}</button></sc-for></div></div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px">
+<sc-for list="{{kpis}}" as="k" hint-placeholder-count="4"><div class="card stat"><div class="xs muted" style="font-weight: 500">{{k.l}}</div><div class="n" style="margin: 6px 0 4px">{{k.v}}</div><div class="xs muted">{{k.n}}</div></div></sc-for>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px">
+<div class="card" style="flex: 2 1 480px; min-width: 0"><div class="card-h"><div><h2 class="h2">Faturamento por dia</h2><p class="xs muted">{{label}}</p></div></div>
+<div class="card-b" style="display: flex; gap: 10px; align-items: flex-end; height: 230px; padding-top: 24px"><sc-for list="{{bars}}" as="b" hint-placeholder-count="7"><div class="col grow" style="gap: 6px; align-items: center; justify-content: flex-end; height: 100%"><span class="xs muted">{{b.v}}</span><div style="width: 100%; max-width: 44px; height: {{b.h}}px; background: var(--primary); border-radius: 4px 4px 0 0"></div><span class="xs muted">{{b.d}}</span></div></sc-for></div></div>
+<div class="card" style="flex: 1 1 320px; min-width: 0"><div class="card-h"><div><h2 class="h2">Triagem do Alex</h2><p class="xs muted">Como as conversas terminaram</p></div></div>
+<div class="card-b col" style="gap: 16px"><sc-for list="{{triage}}" as="t" hint-placeholder-count="5"><div class="col" style="gap: 6px"><div class="row sm" style="justify-content: space-between"><span>{{t.l}}</span><b>{{t.n}}</b></div><div class="bar"><i style="width: {{t.w}}%; background: {{t.c}}"></i></div></div></sc-for></div></div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px">
+<div class="card" style="flex: 1 1 420px; min-width: 0"><div class="card-h"><div><h2 class="h2">Mais vendidos</h2></div></div><div class="card-b scroll-x" style="padding-top: 8px"><table class="tbl"><thead><tr><th>Produto</th><th>Unidades</th><th>Faturamento</th></tr></thead><tbody>
+<sc-for list="{{top}}" as="p" hint-placeholder-count="5"><tr><td>{{p.n}}</td><td>{{p.u}}</td><td>{{p.v}}</td></tr></sc-for></tbody></table></div></div>
+<div class="card" style="flex: 1 1 420px; min-width: 0"><div class="card-h"><div><h2 class="h2">Procurados sem estoque</h2><p class="xs muted">Demanda que a farmácia não atendeu</p></div><a class="btn btn-outline btn-sm" href="Catalog.dc.html">Catálogo</a></div><div class="card-b scroll-x" style="padding-top: 8px"><table class="tbl"><thead><tr><th>Produto</th><th>Pedidos perdidos</th></tr></thead><tbody>
+<sc-for list="{{miss}}" as="p" hint-placeholder-count="4"><tr><td>{{p.n}}</td><td><span class="badge b-amber">{{p.u}}</span></td></tr></sc-for></tbody></table></div></div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { r: 1 };
+  renderVals() {
+    const S = this.state;
+    const sets = [
+      { label: 'Hoje', d: ['8h', '10h', '12h', '14h', '16h', '18h', '20h'], v: [60, 90, 150, 110, 170, 230, 140], k: ['R$ 842', '12', '70,22', '20,7%'] },
+      { label: 'Últimos 7 dias', d: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], v: [820, 940, 880, 1150, 1380, 1210, 640], k: ['R$ 7.020', '104', '67,50', '19,8%'] },
+      { label: 'Últimos 30 dias', d: ['S1', 'S2', 'S3', 'S4', 'S5'], v: [5900, 6400, 6100, 7300, 7020], k: ['R$ 32.720', '468', '69,90', '20,1%'] }
+    ];
+    const s = sets[S.r];
+    const max = Math.max(...s.v);
+    const bars = s.d.map((d, i) => ({ d, v: s.v[i] >= 1000 ? (s.v[i] / 1000).toFixed(1) + 'k' : String(s.v[i]), h: Math.round((s.v[i] / max) * 150) }));
+    return {
+      ranges: sets.map((x, i) => ({ label: x.label, cls: S.r === i ? 'tab on' : 'tab', pick: () => this.setState({ r: i }) })), label: s.label, bars,
+      kpis: [{ l: 'Faturamento', v: s.k[0], n: 'Pedidos concluídos' }, { l: 'Pedidos', v: s.k[1], n: 'Entrega e retirada' }, { l: 'Ticket médio', v: 'R$ ' + s.k[2], n: 'Por pedido' }, { l: 'Conversão do chat', v: s.k[3], n: 'Conversa que virou pedido' }],
+      triage: [{ l: 'Viraram pedido', n: '38', w: 21, c: '#0F766E' }, { l: 'Encaminhadas ao farmacêutico', n: '27', w: 15, c: '#F59E0B' }, { l: 'Controlado: só informação', n: '9', w: 5, c: '#71717a' }, { l: 'Sinal de alerta (urgente)', n: '2', w: 1, c: '#dc2626' }, { l: 'Dúvidas gerais', n: '108', w: 59, c: '#0B4F4A' }],
+      top: [{ n: 'Dipirona 500 mg', u: 64, v: 'R$ 569,60' }, { n: 'Soro fisiológico 500 ml', u: 41, v: 'R$ 254,20' }, { n: 'Protetor solar FPS 50', u: 22, v: 'R$ 473,00' }, { n: 'Vitamina C 1 g', u: 19, v: 'R$ 144,40' }, { n: 'Ibuprofeno 400 mg', u: 17, v: 'R$ 527,00' }],
+      miss: [{ n: 'Dipirona 500 mg', u: 14 }, { n: 'Loratadina 10 mg', u: 8 }, { n: 'Omeprazol 20 mg', u: 5 }, { n: 'Repelente infantil', u: 3 }]
+    };
+  }
+}
+</script>
+</body>
+</html>
