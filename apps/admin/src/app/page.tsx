@@ -401,6 +401,11 @@ export default function TenantsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Clientes</CardTitle>
+          <CardAction>
+            <Link href="/tenants/new">
+              <Button size="sm">Novo cliente</Button>
+            </Link>
+          </CardAction>
           <CardDescription>Todos os clientes cadastrados na plataforma.</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">

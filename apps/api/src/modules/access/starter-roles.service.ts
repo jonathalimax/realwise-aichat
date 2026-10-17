@@ -41,6 +41,11 @@ export class StarterRolesService {
     }
   }
 
+  /** Roles only (no Owner member): used when an admin creates a business and invites the owner by email. */
+  async ensureRolesOnly(businessId: string, niche: NicheKey): Promise<void> {
+    await this.createMissingRoles(businessId, niche);
+  }
+
   /** When a business changes niche: add missing starter roles and reset starter grids to the new niche. */
   async syncForNiche(businessId: string, niche: NicheKey): Promise<void> {
     await this.createMissingRoles(businessId, niche);

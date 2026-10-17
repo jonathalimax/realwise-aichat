@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { getTenantDetail, getTenantKnowledge, suspendTenant, setConversationalMode, setLlmBudget } from "../../../lib/api";
+import { getTenantDetail, getTenantKnowledge, suspendTenant, setConversationalMode, setLlmBudget, sendTenantAccess } from "../../../lib/api";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../../components/ui/card";
 import { Badge, statusToBadgeVariant } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
@@ -81,6 +81,22 @@ export default function TenantDetailPage() {
             onClick={() => setConversationalMode(tenant.id, !tenant.conversationalModeEnabled).then(() => location.reload())}
           >
             {tenant.conversationalModeEnabled ? "Desativar modo conversa" : "Ativar modo conversa"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const typed = window.prompt("E-mail do proprietário para enviar o acesso (deixe vazio para usar o cadastrado):", "") ?? null;
+              if (typed === null) return;
+              try {
+                const r = await sendTenantAccess(tenant.id, typed.trim() || undefined);
+                window.alert(r.url ? `E-mail não configurado neste ambiente. Link:\n${r.url}` : `Acesso enviado para ${r.email}.`);
+              } catch (e) {
+                window.alert(e instanceof Error ? e.message : "Não consegui enviar o acesso.");
+              }
+            }}
+          >
+            Enviar acesso por e-mail
           </Button>
           <Button
             variant="destructive"

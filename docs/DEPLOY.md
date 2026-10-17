@@ -94,6 +94,10 @@ Build-time values (baked into the images by `deploy.yml`, not Coolify): `NEXT_PU
 
 **Known gap to resolve before relying on every email link**: several notification emails still build links as `dashboardLink("/inbox")`, `dashboardLink("/agenda")` (real estate / dealership), and Stripe return URLs and the Google Calendar callback append `/billing` / `/agenda` straight to `DASHBOARD_URL` (`flow.service.ts`, `chat.service.ts`, `booking-notifications.ts`, `billing.service.ts`, `calendar.controller.ts`). With `DASHBOARD_URL` as a bare origin those links miss the `/<niche>/app` prefix and would land on the marketing site; with the prefix included in `DASHBOARD_URL` they work but the invite/reset/pharmacy links (which add the prefix themselves) would double it. Whatever value production has today, check these two flows after deploy (smoke tests 6.9, 6.10); the clean fix is to pass the niche prefix at those call sites (`dashboardBasePath(niche)`) and keep `DASHBOARD_URL` as a bare origin.
 
+## 4b. Creating customers from the admin console (no phone / SMS)
+
+Admin console > Clientes > **Novo cliente**: choose the niche (farmácia, imobiliária, concessionária), business name, owner name and e-mail. The owner receives an e-mail (Resend) with a link to `/<niche>/app/convite/<token>` (valid 7 days) to choose a password, then lands in the onboarding interview. Needs `RESEND_API_KEY`; without it the admin screen shows the link to copy. For a business that already exists (signed up by phone), open it > **Enviar acesso por e-mail**: the owner gets a password-setup link and can then log in with e-mail and password. Migration `20261017100000_business_phone_optional` only drops NOT NULL on `Business.phone` (additive; the unique index stays).
+
 ## 5. First run: create the first pharmacy
 
 1. Open `https://aichat.realwise.com.br/farmacia` (marketing page) and click **Entrar no painel** / pick a plan: it goes to `https://aichat.realwise.com.br/farmacia/app/login`.

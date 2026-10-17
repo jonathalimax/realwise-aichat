@@ -95,7 +95,7 @@ model Business {
   slug                       String         @unique
   niche                      Niche
   parentBusinessId           String?
-  phone                      String         @unique
+  phone                      String?        @unique
   ownerName                  String
   email                      String?
   logoUrl                    String?

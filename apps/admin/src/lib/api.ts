@@ -15,6 +15,26 @@ async function request(path: string, options?: RequestInit) {
   return res.json();
 }
 
+async function requestWithMessage(path: string, options?: RequestInit) {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    credentials: "include",
+    headers: { "content-type": "application/json", ...options?.headers },
+    cache: "no-store",
+  });
+  if (res.status === 401 && typeof window !== "undefined" && window.location.pathname !== `${BASE_PATH}/login`) {
+    window.location.href = `${BASE_PATH}/login`;
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof body?.message === "string" ? body.message : `Request failed: ${res.status}`);
+  return body;
+}
+
+export type CreateBusinessInput = { niche: "imobiliaria" | "farmacia" | "concessionaria"; businessName: string; ownerName: string; email: string; trialDays?: number };
+export const createBusiness = (input: CreateBusinessInput): Promise<{ business: { id: string; name: string; niche: string }; inviteUrl?: string }> =>
+  requestWithMessage("/admin/businesses", { method: "POST", body: JSON.stringify(input) });
+export const sendTenantAccess = (id: string, email?: string): Promise<{ ok: true; email: string; kind: "invite" | "password_reset"; url?: string }> =>
+  requestWithMessage(`/admin/tenants/${id}/send-access`, { method: "POST", body: JSON.stringify(email ? { email } : {}) });
 export const getTenants = () => request("/admin/tenants");
 export const getTenantDetail = (id: string) => request(`/admin/tenants/${id}`);
 export const getTenantKnowledge = (id: string) => request(`/admin/tenants/${id}/knowledge`);
