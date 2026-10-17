@@ -64,7 +64,7 @@ export default function AcceptInvitePage() {
     setBusy(true);
     try {
       const me = await acceptInvite({ token, name: name.trim(), password, crf: crf.trim() || undefined, acceptTerms: true });
-      router.push(homeFor(me.business.niche, me));
+      router.push(me.business.status === "onboarding" ? "/onboarding" : homeFor(me.business.niche, me));
     } catch (err) {
       if (err instanceof ApiError && err.code === "CRF_REQUIRED_FOR_ROLE") setError("Esta função exige o CRF de farmacêutico.");
       else if (err instanceof ApiError && err.code === "WEAK_PASSWORD") setError("Escolha uma senha mais forte (mínimo 8 caracteres).");

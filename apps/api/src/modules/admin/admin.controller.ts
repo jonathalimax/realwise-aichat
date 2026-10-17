@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { AdminService, PROBLEM_CASE_CATEGORIES } from "./admin.service";
+import { AdminOnboardingService } from "./admin-onboarding.service";
 import { AdminSessionGuard } from "../../common/guards/admin-session.guard";
 import type { AdminSessionClaims } from "@realwise/auth";
 
@@ -13,7 +14,17 @@ function parseDays(days?: string): number {
 @UseGuards(AdminSessionGuard)
 @Controller("admin")
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(private readonly admin: AdminService, private readonly onboarding: AdminOnboardingService) {}
+
+  @Post("businesses")
+  createBusiness(@Body() body: { niche?: string; businessName?: string; ownerName?: string; email?: string; trialDays?: number }) {
+    return this.onboarding.createBusiness(body);
+  }
+
+  @Post("tenants/:id/send-access")
+  sendAccess(@Param("id") id: string, @Body("email") email?: string) {
+    return this.onboarding.sendOwnerAccess(id, email);
+  }
 
   @Get("tenants")
   listTenants() {
