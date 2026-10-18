@@ -149,36 +149,27 @@ test("settings: identity fields only by an Owner (OWNER_PROTECTED), others free 
   assert.ok(dto.banner.includes("sempre ativas"));
 });
 
-test("proposals: created from interview answers, nothing applied until the owner confirms", async () => {
+test("interview answers are applied right away; only an answer we cannot interpret stays pending", async () => {
   const { service, state } = fakeSettings();
   await service.proposeFromField("b1", "taxa_entrega", "R$ 6,00");
   await service.proposeFromField("b1", "produtos_exigem_farmaceutico", "Dipirona, Omeprazol");
   await service.proposeFromField("b1", "nao_mapeado", "x");
-  assert.equal(state.row.deliveryFeeCents, 0, "nothing applied silently");
+  assert.equal(state.row.deliveryFeeCents, 600, "what the owner said is the setting");
   assert.deepEqual(Object.keys(state.row.proposals).sort(), ["produtos_exigem_farmaceutico", "taxa_entrega"]);
-  assert.equal(state.row.proposals.taxa_entrega.status, "pending");
+  assert.equal(state.row.proposals.taxa_entrega.status, "confirmed");
   assert.deepEqual(state.row.proposals.taxa_entrega.proposed, { deliveryFeeCents: 600 });
-  let dto = await service.dto("b1");
-  assert.deepEqual(dto.proposals.produtos_exigem_farmaceutico.matchedProducts, [{ id: "p1", name: "Dipirona 500 mg" }]);
-
-  dto = await service.confirmProposal(member("manager"), "taxa_entrega", { deliveryFeeCents: 650 });
-  assert.equal(state.row.deliveryFeeCents, 650, "owner-edited value wins over the parsed one");
-  assert.equal(dto.proposals.taxa_entrega.status, "confirmed");
-  await assert.rejects(() => service.confirmProposal(member("manager"), "taxa_entrega", { minOrderCents: 1 }), (e: any) => e.getResponse().code === "INVALID_SETTING", "only the proposal's own keys");
-
-  await service.confirmProposal(member("manager"), "produtos_exigem_farmaceutico");
   assert.equal(state.products[0].pharmacistRequired, true);
   assert.equal(state.products[1].pharmacistRequired, false);
 
+  // Not interpretable: stays pending so the owner types the values; can be dismissed.
   await service.proposeFromField("b1", "retirada_loja", "talvez");
+  assert.equal(state.row.proposals.retirada_loja.status, "pending");
   await assert.rejects(() => service.confirmProposal(member("manager"), "retirada_loja"), (e: any) => e.getResponse().code === "PROPOSAL_EMPTY");
   const dismissed = await service.dismissProposal(member("manager"), "retirada_loja");
   assert.equal(dismissed.proposals.retirada_loja.status, "dismissed");
   await assert.rejects(() => service.dismissProposal(member("manager"), "nope"), (e: any) => e.getStatus() === 404);
 
   await service.proposeFromField("b1", "razao_social_cnpj", "Farmácia Y, 11.222.333/0001-81");
-  await assert.rejects(() => service.confirmProposal(member("manager"), "razao_social_cnpj"), (e: any) => e.getResponse().code === "OWNER_PROTECTED");
-  await service.confirmProposal(member("owner"), "razao_social_cnpj");
   assert.equal(state.row.legalName, "Farmácia Y");
 });
 

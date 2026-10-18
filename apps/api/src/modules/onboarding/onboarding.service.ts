@@ -9,6 +9,7 @@ import { extractJsonObject } from "../../inference/json-extract";
 import { PharmacySettingsService } from "../pharmacy-settings/pharmacy-settings.service";
 import { classifyOperationModeAnswer } from "../pharmacy-settings/proposals";
 import { chatLink } from "../../common/chat-links";
+import { KnowledgeQaService } from "../knowledge/knowledge-qa.service";
 import { loadOperationMode } from "../pharmacy-common/operation-mode";
 
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
@@ -17,6 +18,23 @@ const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
 const OPERATION_MODE_FIELD = "modo_operacao";
 const OPERATION_MODE_CLARIFY =
   'Não ficou claro o "Modo de operação". Você quer usar estoque e vender pelo sistema (responda "comércio") ou só o atendimento com IA, que escala tudo sobre produtos ao farmacêutico (responda "atendimento")?';
+/** Customer-facing questions for the interview answers Alex should be able to give straight away (field -> question, answer lead-in). */
+const OWNER_ANSWER_QA: Record<string, { question: string; lead: string }> = {
+  horario_funcionamento: { question: "Qual o horário de funcionamento da farmácia?", lead: "Nosso horário de funcionamento" },
+  areas_entrega: { question: "Quais bairros vocês atendem na entrega?", lead: "Entregamos em" },
+  taxa_entrega: { question: "Qual é a taxa de entrega?", lead: "Taxa de entrega" },
+  pedido_minimo: { question: "Existe valor mínimo de pedido?", lead: "Pedido mínimo" },
+  retirada_loja: { question: "Vocês têm retirada em loja?", lead: "Retirada em loja" },
+  formas_pagamento_entrega: { question: "Quais formas de pagamento vocês aceitam?", lead: "Formas de pagamento" },
+  politica_troca_devolucao: { question: "Como funciona a troca e devolução?", lead: "Troca e devolução" },
+  farmaceutico_responsavel: { question: "Quem é o farmacêutico responsável?", lead: "Farmacêutico responsável" },
+  razao_social_cnpj: { question: "Qual é o CNPJ da farmácia?", lead: "Razão social e CNPJ" },
+};
+/** Fields that only matter when the pharmacy sells through the system (stock, orders): skipped in attendance mode. */
+const COMMERCE_ONLY_FIELDS = new Set(["pedido_minimo", "limite_quantidade_item", "produtos_exigem_farmaceutico"]);
+const SKIP_RE = /^\s*(pular|pula|pule|pr[óo]xim[ao]|depois|mais tarde|n[ãa]o sei|n[ãa]o tenho|n[ãa]o se aplica|prefiro n[ãa]o|skip)\b/i;
+const FINISH_RE = /^\s*(concluir|finalizar|terminar|encerrar|chega|[eé] s[óo] isso|j[áa] deu|pode finalizar)\b/i;
+
 /** The question lists ONLY the modes this pharmacy's plan allows; with a single mode available it is stated, not asked. */
 function operationModeQuestion(commerceAllowed: boolean): string {
   return commerceAllowed
@@ -85,6 +103,7 @@ export class OnboardingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pharmacySettings: PharmacySettingsService,
+    private readonly knowledgeQa: KnowledgeQaService,
   ) {}
 
   async getProfile(businessId: string) {
@@ -112,7 +131,8 @@ export class OnboardingService {
     const fieldStatus = (existing?.fieldStatus as Record<string, unknown>) ?? {};
 
     data[fieldKey] = value;
-    fieldStatus[fieldKey] = { source, approvedByOwner: false, updatedAt: new Date().toISOString() };
+    // What the owner typed or said in the interview is the truth: no later "confirm" step. Only values read from documents wait for a review.
+    fieldStatus[fieldKey] = { source, approvedByOwner: source !== "document", updatedAt: new Date().toISOString() };
 
     const profile = await this.prisma.client.businessProfile.upsert({
       where: { businessId },
@@ -124,9 +144,14 @@ export class OnboardingService {
         fieldStatus: fieldStatus as any,
       },
     });
-    // Pharmacy: an interview answer becomes a PROPOSED setting the owner must confirm (never applied silently).
+    // Pharmacy: an interview answer is applied to the settings right away (only answers we cannot interpret stay pending).
     if (business.niche === "farmacia" && typeof value === "string") {
       await this.pharmacySettings.proposeFromField(businessId, fieldKey, value).catch(() => {});
+      // ...and a Q&A so Alex can answer the customers with it straight away.
+      const qa = OWNER_ANSWER_QA[fieldKey];
+      if (qa && source !== "document" && value.trim().length >= 2) {
+        await this.knowledgeQa.upsertOwnerAnswer(businessId, qa.question, `${qa.lead}: ${value.trim()}`).catch(() => {});
+      }
     }
     return { ok: true, profile };
   }
@@ -160,8 +185,17 @@ export class OnboardingService {
     const data = (profile?.data as Record<string, unknown>) ?? {};
 
     const weightOrder = { required: 0, recommended: 1, optional: 2 } as const;
+    const fieldStatus = (profile?.fieldStatus as Record<string, any>) ?? {};
+    // Pharmacy in attendance mode (chosen, or forced by the plan) has no stock/orders: do not ask about them.
+    let attendanceOnly = false;
+    if (business.niche === "farmacia") {
+      const mode = await loadOperationMode(this.prisma.client, businessId);
+      attendanceOnly = !mode.commerceAllowedByPlan || String(data[OPERATION_MODE_FIELD] ?? "").toLowerCase().startsWith("atend");
+    }
     const gaps = template.fields
       .filter((f) => data[f.key] === undefined || data[f.key] === "")
+      .filter((f) => !fieldStatus[f.key]?.skipped)
+      .filter((f) => !(attendanceOnly && COMMERCE_ONLY_FIELDS.has(f.key)))
       .sort((a, b) => weightOrder[a.weight] - weightOrder[b.weight]);
 
     return { business, template, data, gaps };
@@ -174,11 +208,42 @@ export class OnboardingService {
     return { ...result, totalFields: template.fields.length, answeredFields: template.fields.length - gaps.length };
   }
 
+  /** Marks fields as "skipped" so the interview moves on (the owner can fill them later in Farmácia). */
+  private async markSkipped(businessId: string, keys: string[]) {
+    if (!keys.length) return;
+    const existing = await this.prisma.client.businessProfile.findUnique({ where: { businessId } });
+    const fieldStatus = { ...((existing?.fieldStatus as Record<string, unknown>) ?? {}) };
+    for (const k of keys) fieldStatus[k] = { source: "interview", skipped: true, approvedByOwner: false, updatedAt: new Date().toISOString() };
+    await this.prisma.client.businessProfile.upsert({
+      where: { businessId },
+      update: { fieldStatus: fieldStatus as any },
+      create: { businessId, templateVersion: "0.1.0", data: {}, fieldStatus: fieldStatus as any },
+    });
+  }
+
   private async interviewTurn(businessId: string, history: { role: "owner" | "clara"; content: string }[]) {
-    const { business, gaps } = await this.findGaps(businessId);
+    let { business, gaps } = await this.findGaps(businessId);
     const confidenceScore = business.confidenceScore ?? 0;
 
+    // "Pular" / "não sei" skips the question being asked; "concluir" skips everything that is left (except the operation mode).
+    const lastMsg = history.length ? history[history.length - 1] : undefined;
+    if (lastMsg?.role === "owner" && gaps.length > 0) {
+      const finish = FINISH_RE.test(lastMsg.content);
+      const skip = !finish && SKIP_RE.test(lastMsg.content) && lastMsg.content.trim().length <= 40;
+      if ((finish || skip) && gaps[0].key !== OPERATION_MODE_FIELD) {
+        await this.markSkipped(businessId, finish ? gaps.filter((g) => g.key !== OPERATION_MODE_FIELD).map((g) => g.key) : [gaps[0].key]);
+        ({ business, gaps } = await this.findGaps(businessId));
+        const ack = finish ? "Combinado, o resto você completa depois em Farmácia." : "Sem problema, deixamos essa para depois.";
+        if (gaps.length > 0 && !finish) {
+          return { reply: `${ack} Pode me contar sobre "${gaps[0].label}"? (Se preferir, diga "pular".)`, allDone: false, remainingGaps: gaps.length, confidenceScore };
+        }
+      }
+    }
+
     if (gaps.length === 0) {
+      // Everything asked (or skipped): refresh the readiness score now, it is only recomputed on demand.
+      const refreshed = await this.recomputeConfidence(businessId).catch(() => null);
+      const confidenceScore = (refreshed as any)?.score ?? business.confidenceScore ?? 0;
       const hasRealSlug = !!business.slug && !business.slug.startsWith("pending-");
       if (confidenceScore >= 70 && hasRealSlug) {
         const publicUrl = chatLink(business.slug);
@@ -195,11 +260,17 @@ export class OnboardingService {
           publicUrl,
         };
       }
-      const blockerMessage = !hasRealSlug
-        ? "ainda falta confirmar o nome do seu link"
-        : "ainda falta revisar e aprovar alguns campos na Base de Conhecimento";
+      if (!hasRealSlug) {
+        return {
+          reply: "Já cobrimos todos os campos. Só falta escolher o nome do seu link para liberar a publicação.",
+          allDone: true,
+          remainingGaps: 0,
+          confidenceScore,
+          readyToPublish: false,
+        };
+      }
       return {
-        reply: `Já cobrimos todos os campos, mas ainda estamos em ${confidenceScore}% de prontidão — abaixo de 70%, ${blockerMessage} para liberar a publicação.`,
+        reply: `Já cobrimos tudo o que dava por agora. Ainda estamos em ${confidenceScore}% de prontidão; faltam informações obrigatórias, que você completa em Farmácia sem pressa.`,
         allDone: true,
         remainingGaps: 0,
         confidenceScore,

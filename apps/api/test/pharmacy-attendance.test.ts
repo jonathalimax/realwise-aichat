@@ -325,7 +325,7 @@ test("interview without a model: the operation-mode answer is classified; an amb
   net = stubNetwork(llm.status(503));
   const p = await createPharmacy({ plan: "profissional" });
   const settings = new PharmacySettingsService(p.db.prisma, { record: async () => undefined } as any);
-  const onboarding = new OnboardingService(p.db.prisma, settings);
+  const onboarding = new OnboardingService(p.db.prisma, settings, { upsertOwnerAnswer: async () => true } as any);
   const asked = { role: "clara" as const, content: 'Pode me contar sobre "Modo de operação"?' };
   const profile = () => p.db.models.businessProfile.rows.find((r: any) => r.businessId === p.businessId)!;
 
@@ -340,9 +340,9 @@ test("interview without a model: the operation-mode answer is classified; an amb
   assert.match(clear.reply, /Razão social/);
   assert.ok(profile().data.modo_operacao);
   assert.equal(p.db.models.pharmacySettings.rows[0].proposals.modo_operacao.proposed.operationMode, "attendance");
-  assert.equal(p.db.models.pharmacySettings.rows[0].proposals.modo_operacao.status, "pending");
-  // Nothing is applied until the owner confirms.
-  assert.equal(p.db.models.pharmacySettings.rows[0].operationMode, "commerce");
+  // What the owner said in the interview is applied right away (no confirm step).
+  assert.equal(p.db.models.pharmacySettings.rows[0].proposals.modo_operacao.status, "confirmed");
+  assert.equal(p.db.models.pharmacySettings.rows[0].operationMode, "attendance");
 });
 
 test("settings: only the owner changes the mode; commerce on a plan without the feature is 403 PLAN_FEATURE; chosen time is recorded", T, async () => {

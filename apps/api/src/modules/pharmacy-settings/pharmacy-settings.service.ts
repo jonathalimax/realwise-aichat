@@ -53,8 +53,26 @@ export class PharmacySettingsService {
     return sheetStatus(imp?.stockAsOf ?? null, maxAgeHours);
   }
 
+  /** Pending proposals from before interview answers were applied directly: apply the interpretable ones now. */
+  private async applyLegacyPending(businessId: string, row: Awaited<ReturnType<PharmacySettingsService["getRow"]>>) {
+    const proposals = { ...((row.proposals ?? {}) as Record<string, ProposalRecord>) };
+    const pending = Object.values(proposals).filter((p) => p?.status === "pending");
+    if (!pending.length) return row;
+    let current: Record<string, unknown> = row as unknown as Record<string, unknown>;
+    const writes: Record<string, unknown> = {};
+    for (const p of pending) {
+      const applied = await this.applyInterviewAnswer(businessId, current, p.proposed ?? {}).catch(() => null);
+      if (!applied) continue;
+      Object.assign(writes, applied);
+      current = { ...current, ...applied };
+      proposals[p.fieldKey] = { ...p, status: "confirmed", confirmedAt: new Date().toISOString() };
+    }
+    if (!Object.keys(writes).length && !pending.some((p) => proposals[p.fieldKey]?.status === "confirmed")) return row;
+    return this.prisma.client.pharmacySettings.update({ where: { businessId }, data: { ...(writes as any), proposals: proposals as object } });
+  }
+
   async dto(businessId: string) {
-    const row = await this.getRow(businessId);
+    const row = await this.applyLegacyPending(businessId, await this.getRow(businessId));
     const settings: Record<string, unknown> = {};
     for (const k of SETTINGS_KEYS) settings[k] = (row as any)[k];
     const proposals = await this.proposalsDto(businessId, (row.proposals ?? {}) as Record<string, ProposalRecord>);
@@ -159,17 +177,43 @@ export class PharmacySettingsService {
     if (!(fieldKey in farmaciaSettingsFieldMap)) return;
     const row = await this.getRow(businessId);
     const proposals = { ...((row.proposals ?? {}) as Record<string, ProposalRecord>) };
+    const proposed = parseProposal(fieldKey, rawAnswer);
     const record: ProposalRecord = {
       fieldKey,
       label: PROPOSAL_LABELS[fieldKey] ?? fieldKey,
       rawAnswer: rawAnswer.slice(0, 1000),
-      proposed: parseProposal(fieldKey, rawAnswer),
+      proposed,
       status: "pending",
       proposedAt: new Date().toISOString(),
       confirmedAt: null,
     };
+    // What the owner says in the interview IS the setting: apply it right away. Only an answer we could not interpret stays
+    // as a pending proposal (the owner types the values himself in Farmácia).
+    const applied = await this.applyInterviewAnswer(businessId, row as unknown as Record<string, unknown>, proposed).catch(() => null);
+    if (applied) {
+      record.status = "confirmed";
+      record.confirmedAt = new Date().toISOString();
+    }
     proposals[fieldKey] = record;
-    await this.prisma.client.pharmacySettings.update({ where: { businessId }, data: { proposals: proposals as object } });
+    await this.prisma.client.pharmacySettings.update({ where: { businessId }, data: { ...(applied ?? {}), proposals: proposals as object } });
+  }
+
+  /** Columns to write for an interview answer, or null when nothing could be interpreted. Commerce is never forced on a plan that lacks it. */
+  private async applyInterviewAnswer(businessId: string, row: Record<string, unknown>, proposed: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    const { pharmacistRequiredProductNames, ...columns } = proposed;
+    if (Object.keys(columns).length === 0 && !Array.isArray(pharmacistRequiredProductNames)) return null;
+    if (columns.operationMode === "commerce") {
+      const info = await loadOperationMode(this.prisma.client, businessId);
+      if (!info.commerceAllowedByPlan) columns.operationMode = "attendance";
+    }
+    const { data, changedKeys } = buildSettingsPatch(row, columns);
+    const out: Record<string, unknown> = Object.fromEntries(changedKeys.map((k) => [k, data[k]]));
+    if ("operationMode" in columns) out.operationModeChosenAt = new Date();
+    if (Array.isArray(pharmacistRequiredProductNames)) {
+      const matched = await this.matchProductsByName(businessId, pharmacistRequiredProductNames as string[]);
+      if (matched.length) await this.prisma.client.product.updateMany({ where: { businessId, id: { in: matched.map((m) => m.id) } }, data: { pharmacistRequired: true } });
+    }
+    return out; // interpretable even when nothing changed (the owner repeated the current value)
   }
 
   async confirmProposal(actor: MemberContext, fieldKey: string, values?: Record<string, unknown>) {
