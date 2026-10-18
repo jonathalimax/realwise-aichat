@@ -15,6 +15,12 @@ function label(p: Pick<SuggestionItem, "name" | "presentation">) {
   return p.presentation ? `${p.name} · ${p.presentation}` : p.name;
 }
 
+const BLOCKED_TEXT: Record<string, string> = {
+  no_stock: "Sem estoque. Informe a quantidade em Catálogo para poder indicar.",
+  class_unconfirmed: "Classe ainda não confirmada. Peça a um farmacêutico em Catálogo > Revisar classes.",
+  controlled: "Controlado: não pode ser indicado pelo chat.",
+};
+
 const thumb = (p: SuggestionItem) => ({ imageUrl: p.imageUrl, placeholderIcon: p.placeholderIcon, saleClass: p.requiresPrescription ? ("prescription" as const) : ("otc" as const), name: p.name });
 
 /**
@@ -107,14 +113,15 @@ export function ReplyProductPicker({
       {q.trim().length >= 2 && !full && (
         <ul className="flex max-h-56 flex-col overflow-auto rounded-lg border border-border" aria-label="Resultados da busca">
           {loading && results.length === 0 && <li className="p-3 text-sm text-muted">Buscando…</li>}
-          {!loading && results.length === 0 && !error && <li className="p-3 text-sm text-muted">Nenhum produto disponível com esse nome. Só aparecem itens em estoque com classe confirmada (livre ou com receita).</li>}
+          {!loading && results.length === 0 && !error && <li className="p-3 text-sm text-muted">Nenhum produto com esse nome no catálogo.</li>}
           {results.map((p) => (
             <li key={p.productId} className="border-b border-border last:border-b-0">
-              <button type="button" disabled={picked.has(p.productId)} onClick={() => add(p)} className="flex w-full items-center gap-2.5 p-2 text-left hover:bg-bg-2 disabled:opacity-50 max-md:min-h-11">
+              <button type="button" disabled={picked.has(p.productId) || !!p.blockedReason} title={p.blockedReason ? BLOCKED_TEXT[p.blockedReason] : undefined} onClick={() => add(p)} className="flex w-full items-center gap-2.5 p-2 text-left hover:bg-bg-2 disabled:opacity-60 max-md:min-h-11">
                 <ProductThumb product={thumb(p)} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{label(p)}</span>
                   <span className="text-xs text-muted">{formatBRL(p.priceCents)}{p.requiresPrescription ? " · exige receita" : ""}</span>
+                  {p.blockedReason && <span className="block text-xs text-amber-700">{BLOCKED_TEXT[p.blockedReason]}</span>}
                 </span>
                 {picked.has(p.productId) ? <span className="text-xs text-muted">Adicionado</span> : <Plus className="h-4 w-4 text-accent" aria-hidden />}
               </button>

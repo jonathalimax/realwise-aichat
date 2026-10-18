@@ -299,6 +299,8 @@ export interface SuggestionItem {
   imageUrl: string | null;
   placeholderIcon: "pill" | "bottle" | "box";
   requiresPrescription: boolean;
+  /** Set when the product exists but cannot be suggested yet (text search only). */
+  blockedReason?: "no_stock" | "class_unconfirmed" | "controlled" | null;
 }
 export const replyHandoff = (id: string, body: string | { text?: string; productIds?: string[]; note?: string }): Promise<HandoffDetail> =>
   request(`/handoffs/${id}/reply`, json("POST", typeof body === "string" ? { text: body } : body));

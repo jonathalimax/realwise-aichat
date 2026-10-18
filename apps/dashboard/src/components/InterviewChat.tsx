@@ -115,9 +115,10 @@ export function InterviewChat({
     return () => cancelAnimationFrame(frame);
   }, [messages, sending, uploadStatus, uploadError]);
 
-  async function handleSend() {
-    if (!input.trim() || sending) return;
-    const text = input.trim();
+  async function handleSend(override?: string) {
+    const typed = typeof override === "string" ? override : input;
+    if (!typed.trim() || sending) return;
+    const text = typed.trim();
     const next: Message[] = [...messages, { role: "owner", content: text }];
     setMessages(next);
     setInput("");
@@ -260,7 +261,13 @@ export function InterviewChat({
             placeholder="Digite sua resposta…"
             disabled={sending}
           />
-          <Button onClick={handleSend} disabled={sending || !input.trim()}>Enviar</Button>
+          <Button onClick={() => handleSend()} disabled={sending || !input.trim()}>Enviar</Button>
+        </div>
+      )}
+      {!allDone && messages.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" disabled={sending} onClick={() => handleSend("pular")}>Pular esta pergunta</Button>
+          <Button type="button" variant="outline" size="sm" disabled={sending} onClick={() => handleSend("concluir")}>Concluir agora e completar depois</Button>
         </div>
       )}
       {remainingGaps !== null && (

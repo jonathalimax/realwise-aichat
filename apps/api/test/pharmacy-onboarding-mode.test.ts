@@ -19,7 +19,7 @@ function setup(planCode: "essencial" | "profissional") {
     },
   };
   const pharmacySettings: any = { proposeFromField: async (_b: string, key: string, value: string) => proposals.push([key, value]) };
-  return { service: new OnboardingService(prisma, pharmacySettings), proposals, get profile() { return profile; } };
+  return { service: new OnboardingService(prisma, pharmacySettings, { upsertOwnerAnswer: async () => true } as any), proposals, get profile() { return profile; } };
 }
 
 test("a plan with commerce is asked which mode it wants, with both options named", async () => {

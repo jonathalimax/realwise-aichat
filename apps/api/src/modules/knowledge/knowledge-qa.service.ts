@@ -129,6 +129,32 @@ export class KnowledgeQaService {
     return all.find((d) => d.id !== exceptId && foldText(d.filename).replace(/[^a-z0-9]/g, "") === folded) ?? null;
   }
 
+  /**
+   * An answer the owner gave in the onboarding interview becomes a Q&A Alex can use right away (no confirmation step: what the owner
+   * said is the truth). Same question again = the answer is updated. Returns false when the pair is not storable (dose, clinical, etc.).
+   */
+  async upsertOwnerAnswer(businessId: string, question: string, answer: string): Promise<boolean> {
+    let qa: QaInput;
+    try {
+      qa = validateQa({ question, answer });
+    } catch {
+      return false;
+    }
+    const dup = await this.findDuplicate(businessId, qa.question);
+    if (dup) {
+      await this.prisma.client.knowledgeDocument.update({ where: { id: dup.id }, data: { extractedMarkdown: qa.answer, sizeBytes: qaChunkContent(qa).length } });
+      await this.writeChunk(businessId, dup.id, qa);
+      return true;
+    }
+    const count = await this.prisma.client.knowledgeDocument.count({ where: { businessId, source: QA_SOURCE } });
+    if (count >= QA_MAX_PER_BUSINESS) return false;
+    const doc = await this.prisma.client.knowledgeDocument.create({
+      data: { businessId, filename: qa.question, mimeType: "text/plain", sizeBytes: qaChunkContent(qa).length, storageKey: `qa/${businessId}/${Date.now()}`, source: QA_SOURCE, status: "processed", extractedMarkdown: qa.answer },
+    });
+    await this.writeChunk(businessId, doc.id, qa);
+    return true;
+  }
+
   /** Creates a Q&A; `replaceExisting` updates the answer of an identical question instead of refusing (used by "Responder e salvar"). */
   async create(m: MemberContext, input: { question?: unknown; answer?: unknown }, opts: { replaceExisting?: boolean } = {}) {
     const qa = validateQa(input);

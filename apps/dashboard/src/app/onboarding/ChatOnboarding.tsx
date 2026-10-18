@@ -34,6 +34,8 @@ function randomSuffix(): string {
   return Math.random().toString(36).slice(2, 6);
 }
 
+const ASSISTANT_NAME: Record<string, string> = { imobiliaria: "Clara", farmacia: "Alex", concessionaria: "Tom" };
+
 export function ChatOnboarding({
   business,
   refresh,
@@ -105,7 +107,7 @@ export function ChatOnboarding({
       <div className="flex flex-col gap-6">
         <div className="mb-2 text-center">
           <h1 className="font-serif text-2xl text-ink">Antes de começar, como se chama seu negócio? 👋</h1>
-          <p className="mt-2 text-sm text-ink-soft">A Clara vai usar isso para conversar com você.</p>
+          <p className="mt-2 text-sm text-ink-soft">{ASSISTANT_NAME[niche] ?? "O assistente"} vai usar isso para conversar com você.</p>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -153,13 +155,14 @@ export function ChatOnboarding({
   return (
     <div className="flex flex-col gap-4">
       <div className="mb-2 text-center">
-        <h1 className="font-serif text-2xl text-ink">Hora de conversar com a Clara 💬</h1>
+        <h1 className="font-serif text-2xl text-ink">Hora de conversar com {ASSISTANT_NAME[business.niche] ?? "o assistente"} 💬</h1>
         <p className="mt-2 text-sm text-ink-soft">
-          Manda documentos, responde as perguntas — a Clara monta o perfil do seu negócio com você.
+          Manda documentos, responde as perguntas — {ASSISTANT_NAME[business.niche] ?? "o assistente"} monta o perfil do seu negócio com você.
         </p>
       </div>
 
       <InterviewChat
+        assistantName={ASSISTANT_NAME[business.niche] ?? "Clara"}
         onFieldFilled={refresh}
         onStateChange={(s) => {
           setReadyToPublish(s.readyToPublish);

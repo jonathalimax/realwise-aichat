@@ -135,14 +135,18 @@ export class HandoffsService {
     const ids = (q.ids ?? "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, MAX_SUGGESTED_PRODUCTS);
     const term = (q.q ?? "").trim().slice(0, 60);
     if (!ids.length && term.length < 2) return { items: [] };
+    // By id (Alex's suggestion chips) only listable products come back. A text search ALSO returns the pharmacy's other active
+    // products, flagged with why they cannot be suggested yet (no stock / class not confirmed / controlled), so a product the
+    // owner just registered is never "missing" from the picker.
     const rows = await this.prisma.client.product.findMany({
-      where: {
-        businessId,
-        ...LISTABLE_PRODUCT_WHERE,
-        ...(ids.length
-          ? { id: { in: ids } }
-          : { OR: [{ name: { contains: term, mode: "insensitive" } }, { activeIngredient: { contains: term, mode: "insensitive" } }, { presentation: { contains: term, mode: "insensitive" } }] }),
-      },
+      where: ids.length
+        ? { businessId, ...LISTABLE_PRODUCT_WHERE, id: { in: ids } }
+        : {
+            businessId,
+            active: true,
+            deletedAt: null,
+            OR: [{ name: { contains: term, mode: "insensitive" } }, { activeIngredient: { contains: term, mode: "insensitive" } }, { presentation: { contains: term, mode: "insensitive" } }],
+          },
       orderBy: [{ name: "asc" }, { id: "asc" }],
       take: ids.length ? MAX_SUGGESTED_PRODUCTS : 20,
     });
@@ -150,8 +154,16 @@ export class HandoffsService {
     return { items: rows.map((p) => this.suggestionItem(p, settings?.maxQtyPerItemDefault ?? null)) };
   }
 
+  /** Why a product cannot be suggested to a customer right now (null = it can). */
+  private blockedReason(p: { stockQty: number | null; classConfirmedAt: Date | null; saleClass: string }): "no_stock" | "class_unconfirmed" | "controlled" | null {
+    if (p.saleClass === "controlled") return "controlled";
+    if (!p.classConfirmedAt || (p.saleClass !== "otc" && p.saleClass !== "prescription")) return "class_unconfirmed";
+    if ((p.stockQty ?? 0) <= 0) return "no_stock";
+    return null;
+  }
+
   private suggestionItem(
-    p: { id: string; name: string; presentation: string | null; priceCents: number; stockQty: number | null; maxQtyPerOrder: number | null; imageKey: string | null; updatedAt: Date; saleClass: string },
+    p: { id: string; name: string; presentation: string | null; priceCents: number; stockQty: number | null; maxQtyPerOrder: number | null; imageKey: string | null; updatedAt: Date; saleClass: string; classConfirmedAt: Date | null },
     defaultMax: number | null,
   ) {
     return {
@@ -164,6 +176,7 @@ export class HandoffsService {
       imageUrl: p.imageKey ? `/api/public/products/${p.id}/image?v=${Math.floor(p.updatedAt.getTime() / 1000)}` : null,
       placeholderIcon: placeholderIconFor(p),
       requiresPrescription: p.saleClass === "prescription",
+      blockedReason: this.blockedReason(p),
     };
   }
 
@@ -191,13 +204,14 @@ export class HandoffsService {
     if (h.status === "closed") throw conflict("INVALID_STATE", "Este atendimento já foi encerrado.");
 
     // Every product must be listable AND belong to this business; anything else rejects the whole reply.
-    let items: ReturnType<HandoffsService["suggestionItem"]>[] = [];
+    let items: Array<Omit<ReturnType<HandoffsService["suggestionItem"]>, "blockedReason">> = [];
     if (productIds.length) {
       const rows = await this.prisma.client.product.findMany({ where: { businessId: m.businessId, id: { in: productIds }, ...LISTABLE_PRODUCT_WHERE } });
       if (rows.length !== productIds.length) throw badRequest("PRODUCT_NOT_LISTABLE", "Algum produto não pode ser indicado (sem estoque, inativo, controlado ou sem classificação confirmada).");
       const settings = await this.prisma.client.pharmacySettings.findFirst({ where: { businessId: m.businessId }, select: { maxQtyPerItemDefault: true } });
       const byId = new Map(rows.map((r) => [r.id, r]));
-      items = productIds.map((pid) => this.suggestionItem(byId.get(pid)!, settings?.maxQtyPerItemDefault ?? null));
+      // blockedReason is for the pharmacist's picker only: it never reaches the customer card.
+      items = productIds.map((pid) => { const { blockedReason: _omit, ...item } = this.suggestionItem(byId.get(pid)!, settings?.maxQtyPerItemDefault ?? null); return item; });
     }
 
     const conversation = await this.prisma.client.conversation.findFirst({

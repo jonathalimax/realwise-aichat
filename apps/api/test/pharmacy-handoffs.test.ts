@@ -11,7 +11,7 @@ const pharmacist: MemberContext = {
 };
 
 let productRows: any[] = [];
-const prod = (id: string, over: any = {}) => ({ id, businessId: "b1", name: `Produto ${id}`, presentation: "cx 10", priceCents: 1000, stockQty: 5, maxQtyPerOrder: null, imageKey: null, updatedAt: new Date(1000), saleClass: "otc", ...over });
+const prod = (id: string, over: any = {}) => ({ id, businessId: "b1", name: `Produto ${id}`, presentation: "cx 10", priceCents: 1000, stockQty: 5, maxQtyPerOrder: null, imageKey: null, updatedAt: new Date(1000), saleClass: "otc", classConfirmedAt: new Date(1), ...over });
 let leadPhone: string | null = "+5541991112233";
 function setup(status: "open" | "answered" | "closed" = "open") {
   leadPhone = "+5541991112233";
@@ -308,13 +308,22 @@ test("resume link: whatsapp draft carries it last; chat-link endpoint returns it
   await assert.rejects(() => service.chatLink(attendant, "h1"), (e: any) => e.getResponse().code === "CRF_REQUIRED");
 });
 
-test("product search only returns listable products and needs 2+ chars", async () => {
+test("product search needs 2+ chars; text search also returns unlistable products WITH the reason, by-id search only listable ones", async () => {
   const s = setup();
-  productRows = [prod("p1", { name: "Dipirona" })];
+  productRows = [prod("p1", { name: "Dipirona", stockQty: 5 }), prod("p2", { name: "Dipirona B", stockQty: 0 }), prod("p3", { name: "Dipirona C", classConfirmedAt: null })];
   assert.deepEqual(await s.service.searchProducts("b1", { q: "d" }), { items: [] });
   const r: any = await s.service.searchProducts("b1", { q: "dipi" });
   assert.equal(r.items[0].productId, "p1");
+  assert.equal(r.items[0].blockedReason, null);
+  assert.equal(r.items.find((i: any) => i.productId === "p2").blockedReason, "no_stock");
+  assert.equal(r.items.find((i: any) => i.productId === "p3").blockedReason, "class_unconfirmed");
   const where = s.calls.productQueries.at(-1).where;
-  assert.deepEqual(where.saleClass, { in: ["otc", "prescription"] });
+  assert.equal(where.businessId, "b1");
+  assert.equal(where.active, true);
+  assert.equal(where.saleClass, undefined, "a text search does not hide products that are not suggestable yet");
   assert.equal(where.OR.length, 3);
+  await s.service.searchProducts("b1", { ids: "p1" });
+  const byId = s.calls.productQueries.at(-1).where;
+  assert.deepEqual(byId.saleClass, { in: ["otc", "prescription"] });
+  assert.deepEqual(byId.stockQty, { gt: 0 });
 });
